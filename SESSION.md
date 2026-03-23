@@ -27,6 +27,8 @@ File dikerjakan:
 - Add WA receipt logic for Cash and QRIS payments
 - Setup Flutter Login OTP Flow (4 states: Input Phone, Input OTP, Set PIN, PIN Login) with Riverpod
 - Setup Flutter QRIS Screen (Payment Modal, QrImageView, Timer, Polling)
+- Setup Flutter Offline Mode (Connectivity monitoring, UI banner, CachedNetworkImage)
+- Setup Backend Reporting Endpoint (`GET /reports/daily`)
 - Setup Alembic file 038_connect_outlets.py
 - Setup Alembic file 039_connect_orders.py (idempotency_key UNIQUE, FK to orders, ENUM status)
 - Setup Alembic file 040_connect_customer_profiles.py
@@ -203,5 +205,5 @@ File dikerjakan:
 - Tidak ada.
 
 ## CHECKPOINT TERAKHIR
-Terakhir sampai di: Selesai membuat QRIS Screen di Flutter (Payment Modal).
+Terakhir sampai di: Selesai membuat Reporting Endpoint di Backend (`GET /reports/daily`).
 Besok lanjut dari: Menunggu instruksi selanjutnya untuk fitur Flutter atau Backend.

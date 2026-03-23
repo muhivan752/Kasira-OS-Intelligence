@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class ProductCard extends StatelessWidget {
@@ -37,15 +38,16 @@ class ProductCard extends StatelessWidget {
                   flex: 3,
                   child: Container(
                     width: double.infinity,
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       color: AppColors.surfaceVariant,
-                      image: DecorationImage(
-                        image: NetworkImage(imageUrl),
-                        fit: BoxFit.cover,
-                        colorFilter: isOutOfStock 
-                            ? const ColorFilter.mode(Colors.grey, BlendMode.saturation)
-                            : null,
-                      ),
+                    ),
+                    child: CachedNetworkImage(
+                      imageUrl: imageUrl,
+                      fit: BoxFit.cover,
+                      color: isOutOfStock ? Colors.grey : null,
+                      colorBlendMode: isOutOfStock ? BlendMode.saturation : null,
+                      placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                      errorWidget: (context, url, error) => const Center(child: Icon(Icons.error)),
                     ),
                   ),
                 ),

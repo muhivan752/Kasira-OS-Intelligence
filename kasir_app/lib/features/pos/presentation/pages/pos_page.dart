@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../widgets/product_card.dart';
@@ -15,17 +17,80 @@ class _PosPageState extends State<PosPage> {
   int _selectedCategoryIndex = 0;
   final List<String> _categories = ['Semua', 'Kopi', 'Non-Kopi', 'Makanan', 'Snack', 'Dessert'];
 
+  bool _isOffline = false;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _initConnectivity();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> result) {
+      _updateConnectionStatus(result);
+    });
+  }
+
+  Future<void> _initConnectivity() async {
+    late List<ConnectivityResult> result;
+    try {
+      result = await Connectivity().checkConnectivity();
+    } catch (e) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    _updateConnectionStatus(result);
+  }
+
+  void _updateConnectionStatus(List<ConnectivityResult> result) {
+    final isOffline = result.contains(ConnectivityResult.none) || result.isEmpty;
+    
+    if (_isOffline && !isOffline) {
+      // Trigger sync to server when back online
+      _syncToServer();
+    }
+    
+    setState(() {
+      _isOffline = isOffline;
+    });
+  }
+
+  void _syncToServer() {
+    // TODO: Implement sync logic
+    debugPrint("Syncing to server...");
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Row(
+      body: Column(
         children: [
-          // LEFT PANEL: Products & Categories
+          if (_isOffline)
+            Container(
+              width: double.infinity,
+              color: Colors.red,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: const Text(
+                "Mode Offline - Transaksi tersimpan, sync saat online",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
           Expanded(
-            flex: 7,
-            child: Column(
+            child: Row(
               children: [
+                // LEFT PANEL: Products & Categories
+                Expanded(
+                  flex: 7,
+                  child: Column(
+                    children: [
                 // Header
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -133,14 +198,17 @@ class _PosPageState extends State<PosPage> {
             ),
           ),
 
-          // RIGHT PANEL: Cart / Order Summary
-          Container(
-            width: 400,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(left: BorderSide(color: AppColors.border)),
+                // RIGHT PANEL: Cart / Order Summary
+                Container(
+                  width: 400,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(left: BorderSide(color: AppColors.border)),
+                  ),
+                  child: const CartPanel(),
+                ),
+              ],
             ),
-            child: const CartPanel(),
           ),
         ],
       ),

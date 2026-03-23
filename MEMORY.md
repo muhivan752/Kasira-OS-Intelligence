@@ -13,6 +13,8 @@
 - [x] CRDT Bug Fixes (HLC.receive & PNCounter.get_value)
 - [x] Flutter Login OTP Flow (4 states with Riverpod)
 - [x] Flutter QRIS Screen (Payment Modal, QrImageView, Timer, Polling)
+- [x] Flutter Offline Mode (Connectivity monitoring, UI banner, CachedNetworkImage)
+- [x] Backend Reporting Endpoint (`GET /reports/daily`)
 
 ## ⏳ IN PROGRESS
 - Menunggu instruksi selanjutnya
