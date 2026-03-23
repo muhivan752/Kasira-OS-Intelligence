@@ -10,10 +10,12 @@
 - [x] Migration Batch 6 (notifications, knowledge_graph_edges, stock_events, stock_snapshots, audit_log, global_event_log)
 - [x] Migration Batch 7 (connect_outlets, connect_orders, connect_customer_profiles, connect_chats, connect_behavior_log)
 - [x] Migration Batch 8 (outlet_location_detail, supplier_price_history, products_update, subscriptions, invoices, subscription_payments, payments_update, partial_payments, payment_refunds)
+- [x] CRDT Bug Fixes (HLC.receive & PNCounter.get_value)
+- [x] Flutter Login OTP Flow (4 states with Riverpod)
+- [x] Flutter QRIS Screen (Payment Modal, QrImageView, Timer, Polling)
 
 ## ⏳ IN PROGRESS
-- Setup Flutter App UI (Kasir)
-- Menunggu instruksi selanjutnya (Flutter UI)
+- Menunggu instruksi selanjutnya
 
 ## ⏳ BELUM MULAI
 - Flutter kasir app (15 layar)
@@ -39,7 +41,7 @@
 - Tax: PB1 10%, PPN 12%, service charge configurable
 
 ## Lanjut Berikutnya
-Menunggu konfirmasi user untuk lanjut ke Migration Batch 3 (products, modifiers, ingredients, dll).
+Menunggu instruksi selanjutnya untuk fitur Flutter atau Backend.
 
 ## Context Files Status
 - context/database.md    → ⏳ In Progress

@@ -21,6 +21,12 @@ File dikerjakan:
 
 ## PROGRESS
 ✅ Selesai:
+- CRDT Bug Fixes (HLC.receive logic and PNCounter lower bound)
+- Update backend requirements (uvicorn, cryptography)
+- Translate X-Tenant-ID error message
+- Add WA receipt logic for Cash and QRIS payments
+- Setup Flutter Login OTP Flow (4 states: Input Phone, Input OTP, Set PIN, PIN Login) with Riverpod
+- Setup Flutter QRIS Screen (Payment Modal, QrImageView, Timer, Polling)
 - Setup Alembic file 038_connect_outlets.py
 - Setup Alembic file 039_connect_orders.py (idempotency_key UNIQUE, FK to orders, ENUM status)
 - Setup Alembic file 040_connect_customer_profiles.py
@@ -83,6 +89,12 @@ File dikerjakan:
 - AI chatbot SSE streaming
 
 ## FILE YANG DIUBAH HARI INI
+- backend/services/crdt.py
+- backend/requirements.txt
+- backend/api/deps.py
+- backend/api/routes/payments.py
+- kasir_app/pubspec.yaml
+- kasir_app/lib/features/auth/presentation/pages/login_page.dart
 - backend/migrations/versions/001_tenants.py s/d 051_payment_refunds.py
 - backend/requirements.txt
 - backend/main.py
@@ -191,5 +203,5 @@ File dikerjakan:
 - Tidak ada.
 
 ## CHECKPOINT TERAKHIR
-Terakhir sampai di: Selesai membuat Order Detail Modal, Add Customer Modal, dan Printer Settings Page di Flutter.
-Besok lanjut dari: Selesaikan 3 layar sisa (Sync Settings, Cash Drawer History, Profile) atau mulai Self-Order Next.js.
+Terakhir sampai di: Selesai membuat QRIS Screen di Flutter (Payment Modal).
+Besok lanjut dari: Menunggu instruksi selanjutnya untuk fitur Flutter atau Backend.

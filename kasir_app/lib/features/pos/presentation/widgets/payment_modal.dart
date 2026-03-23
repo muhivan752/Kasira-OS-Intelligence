@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class PaymentModal extends StatefulWidget {
@@ -23,6 +27,23 @@ class _PaymentModalState extends State<PaymentModal> {
   final _amountController = TextEditingController();
   final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
+  // QRIS State
+  bool _isLoadingQris = false;
+  String? _qrisUrl;
+  String? _qrisPaymentId;
+  String? _qrisError;
+  bool _isQrisPaid = false;
+  int _qrisTimerSeconds = 15 * 60;
+  Timer? _qrisTimer;
+  Timer? _qrisPollingTimer;
+
+  final _dio = Dio(BaseOptions(
+    baseUrl: 'http://localhost:8000',
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 10),
+  ));
+  final _storage = const FlutterSecureStorage();
+
   @override
   void initState() {
     super.initState();
@@ -33,7 +54,124 @@ class _PaymentModalState extends State<PaymentModal> {
   @override
   void dispose() {
     _amountController.dispose();
+    _qrisTimer?.cancel();
+    _qrisPollingTimer?.cancel();
     super.dispose();
+  }
+
+  void _startQrisTimer() {
+    _qrisTimer?.cancel();
+    _qrisTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_qrisTimerSeconds > 0) {
+        setState(() {
+          _qrisTimerSeconds--;
+        });
+      } else {
+        timer.cancel();
+        _qrisPollingTimer?.cancel();
+      }
+    });
+  }
+
+  void _startQrisPolling() {
+    _qrisPollingTimer?.cancel();
+    _qrisPollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      if (_qrisPaymentId == null) return;
+
+      try {
+        final token = await _storage.read(key: 'access_token');
+        final response = await _dio.get(
+          '/api/v1/payments/$_qrisPaymentId/status',
+          options: Options(
+            headers: {
+              if (token != null) 'Authorization': 'Bearer $token',
+              'X-Tenant-ID': 'tenant1',
+            },
+          ),
+        );
+
+        final data = response.data['data'];
+        if (data['status'] == 'paid') {
+          timer.cancel();
+          _qrisTimer?.cancel();
+          setState(() {
+            _isQrisPaid = true;
+          });
+          
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) {
+              widget.onPaymentSuccess();
+              Navigator.pop(context);
+            }
+          });
+        }
+      } catch (e) {
+        // Ignore polling errors
+      }
+    });
+  }
+
+  Future<void> _generateQris() async {
+    setState(() {
+      _isLoadingQris = true;
+      _qrisError = null;
+    });
+
+    try {
+      final token = await _storage.read(key: 'access_token');
+      // Use a dummy UUID for outlet_id if not available in this mock context
+      final outletId = '00000000-0000-0000-0000-000000000000';
+
+      final response = await _dio.post(
+        '/api/v1/payments/',
+        options: Options(
+          headers: {
+            if (token != null) 'Authorization': 'Bearer $token',
+            'X-Tenant-ID': 'tenant1',
+          },
+        ),
+        data: {
+          'outlet_id': outletId,
+          'payment_method': 'qris',
+          'amount_due': widget.totalAmount,
+          'amount_paid': widget.totalAmount,
+          'change_amount': 0,
+        },
+      );
+
+      final data = response.data['data'];
+      if (data['status'] == 'failed') {
+        setState(() {
+          _qrisError = 'QRIS tidak tersedia';
+          _isLoadingQris = false;
+        });
+        return;
+      }
+
+      final qrisUrl = data['qris_url'];
+      final paymentId = data['id'];
+
+      if (qrisUrl != null && paymentId != null) {
+        setState(() {
+          _qrisUrl = qrisUrl;
+          _qrisPaymentId = paymentId;
+          _isLoadingQris = false;
+          _qrisTimerSeconds = 15 * 60;
+        });
+        _startQrisTimer();
+        _startQrisPolling();
+      } else {
+        setState(() {
+          _qrisError = 'QRIS tidak tersedia';
+          _isLoadingQris = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _qrisError = 'QRIS tidak tersedia';
+        _isLoadingQris = false;
+      });
+    }
   }
 
   @override
@@ -152,48 +290,103 @@ class _PaymentModalState extends State<PaymentModal> {
                           ),
                         ],
                       ),
-                    ] else ...[
-                      // QRIS Mock UI
-                      Center(
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 200,
-                              height: 200,
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceVariant,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: AppColors.border),
-                              ),
-                              child: const Center(
-                                child: Icon(LucideIcons.qrCode, size: 64, color: AppColors.textTertiary),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            const Text('Menunggu pembayaran dari pelanggan...'),
-                            const SizedBox(height: 16),
-                            const CircularProgressIndicator(),
-                          ],
+                    } else if (_paymentMethod == 'QRIS') ...[
+                      Expanded(
+                        child: Center(
+                          child: _isLoadingQris
+                              ? const CircularProgressIndicator()
+                              : _qrisError != null
+                                  ? Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.error),
+                                        const SizedBox(height: 16),
+                                        Text(_qrisError!, style: Theme.of(context).textTheme.titleMedium),
+                                        const SizedBox(height: 24),
+                                        ElevatedButton(
+                                          onPressed: () => setState(() => _paymentMethod = 'Cash'),
+                                          child: const Text('Bayar Cash'),
+                                        ),
+                                      ],
+                                    )
+                                  : _isQrisPaid
+                                      ? Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(LucideIcons.checkCircle2, size: 64, color: AppColors.success),
+                                            const SizedBox(height: 16),
+                                            Text('Pembayaran Berhasil', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.success)),
+                                          ],
+                                        )
+                                      : Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            if (_qrisUrl != null)
+                                              Container(
+                                                padding: const EdgeInsets.all(16),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  border: Border.all(color: AppColors.border),
+                                                ),
+                                                child: QrImageView(
+                                                  data: _qrisUrl!,
+                                                  version: QrVersions.auto,
+                                                  size: 200.0,
+                                                ),
+                                              ),
+                                            const SizedBox(height: 24),
+                                            if (_qrisTimerSeconds > 0) ...[
+                                              Text(
+                                                'Selesaikan pembayaran dalam',
+                                                style: Theme.of(context).textTheme.bodyLarge,
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                '${(_qrisTimerSeconds ~/ 60).toString().padLeft(2, '0')}:${(_qrisTimerSeconds % 60).toString().padLeft(2, '0')}',
+                                                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                                      color: AppColors.error,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                              ),
+                                            ] else ...[
+                                              const Text('Waktu pembayaran habis', style: TextStyle(color: AppColors.error)),
+                                              const SizedBox(height: 16),
+                                              ElevatedButton(
+                                                onPressed: () => setState(() => _paymentMethod = 'Cash'),
+                                                child: const Text('Ganti ke Cash'),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
                         ),
-                      )
+                      ),
+                    ] else ...[
+                      const Expanded(
+                        child: Center(
+                          child: Text('Metode pembayaran belum tersedia'),
+                        ),
+                      ),
                     ],
                     
-                    const Spacer(),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: (isCash && change < 0) ? null : () {
-                          // TODO: Call API to create payment
-                          widget.onPaymentSuccess();
-                          Navigator.pop(context);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: (isCash && change < 0) ? AppColors.border : AppColors.primary,
+                    if (_paymentMethod != 'QRIS') ...[
+                      const Spacer(),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: (isCash && change < 0) ? null : () {
+                            // TODO: Call API to create payment
+                            widget.onPaymentSuccess();
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: (isCash && change < 0) ? AppColors.border : AppColors.primary,
+                          ),
+                          child: const Text('SELESAIKAN PEMBAYARAN'),
                         ),
-                        child: const Text('SELESAIKAN PEMBAYARAN'),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -207,7 +400,12 @@ class _PaymentModalState extends State<PaymentModal> {
   Widget _buildMethodBtn(String label, IconData icon) {
     final isSelected = _paymentMethod == label;
     return InkWell(
-      onTap: () => setState(() => _paymentMethod = label),
+      onTap: () {
+        setState(() => _paymentMethod = label);
+        if (label == 'QRIS' && (_qrisUrl == null || _qrisError != null) && !_isLoadingQris) {
+          _generateQris();
+        }
+      },
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
