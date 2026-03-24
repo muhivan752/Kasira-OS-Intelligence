@@ -67,14 +67,14 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
     )
     outlet = result.scalar_one_or_none()
     if not outlet:
-        raise HTTPException(status_code=404, detail="Outlet not found")
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
 
     # Get active products with stock > 0
     products_result = await db.execute(
         select(Product).where(
-            Product.outlet_id == outlet.id,
+            Product.brand_id == outlet.brand_id,
             Product.is_active == True,
-            Product.stock > 0,
+            Product.stock_qty > 0,
             Product.deleted_at.is_(None)
         )
     )
@@ -85,16 +85,16 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
             "id": str(outlet.id),
             "name": outlet.name,
             "photo": "https://ui-avatars.com/api/?name=" + outlet.name, # Mock photo
-            "is_open": outlet.is_open,
-            "opening_hours": outlet.opening_hours if outlet.opening_hours else "08:00 - 22:00",
+            "is_open": True,
+            "opening_hours": "08:00 - 22:00",
             "trust_badge": "Verified Partner" # Mock trust badge
         },
         "menu": [
             {
                 "id": str(p.id),
                 "name": p.name,
-                "price": float(p.price),
-                "stock": p.stock,
+                "price": float(p.base_price),
+                "stock": p.stock_qty,
                 "image_url": p.image_url
             } for p in products
         ]
@@ -116,10 +116,10 @@ async def create_connect_order(
     db: AsyncSession = Depends(get_db)
 ):
     if input_data.order_type not in ["pickup", "delivery"]:
-        raise HTTPException(status_code=400, detail="order_type must be pickup or delivery")
+        raise HTTPException(status_code=400, detail="Tipe order harus pickup atau delivery")
     
     if input_data.order_type == "delivery" and not input_data.delivery_address:
-        raise HTTPException(status_code=400, detail="delivery_address is required for delivery")
+        raise HTTPException(status_code=400, detail="Alamat pengiriman wajib diisi")
 
     # Get outlet
     result = await db.execute(
@@ -127,7 +127,7 @@ async def create_connect_order(
     )
     outlet = result.scalar_one_or_none()
     if not outlet:
-        raise HTTPException(status_code=404, detail="Outlet not found")
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
 
     # Check idempotency key
     result = await db.execute(
@@ -197,31 +197,38 @@ async def create_connect_order(
             select(Product).where(Product.id == item_input.product_id)
         )
         product = result.scalar_one_or_none()
-        if not product or not product.is_active or product.stock < item_input.qty:
-            raise HTTPException(status_code=400, detail=f"Product {item_input.product_id} not available or insufficient stock")
+        if not product or not product.is_active or product.stock_qty < item_input.qty:
+            raise HTTPException(status_code=400, detail="Produk tidak tersedia atau stok habis")
         
         # Deduct stock
-        product.stock -= item_input.qty
+        product.stock_qty -= item_input.qty
         
-        item_total = product.price * item_input.qty
+        item_total = product.base_price * item_input.qty
         subtotal += item_total
         
         order_items.append(OrderItem(
             product_id=product.id,
             quantity=item_input.qty,
-            unit_price=product.price,
+            unit_price=product.base_price,
             total_price=item_total,
             notes=item_input.notes
         ))
 
     # Create order
+    from sqlalchemy import text
+    result = await db.execute(
+        text("SELECT nextval('order_display_seq')")
+    )
+    display_number = result.scalar()
+    
     today = datetime.datetime.now().strftime("%Y%m%d")
-    order_number = f"ORD-{today}-{uuid.uuid4().hex[:6].upper()}"
+    order_number = f"ORD-{today}-{display_number}"
     
     order = Order(
         outlet_id=outlet.id,
         customer_id=customer.id,
         order_number=order_number,
+        display_number=display_number,
         status="pending",
         order_type=input_data.order_type,
         subtotal=subtotal,
@@ -277,7 +284,7 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
     )
     order = result.scalar_one_or_none()
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail="Order tidak ditemukan")
 
     return StandardResponse(
         success=True,

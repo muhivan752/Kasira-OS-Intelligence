@@ -26,6 +26,7 @@
 - [x] Create Next.js Storefront Public (menu, cart, order status)
 - [x] Docker + VPS Ready (Dockerfile, docker-compose.yml, .env.example)
 - [x] Create backend/scripts/seed_demo.py
+- [x] Fix Connect API bugs (product fields, order sequence, error messages)
 
 ## ⏳ IN PROGRESS
 - Menunggu instruksi selanjutnya
