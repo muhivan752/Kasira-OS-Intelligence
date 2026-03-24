@@ -36,11 +36,19 @@ class ConnectOrderInput(BaseModel):
     delivery_address: Optional[str] = None
     idempotency_key: str
 
-def send_wa_confirmation(phone: str, display_number: str, outlet_name: str, customer_name: str):
-    # Fire and forget WA confirmation
-    message = f"Pesanan #{display_number} diterima!\nOutlet: {outlet_name}\nTerima kasih {customer_name}!"
-    print(f"[WA MOCK] To: {phone} | Message: {message}")
-    # In real app, call Fonnte API here
+from backend.services.fonnte import send_whatsapp_message
+
+async def send_wa_confirmation_real(
+    phone: str, display_number: str,
+    outlet_name: str, customer_name: str
+):
+    message = (
+        f"Pesanan #{display_number} diterima!\n"
+        f"Outlet: {outlet_name}\n"
+        f"Terima kasih {customer_name}!\n"
+        f"Kami segera memproses pesanan Anda."
+    )
+    await send_whatsapp_message(phone, message)
 
 @router.get("/{slug}", response_model=StandardResponse)
 async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
@@ -244,11 +252,11 @@ async def create_connect_order(
 
     # Send WA confirmation
     background_tasks.add_task(
-        send_wa_confirmation,
-        phone=input_data.customer_phone,
-        display_number=str(order.display_number),
-        outlet_name=outlet.name,
-        customer_name=input_data.customer_name
+        send_wa_confirmation_real,
+        input_data.customer_phone,
+        str(order.display_number),
+        outlet.name,
+        input_data.customer_name
     )
 
     return StandardResponse(
