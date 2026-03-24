@@ -27,6 +27,7 @@
 - [x] Docker + VPS Ready (Dockerfile, docker-compose.yml, .env.example)
 - [x] Create backend/scripts/seed_demo.py
 - [x] Fix Connect API bugs (product fields, order sequence, error messages)
+- [x] Fix backend/scripts/seed_demo.py (imports, timezone, search_path, idempotent)
 
 ## ⏳ IN PROGRESS
 - Menunggu instruksi selanjutnya
