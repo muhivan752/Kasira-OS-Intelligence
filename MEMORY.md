@@ -25,6 +25,7 @@
 - [x] Create Next.js Owner Dashboard (login, dashboard, menu, kasir, laporan, settings, payment, onboarding)
 - [x] Create Next.js Storefront Public (menu, cart, order status)
 - [x] Docker + VPS Ready (Dockerfile, docker-compose.yml, .env.example)
+- [x] Create backend/scripts/seed_demo.py
 
 ## ⏳ IN PROGRESS
 - Menunggu instruksi selanjutnya
