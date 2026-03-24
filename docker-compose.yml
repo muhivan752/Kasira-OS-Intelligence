@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: backend/.env
+    depends_on:
+      - db
+      - redis
+    restart: always
+
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: kasira_db
+      POSTGRES_USER: kasira
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: always
+
+volumes:
+  postgres_data:

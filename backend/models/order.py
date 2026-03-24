@@ -30,7 +30,7 @@ class Order(BaseModel):
 
     # Relationships
     outlet = relationship("Outlet", back_populates="orders")
-    items = relationship("OrderItem", back_populates="order", cascade="all, delete-passive")
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="order")
     # user, customer, table, shift relationships can be added later if needed
 

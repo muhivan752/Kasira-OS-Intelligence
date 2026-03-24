@@ -17,7 +17,18 @@ export default function Home() {
           Backend FastAPI sedang berjalan. Aplikasi Kasir (Flutter) tersedia di dalam folder <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono">kasir_app/</code>.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+          <div className="p-6 rounded-xl border border-black/5 bg-gray-50">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+              Owner Dashboard
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">Kelola outlet, menu, kasir, dan lihat laporan penjualan.</p>
+            <Link href="/dashboard" className="text-[#FF5C00] text-sm font-medium flex items-center gap-1 hover:underline">
+              Buka Dashboard <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+
           <div className="p-6 rounded-xl border border-black/5 bg-gray-50">
             <h3 className="font-semibold mb-2 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-500"></span>

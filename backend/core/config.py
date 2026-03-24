@@ -26,8 +26,6 @@ class Settings(BaseSettings):
     FONNTE_TOKEN: str = "YOUR_FONNTE_TOKEN"
 
     # Midtrans
-    MIDTRANS_SERVER_KEY: str = "SB-Mid-server-xxxx"
-    MIDTRANS_CLIENT_KEY: str = "SB-Mid-client-xxxx"
     MIDTRANS_IS_PRODUCTION: bool = False
 
     # JWT Security
@@ -36,7 +34,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
     
     # Encryption
-    ENCRYPTION_KEY: Optional[str] = None
+    ENCRYPTION_KEY: str = ""
     
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 

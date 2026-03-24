@@ -7,9 +7,12 @@ class Outlet(BaseModel):
     __tablename__ = "outlets"
 
     name = Column(String, nullable=False)
+    slug = Column(String, nullable=False, unique=True)
     address = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     is_active = Column(Boolean(), default=True)
+    is_open = Column(Boolean(), default=True)
+    opening_hours = Column(String, nullable=True) # JSONB in DB
     
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id"), nullable=True, index=True)

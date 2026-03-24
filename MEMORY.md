@@ -15,6 +15,16 @@
 - [x] Flutter QRIS Screen (Payment Modal, QrImageView, Timer, Polling)
 - [x] Flutter Offline Mode (Connectivity monitoring, UI banner, CachedNetworkImage)
 - [x] Backend Reporting Endpoint (`GET /reports/daily`)
+- [x] Setup Alembic (alembic.ini, env.py) - CRITICAL FIX
+- [x] Create Customer model and update models/__init__.py - CRITICAL FIX
+- [x] Fix auth router prefix in api.py
+- [x] Fix order items cascade to delete-orphan
+- [x] Verify missing row versions in migrations
+- [x] Update config.py (remove Midtrans keys, make ENCRYPTION_KEY required)
+- [x] Create Storefront Connect API (GET /connect/{slug}, POST /connect/{slug}/order, GET /connect/order/{order_id})
+- [x] Create Next.js Owner Dashboard (login, dashboard, menu, kasir, laporan, settings, payment, onboarding)
+- [x] Create Next.js Storefront Public (menu, cart, order status)
+- [x] Docker + VPS Ready (Dockerfile, docker-compose.yml, .env.example)
 
 ## ⏳ IN PROGRESS
 - Menunggu instruksi selanjutnya

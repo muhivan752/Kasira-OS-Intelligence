@@ -29,6 +29,13 @@ File dikerjakan:
 - Setup Flutter QRIS Screen (Payment Modal, QrImageView, Timer, Polling)
 - Setup Flutter Offline Mode (Connectivity monitoring, UI banner, CachedNetworkImage)
 - Setup Backend Reporting Endpoint (`GET /reports/daily`)
+- Setup Alembic (alembic.ini, env.py, __init__.py) - CRITICAL FIX
+- Create Customer model and update models/__init__.py - CRITICAL FIX
+- Fix auth router prefix in api.py
+- Fix order items cascade to delete-orphan
+- Verify missing row versions in migrations
+- Update config.py (remove Midtrans keys, make ENCRYPTION_KEY required)
+- Create Storefront Connect API (GET /connect/{slug}, POST /connect/{slug}/order, GET /connect/order/{order_id})
 - Setup Alembic file 038_connect_outlets.py
 - Setup Alembic file 039_connect_orders.py (idempotency_key UNIQUE, FK to orders, ENUM status)
 - Setup Alembic file 040_connect_customer_profiles.py
@@ -205,5 +212,5 @@ File dikerjakan:
 - Tidak ada.
 
 ## CHECKPOINT TERAKHIR
-Terakhir sampai di: Selesai membuat Reporting Endpoint di Backend (`GET /reports/daily`).
-Besok lanjut dari: Menunggu instruksi selanjutnya untuk fitur Flutter atau Backend.
+Terakhir sampai di: Selesai membuat Storefront Connect API (STEP 2).
+Besok lanjut dari: Menunggu instruksi selanjutnya untuk fitur Flutter atau Backend atau Next.js.

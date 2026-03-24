@@ -1,8 +1,8 @@
 from fastapi import APIRouter
-from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports
+from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect
 
 api_router = APIRouter()
-api_router.include_router(auth.router, tags=["auth"])
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(outlets.router, prefix="/outlets", tags=["outlets"])
@@ -13,3 +13,4 @@ api_router.include_router(payments.router, prefix="/payments", tags=["payments"]
 api_router.include_router(sync.router, prefix="/sync", tags=["sync"])
 api_router.include_router(shifts.router, prefix="/shifts", tags=["shifts"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
+api_router.include_router(connect.router, prefix="/connect", tags=["connect"])
