@@ -11,6 +11,7 @@ from backend.api import deps
 from backend.core import security
 from backend.core.config import settings
 from backend.models.user import User
+from backend.models.outlet import Outlet
 from backend.schemas.token import Token
 from backend.schemas.auth import OTPSendRequest, OTPVerifyRequest
 from backend.schemas.response import StandardResponse
@@ -102,12 +103,23 @@ async def verify_otp(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
         
+    # Get user's outlet (if any)
+    outlet_id = None
+    if user.tenant_id:
+        stmt_outlet = select(Outlet).where(Outlet.tenant_id == user.tenant_id, Outlet.deleted_at == None).limit(1)
+        result_outlet = await db.execute(stmt_outlet)
+        outlet = result_outlet.scalar_one_or_none()
+        if outlet:
+            outlet_id = str(outlet.id)
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token_data = Token(
         access_token=security.create_access_token(
             user.id, expires_delta=access_token_expires
         ),
-        token_type="bearer"
+        token_type="bearer",
+        tenant_id=str(user.tenant_id) if user.tenant_id else None,
+        outlet_id=outlet_id
     )
     return StandardResponse(data=token_data, message="Login successful")
 

@@ -34,7 +34,7 @@ export async function createStorefrontOrder(slug: string, orderData: any) {
 export async function getStorefrontOrder(orderId: string) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-    const res = await fetch(`${baseUrl}/connect/order/${orderId}`, {
+    const res = await fetch(`${baseUrl}/connect/orders/${orderId}`, {
       cache: 'no-store',
     });
     if (!res.ok) return null;

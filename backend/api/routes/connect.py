@@ -277,7 +277,7 @@ async def create_connect_order(
         message="Order created successfully"
     )
 
-@router.get("/order/{order_id}", response_model=StandardResponse)
+@router.get("/orders/{order_id}", response_model=StandardResponse)
 async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Order).where(Order.id == order_id)

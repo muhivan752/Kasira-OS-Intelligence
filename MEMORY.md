@@ -29,6 +29,11 @@
 - [x] Fix Connect API bugs (product fields, order sequence, error messages)
 - [x] Fix backend/scripts/seed_demo.py (imports, timezone, search_path, idempotent)
 - [x] Fix backend/scripts/seed_demo.py models (remove tenant_id from Category/Product/Shift, add stock_enabled)
+- [x] Create Dockerfile.next for Next.js frontend
+- [x] Fix route conflict in connect.py (/order/{id} -> /orders/{id}) and update frontend polling
+- [x] Fix Next.js auth (save tenant_id & outlet_id to cookies, add X-Tenant-ID header)
+- [x] Fix backend auth response to include tenant_id & outlet_id
+- [x] Fix Flutter app entry point (DashboardPage -> LoginPage)
 
 ## ⏳ IN PROGRESS
 - Menunggu instruksi selanjutnya

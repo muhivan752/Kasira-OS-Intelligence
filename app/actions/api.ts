@@ -22,6 +22,12 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
     headers.set('Content-Type', 'application/json');
   }
 
+  const cookieStore = await cookies();
+  const tenantId = cookieStore.get('tenant_id')?.value;
+  if (tenantId) {
+    headers.set('X-Tenant-ID', tenantId);
+  }
+
   const res = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers,

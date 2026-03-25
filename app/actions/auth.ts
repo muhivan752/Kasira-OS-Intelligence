@@ -38,6 +38,8 @@ export async function verifyOtp(phone: string, otp: string) {
     }
     
     const token = data.data.access_token;
+    const tenantId = data.data.tenant_id;
+    const outletId = data.data.outlet_id;
     
     // Set HTTP-only cookie
     const cookieStore = await cookies();
@@ -49,6 +51,28 @@ export async function verifyOtp(phone: string, otp: string) {
       secure: process.env.NODE_ENV === 'production',
       maxAge: 60 * 60 * 24 * 7, // 1 week
     });
+    
+    if (tenantId) {
+      cookieStore.set({
+        name: 'tenant_id',
+        value: tenantId,
+        httpOnly: true,
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 24 * 7,
+      });
+    }
+    
+    if (outletId) {
+      cookieStore.set({
+        name: 'outlet_id',
+        value: outletId,
+        httpOnly: true,
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 24 * 7,
+      });
+    }
     
     return { success: true };
   } catch (error) {

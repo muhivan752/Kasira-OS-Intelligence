@@ -19,7 +19,7 @@ class KasiraApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       debugShowCheckedModeBanner: false,
       // Temporarily set to DashboardPage for preview. Change back to LoginPage later.
-      home: const DashboardPage(),
+      home: const LoginPage(),
     );
   }
 }
