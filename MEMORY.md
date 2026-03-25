@@ -34,6 +34,11 @@
 - [x] Fix Next.js auth (save tenant_id & outlet_id to cookies, add X-Tenant-ID header)
 - [x] Fix backend auth response to include tenant_id & outlet_id
 - [x] Fix Flutter app entry point (DashboardPage -> LoginPage)
+- [x] Fix next.config.ts remotePatterns (add ui-avatars.com and *.r2.cloudflarestorage.com)
+- [x] Fix backend/scripts/seed_demo.py order generation (use sequence for display_number, batch commits)
+- [x] Create modern landing page in app/page.tsx with Tailwind CSS and lucide-react
+- [x] Fix storefront fetch error by adding mock data fallback and `use server` directive in `app/actions/storefront.ts`
+- [x] Change localhost to 127.0.0.1 in API URLs to avoid IPv6 connection issues
 
 ## ⏳ IN PROGRESS
 - Menunggu instruksi selanjutnya

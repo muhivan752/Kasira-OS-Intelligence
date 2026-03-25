@@ -1,15 +1,15 @@
-'use client';
-
 import { CartProvider } from './CartContext';
-import { useParams } from 'next/navigation';
 
-export default function StorefrontLayout({
+export const dynamic = 'force-dynamic';
+
+export default async function StorefrontLayout({
   children,
+  params,
 }: {
   children: React.ReactNode;
+  params: Promise<{ slug: string }>;
 }) {
-  const params = useParams();
-  const slug = params.slug as string;
+  const { slug } = await params;
 
   return (
     <CartProvider slug={slug}>

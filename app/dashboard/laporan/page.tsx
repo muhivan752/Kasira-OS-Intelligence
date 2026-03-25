@@ -12,6 +12,7 @@ export default function LaporanPage() {
   const [orders, setOrders] = useState<any[]>([]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     loadData();
   }, [filter]);
 

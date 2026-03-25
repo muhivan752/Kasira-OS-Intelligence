@@ -159,9 +159,6 @@ async def seed_demo():
             
             # Create 100 Orders over last 7 days
             print("Creating 100 orders...")
-            orders = []
-            order_items = []
-            payments = []
             
             for i in range(100):
                 # Random time in last 7 days
@@ -170,8 +167,14 @@ async def seed_demo():
                 
                 order_id = uuid.uuid4()
                 
+                # Get SEQUENCE
+                seq_res = await db.execute(
+                    text("SELECT nextval('order_display_seq')")
+                )
+                display_num = seq_res.scalar()
+                
                 # Random 1-5 items
-                num_items = random.randint(1, 5)
+                num_items = random.randint(1, 4)
                 selected_products = random.sample(products, num_items)
                 
                 total_amount = 0
@@ -181,53 +184,50 @@ async def seed_demo():
                     subtotal = qty * price
                     total_amount += subtotal
                     
-                    order_items.append(
-                        OrderItem(
-                            id=uuid.uuid4(),
-                            order_id=order_id,
-                            product_id=p.id,
-                            quantity=qty,
-                            unit_price=price,
-                            total_price=subtotal
-                        )
-                    )
+                    db.add(OrderItem(
+                        id=uuid.uuid4(),
+                        order_id=order_id,
+                        product_id=p.id,
+                        quantity=qty,
+                        unit_price=price,
+                        total_price=subtotal
+                    ))
                 
-                order = Order(
+                db.add(Order(
                     id=order_id,
                     outlet_id=outlet_id,
                     shift_session_id=shift_id,
                     user_id=user_id,
-                    order_number=f"ORD-{order_time.strftime('%Y%m%d')}-{i:04d}",
-                    display_number=i+1,
+                    order_number=f"ORD-{order_time.strftime('%Y%m%d')}-{display_num}",
+                    display_number=display_num,
                     status="completed",
                     order_type="dine_in",
                     subtotal=total_amount,
                     total_amount=total_amount,
                     created_at=order_time,
                     updated_at=order_time
-                )
-                orders.append(order)
+                ))
                 
                 # Payment
                 payment_method = random.choice(["cash", "qris"])
-                payments.append(
-                    Payment(
-                        id=uuid.uuid4(),
-                        order_id=order_id,
-                        outlet_id=outlet_id,
-                        shift_session_id=shift_id,
-                        amount_due=total_amount,
-                        amount_paid=total_amount,
-                        payment_method=payment_method,
-                        status="paid",
-                        paid_at=order_time,
-                        created_at=order_time
-                    )
-                )
+                db.add(Payment(
+                    id=uuid.uuid4(),
+                    order_id=order_id,
+                    outlet_id=outlet_id,
+                    shift_session_id=shift_id,
+                    amount_due=total_amount,
+                    amount_paid=total_amount,
+                    payment_method=payment_method,
+                    status="paid",
+                    paid_at=order_time,
+                    created_at=order_time
+                ))
                 
-            db.add_all(orders)
-            db.add_all(order_items)
-            db.add_all(payments)
+                # Commit per 10 untuk efisiensi
+                if (i + 1) % 10 == 0:
+                    await db.commit()
+                    print(f"  {i+1}/100 orders created...")
+            
             await db.commit()
             
             print("Demo seed completed successfully!")
