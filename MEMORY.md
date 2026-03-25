@@ -28,6 +28,7 @@
 - [x] Create backend/scripts/seed_demo.py
 - [x] Fix Connect API bugs (product fields, order sequence, error messages)
 - [x] Fix backend/scripts/seed_demo.py (imports, timezone, search_path, idempotent)
+- [x] Fix backend/scripts/seed_demo.py models (remove tenant_id from Category/Product/Shift, add stock_enabled)
 
 ## ⏳ IN PROGRESS
 - Menunggu instruksi selanjutnya

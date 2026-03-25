@@ -8,7 +8,7 @@ import uuid
 # Add backend to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.core.database import AsyncSessionLocal, engine
+from backend.core.database import AsyncSessionLocal
 from backend.models import (
     Tenant, Brand, Outlet, User, Category, Product, 
     Order, OrderItem, Payment, Shift
@@ -38,10 +38,6 @@ async def seed_demo():
             db.add(tenant)
             await db.commit()
             
-            # Create schema for tenant
-            async with engine.begin() as conn:
-                await conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {tenant.schema_name}"))
-                
             # Set search path
             await db.execute(text(f"SET search_path TO public"))
             
@@ -84,10 +80,10 @@ async def seed_demo():
         
             # Create Categories
             categories = [
-                Category(id=uuid.uuid4(), tenant_id=tenant_id, brand_id=brand_id, name="Makanan Utama"),
-                Category(id=uuid.uuid4(), tenant_id=tenant_id, brand_id=brand_id, name="Minuman"),
-                Category(id=uuid.uuid4(), tenant_id=tenant_id, brand_id=brand_id, name="Cemilan"),
-                Category(id=uuid.uuid4(), tenant_id=tenant_id, brand_id=brand_id, name="Dessert")
+                Category(id=uuid.uuid4(), brand_id=brand_id, name="Makanan Utama"),
+                Category(id=uuid.uuid4(), brand_id=brand_id, name="Minuman"),
+                Category(id=uuid.uuid4(), brand_id=brand_id, name="Cemilan"),
+                Category(id=uuid.uuid4(), brand_id=brand_id, name="Dessert")
             ]
             db.add_all(categories)
             await db.commit()
@@ -133,12 +129,12 @@ async def seed_demo():
             for name, price, cat_id in products_data:
                 p = Product(
                     id=uuid.uuid4(),
-                    tenant_id=tenant_id,
                     brand_id=brand_id,
                     category_id=cat_id,
                     name=name,
                     base_price=price,
                     stock_qty=100,
+                    stock_enabled=True,
                     is_active=True
                 )
                 products.append(p)
