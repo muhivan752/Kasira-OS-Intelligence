@@ -10,7 +10,7 @@ class HLC {
   }
 
   static HLC parse(String hlcString) {
-    final parts = hlcString.split('-');
+    final parts = hlcString.split(':');
     if (parts.length != 3) {
       throw FormatException('Invalid HLC format: $hlcString');
     }
@@ -23,7 +23,7 @@ class HLC {
 
   @override
   String toString() {
-    return '$timestamp-${counter.toString().padLeft(4, '0')}-$nodeId';
+    return '$timestamp:$counter:$nodeId';
   }
 
   int compareTo(HLC other) {

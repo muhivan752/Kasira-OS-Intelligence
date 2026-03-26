@@ -37,13 +37,13 @@ class SyncService {
 
       final changes = {
         'categories': [], // We don't create categories from POS
-        'products': unsyncedProducts.map((p) => p.toJson()).toList(),
-        'orders': unsyncedOrders.map((o) => o.toJson()).toList(),
-        'order_items': unsyncedOrderItems.map((oi) => oi.toJson()).toList(),
-        'payments': unsyncedPayments.map((p) => p.toJson()).toList(),
+        'products': unsyncedProducts.map(_productToJson).toList(),
+        'orders': unsyncedOrders.map(_orderToJson).toList(),
+        'order_items': unsyncedOrderItems.map(_orderItemToJson).toList(),
+        'payments': unsyncedPayments.map(_paymentToJson).toList(),
         'outlet_stock': [], // Handled via products/orders usually
-        'shifts': unsyncedShifts.map((s) => s.toJson()).toList(),
-        'cash_activities': unsyncedCashActivities.map((ca) => ca.toJson()).toList(),
+        'shifts': unsyncedShifts.map(_shiftToJson).toList(),
+        'cash_activities': unsyncedCashActivities.map(_cashActivityToJson).toList(),
       };
 
       final lastSyncHlc = prefs.getString(_lastSyncKey);
@@ -269,4 +269,105 @@ class SyncService {
       }
     });
   }
+
+  Map<String, dynamic> _productToJson(ProductLocal p) => {
+    'id': p.id,
+    'brand_id': p.brandId,
+    'category_id': p.categoryId,
+    'name': p.name,
+    'description': p.description,
+    'base_price': p.basePrice,
+    'sku': p.sku,
+    'barcode': p.barcode,
+    'image_url': p.imageUrl,
+    'stock_enabled': p.stockEnabled,
+    'stock_qty': p.stockQty,
+    'is_active': p.isActive,
+    'row_version': p.rowVersion,
+    'is_deleted': p.isDeleted,
+    'hlc': p.lastModifiedHlc,
+  };
+
+  Map<String, dynamic> _orderToJson(OrderLocal o) => {
+    'id': o.id,
+    'outlet_id': o.outletId,
+    'shift_session_id': o.shiftSessionId,
+    'customer_id': o.customerId,
+    'table_id': o.tableId,
+    'user_id': o.userId,
+    'order_number': o.orderNumber,
+    'display_number': o.displayNumber,
+    'status': o.status,
+    'order_type': o.orderType,
+    'subtotal': o.subtotal,
+    'service_charge_amount': o.serviceChargeAmount,
+    'tax_amount': o.taxAmount,
+    'discount_amount': o.discountAmount,
+    'total_amount': o.totalAmount,
+    'notes': o.notes,
+    'created_at': o.createdAt?.toIso8601String(),
+    'updated_at': o.updatedAt?.toIso8601String(),
+    'row_version': o.rowVersion,
+    'is_deleted': o.isDeleted,
+    'hlc': o.lastModifiedHlc,
+  };
+
+  Map<String, dynamic> _orderItemToJson(OrderItemLocal oi) => {
+    'id': oi.id,
+    'order_id': oi.orderId,
+    'product_id': oi.productId,
+    'product_variant_id': oi.productVariantId,
+    'quantity': oi.quantity,
+    'unit_price': oi.unitPrice,
+    'discount_amount': oi.discountAmount,
+    'total_price': oi.totalPrice,
+    'modifiers': oi.modifiers,
+    'notes': oi.notes,
+    'row_version': oi.rowVersion,
+    'is_deleted': oi.isDeleted,
+    'hlc': oi.lastModifiedHlc,
+  };
+
+  Map<String, dynamic> _paymentToJson(PaymentLocal p) => {
+    'id': p.id,
+    'order_id': p.orderId,
+    'outlet_id': p.outletId,
+    'shift_session_id': p.shiftSessionId,
+    'amount_due': p.amountDue,
+    'amount_paid': p.amountPaid,
+    'payment_method': p.paymentMethod,
+    'status': p.status,
+    'reference_number': p.referenceNumber,
+    'paid_at': p.paidAt?.toIso8601String(),
+    'row_version': p.rowVersion,
+    'is_deleted': p.isDeleted,
+    'hlc': p.lastModifiedHlc,
+  };
+
+  Map<String, dynamic> _shiftToJson(ShiftLocal s) => {
+    'id': s.id,
+    'outlet_id': s.outletId,
+    'user_id': s.userId,
+    'status': s.status,
+    'start_time': s.startTime.toIso8601String(),
+    'end_time': s.endTime?.toIso8601String(),
+    'starting_cash': s.startingCash,
+    'ending_cash': s.endingCash,
+    'expected_ending_cash': s.expectedEndingCash,
+    'notes': s.notes,
+    'row_version': s.rowVersion,
+    'is_deleted': s.isDeleted,
+    'hlc': s.lastModifiedHlc,
+  };
+
+  Map<String, dynamic> _cashActivityToJson(CashActivityLocal ca) => {
+    'id': ca.id,
+    'shift_id': ca.shiftId,
+    'activity_type': ca.activityType,
+    'amount': ca.amount,
+    'description': ca.description,
+    'row_version': ca.rowVersion,
+    'is_deleted': ca.isDeleted,
+    'hlc': ca.lastModifiedHlc,
+  };
 }
