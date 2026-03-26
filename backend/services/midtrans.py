@@ -26,7 +26,8 @@ class MidtransService:
         gross_amount: float, 
         server_key: str,
         is_production: bool,
-        custom_field1: Optional[str] = None
+        custom_field1: Optional[str] = None,
+        custom_field2: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Create a QRIS transaction using Midtrans Core API.
@@ -41,6 +42,8 @@ class MidtransService:
         
         if custom_field1:
             payload["custom_field1"] = custom_field1
+        if custom_field2:
+            payload["custom_field2"] = custom_field2
 
         base_url = self._get_base_url(is_production)
         headers = self._get_headers(server_key)

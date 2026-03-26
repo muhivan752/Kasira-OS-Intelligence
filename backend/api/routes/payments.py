@@ -97,7 +97,8 @@ async def create_payment(
                     gross_amount=float(payment.amount_due),
                     server_key=server_key,
                     is_production=outlet.midtrans_is_production,
-                    custom_field1=str(payment.order_id) if payment.order_id else None
+                    custom_field1=str(payment.order_id) if payment.order_id else None,
+                    custom_field2=str(current_user.tenant_id)
                 )
                 
                 # Extract QRIS URL from actions
@@ -189,6 +190,17 @@ async def midtrans_webhook(
         payment_uuid = UUID(order_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid order_id format")
+        
+    # Extract tenant_id from custom_field2 and set search_path
+    tenant_id = payload.get("custom_field2")
+    if tenant_id:
+        try:
+            # Validate UUID format to prevent SQL injection
+            valid_tenant_id = str(UUID(tenant_id))
+            from sqlalchemy import text
+            await db.execute(text(f'SET search_path TO "{valid_tenant_id}", public'))
+        except ValueError:
+            pass # Ignore invalid tenant_id, let db.get fail naturally
         
     payment = await db.get(Payment, payment_uuid)
     if not payment:
