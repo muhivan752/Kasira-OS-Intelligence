@@ -5,7 +5,7 @@ services:
     build: .
     ports:
       - "8000:8000"
-    env_file: backend/.env
+    env_file: .env
     depends_on:
       - db
       - redis
@@ -14,9 +14,9 @@ services:
   db:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_DB: kasira_db
-      POSTGRES_USER: kasira
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-kasira_db}
+      POSTGRES_USER: ${POSTGRES_USER:-kasira}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kasira_secure_password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -33,10 +33,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.next
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000/api/v1
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
     depends_on:
       - backend
     restart: always

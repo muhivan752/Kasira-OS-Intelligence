@@ -39,6 +39,10 @@
 - [x] Create modern landing page in app/page.tsx with Tailwind CSS and lucide-react
 - [x] Fix storefront fetch error by adding mock data fallback and `use server` directive in `app/actions/storefront.ts`
 - [x] Change localhost to 127.0.0.1 in API URLs to avoid IPv6 connection issues
+- [x] Audit all Alembic migrations (upgrade vs downgrade) to ensure Golden Rules compliance
+- [x] Fix Midtrans webhook multi-tenant issue (pass tenant_id via custom_field2 and set search_path dynamically)
+- [x] Pre-deployment checks (CORS, Dockerfile, env vars, docker-compose)
+- [x] Flutter Sync Engine (Drift Database, HLC, Dio API Client, Riverpod Integration)
 
 ## ⏳ IN PROGRESS
 - Menunggu instruksi selanjutnya

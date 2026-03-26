@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # Fonnte WA
-    FONNTE_TOKEN: str = "YOUR_FONNTE_TOKEN"
+    FONNTE_TOKEN: str = ""
 
     # Midtrans
     MIDTRANS_IS_PRODUCTION: bool = False

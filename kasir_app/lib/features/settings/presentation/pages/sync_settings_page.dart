@@ -1,38 +1,70 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/sync/sync_provider.dart';
 
-class SyncSettingsPage extends StatefulWidget {
+class SyncSettingsPage extends ConsumerStatefulWidget {
   const SyncSettingsPage({super.key});
 
   @override
-  State<SyncSettingsPage> createState() => _SyncSettingsPageState();
+  ConsumerState<SyncSettingsPage> createState() => _SyncSettingsPageState();
 }
 
-class _SyncSettingsPageState extends State<SyncSettingsPage> {
+class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
   bool _isAutoSyncEnabled = true;
   bool _isSyncing = false;
-  String _lastSyncTime = '10 menit yang lalu';
+  String _lastSyncTime = 'Belum pernah';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLastSyncTime();
+  }
+
+  void _loadLastSyncTime() {
+    final prefs = ref.read(sharedPreferencesProvider);
+    final lastSync = prefs.getString('last_sync_hlc');
+    if (lastSync != null) {
+      setState(() {
+        _lastSyncTime = 'Tersinkronisasi';
+      });
+    }
+  }
 
   void _performManualSync() async {
     setState(() {
       _isSyncing = true;
     });
 
-    // Simulate sync delay
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (mounted) {
-      setState(() {
-        _isSyncing = false;
-        _lastSyncTime = 'Baru saja';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sinkronisasi data berhasil.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+    try {
+      final syncService = ref.read(syncServiceProvider);
+      await syncService.sync();
+      
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+          _lastSyncTime = 'Baru saja';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sinkronisasi data berhasil.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal sinkronisasi: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

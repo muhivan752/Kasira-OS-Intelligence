@@ -1,19 +1,21 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/sync/sync_provider.dart';
 import '../widgets/product_card.dart';
 import '../widgets/cart_panel.dart';
 
-class PosPage extends StatefulWidget {
+class PosPage extends ConsumerStatefulWidget {
   const PosPage({super.key});
 
   @override
-  State<PosPage> createState() => _PosPageState();
+  ConsumerState<PosPage> createState() => _PosPageState();
 }
 
-class _PosPageState extends State<PosPage> {
+class _PosPageState extends ConsumerState<PosPage> {
   int _selectedCategoryIndex = 0;
   final List<String> _categories = ['Semua', 'Kopi', 'Non-Kopi', 'Makanan', 'Snack', 'Dessert'];
 
@@ -55,9 +57,15 @@ class _PosPageState extends State<PosPage> {
     });
   }
 
-  void _syncToServer() {
-    // TODO: Implement sync logic
+  void _syncToServer() async {
     debugPrint("Syncing to server...");
+    try {
+      final syncService = ref.read(syncServiceProvider);
+      await syncService.sync();
+      debugPrint("Sync completed successfully.");
+    } catch (e) {
+      debugPrint("Sync failed: $e");
+    }
   }
 
   @override

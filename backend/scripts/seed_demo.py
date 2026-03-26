@@ -16,6 +16,8 @@ from backend.models import (
 from backend.core.security import get_pin_hash
 from sqlalchemy import text, select
 
+from backend.models.shift import ShiftStatus
+
 async def seed_demo():
     print("Starting demo seed...")
     try:
@@ -152,7 +154,7 @@ async def seed_demo():
                 start_time=now - timedelta(days=7),
                 end_time=now,
                 starting_cash=500000,
-                status="closed"
+                status=ShiftStatus.closed
             )
             db.add(shift)
             await db.commit()

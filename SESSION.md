@@ -21,6 +21,10 @@ File dikerjakan:
 
 ## PROGRESS
 ✅ Selesai:
+- Audit 56 Alembic migrations (upgrade vs downgrade) to ensure 100% Golden Rules compliance (Perfect Match).
+- Fix Midtrans webhook multi-tenant issue (pass tenant_id via custom_field2 and set search_path dynamically).
+- Pre-deployment checks: Fix Dockerfile to include alembic.ini, update docker-compose.yml to use NEXT_PUBLIC_API_URL as build arg, and update .env.example with production variables.
+- Flutter Sync Engine: Added Drift dependencies, created HLC utility, created Drift Database tables (Products, Orders, OrderItems, Payments, Shifts, CashActivities), created SyncService using Dio, and integrated with PosPage (auto-sync) and SyncSettingsPage (manual sync).
 - CRDT Bug Fixes (HLC.receive logic and PNCounter lower bound)
 - Update backend requirements (uvicorn, cryptography)
 - Translate X-Tenant-ID error message
@@ -188,6 +192,7 @@ File dikerjakan:
   - Membuat `backend/services/midtrans.py` untuk generate QRIS via Midtrans Core API.
   - Menambahkan endpoint `POST /payments/webhook/midtrans` untuk menerima notifikasi dari Midtrans (dengan verifikasi `signature_key`).
   - Jika webhook menerima status `settlement`, status payment otomatis menjadi `paid` dan status order menjadi `completed`.
+  - **Multi-tenant Fix**: Karena Midtrans webhook tidak mengirimkan header `X-Tenant-ID`, `tenant_id` disisipkan ke parameter `custom_field2` saat membuat transaksi QRIS. Webhook handler kemudian mengekstrak `custom_field2`, memvalidasinya sebagai UUID, dan menjalankan `SET search_path TO "{valid_tenant_id}", public` sebelum melakukan query ke database.
 - Inisialisasi Flutter Kasir App (`kasir_app`):
   - Menggunakan arsitektur Feature-First.
   - State management: `flutter_riverpod`.
@@ -212,5 +217,5 @@ File dikerjakan:
 - Tidak ada.
 
 ## CHECKPOINT TERAKHIR
-Terakhir sampai di: Selesai membuat Storefront Connect API (STEP 2).
-Besok lanjut dari: Menunggu instruksi selanjutnya untuk fitur Flutter atau Backend atau Next.js.
+Terakhir sampai di: Audit Alembic migrations dan Fix Midtrans multi-tenant webhook.
+Besok lanjut dari: Deployment ke VPS atau fitur Flutter/Next.js selanjutnya.
