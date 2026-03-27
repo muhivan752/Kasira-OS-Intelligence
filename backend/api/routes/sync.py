@@ -67,6 +67,9 @@ async def sync_data(
         if request.changes.outlet_stock:
             await process_stock_sync(db, request.changes.outlet_stock, outlet_id, server_hlc)
             
+        # Commit all pushed changes in a single transaction
+        await db.commit()
+            
     # 2. PULL (Get changes from server to client since last_sync_hlc)
     client_last_sync_hlc = None
     if request.last_sync_hlc:
@@ -116,6 +119,8 @@ async def sync_data(
             else:
                 record_dict[c.name] = val
                 
+        record_dict["is_deleted"] = getattr(r, "deleted_at", None) is not None
+                
         r_updated_at = getattr(r, "updated_at")
         if r_updated_at.tzinfo is None:
             r_updated_at = r_updated_at.replace(tzinfo=timezone.utc)
@@ -158,6 +163,8 @@ async def sync_data(
             else:
                 record_dict[c.name] = val
                 
+        record_dict["is_deleted"] = getattr(r, "deleted_at", None) is not None
+                
         r_updated_at = getattr(r, "updated_at")
         if r_updated_at.tzinfo is None:
             r_updated_at = r_updated_at.replace(tzinfo=timezone.utc)
@@ -198,6 +205,8 @@ async def sync_data(
                 record_dict[c.name] = str(val)
             else:
                 record_dict[c.name] = val
+                
+        record_dict["is_deleted"] = getattr(r, "deleted_at", None) is not None
                 
         r_updated_at = getattr(r, "updated_at")
         if r_updated_at.tzinfo is None:

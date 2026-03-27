@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
@@ -78,8 +78,35 @@ async def create_payment(
         )
         shift_result = await db.execute(shift_query)
         active_shift = shift_result.scalar_one_or_none()
-        if active_shift:
-            shift_session_id = active_shift.id
+        if not active_shift:
+            raise HTTPException(status_code=400, detail="Anda harus membuka Shift (Buka Kasir) terlebih dahulu sebelum menerima pembayaran.")
+        shift_session_id = active_shift.id
+        
+    # Cash Math Validation
+    if payment_in.payment_method == PaymentMethod.cash:
+        if payment_in.amount_paid < payment_in.amount_due:
+            raise HTTPException(status_code=400, detail="Nominal pembayaran kurang dari total tagihan.")
+        # Force calculate change to prevent frontend manipulation
+        payment_in.change_amount = payment_in.amount_paid - payment_in.amount_due
+        
+    # Double QRIS Validation
+    if payment_in.payment_method == PaymentMethod.qris and payment_in.order_id:
+        pending_qris_query = select(Payment).where(
+            Payment.order_id == payment_in.order_id,
+            Payment.payment_method == PaymentMethod.qris,
+            Payment.status == PaymentStatus.pending,
+            Payment.deleted_at.is_(None)
+        )
+        pending_qris_result = await db.execute(pending_qris_query)
+        existing_qris = pending_qris_result.scalar_one_or_none()
+        if existing_qris:
+            # Return existing QRIS instead of creating a new one
+            return StandardResponse(
+                success=True,
+                data=PaymentResponse.model_validate(existing_qris),
+                request_id=request.state.request_id,
+                message="QRIS payment already exists and is pending"
+            )
         
     payment = Payment(
         order_id=payment_in.order_id,
@@ -134,32 +161,47 @@ async def create_payment(
                 payment.status = PaymentStatus.failed
                 payment.midtrans_raw = {"error": str(e)}
     
-    # If cash payment is successful, update order status to completed
+    # If cash payment is successful, check if order is fully paid
     if initial_status == PaymentStatus.paid and payment_in.order_id:
-        stmt = (
-            update(Order)
-            .where(Order.id == payment_in.order_id)
-            .values(
-                status=OrderStatus.completed,
-                row_version=Order.row_version + 1
-            )
+        # Calculate total paid so far
+        paid_query = select(func.sum(Payment.amount_paid)).where(
+            Payment.order_id == payment_in.order_id,
+            Payment.status == PaymentStatus.paid,
+            Payment.deleted_at.is_(None)
         )
-        await db.execute(stmt)
-        if payment_in.order_id:
-            order_for_receipt = await db.get(Order, payment_in.order_id)
-            if order_for_receipt and order_for_receipt.customer_id:
+        paid_result = await db.execute(paid_query)
+        total_paid_so_far = paid_result.scalar() or 0
+        
+        # Order is already fetched above
+        if total_paid_so_far >= order.total_amount:
+            new_order_status = OrderStatus.completed
+            # If payment is not tied to a shift, it's an online payment, so set to preparing
+            if payment.shift_session_id is None:
+                new_order_status = OrderStatus.preparing
+                
+            stmt = (
+                update(Order)
+                .where(Order.id == payment_in.order_id)
+                .values(
+                    status=new_order_status,
+                    row_version=Order.row_version + 1
+                )
+            )
+            await db.execute(stmt)
+            
+            # Send WA receipt
+            if order.customer_id:
                 from backend.models.customer import Customer
-                customer = await db.get(Customer, order_for_receipt.customer_id)
+                customer = await db.get(Customer, order.customer_id)
                 if customer and customer.phone:
                     outlet = await db.get(Outlet, payment_in.outlet_id)
                     outlet_name = outlet.name if outlet else "Kasira"
                     struk = (
                         f"Struk Kasira\n"
                         f"Outlet: {outlet_name}\n"
-                        f"Order: #{order_for_receipt.display_number}\n\n"
-                        f"Total: Rp{float(payment.amount_due):,.0f}\n"
-                        f"Bayar: {payment_in.payment_method}\n"
-                        f"Kembalian: Rp{float(payment.change_amount):,.0f}\n\n"
+                        f"Order: #{order.display_number}\n\n"
+                        f"Total: Rp{float(order.total_amount):,.0f}\n"
+                        f"Telah Lunas\n\n"
                         f"Terima kasih!"
                     )
                     asyncio.create_task(
@@ -249,44 +291,66 @@ async def midtrans_webhook(
     # Determine new status
     new_status = payment.status
     if transaction_status in ['settlement', 'capture']:
-        new_status = PaymentStatus.paid
+        if float(gross_amount) < float(payment.amount_due):
+            new_status = PaymentStatus.failed # Reject if underpaid
+        else:
+            new_status = PaymentStatus.paid
     elif transaction_status in ['deny', 'cancel', 'expire', 'failure']:
         new_status = PaymentStatus.failed
         
     if new_status != payment.status:
         payment.status = new_status
         payment.midtrans_raw = payload
+        payment.row_version += 1
         
         if new_status == PaymentStatus.paid:
             payment.paid_at = datetime.now(timezone.utc)
-            payment.amount_paid = payment.amount_due # Assuming full payment
+            payment.amount_paid = float(gross_amount) # Use actual paid amount
             
             # Update related order if exists
             if payment.order_id:
-                stmt = (
-                    update(Order)
-                    .where(Order.id == payment.order_id)
-                    .values(
-                        status=OrderStatus.completed,
-                        row_version=Order.row_version + 1
-                    )
+                # Calculate total paid
+                paid_query = select(func.sum(Payment.amount_paid)).where(
+                    Payment.order_id == payment.order_id,
+                    Payment.status == PaymentStatus.paid,
+                    Payment.id != payment.id, # Exclude current payment as it's not committed yet
+                    Payment.deleted_at.is_(None)
                 )
-                await db.execute(stmt)
-                if payment.order_id:
-                    order_for_receipt = await db.get(Order, payment.order_id)
-                    if order_for_receipt and order_for_receipt.customer_id:
+                paid_result = await db.execute(paid_query)
+                total_paid_so_far = paid_result.scalar() or 0
+                
+                order = await db.get(Order, payment.order_id)
+                total_paid = float(total_paid_so_far) + float(payment.amount_paid)
+                
+                if order and total_paid >= float(order.total_amount):
+                    # If it's an online order payment (no shift), set to preparing so POS knows it needs to be made
+                    new_order_status = OrderStatus.completed
+                    if payment.shift_session_id is None:
+                        new_order_status = OrderStatus.preparing
+                        
+                    stmt = (
+                        update(Order)
+                        .where(Order.id == payment.order_id)
+                        .values(
+                            status=new_order_status,
+                            row_version=Order.row_version + 1
+                        )
+                    )
+                    await db.execute(stmt)
+                    
+                    # Send WA receipt
+                    if order.customer_id:
                         from backend.models.customer import Customer
-                        customer = await db.get(Customer, order_for_receipt.customer_id)
+                        customer = await db.get(Customer, order.customer_id)
                         if customer and customer.phone:
                             outlet = await db.get(Outlet, payment.outlet_id)
                             outlet_name = outlet.name if outlet else "Kasira"
                             struk = (
                                 f"Struk Kasira\n"
                                 f"Outlet: {outlet_name}\n"
-                                f"Order: #{order_for_receipt.display_number}\n\n"
-                                f"Total: Rp{float(payment.amount_due):,.0f}\n"
-                                f"Bayar: {payment.payment_method}\n"
-                                f"Kembalian: Rp{float(payment.change_amount):,.0f}\n\n"
+                                f"Order: #{order.display_number}\n\n"
+                                f"Total: Rp{float(order.total_amount):,.0f}\n"
+                                f"Telah Lunas\n\n"
                                 f"Terima kasih!"
                             )
                             asyncio.create_task(

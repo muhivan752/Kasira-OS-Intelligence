@@ -57,8 +57,14 @@ class HLC:
             
         return 0
 
-    def receive(self, remote: 'HLC', current_physical_time: int = None) -> 'HLC':
+    def receive(self, remote: 'HLC', current_physical_time: int = None, max_clock_skew_ms: int = 300000) -> 'HLC':
         now = current_physical_time or int(time.time() * 1000)
+        
+        # Clock Skew Protection: If remote timestamp is too far in the future,
+        # cap it to the maximum allowed skew to prevent the server clock from being dragged forward.
+        if remote.timestamp > now + max_clock_skew_ms:
+            remote.timestamp = now + max_clock_skew_ms
+            
         max_ts = max(self.timestamp, remote.timestamp)
         if now > max_ts:
             self.timestamp = now

@@ -85,8 +85,8 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
             "id": str(outlet.id),
             "name": outlet.name,
             "photo": "https://ui-avatars.com/api/?name=" + outlet.name, # Mock photo
-            "is_open": True,
-            "opening_hours": "08:00 - 22:00",
+            "is_open": outlet.is_open,
+            "opening_hours": outlet.opening_hours or "08:00 - 22:00",
             "trust_badge": "Verified Partner" # Mock trust badge
         },
         "menu": [
@@ -128,6 +128,9 @@ async def create_connect_order(
     outlet = result.scalar_one_or_none()
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+        
+    if not outlet.is_open:
+        raise HTTPException(status_code=400, detail="Maaf, outlet sedang tutup")
 
     # Check idempotency key
     result = await db.execute(
@@ -142,13 +145,22 @@ async def create_connect_order(
             )
             order = order_result.scalar_one_or_none()
             if order:
+                # Get the payment
+                from backend.models.payment import Payment
+                payment_result = await db.execute(
+                    select(Payment).where(Payment.order_id == order.id)
+                )
+                payment = payment_result.scalar_one_or_none()
+                
                 return StandardResponse(
                     success=True,
                     data={
                         "order_id": str(order.id),
                         "display_number": order.display_number,
                         "status": order.status,
-                        "estimated_minutes": 15 if order.order_type == "pickup" else 30
+                        "estimated_minutes": 15 if order.order_type == "pickup" else 30,
+                        "payment_id": str(payment.id) if payment else None,
+                        "qris_url": payment.qris_url if payment else None
                     },
                     message="Order retrieved from idempotency key"
                 )
@@ -192,16 +204,46 @@ async def create_connect_order(
     # Calculate totals and create order items
     subtotal = 0
     order_items = []
+    from backend.models.product import OutletStock
     for item_input in input_data.items:
+        # Use with_for_update to prevent race conditions on stock
         result = await db.execute(
-            select(Product).where(Product.id == item_input.product_id)
+            select(Product).where(
+                Product.id == item_input.product_id,
+                Product.deleted_at.is_(None)
+            ).with_for_update()
         )
         product = result.scalar_one_or_none()
-        if not product or not product.is_active or product.stock_qty < item_input.qty:
-            raise HTTPException(status_code=400, detail="Produk tidak tersedia atau stok habis")
         
-        # Deduct stock
-        product.stock_qty -= item_input.qty
+        if not product or not product.is_active:
+            raise HTTPException(status_code=400, detail="Produk tidak tersedia")
+            
+        if product.stock_enabled:
+            # Check OutletStock
+            stock_result = await db.execute(
+                select(OutletStock).where(
+                    OutletStock.product_id == product.id,
+                    OutletStock.outlet_id == outlet.id
+                ).with_for_update()
+            )
+            outlet_stock = stock_result.scalar_one_or_none()
+            
+            if not outlet_stock or outlet_stock.computed_stock < item_input.qty:
+                raise HTTPException(status_code=400, detail=f"Stok habis untuk produk {product.name}")
+                
+            # Deduct stock using CRDT logic
+            from backend.services.crdt import PNCounter
+            server_node_id = "server"
+            outlet_stock.crdt_negative = PNCounter.increment(
+                outlet_stock.crdt_negative or {}, 
+                server_node_id, 
+                item_input.qty
+            )
+            outlet_stock.computed_stock = PNCounter.get_value(
+                outlet_stock.crdt_positive or {}, 
+                outlet_stock.crdt_negative
+            )
+            outlet_stock.row_version += 1
         
         item_total = product.base_price * item_input.qty
         subtotal += item_total
@@ -243,6 +285,50 @@ async def create_connect_order(
         item.order_id = order.id
         db.add(item)
 
+    # Create Payment (QRIS)
+    from backend.models.payment import Payment
+    from backend.schemas.payment import PaymentMethod, PaymentStatus
+    from backend.services.midtrans import midtrans_service
+    from backend.utils.encryption import decrypt_field
+    
+    payment = Payment(
+        order_id=order.id,
+        outlet_id=outlet.id,
+        payment_method=PaymentMethod.qris,
+        amount_due=subtotal,
+        amount_paid=0,
+        change_amount=0,
+        status=PaymentStatus.pending,
+        idempotency_key=input_data.idempotency_key
+    )
+    db.add(payment)
+    await db.flush()
+    
+    qris_url = None
+    if outlet.midtrans_server_key_encrypted:
+        try:
+            server_key = decrypt_field(outlet.midtrans_server_key_encrypted)
+            midtrans_res = await midtrans_service.create_qris_transaction(
+                order_id=str(payment.id),
+                gross_amount=float(payment.amount_due),
+                server_key=server_key,
+                is_production=outlet.midtrans_is_production,
+                custom_field1=str(payment.order_id),
+                custom_field2=str(outlet.tenant_id)
+            )
+            
+            actions = midtrans_res.get("actions", [])
+            for action in actions:
+                if action.get("name") == "generate-qr-code":
+                    qris_url = action.get("url")
+                    break
+                    
+            payment.qris_url = qris_url
+            payment.midtrans_raw = midtrans_res
+        except Exception as e:
+            payment.status = PaymentStatus.failed
+            payment.midtrans_raw = {"error": str(e)}
+
     # Create connect order for idempotency
     connect_order = ConnectOrder(
         connect_outlet_id=connect_outlet.id,
@@ -272,7 +358,9 @@ async def create_connect_order(
             "order_id": str(order.id),
             "display_number": order.display_number,
             "status": order.status,
-            "estimated_minutes": 15 if order.order_type == "pickup" else 30
+            "estimated_minutes": 15 if order.order_type == "pickup" else 30,
+            "payment_id": str(payment.id),
+            "qris_url": qris_url
         },
         message="Order created successfully"
     )
