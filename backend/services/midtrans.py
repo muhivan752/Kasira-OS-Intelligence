@@ -27,7 +27,8 @@ class MidtransService:
         server_key: str,
         is_production: bool,
         custom_field1: Optional[str] = None,
-        custom_field2: Optional[str] = None
+        custom_field2: Optional[str] = None,
+        expiry_minutes: int = 15
     ) -> Dict[str, Any]:
         """
         Create a QRIS transaction using Midtrans Core API.
@@ -37,6 +38,10 @@ class MidtransService:
             "transaction_details": {
                 "order_id": order_id,
                 "gross_amount": int(gross_amount)
+            },
+            "custom_expiry": {
+                "expiry_duration": expiry_minutes,
+                "unit": "minute"
             }
         }
         

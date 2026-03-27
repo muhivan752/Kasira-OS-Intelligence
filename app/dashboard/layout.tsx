@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { logout } from '@/app/actions/auth';
 import { getCurrentUser, getOutlets } from '@/app/actions/api';
+import { Logo } from '@/components/ui/logo';
 
 const navigation = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
@@ -73,9 +74,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Sidebar Header */}
           <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-                K
-              </div>
+              <Logo size="sm" variant="light" showWordmark={false} />
               <span className="text-lg font-bold text-gray-900 truncate max-w-[150px]">
                 {outletName}
               </span>
@@ -129,9 +128,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Mobile Header */}
         <div className="lg:hidden flex items-center justify-between h-16 px-4 bg-white border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-              K
-            </div>
+            <Logo size="sm" variant="light" showWordmark={false} />
             <span className="text-lg font-bold text-gray-900 truncate max-w-[150px]">
               {outletName}
             </span>

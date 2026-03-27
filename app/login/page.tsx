@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { sendOtp, verifyOtp } from '@/app/actions/auth';
 import { Loader2 } from 'lucide-react';
+import { Logo } from '@/components/ui/logo';
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('');
@@ -65,7 +66,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-100">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Kasira</h2>
+          <Logo size="lg" variant="light" className="justify-center" />
           <p className="mt-2 text-sm text-gray-600">
             {step === 'phone' ? 'Masuk ke Dashboard Owner' : 'Masukkan kode OTP'}
           </p>

@@ -34,11 +34,29 @@ async def create_payment(
     """
     Create a new payment.
     """
+    # Check idempotency key first to prevent duplicate payments and duplicate WA messages
+    if payment_in.idempotency_key:
+        existing_payment_query = select(Payment).where(
+            Payment.idempotency_key == payment_in.idempotency_key,
+            Payment.outlet_id == payment_in.outlet_id
+        )
+        existing_result = await db.execute(existing_payment_query)
+        existing_payment = existing_result.scalar_one_or_none()
+        if existing_payment:
+            return StandardResponse(
+                success=True,
+                data=PaymentResponse.model_validate(existing_payment),
+                request_id=request.state.request_id,
+                message="Payment already processed (idempotent)"
+            )
+
     # Verify order exists if provided
     if payment_in.order_id:
         order = await db.get(Order, payment_in.order_id)
         if not order or order.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Order tidak ditemukan")
+        if order.status == OrderStatus.completed:
+            raise HTTPException(status_code=400, detail="Order sudah selesai (sudah dibayar)")
             
     # Determine initial status based on method
     initial_status = PaymentStatus.pending
@@ -202,7 +220,11 @@ async def midtrans_webhook(
         except ValueError:
             pass # Ignore invalid tenant_id, let db.get fail naturally
         
-    payment = await db.get(Payment, payment_uuid)
+    # Use SELECT FOR UPDATE to prevent race conditions
+    stmt = select(Payment).where(Payment.id == payment_uuid).with_for_update()
+    result = await db.execute(stmt)
+    payment = result.scalar_one_or_none()
+    
     if not payment:
         raise HTTPException(status_code=404, detail="Pembayaran tidak ditemukan")
         

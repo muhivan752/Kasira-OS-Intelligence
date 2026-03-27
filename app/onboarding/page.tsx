@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getOutlets, updateOutlet, createProduct, setupPayment } from '@/app/actions/api';
 import { Loader2, CheckCircle2, Store, Coffee, Utensils, ShoppingBag, ChevronRight, Download } from 'lucide-react';
+import { Logo } from '@/components/ui/logo';
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(1);
@@ -112,6 +113,9 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
+        <div className="flex justify-center mb-10">
+          <Logo size="lg" variant="light" />
+        </div>
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex items-center justify-between">

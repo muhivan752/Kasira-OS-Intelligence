@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Menu, X, Store } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
+import { Logo } from '@/components/ui/logo';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -19,10 +20,7 @@ export default function Navbar() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
-                <Store className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-bold text-xl text-gray-900 tracking-tight">Kasira</span>
+              <Logo size="sm" variant="light" />
             </Link>
           </div>
           

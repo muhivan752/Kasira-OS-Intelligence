@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { getStorefront } from '@/app/actions/storefront';
 import { useCart } from './CartContext';
 import { ShoppingBag, MessageCircle, Store, Clock, MapPin, CheckCircle2 } from 'lucide-react';
+import { Logo } from '@/components/ui/logo';
 
 export default function StorefrontPage() {
   const params = useParams();
@@ -190,10 +191,10 @@ export default function StorefrontPage() {
       </div>
 
       {/* Footer */}
-      <div className="py-8 text-center border-t border-gray-100 mt-4">
-        <p className="text-xs text-gray-400 font-medium">
-          Powered by <span className="font-bold text-gray-500">Kasira</span> — Zero Komisi
-        </p>
+      <div className="py-8 flex flex-col items-center justify-center border-t border-gray-100 mt-4 gap-1">
+        <p className="text-xs text-gray-400 font-medium">Powered by</p>
+        <Logo size="xs" variant="light" />
+        <p className="text-[10px] text-gray-400 font-medium mt-1">Zero Komisi</p>
       </div>
 
       {/* Floating Action Buttons */}
