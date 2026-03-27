@@ -218,7 +218,8 @@ async def update_order_status(
         .where(Order.id == order_id, Order.row_version == status_in.row_version)
         .values(
             status=status_in.status,
-            row_version=Order.row_version + 1
+            row_version=Order.row_version + 1,
+            updated_at=datetime.now(timezone.utc)
         )
         .returning(Order)
     )

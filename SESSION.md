@@ -40,6 +40,12 @@ File dikerjakan:
 - Verify missing row versions in migrations
 - Update config.py (remove Midtrans keys, make ENCRYPTION_KEY required)
 - Create Storefront Connect API (GET /connect/{slug}, POST /connect/{slug}/order, GET /connect/order/{order_id})
+- Fix Storefront Payment Edge Cases:
+  - CRDT Stock Bug: Used `PNCounter.increment` on `crdt_negative` and `with_for_update()` to prevent POS sync conflicts when ordering from Storefront.
+  - Midtrans Webhook: Incremented `payment.row_version` to ensure POS syncs payment status changes.
+  - Online Order Status: Orders without `shift_session_id` are set to `preparing` upon payment (not `completed`) so they appear in the POS kitchen queue.
+  - Outlet Open Validation: Added `is_open` check in `get_connect_storefront` and `create_connect_order`.
+  - QRIS Generation: Integrated Midtrans QRIS directly into `create_connect_order`.
 - Setup Alembic file 038_connect_outlets.py
 - Setup Alembic file 039_connect_orders.py (idempotency_key UNIQUE, FK to orders, ENUM status)
 - Setup Alembic file 040_connect_customer_profiles.py
@@ -124,6 +130,7 @@ File dikerjakan:
 - backend/api/routes/products.py
 - backend/api/routes/orders.py
 - backend/api/routes/payments.py
+- backend/api/routes/connect.py
 - backend/models/base.py
 - backend/models/user.py
 - backend/models/tenant.py
@@ -143,6 +150,7 @@ File dikerjakan:
 - backend/schemas/payment.py
 - backend/schemas/response.py
 - backend/services/midtrans.py
+- backend/services/sync.py
 - kasir_app/pubspec.yaml
 - kasir_app/lib/main.dart
 - kasir_app/lib/core/theme/app_colors.dart
@@ -193,6 +201,11 @@ File dikerjakan:
   - Menambahkan endpoint `POST /payments/webhook/midtrans` untuk menerima notifikasi dari Midtrans (dengan verifikasi `signature_key`).
   - Jika webhook menerima status `settlement`, status payment otomatis menjadi `paid` dan status order menjadi `completed`.
   - **Multi-tenant Fix**: Karena Midtrans webhook tidak mengirimkan header `X-Tenant-ID`, `tenant_id` disisipkan ke parameter `custom_field2` saat membuat transaksi QRIS. Webhook handler kemudian mengekstrak `custom_field2`, memvalidasinya sebagai UUID, dan menjalankan `SET search_path TO "{valid_tenant_id}", public` sebelum melakukan query ke database.
+- **Storefront Payment Edge Cases**:
+  - **CRDT Stock**: Menggunakan `PNCounter.increment` pada `crdt_negative` dan `with_for_update()` saat order dari Storefront agar tidak terjadi konflik sync dengan POS.
+  - **Online Order Status**: Order dari Storefront (tanpa `shift_session_id`) yang sudah dibayar akan diubah statusnya menjadi `preparing` (bukan `completed`) agar masuk ke antrean dapur POS.
+  - **Webhook Sync**: Menambahkan `payment.row_version += 1` di webhook Midtrans agar perubahan status pembayaran ditarik oleh POS saat sync.
+  - **Outlet Validation**: Menambahkan validasi `is_open` di endpoint Storefront untuk mencegah order saat outlet tutup.
 - Inisialisasi Flutter Kasir App (`kasir_app`):
   - Menggunakan arsitektur Feature-First.
   - State management: `flutter_riverpod`.
@@ -217,5 +230,5 @@ File dikerjakan:
 - Tidak ada.
 
 ## CHECKPOINT TERAKHIR
-Terakhir sampai di: Audit Alembic migrations dan Fix Midtrans multi-tenant webhook.
-Besok lanjut dari: Deployment ke VPS atau fitur Flutter/Next.js selanjutnya.
+Terakhir sampai di: Fix Storefront Payment Edge Cases (CRDT stock, Midtrans webhook, outlet validation).
+Besok lanjut dari: Deployment ke VPS, stress testing CRDT, atau fitur Flutter/Next.js selanjutnya.

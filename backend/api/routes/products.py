@@ -55,7 +55,8 @@ async def restock_product(
             stock_qty=new_stock,
             is_active=is_active,
             last_restock_at=datetime.now(timezone.utc),
-            row_version=Product.row_version + 1
+            row_version=Product.row_version + 1,
+            updated_at=datetime.now(timezone.utc)
         )
         .returning(Product)
     )
@@ -241,7 +242,7 @@ async def update_product(
     stmt = (
         update(Product)
         .where(Product.id == product_id, Product.row_version == product_in.row_version)
-        .values(**update_data, row_version=Product.row_version + 1)
+        .values(**update_data, row_version=Product.row_version + 1, updated_at=datetime.now(timezone.utc))
         .returning(Product)
     )
     

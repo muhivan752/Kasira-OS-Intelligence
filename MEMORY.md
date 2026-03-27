@@ -43,6 +43,7 @@
 - [x] Fix Midtrans webhook multi-tenant issue (pass tenant_id via custom_field2 and set search_path dynamically)
 - [x] Pre-deployment checks (CORS, Dockerfile, env vars, docker-compose)
 - [x] Flutter Sync Engine (Drift Database, HLC, Dio API Client, Riverpod Integration)
+- [x] Fix Storefront Payment Edge Cases (CRDT stock deduction, outlet open validation, online order status)
 
 ## ⏳ IN PROGRESS
 - Menunggu instruksi selanjutnya

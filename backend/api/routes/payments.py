@@ -179,15 +179,8 @@ async def create_payment(
             if payment.shift_session_id is None:
                 new_order_status = OrderStatus.preparing
                 
-            stmt = (
-                update(Order)
-                .where(Order.id == payment_in.order_id)
-                .values(
-                    status=new_order_status,
-                    row_version=Order.row_version + 1
-                )
-            )
-            await db.execute(stmt)
+            order.status = new_order_status
+            order.row_version += 1
             
             # Send WA receipt
             if order.customer_id:
@@ -328,15 +321,8 @@ async def midtrans_webhook(
                     if payment.shift_session_id is None:
                         new_order_status = OrderStatus.preparing
                         
-                    stmt = (
-                        update(Order)
-                        .where(Order.id == payment.order_id)
-                        .values(
-                            status=new_order_status,
-                            row_version=Order.row_version + 1
-                        )
-                    )
-                    await db.execute(stmt)
+                    order.status = new_order_status
+                    order.row_version += 1
                     
                     # Send WA receipt
                     if order.customer_id:
