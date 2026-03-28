@@ -17,7 +17,7 @@ from backend.models.shift import Shift, ShiftStatus
 from backend.schemas.payment import PaymentCreate, PaymentResponse, PaymentStatus, PaymentMethod
 from backend.schemas.order import OrderStatus
 from backend.schemas.response import StandardResponse
-from backend.models.audit_log import log_audit
+from backend.services.audit import log_audit
 from backend.services.midtrans import midtrans_service
 from backend.utils.encryption import decrypt_field
 from backend.services.fonnte import send_whatsapp_message

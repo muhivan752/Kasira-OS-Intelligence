@@ -11,7 +11,7 @@ from backend.models.product import Product
 from backend.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from backend.schemas.stock import ProductRestock
 from backend.schemas.response import StandardResponse
-from backend.models.audit_log import log_audit
+from backend.services.audit import log_audit
 
 router = APIRouter()
 

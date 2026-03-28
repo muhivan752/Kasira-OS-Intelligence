@@ -10,7 +10,7 @@ from backend.models.user import User
 from backend.models.category import Category
 from backend.schemas.category import CategoryCreate, CategoryUpdate, CategoryResponse
 from backend.schemas.response import StandardResponse
-from backend.models.audit_log import log_audit
+from backend.services.audit import log_audit
 
 router = APIRouter()
 

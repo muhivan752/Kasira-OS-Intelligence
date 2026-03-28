@@ -23,7 +23,7 @@ router = APIRouter()
 async def sync_data(
     request: SyncRequest,
     db: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user)
+    current_user: User = Depends(deps.get_current_user)
 ) -> Any:
     """
     Pure CRDT Sync Engine Endpoint (Pull & Push)

@@ -14,7 +14,7 @@ from backend.models.order import Order, OrderItem
 from backend.models.product import Product
 from backend.schemas.order import OrderCreate, OrderUpdateStatus, OrderResponse, OrderStatus
 from backend.schemas.response import StandardResponse
-from backend.models.audit_log import log_audit
+from backend.services.audit import log_audit
 
 router = APIRouter()
 
