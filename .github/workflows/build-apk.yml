@@ -32,6 +32,10 @@ jobs:
         run: flutter create .
         working-directory: kasir_app
 
+      - name: Analyze Dart Code
+        run: flutter analyze
+        working-directory: kasir_app
+
       - name: Build APK Action
         run: flutter build apk --release
         working-directory: kasir_app
