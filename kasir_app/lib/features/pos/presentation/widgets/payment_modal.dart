@@ -290,7 +290,7 @@ class _PaymentModalState extends State<PaymentModal> {
                           ),
                         ],
                       ),
-                    } else if (_paymentMethod == 'QRIS') ...[
+                    ] else if (_paymentMethod == 'QRIS') ...[
                       Expanded(
                         child: Center(
                           child: _isLoadingQris

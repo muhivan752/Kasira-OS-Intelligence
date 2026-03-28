@@ -33,7 +33,9 @@ jobs:
         working-directory: kasir_app
 
       - name: Recreate Platform Directories
-        run: flutter create .
+        run: |
+          flutter create .
+          rm -rf test/widget_test.dart
         working-directory: kasir_app
 
       - name: Analyze Dart Code

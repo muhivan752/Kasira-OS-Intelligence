@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'sync_provider.dart';
+import '../sync/sync_provider.dart';
 
 final apiClientProvider = Provider<Dio>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
