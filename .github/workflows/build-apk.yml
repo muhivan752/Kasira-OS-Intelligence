@@ -28,6 +28,10 @@ jobs:
         run: flutter pub get
         working-directory: kasir_app
 
+      - name: Generate Code (Build Runner)
+        run: dart run build_runner build --delete-conflicting-outputs
+        working-directory: kasir_app
+
       - name: Recreate Platform Directories
         run: flutter create .
         working-directory: kasir_app
