@@ -18,7 +18,7 @@ dependencies:
   intl: ^0.19.0
   drift: ^2.14.0
   drift_flutter: ^0.1.0
-  bluetooth_print: ^4.4.0
+  bluetooth_print: ^4.3.0
   cached_network_image: ^3.3.0
   path_provider: ^2.1.2
   connectivity_plus: ^6.0.3
