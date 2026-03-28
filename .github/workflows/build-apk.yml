@@ -1,0 +1,39 @@
+name: Build Kasira Flutter APK
+
+on:
+  workflow_dispatch: # Allows you to run this workflow manually from the Actions tab
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Get Flutter Packages
+        run: flutter pub get
+        working-directory: kasir_app
+
+      - name: Build APK Action
+        run: flutter build apk --release
+        working-directory: kasir_app
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Kasira-Release-APK
+          path: kasir_app/build/app/outputs/flutter-apk/app-release.apk
