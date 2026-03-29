@@ -18,10 +18,8 @@ class Outlet(BaseModel):
     brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id"), nullable=True, index=True)
     row_version = Column(Integer, server_default='0', nullable=False)
     
-    midtrans_server_key_encrypted = Column(String, nullable=True)
-    midtrans_client_key = Column(String, nullable=True)
-    midtrans_is_production = Column(Boolean, default=False)
-    midtrans_connected_at = Column(DateTime(timezone=True), nullable=True)
+    xendit_business_id = Column(String, nullable=True) # sub-account id
+    xendit_connected_at = Column(DateTime(timezone=True), nullable=True)
 
     brand = relationship("Brand", back_populates="outlets")
     orders = relationship("Order", back_populates="outlet")

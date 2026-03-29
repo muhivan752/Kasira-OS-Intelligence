@@ -25,8 +25,10 @@ class Settings(BaseSettings):
     # Fonnte WA
     FONNTE_TOKEN: str = ""
 
-    # Midtrans
-    MIDTRANS_IS_PRODUCTION: bool = False
+    # Xendit Master Keys
+    XENDIT_API_KEY: str = ""
+    XENDIT_WEBHOOK_TOKEN: str = ""
+    XENDIT_IS_PRODUCTION: bool = False
 
     # JWT Security
     SECRET_KEY: str = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7" # Change in production

@@ -18,7 +18,7 @@ from backend.schemas.payment import PaymentCreate, PaymentResponse, PaymentStatu
 from backend.schemas.order import OrderStatus
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
-from backend.services.midtrans import midtrans_service
+from backend.services.xendit import xendit_service
 from backend.utils.encryption import decrypt_field
 from backend.services.fonnte import send_whatsapp_message
 
@@ -128,36 +128,24 @@ async def create_payment(
     db.add(payment)
     await db.flush() # Get payment.id for Midtrans order_id
     
-    # Generate QRIS via Midtrans if method is qris
+    # Generate QRIS via Xendit if method is qris
     if payment_in.payment_method == PaymentMethod.qris:
         outlet = await db.get(Outlet, payment_in.outlet_id)
-        if not outlet or not outlet.midtrans_server_key_encrypted:
+        if not outlet or not outlet.xendit_business_id:
             payment.status = PaymentStatus.failed
-            payment.midtrans_raw = {"error": "Outlet not configured for QRIS"}
+            payment.midtrans_raw = {"error": "Outlet not configured for Xendit QRIS (Missing Sub-Account ID)"}
         else:
             try:
-                server_key = decrypt_field(outlet.midtrans_server_key_encrypted)
-                midtrans_res = await midtrans_service.create_qris_transaction(
-                    order_id=str(payment.id),
-                    gross_amount=float(payment.amount_due),
-                    server_key=server_key,
-                    is_production=outlet.midtrans_is_production,
-                    custom_field1=str(payment.order_id) if payment.order_id else None,
-                    custom_field2=str(current_user.tenant_id)
+                xendit_res = await xendit_service.create_qris_transaction(
+                    reference_id=f"{current_user.tenant_id}::{payment.id}",
+                    amount=float(payment.amount_due),
+                    for_user_id=outlet.xendit_business_id
                 )
-                
-                # Extract QRIS URL from actions
-                actions = midtrans_res.get("actions", [])
-                for action in actions:
-                    if action.get("name") == "generate-qr-code":
-                        qris_url = action.get("url")
-                        break
                         
-                payment.qris_url = qris_url
-                payment.midtrans_raw = midtrans_res
+                payment.qris_url = xendit_res.get("qr_string")
+                payment.midtrans_raw = xendit_res
                 
             except Exception as e:
-                # If Midtrans fails, we save the payment as failed
                 payment.status = PaymentStatus.failed
                 payment.midtrans_raw = {"error": str(e)}
     
@@ -223,38 +211,38 @@ async def create_payment(
         message="Payment created successfully"
     )
 
-@router.post("/webhook/midtrans")
-async def midtrans_webhook(
+@router.post("/webhook/xendit")
+async def xendit_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
-    Handle Midtrans webhook notifications.
+    Handle Xendit webhook notifications.
     """
+    xendit_callback_token = request.headers.get("x-callback-token")
+    if not xendit_callback_token or not xendit_service.verify_webhook(xendit_callback_token):
+        raise HTTPException(status_code=400, detail="Invalid Verification Token")
+
     payload = await request.json()
+    data = payload.get("data", payload)
     
-    order_id = payload.get("order_id") # This is our payment.id
-    status_code = payload.get("status_code")
-    gross_amount = payload.get("gross_amount")
-    signature_key = payload.get("signature_key")
-    transaction_status = payload.get("transaction_status")
+    reference_id_raw = data.get("reference_id", "")
+    if "::" not in reference_id_raw:
+        return {"status": "ok"}
+        
+    tenant_id_str, order_id_str = reference_id_raw.split("::", 1)
     
     try:
-        payment_uuid = UUID(order_id)
+        payment_uuid = UUID(order_id_str)
+        valid_tenant_id = str(UUID(tenant_id_str))
+        from sqlalchemy import text
+        await db.execute(text(f'SET search_path TO "{valid_tenant_id}", public'))
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid order_id format")
+        raise HTTPException(status_code=400, detail="Invalid reference_id format")
         
-    # Extract tenant_id from custom_field2 and set search_path
-    tenant_id = payload.get("custom_field2")
-    if tenant_id:
-        try:
-            # Validate UUID format to prevent SQL injection
-            valid_tenant_id = str(UUID(tenant_id))
-            from sqlalchemy import text
-            await db.execute(text(f'SET search_path TO "{valid_tenant_id}", public'))
-        except ValueError:
-            pass # Ignore invalid tenant_id, let db.get fail naturally
-        
+    status_code = data.get("status", str(payload.get("status", "")).upper())
+    gross_amount = data.get("amount", payload.get("amount", 0))
+    
     # Use SELECT FOR UPDATE to prevent race conditions
     stmt = select(Payment).where(Payment.id == payment_uuid).with_for_update()
     result = await db.execute(stmt)
@@ -263,32 +251,14 @@ async def midtrans_webhook(
     if not payment:
         raise HTTPException(status_code=404, detail="Pembayaran tidak ditemukan")
         
-    outlet = await db.get(Outlet, payment.outlet_id)
-    if not outlet or not outlet.midtrans_server_key_encrypted:
-        raise HTTPException(status_code=400, detail="Outlet not configured for QRIS")
-        
-    server_key = decrypt_field(outlet.midtrans_server_key_encrypted)
-    
-    # Verify signature
-    is_valid = midtrans_service.verify_signature(
-        order_id=order_id,
-        status_code=status_code,
-        gross_amount=gross_amount,
-        signature_key=signature_key,
-        server_key=server_key
-    )
-    
-    if not is_valid:
-        raise HTTPException(status_code=400, detail="Signature tidak valid")
-        
     # Determine new status
     new_status = payment.status
-    if transaction_status in ['settlement', 'capture']:
+    if status_code in ['COMPLETED', 'SUCCEEDED', 'PAID']:
         if float(gross_amount) < float(payment.amount_due):
             new_status = PaymentStatus.failed # Reject if underpaid
         else:
             new_status = PaymentStatus.paid
-    elif transaction_status in ['deny', 'cancel', 'expire', 'failure']:
+    elif status_code in ['FAILED', 'EXPIRED']:
         new_status = PaymentStatus.failed
         
     if new_status != payment.status:

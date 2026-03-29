@@ -18,14 +18,11 @@ class OutletUpdate(OutletBase):
     tenant_id: Optional[UUID4] = None
 
 class OutletPaymentSetup(BaseModel):
-    midtrans_server_key: str
-    midtrans_client_key: str
-    midtrans_is_production: bool = False
+    xendit_business_id: str
 
 class OutletPaymentStatus(BaseModel):
     is_connected: bool
-    midtrans_client_key: Optional[str] = None
-    midtrans_is_production: bool = False
+    xendit_business_id: Optional[str] = None
     connected_at: Optional[datetime] = None
 
 class OutletInDBBase(OutletBase):
@@ -34,9 +31,8 @@ class OutletInDBBase(OutletBase):
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
-    midtrans_client_key: Optional[str] = None
-    midtrans_is_production: bool = False
-    midtrans_connected_at: Optional[datetime] = None
+    xendit_business_id: Optional[str] = None
+    xendit_connected_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

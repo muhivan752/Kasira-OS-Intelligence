@@ -11,7 +11,7 @@ from backend.models.outlet import Outlet
 from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentStatus
 from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
-from backend.utils.encryption import encrypt_field
+from backend.services.audit import log_audit
 import json
 
 router = APIRouter()
@@ -105,18 +105,14 @@ async def setup_payment(
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
         
-    # Encrypt the server key
-    encrypted_server_key = encrypt_field(setup_in.midtrans_server_key)
     now = datetime.now(timezone.utc)
     
     update_stmt = (
         update(Outlet)
         .where(Outlet.id == outlet_id)
         .values(
-            midtrans_server_key_encrypted=encrypted_server_key,
-            midtrans_client_key=setup_in.midtrans_client_key,
-            midtrans_is_production=setup_in.midtrans_is_production,
-            midtrans_connected_at=now,
+            xendit_business_id=setup_in.xendit_business_id,
+            xendit_connected_at=now,
             row_version=Outlet.row_version + 1
         )
     )
@@ -125,8 +121,7 @@ async def setup_payment(
     
     status_data = OutletPaymentStatus(
         is_connected=True,
-        midtrans_client_key=setup_in.midtrans_client_key,
-        midtrans_is_production=setup_in.midtrans_is_production,
+        xendit_business_id=setup_in.xendit_business_id,
         connected_at=now
     )
     
@@ -157,13 +152,12 @@ async def get_payment_status(
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
         
-    is_connected = outlet.midtrans_server_key_encrypted is not None
+    is_connected = outlet.xendit_business_id is not None
     
     status_data = OutletPaymentStatus(
         is_connected=is_connected,
-        midtrans_client_key=outlet.midtrans_client_key,
-        midtrans_is_production=outlet.midtrans_is_production,
-        connected_at=outlet.midtrans_connected_at
+        xendit_business_id=outlet.xendit_business_id,
+        connected_at=outlet.xendit_connected_at
     )
     
     return StandardResponse(
