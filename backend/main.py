@@ -1,5 +1,6 @@
 import uuid
 import json
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,10 +9,21 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from backend.api.api import api_router
 from backend.core.config import settings
 from backend.core.database import tenant_context
+from backend.services.xendit import xendit_service
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup & shutdown lifecycle — pastikan connection pool Xendit ditutup dengan bersih."""
+    # ── Startup ──────────────────────────────────────────────────────────────
+    yield
+    # ── Shutdown ─────────────────────────────────────────────────────────────
+    await xendit_service.close()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    lifespan=lifespan,
 )
 
 # Set CORS enabled origins from env
