@@ -117,6 +117,19 @@ async def setup_payment(
         )
     )
     await db.execute(update_stmt)
+
+    # Golden Rule #2: Setiap WRITE endpoint WAJIB tulis audit log
+    await log_audit(
+        db=db,
+        action="UPDATE",
+        entity="outlets",
+        entity_id=outlet_id,
+        after_state={"xendit_business_id": setup_in.xendit_business_id, "xendit_connected_at": now.isoformat()},
+        user_id=current_user.id,
+        tenant_id=outlet.tenant_id,
+        request_id=getattr(request.state, "request_id", None)
+    )
+
     await db.commit()
     
     status_data = OutletPaymentStatus(

@@ -133,7 +133,7 @@ async def create_payment(
         outlet = await db.get(Outlet, payment_in.outlet_id)
         if not outlet or not outlet.xendit_business_id:
             payment.status = PaymentStatus.failed
-            payment.midtrans_raw = {"error": "Outlet not configured for Xendit QRIS (Missing Sub-Account ID)"}
+            payment.xendit_raw = {"error": "Outlet not configured for Xendit QRIS (Missing Sub-Account ID)"}
         else:
             try:
                 xendit_res = await xendit_service.create_qris_transaction(
@@ -143,11 +143,11 @@ async def create_payment(
                 )
                         
                 payment.qris_url = xendit_res.get("qr_string")
-                payment.midtrans_raw = xendit_res
+                payment.xendit_raw = xendit_res
                 
             except Exception as e:
                 payment.status = PaymentStatus.failed
-                payment.midtrans_raw = {"error": str(e)}
+                payment.xendit_raw = {"error": str(e)}
     
     # If cash payment is successful, check if order is fully paid
     if initial_status == PaymentStatus.paid and payment_in.order_id:
@@ -260,10 +260,10 @@ async def xendit_webhook(
             new_status = PaymentStatus.paid
     elif status_code in ['FAILED', 'EXPIRED']:
         new_status = PaymentStatus.failed
-        
+
     if new_status != payment.status:
         payment.status = new_status
-        payment.midtrans_raw = payload
+        payment.xendit_raw = payload
         payment.row_version += 1
         
         if new_status == PaymentStatus.paid:

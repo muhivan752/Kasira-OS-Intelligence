@@ -4,7 +4,7 @@
 ## 🗺️ ROADMAP PROGRESS (Menuju Tier Starter)
 - ✅ **FASE 0: Fondasi** (Semua Migration, Docker, VPS, Backend Core)
 - ✅ **FASE 1: Auth** (OTP WA, JWT, Device Binding, Role Check)
-- ✅ **FASE 2: Core POS Starter** (Products, Orders, Payment QRIS Midtrans, Stock Deduct)
+- ✅ **FASE 2: Core POS Starter** (Products, Orders, Payment QRIS **Xendit xenPlatform**, Stock Deduct)
 - 🟡 **FASE 3: Flutter Kasir App** (Sebagian besar selesai: UI 14+ layar, Sync Engine, Offline Mode) - *IN PROGRESS*
 - ✅ **FASE 4: Owner Dashboard Next.js** (Owner Login, Laporan, Menu, dll)
 - 🔴 **FASE 5: Pilot** (Pre-Pilot Checklist belum tuntas)
@@ -53,6 +53,15 @@
 - [x] Pre-deployment checks (CORS, Dockerfile, env vars, docker-compose)
 - [x] Flutter Sync Engine (Drift Database, HLC, Dio API Client, Riverpod Integration)
 - [x] Fix Storefront Payment Edge Cases (CRDT stock deduction, outlet open validation, online order status)
+- [x] **Migrasi Payment Gateway: Midtrans → Xendit xenPlatform** (Master-Sub Account architecture)
+  - [x] Migration 057: drop kolom midtrans_*, add xendit_business_id + xendit_connected_at di outlets
+  - [x] Migration 058: rename payments.midtrans_raw → xendit_raw
+  - [x] Service baru: backend/services/xendit.py (create_sub_account, create_qris_transaction, verify_webhook)
+  - [x] Hapus backend/services/midtrans.py
+  - [x] Update payments route: QRIS generate via Xendit + webhook /webhook/xendit dengan token verify
+  - [x] Update outlets route: setup_payment pakai xendit_business_id + tambah audit log (Golden Rule #2)
+  - [x] Update UI: app/dashboard/settings/payment/page.tsx disederhanakan (hanya tampil Business ID)
+  - [x] Arsitektur: uang langsung ke rekening merchant via header `for-user-id`, platform fee 0.2% Kasira
 
 ## ⏳ IN PROGRESS
 - Menunggu instruksi selanjutnya
@@ -77,7 +86,7 @@
 - Printer: bluetooth_print package
 - Multi-tenant: schema-per-tenant di PostgreSQL
 - AI streaming: SSE (bukan WebSocket) untuk chatbot
-- Payment: Midtrans QRIS + idempotency key
+- Payment: **Xendit xenPlatform QRIS** + idempotency key (Master-Sub Account, platform fee 0.2%)
 - Tax: PB1 10%, PPN 12%, service charge configurable
 
 ## Lanjut Berikutnya

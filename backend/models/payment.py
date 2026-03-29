@@ -31,7 +31,7 @@ class Payment(BaseModel):
     refunded_at = Column(DateTime(timezone=True), nullable=True)
     refund_amount = Column(Numeric(12, 2), nullable=True)
     
-    midtrans_raw = Column(JSONB(astext_type=Text()), nullable=True)
+    xendit_raw = Column(JSONB(astext_type=Text()), nullable=True)
     processed_by = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     reconciled_at = Column(DateTime(timezone=True), nullable=True)
     

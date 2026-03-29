@@ -45,7 +45,7 @@ class PaymentResponse(PaymentBase):
     cancelled_at: Optional[datetime] = None
     refunded_at: Optional[datetime] = None
     refund_amount: Optional[Decimal] = None
-    midtrans_raw: Optional[Dict[str, Any]] = None
+    xendit_raw: Optional[Dict[str, Any]] = None
     processed_by: Optional[UUID] = None
     reconciled_at: Optional[datetime] = None
     row_version: int
