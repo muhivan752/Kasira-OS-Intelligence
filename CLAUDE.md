@@ -6,6 +6,7 @@ Kasira = POS + Pilot Otomatis + AI untuk cafe Indonesia
 Stack: FastAPI + PostgreSQL + Flutter + Next.js 14 + Redis + Claude API
 
 ## Wajib Baca Sebelum Coding
+- ROADMAP.md → Master Plan & Build Order (WAJIB SESUAI FASE)
 - MEMORY.md → status terkini + keputusan teknikal
 - skills/{domain}/SKILL.md → conventions domain yang relevan
 

@@ -1,6 +1,15 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
+## 🗺️ ROADMAP PROGRESS (Menuju Tier Starter)
+- ✅ **FASE 0: Fondasi** (Semua Migration, Docker, VPS, Backend Core)
+- ✅ **FASE 1: Auth** (OTP WA, JWT, Device Binding, Role Check)
+- ✅ **FASE 2: Core POS Starter** (Products, Orders, Payment QRIS Midtrans, Stock Deduct)
+- 🟡 **FASE 3: Flutter Kasir App** (Sebagian besar selesai: UI 14+ layar, Sync Engine, Offline Mode) - *IN PROGRESS*
+- ✅ **FASE 4: Owner Dashboard Next.js** (Owner Login, Laporan, Menu, dll)
+- 🔴 **FASE 5: Pilot** (Pre-Pilot Checklist belum tuntas)
+- 🔴 **FASE 6: Pro Features** (Reservasi, Chatbot AI, dll)
+
 ## ✅ SELESAI
 - [x] Migration Batch 1 (tenants, brands, outlets)
 - [x] Migration Batch 2 (roles, users, sessions, devices, suppliers, customers, outlet_tax_config, tables)

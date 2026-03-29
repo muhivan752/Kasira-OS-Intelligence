@@ -1,14 +1,13 @@
-# SESSION — 2026-03-20
+# SESSION — 2026-03-29
 # Claude update file ini otomatis tiap task selesai
 
 ## FOKUS HARI INI
-- [x] Task 1: Buat file Alembic untuk Batch 1 (tenants, brands, outlets)
-- [x] Task 2: Buat file Alembic untuk Batch 2 (roles, users, sessions, devices, suppliers, customers, outlet_tax_config, tables)
-- [x] Task 3: Buat file Alembic untuk Batch 3 (products, inventory, recipes)
-- [x] Task 4: Buat file Alembic untuk Batch 4 (pricing_rules, shifts, orders, payments, reservations, purchase_orders)
+- [x] Sinkronisasi `ROADMAP.md` dengan status proyek berjalan.
+- [ ] Selesaikan sisa FASE 3 (Flutter Kasir App) seperti validasi testing sync CRDT.
+- [ ] Mulai checklist pre-pilot FASE 5 jika aplikasi kasir stabil.
 
 ## MODUL AKTIF
-Modul: Database Migrations
+Modul: Flutter Kasir App Sync (FASE 3) & Pre-Pilot Setup (FASE 5)
 File dikerjakan:
 - backend/migrations/versions/023_pricing_rules.py
 - backend/migrations/versions/023b_shifts.py
