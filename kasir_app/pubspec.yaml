@@ -25,6 +25,7 @@ dependencies:
   flutter_secure_storage: ^9.0.0
   qr_flutter: ^4.1.0
   sqlite3_flutter_libs: ^0.5.24
+  package_info_plus: ^8.0.0
 
 dev_dependencies:
   flutter_test:

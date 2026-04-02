@@ -5,7 +5,7 @@
 - ✅ **FASE 0: Fondasi** (Semua Migration, Docker, VPS, Backend Core)
 - ✅ **FASE 1: Auth** (OTP WA, JWT, Device Binding, Role Check)
 - ✅ **FASE 2: Core POS Starter** (Products, Orders, Payment QRIS **Xendit xenPlatform**, Stock Deduct)
-- 🟡 **FASE 3: Flutter Kasir App** (Sebagian besar selesai: UI 14+ layar, Sync Engine, Offline Mode) - *IN PROGRESS*
+- ✅ **FASE 3: Flutter Kasir App** (15 layar lengkap, GoRouter, Sync Engine, Offline Mode)
 - ✅ **FASE 4: Owner Dashboard Next.js** (Owner Login, Laporan, Menu, dll)
 - 🔴 **FASE 5: Pilot** (Pre-Pilot Checklist belum tuntas)
 - 🔴 **FASE 6: Pro Features** (Reservasi, Chatbot AI, dll)
@@ -53,6 +53,22 @@
 - [x] Pre-deployment checks (CORS, Dockerfile, env vars, docker-compose)
 - [x] Flutter Sync Engine (Drift Database, HLC, Dio API Client, Riverpod Integration)
 - [x] Fix Storefront Payment Edge Cases (CRDT stock deduction, outlet open validation, online order status)
+- [x] **FASE 3: Flutter Kasir App — 15 Layar Lengkap**
+  - [x] SplashPage + update checker (version check API + force update flow)
+  - [x] LoginPage (OTP WA + PIN login + Set PIN — sudah ada sebelumnya)
+  - [x] TableGridPage (denah meja grid: available/occupied/reserved/dirty + ETA badge)
+  - [x] PosPage (menu grid + kategori + cart — sudah ada)
+  - [x] PaymentModal (cash + QRIS + timer + polling — sudah ada)
+  - [x] PaymentSuccessPage (full screen animasi + kembalian + aksi struk/transaksi baru)
+  - [x] ReceiptPreviewPage (struk lengkap + dashed divider + print + kirim WA)
+  - [x] OrderListPage + OrderDetailModal (sudah ada)
+  - [x] ShiftOpenPage (buka shift: modal awal, quick amount, catatan)
+  - [x] ShiftPage (tutup shift + rekap kas — sudah ada)
+  - [x] LowStockAlertPage (filter level: habis/kritis/rendah + restock dialog)
+  - [x] SettingsPage + PrinterSettings + ProfilePage + SyncSettings (sudah ada)
+  - [x] GoRouter setup (SplashPage → LoginPage → ShiftOpen → Dashboard, semua route terdaftar)
+  - [x] package_info_plus ditambahkan ke pubspec.yaml
+  - [x] build-apk.yml diupdate: publish APK ke GitHub Releases + versioning otomatis
 - [x] **Migrasi Payment Gateway: Midtrans → Xendit xenPlatform** (Master-Sub Account architecture)
   - [x] Migration 057: drop kolom midtrans_*, add xendit_business_id + xendit_connected_at di outlets
   - [x] Migration 058: rename payments.midtrans_raw → xendit_raw
@@ -64,10 +80,9 @@
   - [x] Arsitektur: uang langsung ke rekening merchant via header `for-user-id`, platform fee 0.2% Kasira
 
 ## ⏳ IN PROGRESS
-- Menunggu instruksi selanjutnya
+- FASE 5: Pre-Pilot Checklist (backup, monitoring, APK upload)
 
 ## ⏳ BELUM MULAI
-- Flutter kasir app (15 layar)
 - Flutter dapur app (8 layar)
 - Self-order Next.js
 - CRDT sync engine
@@ -90,7 +105,7 @@
 - Tax: PB1 10%, PPN 12%, service charge configurable
 
 ## Lanjut Berikutnya
-Menunggu instruksi selanjutnya untuk fitur Flutter atau Backend.
+FASE 5 Pre-Pilot: pg_dump backup, UptimeRobot, APK di R2, landing page, Sentry error monitoring.
 
 ## Context Files Status
 - context/database.md    → ⏳ In Progress
