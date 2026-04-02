@@ -1,7 +1,20 @@
-name: Build Kasira Flutter APK
+name: Build & Release Kasira Flutter APK
 
 on:
-  workflow_dispatch: # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.0.1)'
+        required: true
+        default: '1.0.0'
+      is_mandatory:
+        description: 'Force update? (true/false)'
+        required: false
+        default: 'false'
+      release_notes:
+        description: 'Release notes'
+        required: false
+        default: 'Bug fixes and improvements'
 
 jobs:
   build:
@@ -38,17 +51,55 @@ jobs:
           rm -rf test/widget_test.dart
         working-directory: kasir_app
 
+      - name: Update version in pubspec.yaml
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          BUILD_NUMBER="${{ github.run_number }}"
+          sed -i "s/^version: .*/version: ${VERSION}+${BUILD_NUMBER}/" pubspec.yaml
+        working-directory: kasir_app
+
       - name: Analyze Dart Code
         continue-on-error: true
         run: flutter analyze
         working-directory: kasir_app
 
-      - name: Build APK Action
+      - name: Build APK Release
         run: flutter build apk --release
         working-directory: kasir_app
+
+      - name: Rename APK
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          mv kasir_app/build/app/outputs/flutter-apk/app-release.apk \
+             kasir_app/build/app/outputs/flutter-apk/kasira-v${VERSION}.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Kasira-Release-APK
-          path: kasir_app/build/app/outputs/flutter-apk/app-release.apk
+          name: Kasira-Release-APK-v${{ github.event.inputs.version }}
+          path: kasir_app/build/app/outputs/flutter-apk/kasira-v${{ github.event.inputs.version }}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: Kasira POS v${{ github.event.inputs.version }}
+          body: |
+            ## Kasira POS v${{ github.event.inputs.version }}
+
+            ${{ github.event.inputs.release_notes }}
+
+            ### Info Update
+            - **Force Update**: ${{ github.event.inputs.is_mandatory }}
+            - **Build**: #${{ github.run_number }}
+            - **Platform**: Android
+
+            ### Cara Install
+            1. Download file `kasira-v${{ github.event.inputs.version }}.apk`
+            2. Aktifkan "Install dari sumber tidak dikenal" di pengaturan Android
+            3. Install APK
+          draft: false
+          prerelease: false
+          files: kasir_app/build/app/outputs/flutter-apk/kasira-v${{ github.event.inputs.version }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

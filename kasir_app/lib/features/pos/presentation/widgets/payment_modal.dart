@@ -5,15 +5,18 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class PaymentModal extends StatefulWidget {
   final double totalAmount;
-  final VoidCallback onPaymentSuccess;
+  final String orderId;
+  final void Function(String paymentMethod, double amountPaid) onPaymentSuccess;
 
   const PaymentModal({
     super.key,
     required this.totalAmount,
+    required this.orderId,
     required this.onPaymentSuccess,
   });
 
@@ -37,8 +40,8 @@ class _PaymentModalState extends State<PaymentModal> {
   Timer? _qrisTimer;
   Timer? _qrisPollingTimer;
 
-  final _dio = Dio(BaseOptions(
-    baseUrl: 'http://localhost:8000',
+  Dio get _dio => Dio(BaseOptions(
+    baseUrl: AppConfig.apiV1,
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 10),
   ));
@@ -80,12 +83,13 @@ class _PaymentModalState extends State<PaymentModal> {
 
       try {
         final token = await _storage.read(key: 'access_token');
+        final tenantId = await _storage.read(key: 'tenant_id');
         final response = await _dio.get(
-          '/api/v1/payments/$_qrisPaymentId/status',
+          '/payments/$_qrisPaymentId/status',
           options: Options(
             headers: {
               if (token != null) 'Authorization': 'Bearer $token',
-              'X-Tenant-ID': 'tenant1',
+              if (tenantId != null) 'X-Tenant-ID': tenantId,
             },
           ),
         );
@@ -100,7 +104,7 @@ class _PaymentModalState extends State<PaymentModal> {
           
           Future.delayed(const Duration(seconds: 2), () {
             if (mounted) {
-              widget.onPaymentSuccess();
+              widget.onPaymentSuccess('QRIS', widget.totalAmount);
               Navigator.pop(context);
             }
           });
@@ -119,15 +123,15 @@ class _PaymentModalState extends State<PaymentModal> {
 
     try {
       final token = await _storage.read(key: 'access_token');
-      // Use a dummy UUID for outlet_id if not available in this mock context
-      final outletId = '00000000-0000-0000-0000-000000000000';
+      final tenantId = await _storage.read(key: 'tenant_id');
+      final outletId = await _storage.read(key: 'outlet_id') ?? '';
 
       final response = await _dio.post(
-        '/api/v1/payments/',
+        '/payments/',
         options: Options(
           headers: {
             if (token != null) 'Authorization': 'Bearer $token',
-            'X-Tenant-ID': 'tenant1',
+            if (tenantId != null) 'X-Tenant-ID': tenantId,
           },
         ),
         data: {
@@ -376,8 +380,7 @@ class _PaymentModalState extends State<PaymentModal> {
                         height: 56,
                         child: ElevatedButton(
                           onPressed: (isCash && change < 0) ? null : () {
-                            // TODO: Call API to create payment
-                            widget.onPaymentSuccess();
+                            widget.onPaymentSuccess(_paymentMethod, _amountReceived);
                             Navigator.pop(context);
                           },
                           style: ElevatedButton.styleFrom(
