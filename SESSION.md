@@ -1,138 +1,211 @@
 # SESSION — 2026-04-02
 # Claude update file ini otomatis tiap task selesai
 
-## FOKUS SESI INI
-- [x] Feature D: Loyalty Points — backend + Flutter (selesai)
-- [x] Feature A: Flutter Dapur App — 8 layar kitchen display (selesai)
-- [ ] Feature B: Kasira Connect Storefront — **NEXT**
+## ✅ SELESAI SESI INI
+- [x] Feature D: Loyalty Points — backend + Flutter
+- [x] Feature A: Flutter Dapur App — 8 layar kitchen display
+- [x] Feature B: Kasira Connect Storefront — Xendit QRIS + QR display + bugfix
 
-## MODUL AKTIF
-Modul: Flutter Dapur App (Feature A) — selesai
-Next: Kasira Connect Storefront (Feature B)
+## 🔴 LANJUT DARI SINI → Feature C: AI Chatbot Owner
 
-## PROGRESS SESI INI
+---
 
-### ✅ Feature D: Loyalty Points
-- Migration 059: `customer_points` + `point_transactions`
-  - UNIQUE(order_id, type) → idempotent earn/redeem (Golden Rule #35)
-  - row_version pada customer_points (Golden Rule #29–30)
-- `backend/api/routes/loyalty.py`
-  - `GET /loyalty/{customer_id}/balance` → saldo + redeemValueRp
-  - `POST /loyalty/earn` → idempoten via ON CONFLICT DO NOTHING
-  - `POST /loyalty/redeem` → optimistic lock, deduct balance
-  - `GET /loyalty/{customer_id}/history` → 20 transaksi terakhir
-- `backend/api/api.py` → include loyalty router
-- Flutter `features/loyalty/`:
-  - `loyalty_provider.dart` (FutureProvider.family balance + history)
-  - `loyalty_redeem_widget.dart` (switch + slider di CartPanel)
-  - `loyalty_history_page.dart` (gradient balance card + txn list)
-  - `cart_panel.dart` refactor → ConsumerStatefulWidget, integrasikan redeem widget
-  - `main.dart` → tambah route `/loyalty/:customerId`
+## CHECKPOINT LENGKAP — RESUME DARI SINI
 
-### ✅ Feature A: Flutter Dapur App
-Commit: `1b9d67e` di branch `claude/review-documentation-qqAkC`
-
-**File baru:**
+### Branch aktif
 ```
-kasir_app/lib/main_dapur.dart              ← entry point terpisah
-kasir_app/lib/features/dapur/
-  providers/dapur_provider.dart            ← polling + optimistic update
-  presentation/pages/
-    dapur_splash_page.dart                 ← dark splash, cek config
-    dapur_login_page.dart                  ← numpad PIN 6 digit
-    dapur_dashboard_page.dart              ← grid 3 tab + badge pesanan baru
-    dapur_completed_page.dart              ← list selesai hari ini
-    dapur_statistik_page.dart              ← stat cards + bar + urgent alert
-    dapur_settings_page.dart               ← suara, interval, logout
-  presentation/widgets/
-    order_queue_card.dart                  ← card + 1-tap status update
+claude/review-documentation-qqAkC
+```
+Last commit: `cc54d4e` — "fix: 4 bugs di Feature B Connect Storefront"
+
+### Urutan priority fitur tersisa
+```
+C → E → F → VPS
+```
+1. **Feature C: AI Chatbot Owner** ← NEXT
+2. Feature E: Reservasi + Booking via Connect
+3. Feature F: FASE 5 Pre-Pilot (UptimeRobot, Sentry, APK ke R2)
+4. VPS Deployment (kasira-setup.sh sudah siap)
+
+---
+
+## FEATURE C: AI CHATBOT OWNER — Detail Teknikal
+
+### Yang harus dibuat (semuanya BARU):
+```
+backend/api/routes/ai.py          ← endpoint POST /ai/chat (SSE stream)
+backend/services/ai_service.py    ← logic: model selector, intent, context builder
+backend/api/api.py                ← include ai router
 ```
 
-**File diubah:**
+### Golden Rules yang berlaku untuk Feature C:
+- Rule #25: Claude API model dipilih via get_model_for_tier(tier, task) — TIDAK BOLEH hardcoded
+- Rule #26: Starter + rutin task → Haiku | Sonnet hanya Pro+ untuk task kompleks
+- Rule #27: 3 optimasi WAJIB:
+  1. Batching context (agregat per 1 jam, bukan raw rows)
+  2. Cache system prompt di Redis (sampai 00.00 WIB)
+  3. Compress context (kirim agregat, BUKAN raw transaksi)
+- Rule #54: AI intent WAJIB classified dulu, WRITE butuh konfirmasi owner
+- Rule #55: System prompt max 800 token context agregat, di-cache Redis 5 menit
+- Rule #56: UNKNOWN intent = tolak sopan, jangan hallucinate di luar konteks bisnis
+- Rule #2: Setiap WRITE endpoint WAJIB tulis audit log
+- Rule #9: FastAPI async ONLY
+
+### Spesifikasi teknikal:
+
+#### 1. Intent Classifier
+```python
+INTENTS = {
+    "READ": ["laporan", "omzet", "penjualan", "stok", "produk terlaris", "pelanggan"],
+    "WRITE": ["tambah", "ubah", "hapus", "update", "ganti harga"],
+    "UNKNOWN": # semua di luar konteks bisnis cafe/restoran
+}
 ```
-backend/api/routes/auth.py                 ← tambah POST /auth/pin/verify
-kasir_app/lib/features/auth/.../login_page.dart ← simpan 'phone' ke storage
-.github/workflows/build-apk.yml           ← build 2 APK (pos + dapur)
+- WRITE → return response: "Apakah Anda yakin ingin [action]? Ketik YA untuk konfirmasi"
+- UNKNOWN → tolak sopan: "Maaf, saya hanya bisa membantu pertanyaan seputar bisnis Anda"
+
+#### 2. Model Selector
+```python
+def get_model_for_tier(tier: str, task: str) -> str:
+    if tier in ('pro', 'enterprise') and task == 'complex':
+        return "claude-sonnet-4-6"  # Rule #26
+    return "claude-haiku-4-5-20251001"  # Default Starter/rutin
 ```
 
-**Detail teknikal dapur_provider.dart:**
-- `startPolling(intervalSeconds: 8)` → Timer.periodic
-- `fetchOrders()` → 2 request paralel: active orders + completed today
-- `updateStatus()` → PUT /orders/{id}/status dengan row_version
-  → 409 conflict → auto fetchOrders(silent: true)
-- `dapurStatsProvider` → computed dari DapurState (Provider<DapurStats>)
-- `DapurOrder.isUrgent` → elapsedMinutes >= 15 (card border merah)
-- `DapurOrder.isWarning` → elapsedMinutes >= 10 (timer kuning)
-
-**Detail teknikal POST /auth/pin/verify:**
-- Input: `{phone, pin}` — tidak perlu JWT
-- Verifikasi: `security.verify_pin(pin, user.pin_hash)`
-- Return: JWT + tenant_id + outlet_id (sama dengan OTP verify)
-- Audit log wajib (Golden Rule #2)
-
-**Cara build Dapur APK:**
-```bash
-flutter build apk --release --target lib/main_dapur.dart
+#### 3. Context Builder (max 800 token, Rule #55)
+```python
+async def build_context(outlet_id, tenant_id, db, redis) -> str:
+    # Cache key: f"ai:context:{outlet_id}"
+    # TTL: sampai 00.00 WIB = hitung detik sampai tengah malam Asia/Jakarta
+    # Content (AGREGAT, bukan raw):
+    # - Nama outlet, tier, jam buka
+    # - Omzet hari ini (total Rp, jumlah transaksi)
+    # - Top 3 produk terlaris hari ini
+    # - Stok kritis (< 5 unit)
+    # - Ringkasan 7 hari terakhir (omzet, trend naik/turun)
 ```
 
-## KEPUTUSAN BARU SESI INI
-1. **Dapur App = entry point terpisah** (bukan route dari main app).
-   Alasan: tim dapur tidak butuh akses POS, UI berbeda (dark theme).
-2. **PIN login tanpa OTP untuk dapur** via `POST /auth/pin/verify`.
-   Alasan: dapur staff tidak selalu punya HP, login harus cepat di device shared.
-3. **Phone disimpan ke FlutterSecureStorage** saat OTP verify di login_page.dart.
-   Dibutuhkan dapur login untuk memanggil `/auth/pin/verify`.
-4. **Auto-polling 8 detik** (bukan WebSocket).
-   Alasan: cukup untuk kitchen display, tidak perlu infra WebSocket dulu.
-5. **GitHub Actions build 2 APK** sekaligus (pos + dapur) dari 1 workflow trigger.
+#### 4. SSE Streaming Endpoint
+```python
+@router.post("/chat")
+async def ai_chat(
+    request: ChatRequest,
+    current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+) -> StreamingResponse:
+    # 1. classify intent
+    # 2. if UNKNOWN → return SSE dengan pesan tolak
+    # 3. if WRITE → return SSE dengan konfirmasi
+    # 4. build context (dari cache Redis atau query DB)
+    # 5. call Claude API stream
+    # 6. yield SSE chunks
+    # 7. audit log (Rule #2)
+```
 
-## CHECKPOINT TERAKHIR
-Terakhir di: Feature A (Dapur App) selesai, pushed ke `claude/review-documentation-qqAkC`.
-Lanjut dari: **Feature B — Kasira Connect Storefront**.
+#### 5. Request/Response schema
+```python
+class ChatRequest(BaseModel):
+    message: str
+    conversation_id: Optional[str] = None  # untuk multi-turn
 
-## CONTEXT UNTUK LANJUT FEATURE B
-Backend Connect API sudah ada di `backend/api/routes/connect.py`:
-- `GET /connect/{slug}` → info outlet + menu publik
-- `POST /connect/{slug}/order` → buat order dari storefront + generate QRIS Xendit
-- `GET /connect/orders/{order_id}` → cek status order
+# SSE format:
+# data: {"type": "chunk", "content": "..."}
+# data: {"type": "done", "tokens_used": 123}
+# data: {"type": "error", "message": "..."}
+```
 
-Yang belum ada / perlu diperbaiki:
-- Next.js UI `app/[slug]/` — halaman menu publik yang bagus
-- Cart state di storefront (local state, tanpa login)
-- Order tracking page setelah bayar
-- Xendit QRIS sudah di backend, pastikan storefront polling status tiap 3 detik
-- Connect storefront slug sudah otomatis saat outlet register (Golden Rule #21)
+#### 6. Claude API call
+```python
+import anthropic
+client = anthropic.AsyncAnthropic()
 
-File yang perlu dibaca saat lanjut:
-- `backend/api/routes/connect.py` (API yang sudah ada)
-- `app/[slug]/` (cek apakah sudah ada atau perlu dibuat dari nol)
-- `backend/services/xendit.py` (untuk memahami QRIS flow)
+async with client.messages.stream(
+    model=get_model_for_tier(user.tier, classify_task(message)),
+    max_tokens=1024,
+    system=system_prompt,  # max 800 token
+    messages=[{"role": "user", "content": message}],
+) as stream:
+    async for text in stream.text_stream:
+        yield f"data: {json.dumps({'type': 'chunk', 'content': text})}\n\n"
+```
+
+### File yang perlu dibaca sebelum coding Feature C:
+1. `backend/api/api.py` — untuk include router baru
+2. `backend/api/deps.py` — untuk get_current_user + get_db
+3. `backend/api/routes/reports.py` — untuk memahami query omzet yang sudah ada
+4. `backend/services/redis.py` — untuk caching pattern yang sudah dipakai
+5. `backend/core/config.py` — untuk ANTHROPIC_API_KEY config
+
+### Package yang mungkin perlu ditambah ke requirements.txt:
+- `anthropic` — Claude API SDK (cek dulu apakah sudah ada)
+
+---
+
+## SUMMARY FEATURE B — Apa yang Sudah Selesai
+
+### backend/api/routes/connect.py
+- Hapus Midtrans, pakai Xendit QRIS
+- `xendit_service.create_qris_transaction(reference_id=f"{tenant_id}::{payment_id}", ...)`
+- Tambah `payment_method` field di `ConnectOrderInput` (default: 'qris')
+- Cash: status langsung paid, order ke 'preparing'
+- POST response include: `payment: { method, status, qris_url, qris_expired_at }`
+- GET /orders/{order_id}: return full data (items, outlet, payment)
+
+### backend/api/routes/payments.py (webhook)
+- Setelah order confirmed → query ConnectOrder → set status = 'accepted'
+
+### app/[slug]/cart/page.tsx
+- Redirect: `res.data.id` → `res.data.order_id` (BUG FIX)
+- Tambah `idempotency_key` di payload (Golden Rule #34)
+- Item field: `quantity` → `qty` (sesuai backend schema)
+
+### app/[slug]/order/[id]/page.tsx
+- State: qrisUrl, qrisExpiredAt, qrisCountdown
+- QRIS display: render via `api.qrserver.com` (bukan img src langsung dari qr_string)
+- Countdown MM:SS, merah saat < 60 detik
+- Polling berhenti saat status = completed/cancelled/failed
+
+### app/actions/storefront.ts
+- Error handling real (bukan silently fallback ke mock)
+- Mock data include payment object lengkap
+
+---
+
+## CARA RESUME SESI BARU
+
+Ketika mulai sesi baru, Claude harus:
+1. Baca CLAUDE.md (Golden Rules)
+2. Baca MEMORY.md (status + keputusan teknikal)
+3. Baca SESSION.md ini (checkpoint + spesifikasi Feature C)
+4. Lanjut langsung ke Feature C tanpa tanya-tanya
+
+Perintah untuk Claude di sesi baru:
+> "baca claude.md, memory.md, session.md dulu lalu lanjut ke feature C AI chatbot"
+
+---
+
+## BLOCKER
+- Tidak ada.
 
 ## FILE YANG DIUBAH SESI INI
+
 ### Feature D (Loyalty):
 - `backend/api/routes/loyalty.py` (baru)
 - `backend/api/api.py`
-- `kasir_app/lib/features/loyalty/providers/loyalty_provider.dart` (baru)
-- `kasir_app/lib/features/loyalty/presentation/widgets/loyalty_redeem_widget.dart` (baru)
-- `kasir_app/lib/features/loyalty/presentation/pages/loyalty_history_page.dart` (baru)
+- `kasir_app/lib/features/loyalty/` (semua file baru)
 - `kasir_app/lib/features/pos/presentation/widgets/cart_panel.dart`
 - `kasir_app/lib/main.dart`
 
 ### Feature A (Dapur):
 - `kasir_app/lib/main_dapur.dart` (baru)
-- `kasir_app/lib/features/dapur/providers/dapur_provider.dart` (baru)
-- `kasir_app/lib/features/dapur/presentation/pages/dapur_splash_page.dart` (baru)
-- `kasir_app/lib/features/dapur/presentation/pages/dapur_login_page.dart` (baru)
-- `kasir_app/lib/features/dapur/presentation/pages/dapur_dashboard_page.dart` (baru)
-- `kasir_app/lib/features/dapur/presentation/pages/dapur_completed_page.dart` (baru)
-- `kasir_app/lib/features/dapur/presentation/pages/dapur_statistik_page.dart` (baru)
-- `kasir_app/lib/features/dapur/presentation/pages/dapur_settings_page.dart` (baru)
-- `kasir_app/lib/features/dapur/presentation/widgets/order_queue_card.dart` (baru)
+- `kasir_app/lib/features/dapur/` (semua file baru)
 - `backend/api/routes/auth.py` (tambah POST /auth/pin/verify)
-- `kasir_app/lib/features/auth/presentation/pages/login_page.dart` (simpan phone)
-- `.github/workflows/build-apk.yml` (build 2 APK)
-- `MEMORY.md` (update progress)
-- `SESSION.md` (file ini)
+- `kasir_app/lib/features/auth/presentation/pages/login_page.dart`
+- `.github/workflows/build-apk.yml`
 
-## BLOCKER
-- Tidak ada.
+### Feature B (Connect Storefront):
+- `backend/api/routes/connect.py`
+- `backend/api/routes/payments.py`
+- `app/actions/storefront.ts`
+- `app/[slug]/order/[id]/page.tsx`
+- `app/[slug]/cart/page.tsx`
