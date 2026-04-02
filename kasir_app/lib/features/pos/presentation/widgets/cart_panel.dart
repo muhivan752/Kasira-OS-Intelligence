@@ -7,14 +7,24 @@ import '../../../../core/theme/app_colors.dart';
 import '../../providers/cart_provider.dart';
 import 'payment_modal.dart';
 import '../../../customers/presentation/widgets/customer_selection_modal.dart';
+import '../../../loyalty/presentation/widgets/loyalty_redeem_widget.dart';
 
-class CartPanel extends ConsumerWidget {
+class CartPanel extends ConsumerStatefulWidget {
   const CartPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CartPanel> createState() => _CartPanelState();
+}
+
+class _CartPanelState extends ConsumerState<CartPanel> {
+  double _loyaltyDiscount = 0;
+  double _loyaltyPointsToRedeem = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
     final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final grandTotal = (cart.subtotal - _loyaltyDiscount).clamp(0, double.infinity);
 
     return Column(
       children: [
@@ -108,6 +118,19 @@ class CartPanel extends ConsumerWidget {
 
         const SizedBox(height: 8),
 
+        // Loyalty redeem (muncul jika pelanggan dipilih)
+        if (cart.customerId != null)
+          LoyaltyRedeemWidget(
+            customerId: cart.customerId!,
+            orderTotal: cart.subtotal,
+            onRedeemChanged: (pts, discRp) {
+              setState(() {
+                _loyaltyPointsToRedeem = pts;
+                _loyaltyDiscount = discRp;
+              });
+            },
+          ),
+
         // Cart items
         Expanded(
           child: cart.items.isEmpty
@@ -137,13 +160,21 @@ class CartPanel extends ConsumerWidget {
             child: Column(
               children: [
                 _SummaryRow(label: 'Subtotal', value: currency.format(cart.subtotal)),
+                if (_loyaltyDiscount > 0) ...[
+                  const SizedBox(height: 4),
+                  _SummaryRow(
+                    label: 'Diskon Poin (${_loyaltyPointsToRedeem.toInt()} poin)',
+                    value: '- ${currency.format(_loyaltyDiscount)}',
+                    valueColor: AppColors.success,
+                  ),
+                ],
                 const Divider(height: 20, color: AppColors.border),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('Total', style: Theme.of(context).textTheme.titleLarge),
                     Text(
-                      currency.format(cart.subtotal),
+                      currency.format(grandTotal),
                       style: Theme.of(context)
                           .textTheme
                           .titleLarge
@@ -166,7 +197,7 @@ class CartPanel extends ConsumerWidget {
                   child: ElevatedButton(
                     onPressed: cart.isSubmitting
                         ? null
-                        : () => _handlePayment(context, ref, cart),
+                        : () => _handlePayment(context, ref, cart, grandTotal),
                     child: cart.isSubmitting
                         ? const SizedBox(
                             width: 20,
@@ -183,26 +214,28 @@ class CartPanel extends ConsumerWidget {
     );
   }
 
-  Future<void> _handlePayment(BuildContext context, WidgetRef ref, CartState cart) async {
-    // 1. Submit order ke backend
+  Future<void> _handlePayment(BuildContext context, WidgetRef ref, CartState cart, double grandTotal) async {
     final orderId = await ref.read(cartProvider.notifier).submitOrder();
-    if (orderId == null) return; // error sudah ditampilkan di state
+    if (orderId == null) return;
 
-    // 2. Buka payment modal
     if (context.mounted) {
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (_) => PaymentModal(
-          totalAmount: cart.subtotal,
+          totalAmount: grandTotal,
           orderId: orderId,
           onPaymentSuccess: (String paymentMethod, double amountPaid) {
             ref.read(cartProvider.notifier).clearCart();
+            setState(() {
+              _loyaltyDiscount = 0;
+              _loyaltyPointsToRedeem = 0;
+            });
             if (context.mounted) {
               context.push('/payment/success', extra: {
-                'totalAmount': cart.subtotal,
+                'totalAmount': grandTotal,
                 'amountPaid': amountPaid,
-                'changeAmount': amountPaid - cart.subtotal,
+                'changeAmount': amountPaid - grandTotal,
                 'paymentMethod': paymentMethod,
                 'orderId': orderId,
                 'displayNumber': orderId.substring(0, 8).toUpperCase(),
@@ -375,8 +408,9 @@ class _OrderTypeBtn extends StatelessWidget {
 class _SummaryRow extends StatelessWidget {
   final String label;
   final String value;
+  final Color? valueColor;
 
-  const _SummaryRow({required this.label, required this.value});
+  const _SummaryRow({required this.label, required this.value, this.valueColor});
 
   @override
   Widget build(BuildContext context) {
@@ -384,7 +418,11 @@ class _SummaryRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        Text(value, style: TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 13,
+          color: valueColor ?? AppColors.textPrimary,
+        )),
       ],
     );
   }

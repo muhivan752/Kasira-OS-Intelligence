@@ -7,6 +7,7 @@ import 'core/sync/sync_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/dashboard/presentation/pages/dashboard_page.dart';
+import 'features/loyalty/presentation/pages/loyalty_history_page.dart';
 import 'features/onboarding/presentation/pages/server_setup_page.dart';
 import 'features/inventory/presentation/pages/low_stock_alert_page.dart';
 import 'features/pos/presentation/pages/payment_success_page.dart';
@@ -77,6 +78,16 @@ final _router = GoRouter(
     GoRoute(
       path: '/stock/alerts',
       builder: (context, state) => const LowStockAlertPage(),
+    ),
+    GoRoute(
+      path: '/loyalty/:customerId',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return LoyaltyHistoryPage(
+          customerId: state.pathParameters['customerId']!,
+          customerName: extra['customerName'] as String? ?? 'Pelanggan',
+        );
+      },
     ),
   ],
 );

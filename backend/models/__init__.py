@@ -11,3 +11,4 @@ from .payment import Payment
 from .audit_log import AuditLog
 from .customer import Customer
 from .connect import ConnectOutlet, ConnectOrder
+from .loyalty import CustomerPoints, PointTransaction
