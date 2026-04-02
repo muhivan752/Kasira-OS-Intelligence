@@ -40,10 +40,14 @@ export default function OrderStatusPage() {
     }
     loadData();
 
-    // Poll every 5 seconds
+    // Poll every 5 seconds, berhenti jika sudah final
     const interval = setInterval(async () => {
       const data = await getStorefrontOrder(orderId);
       applyOrderData(data);
+      if (data && ['completed', 'cancelled', 'failed'].includes(data.status)
+          && data.payment?.status !== 'pending') {
+        clearInterval(interval);
+      }
     }, 5000);
 
     return () => clearInterval(interval);
@@ -148,9 +152,10 @@ export default function OrderStatusPage() {
           {qrisUrl ? (
             <>
               <p className="text-xs font-bold text-gray-400 tracking-widest mb-4">SCAN UNTUK MEMBAYAR</p>
+              {/* qrisUrl = raw QR string dari Xendit, render via qrserver.com */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={qrisUrl}
+                src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrisUrl)}&size=220x220&margin=4`}
                 alt="QRIS Code"
                 className="w-52 h-52 mx-auto rounded-2xl border border-gray-100 shadow-sm"
               />

@@ -54,9 +54,8 @@ export default function CartPage() {
 
     const orderItems = items.map(item => ({
       product_id: item.id,
-      quantity: item.quantity,
-      price: item.price,
-      notes: ''
+      qty: item.quantity,  // backend ConnectOrderItemInput uses qty
+      notes: '',
     }));
 
     const payload = {
@@ -66,14 +65,15 @@ export default function CartPage() {
       delivery_address: orderType === 'delivery' ? deliveryAddress : null,
       notes: notes || null,
       items: orderItems,
-      payment_method: paymentMethod
+      payment_method: paymentMethod,
+      idempotency_key: `${slug}-${customerPhone}-${Date.now()}`,  // Golden Rule #34
     };
 
     const res = await createStorefrontOrder(slug, payload);
     
     if (res.success) {
       clearCart();
-      router.push(`/${slug}/order/${res.data.id}`);
+      router.push(`/${slug}/order/${res.data.order_id}`);
     } else {
       alert(res.message);
       setSubmitting(false);

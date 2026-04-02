@@ -302,7 +302,7 @@ async def xendit_webhook(
                     co_result = await db.execute(co_stmt)
                     connect_order = co_result.scalar_one_or_none()
                     if connect_order and connect_order.status == 'pending':
-                        connect_order.status = 'confirmed'
+                        connect_order.status = 'accepted'  # ENUM: pending/accepted/processing/ready/completed
 
                     # Send WA receipt
                     if order.customer_id:
