@@ -109,15 +109,13 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
     if (!mounted) return;
     setState(() => _statusText = 'Menyiapkan...');
 
-    final token = await _storage.read(key: 'access_token');
-    final pin = await _storage.read(key: 'user_pin');
-
-    if (!mounted) return;
-    if (token != null && pin != null && pin.isNotEmpty) {
-      context.go('/login');
-    } else {
-      context.go('/login');
+    // Pertama kali install → minta URL server
+    if (!AppConfig.isConfigured) {
+      if (mounted) context.go('/setup');
+      return;
     }
+
+    if (mounted) context.go('/login');
   }
 
   @override

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'printer_settings_page.dart';
 import 'sync_settings_page.dart';
@@ -66,6 +68,15 @@ class SettingsPage extends StatelessWidget {
                   onTap: () {},
                 ),
                 
+                const SizedBox(height: 32),
+                _buildSectionTitle('Server & Koneksi'),
+                _buildSettingTile(
+                  icon: LucideIcons.server,
+                  title: 'URL Server',
+                  subtitle: AppConfig.baseUrl,
+                  onTap: () => context.push('/setup'),
+                ),
+
                 const SizedBox(height: 32),
                 _buildSectionTitle('Akun & Bantuan'),
                 _buildSettingTile(
