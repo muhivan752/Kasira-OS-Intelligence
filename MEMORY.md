@@ -11,14 +11,7 @@
 - 🔴 **FASE 6: Pro Features** (Reservasi, Chatbot AI, dll)
 
 ## ✅ SELESAI
-- [x] Migration Batch 1 (tenants, brands, outlets)
-- [x] Migration Batch 2 (roles, users, sessions, devices, suppliers, customers, outlet_tax_config, tables)
-- [x] Migration Batch 3 (categories, products, product_variants, modifiers, outlet_product_overrides, ingredients, ingredient_units, ingredient_suppliers, outlet_stock, recipes, recipe_ingredients)
-- [x] Migration Batch 4 (pricing_rules, shifts, orders, order_items, payments, reservations, purchase_orders, purchase_order_items)
-- [x] Migration Batch 5 (customer_points, point_transactions)
-- [x] Migration Batch 6 (notifications, knowledge_graph_edges, stock_events, stock_snapshots, audit_log, global_event_log)
-- [x] Migration Batch 7 (connect_outlets, connect_orders, connect_customer_profiles, connect_chats, connect_behavior_log)
-- [x] Migration Batch 8 (outlet_location_detail, supplier_price_history, products_update, subscriptions, invoices, subscription_payments, payments_update, partial_payments, payment_refunds)
+- [x] Migration Batch 1–8 (semua tabel, row_version, Golden Rules compliant)
 - [x] CRDT Bug Fixes (HLC.receive & PNCounter.get_value)
 - [x] Flutter Login OTP Flow (4 states with Riverpod)
 - [x] Flutter QRIS Screen (Payment Modal, QrImageView, Timer, Polling)
@@ -34,60 +27,75 @@
 - [x] Create Next.js Owner Dashboard (login, dashboard, menu, kasir, laporan, settings, payment, onboarding)
 - [x] Create Next.js Storefront Public (menu, cart, order status)
 - [x] Docker + VPS Ready (Dockerfile, docker-compose.yml, .env.example)
-- [x] Create backend/scripts/seed_demo.py
+- [x] Create backend/scripts/seed_demo.py (idempotent, timezone, sequence)
 - [x] Fix Connect API bugs (product fields, order sequence, error messages)
-- [x] Fix backend/scripts/seed_demo.py (imports, timezone, search_path, idempotent)
-- [x] Fix backend/scripts/seed_demo.py models (remove tenant_id from Category/Product/Shift, add stock_enabled)
-- [x] Create Dockerfile.next for Next.js frontend
-- [x] Fix route conflict in connect.py (/order/{id} -> /orders/{id}) and update frontend polling
-- [x] Fix Next.js auth (save tenant_id & outlet_id to cookies, add X-Tenant-ID header)
+- [x] Fix Dockerfile.next for Next.js frontend
+- [x] Fix Next.js auth (save tenant_id & outlet_id to cookies, X-Tenant-ID header)
 - [x] Fix backend auth response to include tenant_id & outlet_id
 - [x] Fix Flutter app entry point (DashboardPage -> LoginPage)
-- [x] Fix next.config.ts remotePatterns (add ui-avatars.com and *.r2.cloudflarestorage.com)
-- [x] Fix backend/scripts/seed_demo.py order generation (use sequence for display_number, batch commits)
-- [x] Create modern landing page in app/page.tsx with Tailwind CSS and lucide-react
-- [x] Fix storefront fetch error by adding mock data fallback and `use server` directive in `app/actions/storefront.ts`
-- [x] Change localhost to 127.0.0.1 in API URLs to avoid IPv6 connection issues
-- [x] Audit all Alembic migrations (upgrade vs downgrade) to ensure Golden Rules compliance
-- [x] Fix Midtrans webhook multi-tenant issue (pass tenant_id via custom_field2 and set search_path dynamically)
+- [x] Audit Alembic migrations – 100% Golden Rules compliance
+- [x] Fix Midtrans webhook multi-tenant (custom_field2, dynamic search_path)
 - [x] Pre-deployment checks (CORS, Dockerfile, env vars, docker-compose)
 - [x] Flutter Sync Engine (Drift Database, HLC, Dio API Client, Riverpod Integration)
-- [x] Fix Storefront Payment Edge Cases (CRDT stock deduction, outlet open validation, online order status)
+- [x] Fix Storefront Payment Edge Cases (CRDT stock, outlet validation, online order status)
 - [x] **FASE 3: Flutter Kasir App — 15 Layar Lengkap**
-  - [x] SplashPage + update checker (version check API + force update flow)
-  - [x] LoginPage (OTP WA + PIN login + Set PIN — sudah ada sebelumnya)
-  - [x] TableGridPage (denah meja grid: available/occupied/reserved/dirty + ETA badge)
-  - [x] PosPage (menu grid + kategori + cart — sudah ada)
-  - [x] PaymentModal (cash + QRIS + timer + polling — sudah ada)
-  - [x] PaymentSuccessPage (full screen animasi + kembalian + aksi struk/transaksi baru)
-  - [x] ReceiptPreviewPage (struk lengkap + dashed divider + print + kirim WA)
-  - [x] OrderListPage + OrderDetailModal (sudah ada)
-  - [x] ShiftOpenPage (buka shift: modal awal, quick amount, catatan)
-  - [x] ShiftPage (tutup shift + rekap kas — sudah ada)
-  - [x] LowStockAlertPage (filter level: habis/kritis/rendah + restock dialog)
-  - [x] SettingsPage + PrinterSettings + ProfilePage + SyncSettings (sudah ada)
-  - [x] GoRouter setup (SplashPage → LoginPage → ShiftOpen → Dashboard, semua route terdaftar)
-  - [x] package_info_plus ditambahkan ke pubspec.yaml
-  - [x] build-apk.yml diupdate: publish APK ke GitHub Releases + versioning otomatis
-- [x] **Migrasi Payment Gateway: Midtrans → Xendit xenPlatform** (Master-Sub Account architecture)
-  - [x] Migration 057: drop kolom midtrans_*, add xendit_business_id + xendit_connected_at di outlets
-  - [x] Migration 058: rename payments.midtrans_raw → xendit_raw
-  - [x] Service baru: backend/services/xendit.py (create_sub_account, create_qris_transaction, verify_webhook)
-  - [x] Hapus backend/services/midtrans.py
-  - [x] Update payments route: QRIS generate via Xendit + webhook /webhook/xendit dengan token verify
-  - [x] Update outlets route: setup_payment pakai xendit_business_id + tambah audit log (Golden Rule #2)
-  - [x] Update UI: app/dashboard/settings/payment/page.tsx disederhanakan (hanya tampil Business ID)
-  - [x] Arsitektur: uang langsung ke rekening merchant via header `for-user-id`, platform fee 0.2% Kasira
+  - SplashPage + version checker | LoginPage | TableGridPage | PosPage | PaymentModal
+  - PaymentSuccessPage | ReceiptPreviewPage | OrderListPage + OrderDetailModal
+  - ShiftOpenPage | ShiftPage | LowStockAlertPage | SettingsPage + PrinterSettings
+  - GoRouter setup | package_info_plus | build-apk.yml → GitHub Releases
+- [x] **Migrasi Payment Gateway: Midtrans → Xendit xenPlatform**
+  - Migration 057–058 (drop midtrans_*, add xendit_business_id, rename xendit_raw)
+  - backend/services/xendit.py (create_sub_account, create_qris_transaction, verify_webhook)
+  - Update payments + outlets route: QRIS via Xendit, platform fee 0.2%
+- [x] **AppConfig + Real API Integration**
+  - `AppConfig` singleton (SharedPreferences, first-launch flow)
+  - `ServerSetupPage` (input URL VPS + ping test)
+  - `CartProvider` + `ProductsProvider` dengan real API call
+  - Save `tenant_id`, `outlet_id`, `phone` ke FlutterSecureStorage saat login
+- [x] **VPS Deployment**
+  - `kasira-setup.sh` (one-command: Docker, UFW, clone repo, .env, pg_dump cron, systemd service)
+  - `backend/scripts/seed_admin.py` (idempotent: Tenant + Brand + Outlet + User admin)
+- [x] **Feature D: Loyalty Points** — selesai 2026-04-02
+  - Migration 059: `customer_points` + `point_transactions` (UNIQUE order_id+type, row_version)
+  - `backend/api/routes/loyalty.py` — 4 endpoint: balance, earn (idempoten), redeem (optimistic lock), history
+  - `backend/api/api.py` — include loyalty router
+  - Flutter: `loyalty_provider.dart` (FutureProvider.family), `loyalty_redeem_widget.dart` (slider),
+    `loyalty_history_page.dart` (gradient card), `cart_panel.dart` (integrated redeem + grand total)
+  - `main.dart` — route `/loyalty/:customerId`
+  - Aturan: 1 poin/Rp10.000, 1 poin=Rp100, min 10 poin untuk redeem
+- [x] **Feature A: Flutter Dapur App (Kitchen Display)** — selesai 2026-04-02
+  - Entry point terpisah: `kasir_app/lib/main_dapur.dart`
+    → build dengan `flutter build apk --target lib/main_dapur.dart`
+  - `features/dapur/providers/dapur_provider.dart`
+    → DapurNotifier: auto-polling Timer setiap 8 detik (configurable)
+    → fetchOrders: GET /orders/?status=pending,preparing,ready + GET /orders/?status=done&today=true
+    → updateStatus: optimistic update + conflict detection row_version (409 → auto-refresh)
+    → dapurStatsProvider: computed stats dari state
+  - 6 halaman dapur:
+    1. `dapur_splash_page.dart` — dark mode splash, cek AppConfig → /dapur/login atau /dapur/dashboard
+    2. `dapur_login_page.dart` — numpad PIN 6 digit, tanpa OTP, panggil POST /auth/pin/verify
+    3. `dapur_dashboard_page.dart` — grid 3 tab (Antrian/Dimasak/Siap Saji), badge "PESANAN BARU!" real-time,
+       bottom sheet detail per order, auto-refresh indicator, PESANAN BARU flash indicator
+    4. `dapur_completed_page.dart` — list pesanan selesai hari ini
+    5. `dapur_statistik_page.dart` — stat cards + progress bar per status + alert urgent orders (>15 menit)
+    6. `dapur_settings_page.dart` — toggle suara, interval refresh slider (5–30 detik), logout
+  - `widgets/order_queue_card.dart` — card per order: timer merah >15 menit kuning >10 menit,
+    status badge, 1-tap aksi (Mulai Masak → Siap Saji → Selesai)
+  - Backend: `POST /auth/pin/verify` — standalone login phone+PIN (untuk dapur, tanpa OTP)
+    → audit log setiap login, return JWT + tenant_id + outlet_id
+  - `login_page.dart` — simpan `phone` ke FlutterSecureStorage saat OTP verify (dibutuhkan dapur)
+  - `build-apk.yml` — build 2 APK: `kasira-pos-v*.apk` + `kasira-dapur-v*.apk`
+  - GoRouter dapur: /dapur → /dapur/login → /dapur/dashboard → /dapur/completed,statistik,settings
 
 ## ⏳ IN PROGRESS
-- FASE 5: Pre-Pilot Checklist (backup, monitoring, APK upload)
+- FASE 5: Pre-Pilot Checklist (backup, monitoring, APK upload ke R2)
 
-## ⏳ BELUM MULAI
-- Flutter dapur app (8 layar)
-- Self-order Next.js
-- CRDT sync engine
-- Pilot Otomatis rule engine
-- AI chatbot SSE streaming
+## ❌ BELUM MULAI (Prioritas sesuai urutan)
+1. **Feature B: Kasira Connect Storefront** — self-order Next.js lengkap (menu publik, cart, order tracking)
+2. **Feature C: AI Chatbot Owner** — SSE streaming, intent classifier, system prompt <800 token, cache Redis
+3. **Feature E: Reservasi + Booking** via Connect
+4. **Feature F: FASE 5 Pre-Pilot** — pg_dump cron (sudah di kasira-setup.sh), UptimeRobot, Sentry, APK ke R2
+5. **VPS Deployment** — deploy ke VPS beneran (kasira-setup.sh sudah siap, tunggu fitur selesai semua)
 
 ## Keputusan Teknikal (JANGAN DIUBAH TANPA ALASAN)
 - ORM: SQLAlchemy async (bukan Tortoise)
@@ -103,9 +111,20 @@
 - AI streaming: SSE (bukan WebSocket) untuk chatbot
 - Payment: **Xendit xenPlatform QRIS** + idempotency key (Master-Sub Account, platform fee 0.2%)
 - Tax: PB1 10%, PPN 12%, service charge configurable
+- Loyalty: 1 poin/Rp10.000 earn, 1 poin=Rp100 redeem, min 10 poin, UNIQUE(order_id,type)
+- Dapur App: entry point terpisah main_dapur.dart, polling 8 detik, dark UI theme
+- PIN Login: `/auth/pin/verify` untuk dapur (phone+PIN tanpa OTP)
+
+## Branch Git
+- Branch aktif: `claude/review-documentation-qqAkC`
+- Branch fitur lama: `feat/loyalty-points` (sudah merged ke branch aktif)
+- Semua commit harus ke `claude/review-documentation-qqAkC`
 
 ## Lanjut Berikutnya
-FASE 5 Pre-Pilot: pg_dump backup, UptimeRobot, APK di R2, landing page, Sentry error monitoring.
+**Feature B: Kasira Connect Storefront** — self-order Next.js untuk pelanggan cafe.
+- Backend `/connect/` API sudah ada (create_connect_order, get storefront, get order status)
+- Yang belum: UI Next.js yang lebih polished + integrasi Xendit QRIS untuk storefront
+- File target: `app/[slug]/` (public pages), komponen cart, order tracking page
 
 ## Context Files Status
 - context/database.md    → ⏳ In Progress
@@ -115,3 +134,4 @@ FASE 5 Pre-Pilot: pg_dump backup, UptimeRobot, APK di R2, landing page, Sentry e
 - context/payment.md     → ⏳ Belum dibuat
 - context/flutter-kasir.md → ⏳ Belum dibuat
 - context/connect.md     → ⏳ Belum dibuat
+- context/dapur.md       → ⏳ Belum dibuat
