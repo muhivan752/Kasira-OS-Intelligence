@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class SplashPage extends StatefulWidget {
@@ -21,8 +22,8 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
   String? _updateUrl;
 
   final _storage = const FlutterSecureStorage();
-  final _dio = Dio(BaseOptions(
-    baseUrl: 'http://127.0.0.1:8000',
+  Dio get _dio => Dio(BaseOptions(
+    baseUrl: AppConfig.apiV1,
     connectTimeout: const Duration(seconds: 5),
     receiveTimeout: const Duration(seconds: 5),
   ));
@@ -53,7 +54,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
       final info = await PackageInfo.fromPlatform();
       final currentVersion = info.version;
 
-      final response = await _dio.get('/api/v1/app/version?platform=android');
+      final response = await _dio.get('/auth/app/version?platform=android');
       final data = response.data['data'];
 
       final latestVersion = data['latest_version'] as String;

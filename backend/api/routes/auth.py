@@ -1,22 +1,27 @@
 import random
 import logging
+import uuid
 from datetime import timedelta
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from backend.api import deps
 from backend.core import security
 from backend.core.config import settings
 from backend.models.user import User
 from backend.models.outlet import Outlet
+from backend.models.tenant import Tenant
+from backend.models.brand import Brand
 from backend.schemas.token import Token
 from backend.schemas.auth import OTPSendRequest, OTPVerifyRequest
 from backend.schemas.response import StandardResponse
 from backend.services.fonnte import send_whatsapp_message
 from backend.services.redis import get_redis_client
+from backend.services.audit import write_audit_log
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -145,3 +150,132 @@ async def login_with_pin(
         token_type="bearer"
     )
     return StandardResponse(data=token_data, message="PIN verified successfully")
+
+
+# ---------------------------------------------------------------------------
+# Register — buat tenant + brand + outlet + owner user sekaligus
+# ---------------------------------------------------------------------------
+class RegisterRequest(BaseModel):
+    business_name: str = Field(..., min_length=2, max_length=100)
+    phone: str = Field(..., description="Format: 628xxx")
+    owner_name: str = Field(..., min_length=2)
+    pin: str = Field(..., min_length=6, max_length=6)
+
+@router.post("/register", response_model=StandardResponse[Token])
+async def register(
+    request: RegisterRequest,
+    db: AsyncSession = Depends(deps.get_db),
+) -> Any:
+    """Daftarkan tenant baru beserta owner user-nya."""
+    # Cek duplikat phone
+    stmt = select(User).where(User.phone == request.phone, User.deleted_at == None)
+    if (await db.execute(stmt)).scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Nomor HP sudah terdaftar")
+
+    tenant_id = uuid.uuid4()
+    brand_id = uuid.uuid4()
+    outlet_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+
+    schema_name = f"tenant_{str(tenant_id).replace('-', '')[:16]}"
+    slug = request.business_name.lower().replace(" ", "-")[:50]
+
+    tenant = Tenant(id=tenant_id, name=request.business_name,
+                    schema_name=schema_name, is_active=True)
+    brand = Brand(id=brand_id, tenant_id=tenant_id,
+                  name=request.business_name, type="cafe", is_active=True)
+    outlet = Outlet(id=outlet_id, tenant_id=tenant_id, brand_id=brand_id,
+                    name=request.business_name, slug=slug, is_active=True)
+    user = User(id=user_id, tenant_id=tenant_id,
+                full_name=request.owner_name, phone=request.phone,
+                pin_hash=security.get_pin_hash(request.pin), is_active=True)
+
+    db.add_all([tenant, brand, outlet, user])
+    await db.commit()
+
+    await log_audit(db, action="register", entity="tenant", entity_id=str(tenant_id),
+                    after_state={"tenant": request.business_name, "phone": request.phone},
+                    user_id=str(user_id), tenant_id=str(tenant_id))
+
+    token = Token(
+        access_token=security.create_access_token(user_id),
+        token_type="bearer",
+        tenant_id=str(tenant_id),
+        outlet_id=str(outlet_id),
+    )
+    return StandardResponse(data=token, message="Registrasi berhasil")
+
+
+# ---------------------------------------------------------------------------
+# Set PIN kasir
+# ---------------------------------------------------------------------------
+class PinSetRequest(BaseModel):
+    pin: str = Field(..., min_length=6, max_length=6)
+
+@router.post("/pin/set", response_model=StandardResponse[dict])
+async def set_pin(
+    body: PinSetRequest,
+    current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+) -> Any:
+    """Simpan atau ganti PIN kasir."""
+    current_user.pin_hash = security.get_pin_hash(body.pin)
+    await db.commit()
+    return StandardResponse(data={"ok": True}, message="PIN berhasil disimpan")
+
+
+# ---------------------------------------------------------------------------
+# Logout — hapus token dari Redis (blacklist)
+# ---------------------------------------------------------------------------
+@router.delete("/logout", response_model=StandardResponse[dict])
+async def logout(
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """Revoke access token (blacklist di Redis)."""
+    redis = await get_redis_client()
+    await redis.setex(f"blacklist:{current_user.id}", 60 * 60 * 24 * 8, "1")
+    return StandardResponse(data={"ok": True}, message="Logout berhasil")
+
+
+# ---------------------------------------------------------------------------
+# Me — profil user yang sedang login
+# ---------------------------------------------------------------------------
+@router.get("/me", response_model=StandardResponse[dict])
+async def get_me(
+    current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+) -> Any:
+    """Return profil user + outlet aktif."""
+    outlet_id = None
+    stmt_outlet = select(Outlet).where(
+        Outlet.tenant_id == current_user.tenant_id, Outlet.deleted_at == None
+    ).limit(1)
+    outlet = (await db.execute(stmt_outlet)).scalar_one_or_none()
+    if outlet:
+        outlet_id = str(outlet.id)
+
+    return StandardResponse(data={
+        "id": str(current_user.id),
+        "full_name": current_user.full_name,
+        "phone": current_user.phone,
+        "tenant_id": str(current_user.tenant_id),
+        "outlet_id": outlet_id,
+        "is_active": current_user.is_active,
+    }, message="OK")
+
+
+# ---------------------------------------------------------------------------
+# App Version — untuk splash screen update checker
+# ---------------------------------------------------------------------------
+CURRENT_APP_VERSION = "1.0.0"
+
+@router.get("/app/version", response_model=StandardResponse[dict])
+async def get_app_version(platform: str = "android") -> Any:
+    """Cek versi terbaru APK. Flutter splash screen polling ini."""
+    return StandardResponse(data={
+        "latest_version": CURRENT_APP_VERSION,
+        "is_mandatory": False,
+        "download_url": None,
+        "release_notes": "Versi awal Kasira POS",
+        "platform": platform,
+    }, message="OK")

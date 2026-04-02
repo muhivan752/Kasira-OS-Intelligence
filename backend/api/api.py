@@ -14,3 +14,6 @@ api_router.include_router(sync.router, prefix="/sync", tags=["sync"])
 api_router.include_router(shifts.router, prefix="/shifts", tags=["shifts"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(connect.router, prefix="/connect", tags=["connect"])
+
+# app/version endpoint (prefix di auth router sudah handle ini)
+# route: GET /api/v1/auth/app/version — dipanggil dari SplashPage

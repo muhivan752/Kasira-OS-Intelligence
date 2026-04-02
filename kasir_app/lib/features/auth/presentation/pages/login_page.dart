@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 
 // --- STATE ---
@@ -78,8 +79,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   final _storage = const FlutterSecureStorage();
-  final _dio = Dio(BaseOptions(
-    baseUrl: 'http://localhost:8000', // Sesuaikan dengan URL backend
+  Dio get _dio => Dio(BaseOptions(
+    baseUrl: AppConfig.baseUrl,
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 10),
   ));
@@ -163,11 +164,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'otp': otp
       });
       
-      final token = response.data['data']['access_token'];
+      final data = response.data['data'];
+      final token = data['access_token'] as String;
+      final tenantId = data['tenant_id'] as String?;
+      final outletId = data['outlet_id'] as String?;
+
       await _storage.write(key: 'access_token', value: token);
-      
+      if (tenantId != null) await _storage.write(key: 'tenant_id', value: tenantId);
+      if (outletId != null) await _storage.write(key: 'outlet_id', value: outletId);
+
       _timer?.cancel();
-      
+
       final savedPin = await _storage.read(key: 'user_pin');
       if (savedPin != null && savedPin.isNotEmpty) {
         state = state.copyWith(isLoading: false, isSuccess: true);
