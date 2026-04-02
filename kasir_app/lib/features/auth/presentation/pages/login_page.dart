@@ -170,6 +170,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final outletId = data['outlet_id'] as String?;
 
       await _storage.write(key: 'access_token', value: token);
+      await _storage.write(key: 'phone', value: state.phone);
       if (tenantId != null) await _storage.write(key: 'tenant_id', value: tenantId);
       if (outletId != null) await _storage.write(key: 'outlet_id', value: outletId);
 

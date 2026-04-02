@@ -225,6 +225,53 @@ async def set_pin(
 
 
 # ---------------------------------------------------------------------------
+# PIN Verify — standalone login dengan phone + PIN (untuk Dapur app)
+# ---------------------------------------------------------------------------
+class PinVerifyRequest(BaseModel):
+    phone: str = Field(..., description="Format: 628xxx")
+    pin: str = Field(..., min_length=6, max_length=6)
+
+@router.post("/pin/verify", response_model=StandardResponse[Token])
+async def verify_pin_login(
+    body: PinVerifyRequest,
+    db: AsyncSession = Depends(deps.get_db),
+) -> Any:
+    """Login menggunakan phone + PIN — untuk Dapur app tanpa OTP."""
+    stmt = select(User).where(User.phone == body.phone, User.deleted_at == None)
+    user = (await db.execute(stmt)).scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="Nomor HP atau PIN salah")
+    if not user.pin_hash or not security.verify_pin(body.pin, user.pin_hash):
+        raise HTTPException(status_code=401, detail="Nomor HP atau PIN salah")
+
+    from backend.core.security import create_access_token
+    access_token = create_access_token(subject=str(user.id))
+
+    # Get outlet_id
+    outlet_id = None
+    stmt_outlet = select(Outlet).where(
+        Outlet.tenant_id == user.tenant_id, Outlet.deleted_at == None
+    ).limit(1)
+    outlet = (await db.execute(stmt_outlet)).scalar_one_or_none()
+    if outlet:
+        outlet_id = str(outlet.id)
+
+    await write_audit_log(
+        db=db, user_id=str(user.id), tenant_id=str(user.tenant_id),
+        action="pin_login", resource_type="user", resource_id=str(user.id),
+        details={"source": "dapur_app"},
+    )
+
+    token_data = Token(
+        access_token=access_token,
+        token_type="bearer",
+        tenant_id=str(user.tenant_id) if user.tenant_id else None,
+        outlet_id=outlet_id,
+    )
+    return StandardResponse(data=token_data, message="Login berhasil")
+
+
+# ---------------------------------------------------------------------------
 # Logout — hapus token dari Redis (blacklist)
 # ---------------------------------------------------------------------------
 @router.delete("/logout", response_model=StandardResponse[dict])

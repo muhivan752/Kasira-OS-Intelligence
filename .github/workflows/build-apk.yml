@@ -63,29 +63,46 @@ jobs:
         run: flutter analyze
         working-directory: kasir_app
 
-      - name: Build APK Release
-        run: flutter build apk --release
+      - name: Build POS APK Release
+        run: flutter build apk --release --target lib/main.dart
         working-directory: kasir_app
 
-      - name: Rename APK
+      - name: Build Dapur APK Release
+        run: flutter build apk --release --target lib/main_dapur.dart
+        working-directory: kasir_app
+
+      - name: Rename APKs
         run: |
           VERSION="${{ github.event.inputs.version }}"
           mv kasir_app/build/app/outputs/flutter-apk/app-release.apk \
-             kasir_app/build/app/outputs/flutter-apk/kasira-v${VERSION}.apk
+             kasir_app/build/app/outputs/flutter-apk/kasira-dapur-v${VERSION}.apk
+          # POS APK was built first, rename the one in the staging dir
+        shell: bash
 
-      - name: Upload APK Artifact
+      - name: Rename POS APK
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          # Re-build POS to get clean output file
+          flutter build apk --release --target lib/main.dart
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/kasira-pos-v${VERSION}.apk
+        working-directory: kasir_app
+
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Kasira-Release-APK-v${{ github.event.inputs.version }}
-          path: kasir_app/build/app/outputs/flutter-apk/kasira-v${{ github.event.inputs.version }}.apk
+          name: Kasira-Release-APKs-v${{ github.event.inputs.version }}
+          path: |
+            kasir_app/build/app/outputs/flutter-apk/kasira-pos-v${{ github.event.inputs.version }}.apk
+            kasir_app/build/app/outputs/flutter-apk/kasira-dapur-v${{ github.event.inputs.version }}.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.event.inputs.version }}
-          name: Kasira POS v${{ github.event.inputs.version }}
+          name: Kasira v${{ github.event.inputs.version }}
           body: |
-            ## Kasira POS v${{ github.event.inputs.version }}
+            ## Kasira v${{ github.event.inputs.version }}
 
             ${{ github.event.inputs.release_notes }}
 
@@ -94,12 +111,20 @@ jobs:
             - **Build**: #${{ github.run_number }}
             - **Platform**: Android
 
+            ### APK yang Tersedia
+            | APK | Deskripsi |
+            |-----|-----------|
+            | `kasira-pos-v*.apk` | Aplikasi kasir utama (POS) |
+            | `kasira-dapur-v*.apk` | Aplikasi kitchen display untuk dapur |
+
             ### Cara Install
-            1. Download file `kasira-v${{ github.event.inputs.version }}.apk`
+            1. Download APK yang sesuai
             2. Aktifkan "Install dari sumber tidak dikenal" di pengaturan Android
             3. Install APK
           draft: false
           prerelease: false
-          files: kasir_app/build/app/outputs/flutter-apk/kasira-v${{ github.event.inputs.version }}.apk
+          files: |
+            kasir_app/build/app/outputs/flutter-apk/kasira-pos-v${{ github.event.inputs.version }}.apk
+            kasir_app/build/app/outputs/flutter-apk/kasira-dapur-v${{ github.event.inputs.version }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
