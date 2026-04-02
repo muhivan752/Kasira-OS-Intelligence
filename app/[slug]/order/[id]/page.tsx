@@ -15,6 +15,18 @@ export default function OrderStatusPage() {
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<any>(null);
   const [storeData, setStoreData] = useState<any>(null);
+  const [qrisUrl, setQrisUrl] = useState<string | null>(null);
+  const [qrisExpiredAt, setQrisExpiredAt] = useState<Date | null>(null);
+  const [qrisCountdown, setQrisCountdown] = useState(0);
+
+  const applyOrderData = (data: any) => {
+    if (!data) return;
+    setOrder(data);
+    if (data.payment?.qris_url) setQrisUrl(data.payment.qris_url);
+    if (data.payment?.qris_expired_at) {
+      setQrisExpiredAt(new Date(data.payment.qris_expired_at));
+    }
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -22,23 +34,32 @@ export default function OrderStatusPage() {
         getStorefrontOrder(orderId),
         getStorefront(slug)
       ]);
-      
-      if (orderData) setOrder(orderData);
+      applyOrderData(orderData);
       if (store) setStoreData(store);
-      
       setLoading(false);
     }
-    
     loadData();
 
     // Poll every 5 seconds
     const interval = setInterval(async () => {
       const data = await getStorefrontOrder(orderId);
-      if (data) setOrder(data);
+      applyOrderData(data);
     }, 5000);
 
     return () => clearInterval(interval);
   }, [slug, orderId]);
+
+  // Countdown timer untuk QRIS
+  useEffect(() => {
+    if (!qrisExpiredAt) return;
+    const tick = () => {
+      const secs = Math.max(0, Math.floor((qrisExpiredAt.getTime() - Date.now()) / 1000));
+      setQrisCountdown(secs);
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [qrisExpiredAt]);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
@@ -120,6 +141,51 @@ export default function OrderStatusPage() {
           </div>
         )}
       </div>
+
+      {/* QRIS Payment — tampil saat pending + belum kadaluarsa */}
+      {order.status === 'pending' && order.payment?.method === 'qris' && (
+        <div className="bg-white p-6 mb-2 text-center border-b-2 border-blue-50">
+          {qrisUrl ? (
+            <>
+              <p className="text-xs font-bold text-gray-400 tracking-widest mb-4">SCAN UNTUK MEMBAYAR</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrisUrl}
+                alt="QRIS Code"
+                className="w-52 h-52 mx-auto rounded-2xl border border-gray-100 shadow-sm"
+              />
+              <div className="mt-4">
+                {qrisCountdown > 0 ? (
+                  <p className="text-sm text-gray-500">
+                    Berlaku{' '}
+                    <span className={`font-bold ${qrisCountdown < 60 ? 'text-red-500' : 'text-blue-600'}`}>
+                      {Math.floor(qrisCountdown / 60)}:{String(qrisCountdown % 60).padStart(2, '0')}
+                    </span>
+                  </p>
+                ) : (
+                  <div>
+                    <p className="text-sm text-red-500 font-medium mb-2">QR Code kadaluarsa</p>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="text-sm text-blue-600 underline"
+                    >
+                      Muat ulang untuk QR baru
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-3">
+                Total: {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(order.total_amount || 0)}
+              </p>
+            </>
+          ) : (
+            <div className="py-4">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-3" />
+              <p className="text-sm text-gray-500">Menyiapkan QR Code...</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Timeline */}
       {order.status !== 'cancelled' && (

@@ -290,10 +290,20 @@ async def xendit_webhook(
                     new_order_status = OrderStatus.completed
                     if payment.shift_session_id is None:
                         new_order_status = OrderStatus.preparing
-                        
+
                     order.status = new_order_status
                     order.row_version += 1
-                    
+
+                    # Update connect_order status jika ini storefront order
+                    from backend.models.connect import ConnectOrder
+                    co_stmt = select(ConnectOrder).where(
+                        ConnectOrder.order_id == payment.order_id
+                    )
+                    co_result = await db.execute(co_stmt)
+                    connect_order = co_result.scalar_one_or_none()
+                    if connect_order and connect_order.status == 'pending':
+                        connect_order.status = 'confirmed'
+
                     # Send WA receipt
                     if order.customer_id:
                         from backend.models.customer import Customer

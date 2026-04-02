@@ -94,28 +94,35 @@ export async function createStorefrontOrder(slug: string, orderData: any) {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
     const res = await fetch(`${baseUrl}/connect/${slug}/order`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(orderData),
     });
     if (!res.ok) {
-      console.warn(`Backend not reachable (status ${res.status}), using mock data for order creation.`);
-      return { 
-        success: true, 
-        data: { id: 'mock-order-' + Date.now(), order_number: 'ORD-MOCK-001' }, 
-        message: 'Pesanan berhasil dibuat (Mock)' 
-      };
+      const errBody = await res.json().catch(() => ({}));
+      const errMsg = errBody.detail || `Gagal membuat pesanan (${res.status})`;
+      return { success: false, data: null, message: errMsg };
     }
     const data = await res.json();
-    return { success: res.ok, data: data.data, message: data.message || data.detail };
+    // data.data = { order_id, display_number, status, estimated_minutes, payment: { method, status, qris_url, qris_expired_at } }
+    return { success: true, data: data.data, message: data.message };
   } catch (error) {
     console.warn(`Backend not reachable, using mock data for order creation.`);
-    // Fallback to mock data for demo purposes if backend is not running
-    return { 
-      success: true, 
-      data: { id: 'mock-order-' + Date.now(), order_number: 'ORD-MOCK-001' }, 
-      message: 'Pesanan berhasil dibuat (Mock)' 
+    const mockExpiry = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    return {
+      success: true,
+      data: {
+        order_id: 'mock-order-' + Date.now(),
+        display_number: 1,
+        status: 'pending',
+        estimated_minutes: 15,
+        payment: {
+          method: orderData.payment_method || 'qris',
+          status: 'pending',
+          qris_url: null,
+          qris_expired_at: mockExpiry,
+        },
+      },
+      message: 'Pesanan berhasil dibuat (Mock)',
     };
   }
 }
@@ -146,22 +153,31 @@ function getMockOrder(orderId: string) {
     order_number: 'ORD-MOCK-001',
     display_number: 1,
     status: 'pending',
-    payment_status: 'unpaid',
+    order_type: 'pickup',
+    payment_method: 'qris',
     total_amount: 50000,
-    customer_name: 'Pelanggan Demo',
     created_at: new Date().toISOString(),
+    estimated_minutes: 15,
+    delivery_address: null,
     items: [
       {
         id: 'item-1',
         product_name: 'Nasi Goreng Spesial',
         quantity: 2,
         price: 25000,
-        subtotal: 50000
+        subtotal: 50000,
+        notes: null,
       }
     ],
     outlet: {
       name: 'Warung Demo',
       phone: '081234567890'
-    }
+    },
+    payment: {
+      method: 'qris',
+      status: 'pending',
+      qris_url: null,
+      qris_expired_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    },
   };
 }

@@ -35,6 +35,7 @@ class ConnectOrderInput(BaseModel):
     order_type: str
     delivery_address: Optional[str] = None
     idempotency_key: str
+    payment_method: str = 'qris'  # 'qris' atau 'cash'
 
 from backend.services.fonnte import send_whatsapp_message
 
@@ -152,6 +153,8 @@ async def create_connect_order(
                 )
                 payment = payment_result.scalar_one_or_none()
                 
+                raw = (payment.xendit_raw or {}) if payment else {}
+                q_url = (payment.qris_url or raw.get("qr_string")) if payment else None
                 return StandardResponse(
                     success=True,
                     data={
@@ -159,8 +162,12 @@ async def create_connect_order(
                         "display_number": order.display_number,
                         "status": order.status,
                         "estimated_minutes": 15 if order.order_type == "pickup" else 30,
-                        "payment_id": str(payment.id) if payment else None,
-                        "qris_url": payment.qris_url if payment else None
+                        "payment": {
+                            "method": payment.payment_method if payment else None,
+                            "status": payment.status if payment else None,
+                            "qris_url": q_url,
+                            "qris_expired_at": None,
+                        },
                     },
                     message="Order retrieved from idempotency key"
                 )
@@ -285,49 +292,56 @@ async def create_connect_order(
         item.order_id = order.id
         db.add(item)
 
-    # Create Payment (QRIS)
+    # Create Payment
     from backend.models.payment import Payment
     from backend.schemas.payment import PaymentMethod, PaymentStatus
-    from backend.services.midtrans import midtrans_service
-    from backend.utils.encryption import decrypt_field
-    
+    from backend.services.xendit import xendit_service
+
+    pay_method = PaymentMethod.qris if input_data.payment_method == 'qris' else PaymentMethod.cash
+    initial_status = PaymentStatus.pending if pay_method == PaymentMethod.qris else PaymentStatus.paid
+
     payment = Payment(
         order_id=order.id,
         outlet_id=outlet.id,
-        payment_method=PaymentMethod.qris,
+        payment_method=pay_method,
         amount_due=subtotal,
-        amount_paid=0,
+        amount_paid=subtotal if pay_method == PaymentMethod.cash else 0,
         change_amount=0,
-        status=PaymentStatus.pending,
+        status=initial_status,
         idempotency_key=input_data.idempotency_key
     )
     db.add(payment)
     await db.flush()
-    
+
     qris_url = None
-    if outlet.midtrans_server_key_encrypted:
-        try:
-            server_key = decrypt_field(outlet.midtrans_server_key_encrypted)
-            midtrans_res = await midtrans_service.create_qris_transaction(
-                order_id=str(payment.id),
-                gross_amount=float(payment.amount_due),
-                server_key=server_key,
-                is_production=outlet.midtrans_is_production,
-                custom_field1=str(payment.order_id),
-                custom_field2=str(outlet.tenant_id)
-            )
-            
-            actions = midtrans_res.get("actions", [])
-            for action in actions:
-                if action.get("name") == "generate-qr-code":
-                    qris_url = action.get("url")
-                    break
-                    
-            payment.qris_url = qris_url
-            payment.midtrans_raw = midtrans_res
-        except Exception as e:
+    qris_expired_at = None
+
+    if pay_method == PaymentMethod.qris:
+        if outlet.xendit_business_id:
+            try:
+                xendit_res = await xendit_service.create_qris_transaction(
+                    reference_id=f"{outlet.tenant_id}::{payment.id}",
+                    amount=float(payment.amount_due),
+                    for_user_id=outlet.xendit_business_id,
+                    platform_fee_percent=0.2,
+                )
+                qris_url = xendit_res.get("qr_string") or xendit_res.get("qr_url")
+                payment.qris_url = qris_url
+                payment.xendit_raw = xendit_res
+                # QRIS expired 15 menit (Golden Rule #41)
+                qris_expired_at = (
+                    datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+                ).isoformat() + "Z"
+            except Exception as e:
+                payment.status = PaymentStatus.failed
+                payment.xendit_raw = {"error": str(e)}
+        else:
+            # Outlet belum setup Xendit — tandai failed, kasir bisa fallback cash
             payment.status = PaymentStatus.failed
-            payment.midtrans_raw = {"error": str(e)}
+            payment.xendit_raw = {"error": "Outlet belum terhubung Xendit"}
+    else:
+        # Cash: order langsung masuk preparing
+        order.status = "preparing"
 
     # Create connect order for idempotency
     connect_order = ConnectOrder(
@@ -359,8 +373,12 @@ async def create_connect_order(
             "display_number": order.display_number,
             "status": order.status,
             "estimated_minutes": 15 if order.order_type == "pickup" else 30,
-            "payment_id": str(payment.id),
-            "qris_url": qris_url
+            "payment": {
+                "method": payment.payment_method,
+                "status": payment.status,
+                "qris_url": qris_url,
+                "qris_expired_at": qris_expired_at,
+            },
         },
         message="Order created successfully"
     )
@@ -368,18 +386,80 @@ async def create_connect_order(
 @router.get("/orders/{order_id}", response_model=StandardResponse)
 async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Order).where(Order.id == order_id)
+        select(Order).options(selectinload(Order.items)).where(Order.id == order_id)
     )
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order tidak ditemukan")
 
+    # Load payment info
+    from backend.models.payment import Payment
+    pay_result = await db.execute(
+        select(Payment).where(
+            Payment.order_id == order.id,
+            Payment.deleted_at.is_(None)
+        ).order_by(Payment.created_at.desc()).limit(1)
+    )
+    payment = pay_result.scalar_one_or_none()
+
+    payment_data = None
+    if payment:
+        raw = payment.xendit_raw or {}
+        q_url = payment.qris_url or raw.get("qr_string") or raw.get("qr_url")
+        # Expired at = created_at + 15 menit (fallback kalau tidak tersimpan)
+        expired_at = None
+        if payment.payment_method == 'qris' and payment.status == 'pending':
+            exp = payment.created_at + datetime.timedelta(minutes=15)
+            expired_at = exp.isoformat() + "Z"
+        payment_data = {
+            "method": payment.payment_method,
+            "status": payment.status,
+            "qris_url": q_url,
+            "qris_expired_at": expired_at,
+        }
+
+    # Load items with product names
+    items_data = []
+    for item in (order.items or []):
+        prod_result = await db.execute(
+            select(Product).where(Product.id == item.product_id)
+        )
+        prod = prod_result.scalar_one_or_none()
+        items_data.append({
+            "id": str(item.id),
+            "product_name": prod.name if prod else "Produk",
+            "quantity": item.quantity,
+            "price": float(item.unit_price),
+            "subtotal": float(item.total_price),
+            "notes": item.notes,
+        })
+
+    # Load outlet info for WA contact
+    outlet_result = await db.execute(
+        select(Outlet).where(Outlet.id == order.outlet_id)
+    )
+    outlet = outlet_result.scalar_one_or_none()
+    outlet_data = {
+        "name": outlet.name if outlet else "",
+        "phone": outlet.phone if outlet else "",
+    } if outlet else {}
+
     return StandardResponse(
         success=True,
         data={
-            "status": order.status,
+            "id": str(order.id),
+            "order_number": order.order_number,
             "display_number": order.display_number,
-            "estimated_minutes": 15 if order.order_type == "pickup" else 30
+            "status": order.status,
+            "order_type": order.order_type,
+            "total_amount": float(order.total_amount),
+            "created_at": order.created_at.isoformat() + "Z",
+            "estimated_minutes": 15 if order.order_type == "pickup" else 30,
+            "delivery_address": order.notes if order.order_type == "delivery" else None,
+            "payment_method": payment.payment_method if payment else None,
+            "items": items_data,
+            "payment": payment_data,
+            "outlet": outlet_data,
         },
         message="Order status retrieved"
     )
