@@ -63,6 +63,13 @@
     `loyalty_history_page.dart` (gradient card), `cart_panel.dart` (integrated redeem + grand total)
   - `main.dart` — route `/loyalty/:customerId`
   - Aturan: 1 poin/Rp10.000, 1 poin=Rp100, min 10 poin untuk redeem
+- [x] **Feature B: Kasira Connect Storefront** — selesai 2026-04-02
+  - `connect.py`: ganti Midtrans → Xendit QRIS (reference_id = tenant_id::payment_id, platform_fee 0.2%)
+  - `connect.py`: payment_method di ConnectOrderInput (cash/qris), cash → langsung paid+preparing
+  - `connect.py`: POST response + GET /orders/{id} sekarang include full payment + items data
+  - `payments.py` webhook: setelah order confirmed → update connect_orders.status = 'confirmed'
+  - `app/actions/storefront.ts`: error handling real, mock data include payment object
+  - `app/[slug]/order/[id]/page.tsx`: QRIS display + countdown MM:SS + auto-refresh saat expired
 - [x] **Feature A: Flutter Dapur App (Kitchen Display)** — selesai 2026-04-02
   - Entry point terpisah: `kasir_app/lib/main_dapur.dart`
     → build dengan `flutter build apk --target lib/main_dapur.dart`
@@ -91,7 +98,7 @@
 - FASE 5: Pre-Pilot Checklist (backup, monitoring, APK upload ke R2)
 
 ## ❌ BELUM MULAI (Prioritas sesuai urutan)
-1. **Feature B: Kasira Connect Storefront** — self-order Next.js lengkap (menu publik, cart, order tracking)
+1. ~~**Feature B: Kasira Connect Storefront**~~ ✅ SELESAI 2026-04-02
 2. **Feature C: AI Chatbot Owner** — SSE streaming, intent classifier, system prompt <800 token, cache Redis
 3. **Feature E: Reservasi + Booking** via Connect
 4. **Feature F: FASE 5 Pre-Pilot** — pg_dump cron (sudah di kasira-setup.sh), UptimeRobot, Sentry, APK ke R2
@@ -121,10 +128,13 @@
 - Semua commit harus ke `claude/review-documentation-qqAkC`
 
 ## Lanjut Berikutnya
-**Feature B: Kasira Connect Storefront** — self-order Next.js untuk pelanggan cafe.
-- Backend `/connect/` API sudah ada (create_connect_order, get storefront, get order status)
-- Yang belum: UI Next.js yang lebih polished + integrasi Xendit QRIS untuk storefront
-- File target: `app/[slug]/` (public pages), komponen cart, order tracking page
+**Feature C: AI Chatbot Owner** — SSE streaming, intent classifier.
+- Endpoint: `POST /ai/chat` → SSE stream response
+- Intent classifier: READ vs WRITE, UNKNOWN → tolak sopan (Rule #54, #56)
+- System prompt max 800 token, di-cache Redis 5 menit (Rule #55)
+- Model: `get_model_for_tier(tier, task)` — Haiku untuk Starter, Sonnet untuk Pro+ (Rule #25–26)
+- 3 optimasi: batching 1 jam, cache sampai 00.00, compress context agregat (Rule #27)
+- File target: `backend/api/routes/ai.py` (baru), `backend/services/ai_service.py` (baru)
 
 ## Context Files Status
 - context/database.md    → ⏳ In Progress
