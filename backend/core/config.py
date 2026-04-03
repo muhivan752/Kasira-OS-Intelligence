@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     
     # Encryption
     ENCRYPTION_KEY: str = ""
+
+    # Claude AI
+    ANTHROPIC_API_KEY: str = ""
     
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
