@@ -15,7 +15,7 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    op.execute("CREATE TYPE subscription_status AS ENUM ('active', 'past_due', 'canceled', 'unpaid', 'trialing')")
+    op.execute("CREATE TYPE subscription_billing_status AS ENUM ('active', 'past_due', 'canceled', 'unpaid', 'trialing')")
     op.execute("CREATE TYPE subscription_interval AS ENUM ('daily', 'weekly', 'monthly', 'yearly')")
 
     op.create_table(
@@ -26,7 +26,7 @@ def upgrade():
         sa.Column('plan_tier', sa.String(), nullable=False), # Starter/Pro/Business
         sa.Column('outlet_count', sa.Integer(), server_default='1', nullable=False),
         sa.Column('amount_per_period', sa.Numeric(12, 2), nullable=False),
-        sa.Column('status', postgresql.ENUM('active', 'past_due', 'canceled', 'unpaid', 'trialing', name='subscription_status', create_type=False), server_default='trialing', nullable=False),
+        sa.Column('status', postgresql.ENUM('active', 'past_due', 'canceled', 'unpaid', 'trialing', name='subscription_billing_status', create_type=False), server_default='trialing', nullable=False),
         sa.Column('interval', postgresql.ENUM('daily', 'weekly', 'monthly', 'yearly', name='subscription_interval', create_type=False), nullable=False),
         sa.Column('price', sa.Numeric(12, 2), nullable=False),
         sa.Column('current_period_start', sa.DateTime(timezone=True), nullable=False),
@@ -43,4 +43,4 @@ def upgrade():
 def downgrade():
     op.drop_table('subscriptions')
     op.execute("DROP TYPE subscription_interval")
-    op.execute("DROP TYPE subscription_status")
+    op.execute("DROP TYPE subscription_billing_status")
