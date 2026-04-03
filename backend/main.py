@@ -11,6 +11,24 @@ from backend.core.config import settings
 from backend.core.database import tenant_context
 from backend.services.xendit import xendit_service
 
+# ── Sentry (Rule #45 pre-pilot: monitoring wajib) ─────────────────────────────
+if settings.SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT if hasattr(settings, 'ENVIRONMENT') else "production",
+        integrations=[
+            FastApiIntegration(transaction_style="endpoint"),
+            SqlalchemyIntegration(),
+        ],
+        traces_sample_rate=0.1,       # 10% performance tracing — cukup untuk pre-pilot
+        profiles_sample_rate=0.0,
+        send_default_pii=False,       # JANGAN kirim PII (GDPR + privacy)
+    )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

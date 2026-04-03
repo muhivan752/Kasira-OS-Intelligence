@@ -1,4 +1,5 @@
 import type {NextConfig} from 'next';
+import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -45,4 +46,15 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Wrap dengan Sentry hanya jika DSN dikonfigurasi — aman untuk development tanpa Sentry
+export default process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, {
+      silent: true,       // suppress Sentry build output
+      telemetry: false,   // tidak kirim telemetry ke Sentry
+      disableLogger: true,
+      // Source maps di-upload ke Sentry hanya saat CI/production
+      sourcemaps: {
+        disable: process.env.NODE_ENV !== 'production',
+      },
+    })
+  : nextConfig;

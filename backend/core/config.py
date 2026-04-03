@@ -40,7 +40,10 @@ class Settings(BaseSettings):
 
     # Claude AI
     ANTHROPIC_API_KEY: str = ""
-    
+
+    # Sentry Error Tracking
+    SENTRY_DSN: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
 settings = Settings()

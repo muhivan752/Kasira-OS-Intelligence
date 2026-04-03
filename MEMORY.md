@@ -114,12 +114,31 @@
   - `backend/models/loyalty.py` — CustomerPoints + PointTransaction models
   - `backend/api/routes/loyalty.py` — 4 endpoint: balance, earn (idempoten), redeem (optimistic lock), history
 
+- [x] **Feature F: FASE 5 Pre-Pilot** — selesai 2026-04-03
+  - Sentry Backend: `sentry-sdk[fastapi]>=2.0.0` di requirements.txt
+    + init di `backend/main.py` (only if SENTRY_DSN set, traces_sample_rate=0.1, send_default_pii=False)
+    + `SENTRY_DSN` di config.py + .env.example
+  - Sentry Frontend: `@sentry/nextjs` di package.json
+    + `sentry.client.config.ts` + `sentry.server.config.ts`
+    + `instrumentation.ts` (Next.js 14+ native, no experimental flag)
+    + `next.config.ts` wrapped dengan `withSentryConfig` (conditional on NEXT_PUBLIC_SENTRY_DSN)
+  - APK ke R2: `build-apk.yml` tambah step upload ke Cloudflare R2 (S3-compatible API)
+    + Upload kedua APK (pos + dapur) ke `s3://{R2_BUCKET}/apk/`
+    + Generate + upload `version.json` ke R2 (Flutter baca ini saat startup — Golden Rule #14 + #15)
+    + GitHub Secrets: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_URL
+  - `.env.example` update: ANTHROPIC_API_KEY, SENTRY_DSN, NEXT_PUBLIC_SENTRY_DSN, R2 vars (commented)
+  - `kasira-setup.sh` update: prompt ANTHROPIC_API_KEY + SENTRY_DSN saat setup VPS
+  - pg_dump cron: sudah ada di kasira-setup.sh (tiap 6 jam ke /var/backups/kasira) — ✅ verified OK
+  - UptimeRobot: manual setup di dashboard — monitor http://VPS_IP:8000/ dan http://VPS_IP:3000/
+
 ## ⏳ IN PROGRESS
-- FASE 5: Pre-Pilot Checklist (backup, monitoring, APK upload ke R2)
+- VPS Deployment: kasira-setup.sh siap, butuh VPS Ubuntu 22.04 untuk deploy
 
 ## ❌ BELUM MULAI (Prioritas sesuai urutan)
-1. **Feature F: FASE 5 Pre-Pilot** — pg_dump cron (sudah di kasira-setup.sh), UptimeRobot, Sentry, APK ke R2, .env.example update
-2. **VPS Deployment** — deploy ke VPS beneran (kasira-setup.sh sudah siap, tunggu fitur selesai semua)
+1. **VPS Deployment** — jalankan `bash kasira-setup.sh` di server Ubuntu 22.04
+   - Isi FONNTE_TOKEN, XENDIT_API_KEY, ANTHROPIC_API_KEY, SENTRY_DSN saat prompted
+   - Setelah up: setup UptimeRobot monitor untuk /health endpoint
+   - Setelah up: trigger build-apk.yml untuk upload APK ke R2 (isi GitHub Secrets dulu)
 
 ## Keputusan Teknikal (JANGAN DIUBAH TANPA ALASAN)
 - ORM: SQLAlchemy async (bukan Tortoise)

@@ -137,6 +137,17 @@ create_env_file() {
   XENDIT_API_KEY=${INPUT_XENDIT_KEY:-""}
   XENDIT_WEBHOOK_TOKEN=${INPUT_XENDIT_WEBHOOK:-""}
 
+  echo ""
+  echo -e "${BOLD}Masukkan API Key Claude AI (untuk AI Chatbot Owner):${NC}"
+  read -rp "  ANTHROPIC_API_KEY (bisa kosong dulu, isi nanti): " INPUT_ANTHROPIC
+  ANTHROPIC_API_KEY=${INPUT_ANTHROPIC:-""}
+
+  echo ""
+  echo -e "${BOLD}Masukkan Sentry DSN (untuk error tracking — opsional):${NC}"
+  echo -e "  Buat project di sentry.io → Settings → Client Keys → DSN"
+  read -rp "  SENTRY_DSN (kosongkan jika belum punya): " INPUT_SENTRY
+  SENTRY_DSN=${INPUT_SENTRY:-""}
+
   cat > "$KASIRA_DIR/.env" <<EOF
 # ── Database ────────────────────────────────────────────
 POSTGRES_SERVER=db
@@ -165,6 +176,13 @@ FONNTE_TOKEN=${FONNTE_TOKEN}
 XENDIT_API_KEY=${XENDIT_API_KEY}
 XENDIT_WEBHOOK_TOKEN=${XENDIT_WEBHOOK_TOKEN}
 XENDIT_IS_PRODUCTION=False
+
+# ── Claude AI ───────────────────────────────────────────
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+# Sentry Error Tracking
+SENTRY_DSN=${SENTRY_DSN}
+NEXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN}
 
 # ── App ──────────────────────────────────────────────────
 ENVIRONMENT=production

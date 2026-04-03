@@ -96,6 +96,63 @@ jobs:
             kasir_app/build/app/outputs/flutter-apk/kasira-pos-v${{ github.event.inputs.version }}.apk
             kasir_app/build/app/outputs/flutter-apk/kasira-dapur-v${{ github.event.inputs.version }}.apk
 
+      # ── Upload ke Cloudflare R2 (Golden Rule #14 — APK hosted di R2) ────────
+      - name: Upload APKs to Cloudflare R2
+        if: ${{ secrets.R2_ACCOUNT_ID != '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          IS_MANDATORY="${{ github.event.inputs.is_mandatory }}"
+          NOTES="${{ github.event.inputs.release_notes }}"
+          APK_DIR="kasir_app/build/app/outputs/flutter-apk"
+          BUCKET="${{ secrets.R2_BUCKET }}"
+          PUB_URL="${{ secrets.R2_PUBLIC_URL }}"
+
+          pip install awscli --quiet
+
+          # Upload kedua APK ke R2 bucket
+          aws s3 cp "${APK_DIR}/kasira-pos-v${VERSION}.apk" \
+            "s3://${BUCKET}/apk/kasira-pos-v${VERSION}.apk" \
+            --endpoint-url "${R2_ENDPOINT}"
+
+          aws s3 cp "${APK_DIR}/kasira-dapur-v${VERSION}.apk" \
+            "s3://${BUCKET}/apk/kasira-dapur-v${VERSION}.apk" \
+            --endpoint-url "${R2_ENDPOINT}"
+
+          # Buat version.json — dibaca Flutter saat startup (Golden Rule #14 + #15)
+          cat > /tmp/version.json <<VEOF
+          {
+            "pos": {
+              "version": "${VERSION}",
+              "is_mandatory": ${IS_MANDATORY},
+              "download_url": "${PUB_URL}/apk/kasira-pos-v${VERSION}.apk",
+              "release_notes": "${NOTES}"
+            },
+            "dapur": {
+              "version": "${VERSION}",
+              "is_mandatory": ${IS_MANDATORY},
+              "download_url": "${PUB_URL}/apk/kasira-dapur-v${VERSION}.apk",
+              "release_notes": "${NOTES}"
+            }
+          }
+          VEOF
+
+          # Upload version.json dengan cache-control no-cache agar Flutter selalu baca terbaru
+          aws s3 cp /tmp/version.json \
+            "s3://${BUCKET}/version.json" \
+            --endpoint-url "${R2_ENDPOINT}" \
+            --content-type "application/json" \
+            --cache-control "no-cache, no-store"
+
+          echo "✅ APK dan version.json berhasil di-upload ke R2"
+          echo "POS URL: ${PUB_URL}/apk/kasira-pos-v${VERSION}.apk"
+          echo "Dapur URL: ${PUB_URL}/apk/kasira-dapur-v${VERSION}.apk"
+          echo "version.json URL: ${PUB_URL}/version.json"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
