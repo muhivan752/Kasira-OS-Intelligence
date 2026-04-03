@@ -23,7 +23,7 @@ def upgrade():
         sa.Column('outlet_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('outlets.id', ondelete='CASCADE'), nullable=False),
         sa.Column('name', sa.String(), nullable=False),
         sa.Column('capacity', sa.Integer(), server_default='2', nullable=False),
-        sa.Column('status', postgresql.ENUM('available', 'reserved', 'occupied', 'closed', name='table_status', create_type=False), server_default="'available'", nullable=False),
+        sa.Column('status', postgresql.ENUM('available', 'reserved', 'occupied', 'closed', name='table_status', create_type=False), server_default='available', nullable=False),
         sa.Column('position_x', sa.Float(), nullable=True),
         sa.Column('position_y', sa.Float(), nullable=True),
         sa.Column('is_active', sa.Boolean(), server_default='true', nullable=False),

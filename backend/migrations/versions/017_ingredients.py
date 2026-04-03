@@ -30,7 +30,7 @@ def upgrade():
         sa.Column('cost_per_base_unit', sa.Numeric(12, 2), server_default='0', nullable=False),
         sa.Column('ai_setup_complete', sa.Boolean(), server_default='false', nullable=False),
         sa.Column('needs_review', sa.Boolean(), server_default='false', nullable=False),
-        sa.Column('ingredient_type', postgresql.ENUM('recipe', 'overhead', name='ingredient_type', create_type=False), server_default="'recipe'", nullable=False),
+        sa.Column('ingredient_type', postgresql.ENUM('recipe', 'overhead', name='ingredient_type', create_type=False), server_default='recipe', nullable=False),
         sa.Column('overhead_cost_per_day', sa.Numeric(12, 2), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
