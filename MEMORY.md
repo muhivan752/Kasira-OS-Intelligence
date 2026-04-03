@@ -132,13 +132,21 @@
   - UptimeRobot: manual setup di dashboard — monitor http://VPS_IP:8000/ dan http://VPS_IP:3000/
 
 ## ⏳ IN PROGRESS
-- VPS Deployment: kasira-setup.sh siap, butuh VPS Ubuntu 22.04 untuk deploy
+- **VPS Login Bug** — OTP verify 200 OK tapi redirect balik ke /login
+  - Root cause: belum diketahui pasti. Kemungkinan: `getCurrentUser()` di dashboard layout gagal call `/users/me` atau cookie tidak terbaca setelah verifyOtp
+  - VPS: 103.189.235.164, branch: claude/review-documentation-qqAkC
+  - Admin phone: 6285270782220, PIN: 111222
+  - ENVIRONMENT=development, FONNTE_TOKEN dicomment (dev mode aktif)
+  - Dev OTP: set manual via `docker exec kasira-redis-1 redis-cli SET "otp:6285270782220" "123456" EX 300`
+  - Semua container running, migration 001–059 clean, seed_admin berhasil
 
 ## ❌ BELUM MULAI (Prioritas sesuai urutan)
-1. **VPS Deployment** — jalankan `bash kasira-setup.sh` di server Ubuntu 22.04
-   - Isi FONNTE_TOKEN, XENDIT_API_KEY, ANTHROPIC_API_KEY, SENTRY_DSN saat prompted
-   - Setelah up: setup UptimeRobot monitor untuk /health endpoint
-   - Setelah up: trigger build-apk.yml untuk upload APK ke R2 (isi GitHub Secrets dulu)
+1. **Fix Login Flow** — debug `/users/me` response setelah OTP verify sukses
+   - Cek: apakah token cookie ter-set dengan benar setelah verifyOtp
+   - Cek: apakah `/users/me` return 200 atau error (lihat docker logs backend saat akses dashboard)
+   - Kemungkinan: `pin/verify` vs `otp/verify` flow — dashboard mungkin butuh PIN step juga
+2. **Register Page** — sudah dibuat di `/app/register/page.tsx`, belum ditest karena login belum jalan
+3. **UptimeRobot** — setup manual monitor http://103.189.235.164:8000 dan :3000
 
 ## Keputusan Teknikal (JANGAN DIUBAH TANPA ALASAN)
 - ORM: SQLAlchemy async (bukan Tortoise)
