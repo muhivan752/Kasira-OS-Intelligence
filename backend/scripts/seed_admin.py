@@ -24,6 +24,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from sqlalchemy import select, text
 from backend.core.database import AsyncSessionLocal
 from backend.core.security import get_pin_hash
+import backend.models  # noqa: F401 — register all models so FK chain resolves
 from backend.models.tenant import Tenant
 from backend.models.brand import Brand
 from backend.models.outlet import Outlet
