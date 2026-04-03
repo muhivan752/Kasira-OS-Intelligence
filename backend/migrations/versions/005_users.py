@@ -22,7 +22,7 @@ def upgrade():
         sa.Column('phone', sa.String(), nullable=False, unique=True),
         sa.Column('full_name', sa.String(), nullable=False),
         sa.Column('pin_hash', sa.String(), nullable=True),
-        sa.Column('role_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('roles.id', ondelete='RESTRICT'), nullable=False),
+        sa.Column('role_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('roles.id', ondelete='RESTRICT'), nullable=True),
         sa.Column('assigned_outlet_ids', postgresql.ARRAY(postgresql.UUID(as_uuid=True)), nullable=True),
         sa.Column('is_active', sa.Boolean(), server_default='true', nullable=False),
         sa.Column('is_superuser', sa.Boolean(), server_default='false', nullable=False),
