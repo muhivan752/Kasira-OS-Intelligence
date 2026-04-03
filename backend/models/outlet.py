@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Boolean, ForeignKey, Integer, DateTime
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from backend.models.base import BaseModel
 
@@ -12,7 +12,7 @@ class Outlet(BaseModel):
     phone = Column(String, nullable=True)
     is_active = Column(Boolean(), default=True)
     is_open = Column(Boolean(), default=True)
-    opening_hours = Column(String, nullable=True) # JSONB in DB
+    opening_hours = Column(JSONB, nullable=True)
     
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id"), nullable=True, index=True)
