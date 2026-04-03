@@ -12,7 +12,7 @@ from backend.core.database import tenant_context
 from backend.services.xendit import xendit_service
 
 # ── Sentry (Rule #45 pre-pilot: monitoring wajib) ─────────────────────────────
-if settings.SENTRY_DSN:
+if settings.SENTRY_DSN and settings.SENTRY_DSN.strip().startswith('http'):
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
     from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
