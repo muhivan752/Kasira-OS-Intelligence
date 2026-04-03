@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getStorefront } from '@/app/actions/storefront';
 import { useCart } from './CartContext';
-import { ShoppingBag, MessageCircle, Store, Clock, MapPin, CheckCircle2 } from 'lucide-react';
+import { ShoppingBag, MessageCircle, Store, Clock, MapPin, CheckCircle2, CalendarCheck } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
 
 export default function StorefrontPage() {
@@ -199,9 +199,22 @@ export default function StorefrontPage() {
 
       {/* Floating Action Buttons */}
       <div className="fixed bottom-6 left-0 right-0 px-4 pointer-events-none flex flex-col items-center gap-3 z-50">
+        {/* Reservasi button — shown when cart is empty */}
+        {totalItems === 0 && outlet.is_open && (
+          <div className="w-full max-w-md mx-auto pointer-events-auto">
+            <button
+              onClick={() => router.push(`/${slug}/booking`)}
+              className="w-full bg-white border border-blue-200 text-blue-600 rounded-full shadow-lg px-5 py-3 flex items-center justify-center gap-2 font-semibold text-sm hover:bg-blue-50 transition-colors"
+            >
+              <CalendarCheck className="w-5 h-5" />
+              Reservasi Meja
+            </button>
+          </div>
+        )}
+
         <div className="w-full max-w-md mx-auto flex justify-between items-end pointer-events-auto">
           {/* WA Button */}
-          <button 
+          <button
             onClick={handleWhatsApp}
             className="w-12 h-12 bg-green-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-green-600 transition-colors"
           >
@@ -210,7 +223,7 @@ export default function StorefrontPage() {
 
           {/* Cart Button */}
           {totalItems > 0 && (
-            <button 
+            <button
               onClick={() => router.push(`/${slug}/cart`)}
               className="flex-1 ml-4 bg-blue-600 text-white rounded-full shadow-lg p-1 flex items-center hover:bg-blue-700 transition-colors"
             >

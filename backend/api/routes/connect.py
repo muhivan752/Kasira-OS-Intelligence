@@ -51,6 +51,22 @@ async def send_wa_confirmation_real(
     )
     await send_whatsapp_message(phone, message)
 
+
+async def send_wa_booking_confirmation(
+    phone: str, booking_id: str, outlet_name: str,
+    customer_name: str, reservation_time_str: str, guest_count: int
+):
+    message = (
+        f"Booking meja diterima!\n"
+        f"Outlet: {outlet_name}\n"
+        f"Nama: {customer_name}\n"
+        f"Waktu: {reservation_time_str}\n"
+        f"Jumlah tamu: {guest_count} orang\n"
+        f"Status: Menunggu konfirmasi outlet.\n"
+        f"ID Booking: {booking_id[:8].upper()}"
+    )
+    await send_whatsapp_message(phone, message)
+
 @router.get("/{slug}", response_model=StandardResponse)
 async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
     # Check cache
@@ -382,6 +398,222 @@ async def create_connect_order(
         },
         message="Order created successfully"
     )
+
+class BookingInput(BaseModel):
+    customer_name: str
+    customer_phone: str
+    reservation_time: str  # ISO 8601 string, e.g. "2026-04-10T19:00:00+07:00"
+    guest_count: int = Field(gt=0)
+    table_id: Optional[uuid.UUID] = None
+    notes: Optional[str] = None
+
+
+@router.get("/{slug}/tables", response_model=StandardResponse)
+async def get_available_tables(slug: str, db: AsyncSession = Depends(get_db)):
+    """Meja tersedia untuk booking form di storefront."""
+    result = await db.execute(
+        select(Outlet).where(Outlet.slug == slug, Outlet.deleted_at.is_(None))
+    )
+    outlet = result.scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    from backend.models.reservation import Table
+    tables_result = await db.execute(
+        select(Table).where(
+            Table.outlet_id == outlet.id,
+            Table.is_active == 'true',
+            Table.status == 'available',
+            Table.deleted_at.is_(None),
+        ).order_by(Table.name)
+    )
+    tables = tables_result.scalars().all()
+
+    return StandardResponse(
+        success=True,
+        data=[
+            {
+                "id": str(t.id),
+                "name": t.name,
+                "capacity": t.capacity,
+                "status": t.status,
+            }
+            for t in tables
+        ],
+        message="Daftar meja tersedia",
+    )
+
+
+@router.post("/{slug}/booking", response_model=StandardResponse)
+async def create_booking(
+    slug: str,
+    input_data: BookingInput,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Buat booking meja dari storefront (tanpa login).
+    Rule #33: reservations WAJIB row_version — double booking via Connect = real problem.
+    Golden Rule #24: meja belum di-reserve sampai owner konfirmasi.
+    """
+    result = await db.execute(
+        select(Outlet).where(Outlet.slug == slug, Outlet.deleted_at.is_(None))
+    )
+    outlet = result.scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    if not outlet.is_open:
+        raise HTTPException(status_code=400, detail="Maaf, outlet sedang tutup")
+
+    # Parse reservation_time — accept ISO 8601 with/without timezone
+    import datetime as dt
+    try:
+        # Python 3.11+ handles Z and +07:00; strip Z for older versions
+        reservation_time_str = input_data.reservation_time.replace("Z", "+00:00")
+        reservation_dt = dt.datetime.fromisoformat(reservation_time_str)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Format waktu tidak valid, gunakan ISO 8601 (contoh: 2026-04-10T19:00:00+07:00)")
+
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    if reservation_dt.tzinfo:
+        if reservation_dt <= now_utc:
+            raise HTTPException(status_code=400, detail="Waktu reservasi harus di masa depan")
+    elif reservation_dt <= now_utc.replace(tzinfo=None):
+        raise HTTPException(status_code=400, detail="Waktu reservasi harus di masa depan")
+
+    # Get or create customer
+    cust_result = await db.execute(
+        select(Customer).where(
+            Customer.tenant_id == outlet.tenant_id,
+            Customer.phone == input_data.customer_phone,
+        )
+    )
+    customer = cust_result.scalar_one_or_none()
+    if not customer:
+        customer = Customer(
+            tenant_id=outlet.tenant_id,
+            name=input_data.customer_name,
+            phone=input_data.customer_phone,
+        )
+        db.add(customer)
+        await db.flush()
+
+    # Validate table availability (Rule #33 — double booking protection)
+    from backend.models.reservation import Reservation, Table
+    if input_data.table_id:
+        tbl_result = await db.execute(
+            select(Table).where(
+                Table.id == input_data.table_id,
+                Table.outlet_id == outlet.id,
+                Table.deleted_at.is_(None),
+            ).with_for_update()
+        )
+        table = tbl_result.scalar_one_or_none()
+        if not table:
+            raise HTTPException(status_code=404, detail="Meja tidak ditemukan")
+        if table.status != "available":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Meja tidak tersedia (status: {table.status}), pilih meja lain",
+            )
+        if table.capacity < input_data.guest_count:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Kapasitas meja hanya {table.capacity} orang",
+            )
+
+    reservation = Reservation(
+        outlet_id=outlet.id,
+        customer_id=customer.id,
+        table_id=input_data.table_id,
+        reservation_time=reservation_dt,
+        guest_count=input_data.guest_count,
+        status="pending",
+        notes=input_data.notes,
+    )
+    db.add(reservation)
+    await db.commit()
+    await db.refresh(reservation)
+
+    # Fetch table name for response
+    table_name = None
+    if input_data.table_id:
+        tbl_res = await db.execute(select(Table).where(Table.id == input_data.table_id))
+        tbl = tbl_res.scalar_one_or_none()
+        table_name = tbl.name if tbl else None
+
+    friendly_time = reservation_dt.strftime("%d %b %Y %H:%M")
+    background_tasks.add_task(
+        send_wa_booking_confirmation,
+        input_data.customer_phone,
+        str(reservation.id),
+        outlet.name,
+        input_data.customer_name,
+        friendly_time,
+        input_data.guest_count,
+    )
+
+    return StandardResponse(
+        success=True,
+        data={
+            "booking_id": str(reservation.id),
+            "customer_name": input_data.customer_name,
+            "reservation_time": reservation_dt.isoformat(),
+            "guest_count": input_data.guest_count,
+            "table_name": table_name,
+            "status": "pending",
+        },
+        message="Booking berhasil dibuat, menunggu konfirmasi dari outlet",
+    )
+
+
+@router.get("/bookings/{booking_id}", response_model=StandardResponse)
+async def get_booking_status(booking_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Get booking status (polling dari storefront)."""
+    from backend.models.reservation import Reservation, Table
+    result = await db.execute(
+        select(Reservation).where(
+            Reservation.id == booking_id,
+            Reservation.deleted_at.is_(None),
+        )
+    )
+    reservation = result.scalar_one_or_none()
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Booking tidak ditemukan")
+
+    cust_result = await db.execute(select(Customer).where(Customer.id == reservation.customer_id))
+    customer = cust_result.scalar_one_or_none()
+
+    table_name = None
+    if reservation.table_id:
+        tbl_result = await db.execute(select(Table).where(Table.id == reservation.table_id))
+        tbl = tbl_result.scalar_one_or_none()
+        table_name = tbl.name if tbl else None
+
+    outlet_result = await db.execute(
+        select(Outlet).where(Outlet.id == reservation.outlet_id)
+    )
+    outlet = outlet_result.scalar_one_or_none()
+
+    return StandardResponse(
+        success=True,
+        data={
+            "booking_id": str(reservation.id),
+            "customer_name": customer.name if customer else "Guest",
+            "customer_phone": customer.phone if customer else None,
+            "reservation_time": reservation.reservation_time.isoformat(),
+            "guest_count": reservation.guest_count,
+            "table_name": table_name,
+            "status": reservation.status,
+            "notes": reservation.notes,
+            "outlet": {
+                "name": outlet.name if outlet else "",
+                "phone": outlet.phone if outlet else "",
+            },
+        },
+    )
+
 
 @router.get("/orders/{order_id}", response_model=StandardResponse)
 async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depends(get_db)):

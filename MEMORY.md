@@ -94,16 +94,32 @@
   - `build-apk.yml` — build 2 APK: `kasira-pos-v*.apk` + `kasira-dapur-v*.apk`
   - GoRouter dapur: /dapur → /dapur/login → /dapur/dashboard → /dapur/completed,statistik,settings
 
+- [x] **Feature E: Reservasi + Booking via Connect** — selesai 2026-04-03
+  - `backend/models/reservation.py` — Table + Reservation models (row_version, ENUM)
+  - `backend/api/routes/reservations.py` — owner CRUD: list/get/confirm/cancel/complete
+    → confirm: set meja reserved (Golden Rule #24)
+    → cancel/complete: release meja (Golden Rule #24)
+    → log_audit setiap WRITE (Rule #2), optimistic lock row_version (Rule #33)
+  - `backend/api/routes/connect.py` — tambah 3 endpoint:
+    → GET /{slug}/tables → meja tersedia untuk booking form
+    → POST /{slug}/booking → buat booking (tanpa login, WA confirmation)
+    → GET /bookings/{id} → status polling
+  - `backend/api/api.py` — include reservations + loyalty router
+  - `app/actions/storefront.ts` — getAvailableTables, createBooking, getBookingStatus
+  - `app/[slug]/booking/page.tsx` — form: nama, telepon, tanggal, jam, tamu, meja, catatan
+  - `app/[slug]/booking/[id]/page.tsx` — status polling (pending/confirmed/cancelled)
+  - `app/[slug]/page.tsx` — tombol "Reservasi Meja" saat cart kosong
+- [x] **Feature D (Loyalty) — file yang hilang dibuat ulang** — 2026-04-03
+  - `backend/migrations/versions/059_loyalty_points.py` — customer_points + point_transactions
+  - `backend/models/loyalty.py` — CustomerPoints + PointTransaction models
+  - `backend/api/routes/loyalty.py` — 4 endpoint: balance, earn (idempoten), redeem (optimistic lock), history
+
 ## ⏳ IN PROGRESS
 - FASE 5: Pre-Pilot Checklist (backup, monitoring, APK upload ke R2)
 
 ## ❌ BELUM MULAI (Prioritas sesuai urutan)
-1. ~~**Feature B: Kasira Connect Storefront**~~ ✅ SELESAI 2026-04-02
-2. ~~**Feature C: AI Chatbot Owner**~~ ✅ SELESAI 2026-04-02
-2. **Feature C: AI Chatbot Owner** — SSE streaming, intent classifier, system prompt <800 token, cache Redis
-3. **Feature E: Reservasi + Booking** via Connect
-4. **Feature F: FASE 5 Pre-Pilot** — pg_dump cron (sudah di kasira-setup.sh), UptimeRobot, Sentry, APK ke R2
-5. **VPS Deployment** — deploy ke VPS beneran (kasira-setup.sh sudah siap, tunggu fitur selesai semua)
+1. **Feature F: FASE 5 Pre-Pilot** — pg_dump cron (sudah di kasira-setup.sh), UptimeRobot, Sentry, APK ke R2, .env.example update
+2. **VPS Deployment** — deploy ke VPS beneran (kasira-setup.sh sudah siap, tunggu fitur selesai semua)
 
 ## Keputusan Teknikal (JANGAN DIUBAH TANPA ALASAN)
 - ORM: SQLAlchemy async (bukan Tortoise)
@@ -132,13 +148,12 @@
 - Semua commit harus ke `claude/review-documentation-qqAkC`
 
 ## Lanjut Berikutnya
-**Feature E: Reservasi + Booking via Connect** — customer bisa booking meja dari storefront.
-- Endpoint: `POST /ai/chat` → SSE stream response
-- Intent classifier: READ vs WRITE, UNKNOWN → tolak sopan (Rule #54, #56)
-- System prompt max 800 token, di-cache Redis 5 menit (Rule #55)
-- Model: `get_model_for_tier(tier, task)` — Haiku untuk Starter, Sonnet untuk Pro+ (Rule #25–26)
-- 3 optimasi: batching 1 jam, cache sampai 00.00, compress context agregat (Rule #27)
-- File target: `backend/api/routes/ai.py` (baru), `backend/services/ai_service.py` (baru)
+**Feature F: FASE 5 Pre-Pilot** — checklist sebelum deploy ke VPS produksi:
+- UptimeRobot monitoring setup
+- Sentry error tracking integration
+- APK upload ke Cloudflare R2 (build-apk.yml update)
+- .env.example update (tambah ANTHROPIC_API_KEY)
+- pg_dump cron sudah ada di kasira-setup.sh → verify running
 
 ## Context Files Status
 - context/database.md    → ⏳ In Progress

@@ -1,13 +1,11 @@
-# SESSION — 2026-04-02
+# SESSION — 2026-04-03
 # Claude update file ini otomatis tiap task selesai
 
 ## ✅ SELESAI SESI INI
-- [x] Feature D: Loyalty Points — backend + Flutter
-- [x] Feature A: Flutter Dapur App — 8 layar kitchen display
-- [x] Feature B: Kasira Connect Storefront — Xendit QRIS + QR display + bugfix
-- [x] Feature C: AI Chatbot Owner — SSE streaming + intent classifier
+- [x] Feature E: Reservasi + Booking via Connect
+- [x] Feature D fix: loyalty.py route + model + migration 059 (file hilang, dibuat ulang)
 
-## 🔴 LANJUT DARI SINI → Feature E: Reservasi + Booking
+## 🔴 LANJUT DARI SINI → Feature F: FASE 5 Pre-Pilot
 
 ---
 
@@ -17,108 +15,83 @@
 ```
 claude/review-documentation-qqAkC
 ```
-Last commit: `bbc1cfc` — "feat: Feature C — AI Chatbot Owner (SSE streaming)"
+Last commit: feat: Feature E — Reservasi + Booking + Loyalty fix
 
 ### Urutan priority fitur tersisa
 ```
-E → F → VPS
+F → VPS
 ```
-1. **Feature E: Reservasi + Booking via Connect** ← NEXT
-2. Feature F: FASE 5 Pre-Pilot (UptimeRobot, Sentry, APK ke R2, .env.example update)
-3. VPS Deployment (kasira-setup.sh sudah siap)
+1. **Feature F: FASE 5 Pre-Pilot** ← NEXT
+2. VPS Deployment (kasira-setup.sh sudah siap)
 
 ---
 
-## FEATURE E: RESERVASI + BOOKING — Detail Teknikal
+## FEATURE F: FASE 5 PRE-PILOT — Detail Teknikal
 
-### Konteks
-- Tabel `reservations` sudah ada di DB (migration batch 4)
-- Tabel sudah punya `row_version` (Rule #33: reservations WAJIB row_version)
-- Golden Rule #24: Meja reserved otomatis saat connect_order confirmed → release saat done
-- Golden Rule #23: ETA dine in disimpan di connect_orders.eta_minutes
+### Yang harus dibuat/dikerjakan:
+1. **UptimeRobot** — tambah monitor config/instructions di docs atau README
+2. **Sentry** — integrate ke backend FastAPI + Next.js frontend
+   - `pip install sentry-sdk[fastapi]`
+   - `SENTRY_DSN` env var
+   - Sentry.init di main.py + next.config.js
+3. **APK ke Cloudflare R2** — update `.github/workflows/build-apk.yml`
+   - Upload kasira-pos-v*.apk + kasira-dapur-v*.apk ke R2 setelah build
+4. **.env.example** — tambah:
+   - `ANTHROPIC_API_KEY=sk-ant-...`
+   - `SENTRY_DSN=https://...`
+5. **Verify pg_dump cron** — sudah ada di kasira-setup.sh, cek syntax benar
 
-### Yang harus dibuat:
-```
-backend/api/routes/reservations.py    ← CRUD reservasi (baru atau cek sudah ada)
-app/[slug]/booking/page.tsx           ← Booking form di storefront (baru)
-app/[slug]/booking/[id]/page.tsx      ← Booking status page (baru)
-```
-
-### File yang perlu dibaca sebelum coding Feature E:
-1. `backend/models/reservation.py` (atau cek di models/) — struktur tabel
-2. `backend/migrations/versions/027_reservations.py` — lihat kolom lengkap
-3. `app/[slug]/` — lihat struktur existing untuk tahu cara tambah halaman baru
-4. `backend/api/routes/connect.py` — connect order sudah ada, perlu tambah ETA + meja reserved
-5. Check apakah `reservations` router sudah ada di `backend/api/api.py`
-
-### Key fields reservations table (dari migration batch 4):
-- id UUID, outlet_id, customer_id
-- table_id (FK tables), reservation_date, start_time, end_time
-- party_size, notes, status (pending/confirmed/cancelled/completed)
-- row_version (Rule #33)
-- connect_order_id (link ke connect_order jika booking via storefront)
-
-### Endpoints yang dibutuhkan:
-```
-POST /reservations/           ← buat booking (guest bisa tanpa login)
-GET  /reservations/{id}       ← status booking
-PUT  /reservations/{id}/confirm  ← owner/kasir konfirmasi
-PUT  /reservations/{id}/cancel   ← cancel
-GET  /connect/{slug}/tables   ← available tables untuk storefront booking
-```
-
-### Frontend storefront (Next.js):
-- Form: nama, telepon, tanggal, jam, jumlah orang, catatan
-- Pilih meja (dari GET /connect/{slug}/tables)
-- Konfirmasi via WA setelah submit
-- Status page polling (booking pending/confirmed/cancelled)
+### File yang perlu dibaca sebelum coding Feature F:
+1. `.env.example` — lihat apa yang sudah ada
+2. `backend/main.py` — lihat struktur app FastAPI
+3. `.github/workflows/build-apk.yml` — lihat struktur workflow
+4. `kasira-setup.sh` — verify pg_dump cron
 
 ---
 
-## FEATURE C — Summary yang Sudah Selesai
+## FEATURE E — Summary yang Sudah Selesai
 
-### backend/services/ai_service.py (BARU)
-- `get_model_for_tier(tier, task)` — Rule #25/#26
-  → "claude-haiku-4-5-20251001" default
-  → "claude-sonnet-4-6" hanya Pro+/complex
-- `classify_intent(message)` — Rule #54/#56
-  → READ: laporan/omzet/stok/penjualan/pelanggan
-  → WRITE: tambah/hapus/ubah/ganti → blok, minta ke Settings app
-  → UNKNOWN: tolak sopan
-- `build_context(outlet_id, tenant_id, outlet_name, db, redis)` — Rule #27/#55
-  → Cache Redis: `ai:context:{outlet_id}`, TTL sampai 00.00 WIB
-  → Agregat: omzet hari ini, top 3 produk, 7 hari, stok kritis <5
-  → Max ~800 token
-- `stream_ai_response()` — AsyncGenerator SSE chunks
-  → format: `data: {"type": "chunk/done/error", ...}\n\n`
+### backend/models/reservation.py
+- `Table`: outlet_id, name, capacity, status (available/reserved/occupied/closed), position_x, position_y, is_active, row_version
+- `Reservation`: outlet_id, customer_id, table_id, reservation_time, guest_count, status (pending/confirmed/cancelled/completed), notes, row_version
 
-### backend/api/routes/ai.py (BARU)
-- `POST /ai/chat` → StreamingResponse text/event-stream
-  → Auth required (get_current_user)
-  → Validate outlet belongs to tenant
-  → log_audit (Rule #2)
-  → X-Accel-Buffering: no (nginx bypass untuk SSE)
-- `DELETE /ai/context/{outlet_id}` → clear Redis cache manual
+### backend/api/routes/reservations.py (BARU)
+- `GET /reservations/?outlet_id=` → list reservasi (bulk load N+1 safe)
+- `GET /reservations/{id}` → detail
+- `PUT /reservations/{id}/confirm` → konfirmasi + set table.status='reserved' (Golden Rule #24)
+- `PUT /reservations/{id}/cancel` → cancel + release table (Golden Rule #24)
+- `PUT /reservations/{id}/complete` → complete + release table (Golden Rule #24)
+- Semua WRITE: log_audit + optimistic lock row_version
+
+### backend/api/routes/connect.py (TAMBAHAN)
+- `GET /{slug}/tables` → meja status='available' untuk booking form
+- `POST /{slug}/booking` → buat reservasi (tanpa login, validasi meja WITH FOR UPDATE, WA confirmation)
+- `GET /bookings/{booking_id}` → status polling
 
 ### backend/api/api.py
-- Tambah: `api_router.include_router(ai.router, prefix="/ai", tags=["ai"])`
+- Tambah: `reservations.router` + `loyalty.router`
 
-### backend/requirements.txt
-- Tambah: `anthropic>=0.40.0`
+### app/actions/storefront.ts (TAMBAHAN)
+- `getAvailableTables(slug)` + `createBooking(slug, data)` + `getBookingStatus(bookingId)`
+- Mock fallback untuk semua 3 functions
 
-### backend/core/config.py
-- Tambah: `ANTHROPIC_API_KEY: str = ""`
+### app/[slug]/booking/page.tsx (BARU)
+- Form: nama, telepon, tanggal (min tomorrow), jam, jumlah tamu (counter), pilih meja, catatan
+- Filter meja by guest_count >= capacity
+- Submit → redirect ke /[slug]/booking/[id]
 
-### .env.example (perlu ditambah di sesi berikutnya)
-- `ANTHROPIC_API_KEY=sk-ant-...`
+### app/[slug]/booking/[id]/page.tsx (BARU)
+- Polling setiap 10 detik, stop saat confirmed/cancelled/completed
+- Status visual: pending=kuning, confirmed=hijau, cancelled=merah, completed=abu
+- WA contact button, back to menu
 
----
+### app/[slug]/page.tsx (MODIFIED)
+- Tombol "Reservasi Meja" muncul saat cart kosong + outlet is_open
 
-## CATATAN PENTING
-- `loyalty.py` route file tidak ada di filesystem (mungkin tidak pernah dibuat atau hilang)
-  → Perlu dicek dan dibuat ulang jika Feature D (Loyalty) sudah ada di MEMORY.md
-  → File yang perlu dicek: `backend/api/routes/loyalty.py`
-- `backend/api/api.py` tidak include loyalty router → perlu ditambah juga
+### Feature D Fix (Loyalty):
+- `backend/migrations/versions/059_loyalty_points.py` → customer_points + point_transactions
+- `backend/models/loyalty.py` → CustomerPoints + PointTransaction
+- `backend/api/routes/loyalty.py` → balance, earn (idempoten UNIQUE order+type), redeem (row_version lock), history
 
 ---
 
@@ -129,5 +102,4 @@ Perintah untuk Claude di sesi baru:
 
 Claude harus:
 1. Baca CLAUDE.md + MEMORY.md + SESSION.md
-2. Cek apakah loyalty.py exists, jika tidak buat ulang
-3. Lanjut Feature E: Reservasi
+2. Lanjut Feature F: FASE 5 Pre-Pilot

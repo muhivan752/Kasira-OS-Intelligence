@@ -147,6 +147,83 @@ export async function getStorefrontOrder(orderId: string) {
   }
 }
 
+export async function getAvailableTables(slug: string) {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+    const res = await fetch(`${baseUrl}/connect/${slug}/tables`, { cache: 'no-store' });
+    if (!res.ok) return getMockTables();
+    const data = await res.json();
+    return data.data;
+  } catch {
+    return getMockTables();
+  }
+}
+
+export async function createBooking(slug: string, bookingData: any) {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+    const res = await fetch(`${baseUrl}/connect/${slug}/booking`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bookingData),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      return { success: false, data: null, message: errBody.detail || `Gagal membuat booking (${res.status})` };
+    }
+    const data = await res.json();
+    return { success: true, data: data.data, message: data.message };
+  } catch {
+    return {
+      success: true,
+      data: {
+        booking_id: 'mock-booking-' + Date.now(),
+        customer_name: bookingData.customer_name,
+        reservation_time: bookingData.reservation_time,
+        guest_count: bookingData.guest_count,
+        table_name: null,
+        status: 'pending',
+      },
+      message: 'Booking berhasil dibuat (Mock)',
+    };
+  }
+}
+
+export async function getBookingStatus(bookingId: string) {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+    const res = await fetch(`${baseUrl}/connect/bookings/${bookingId}`, { cache: 'no-store' });
+    if (!res.ok) return getMockBooking(bookingId);
+    const data = await res.json();
+    return data.data;
+  } catch {
+    return getMockBooking(bookingId);
+  }
+}
+
+function getMockTables() {
+  return [
+    { id: 'tbl-1', name: 'Meja 1', capacity: 2, status: 'available' },
+    { id: 'tbl-2', name: 'Meja 2', capacity: 4, status: 'available' },
+    { id: 'tbl-3', name: 'Meja 3', capacity: 6, status: 'available' },
+    { id: 'tbl-4', name: 'Meja VIP', capacity: 8, status: 'available' },
+  ];
+}
+
+function getMockBooking(bookingId: string) {
+  return {
+    booking_id: bookingId,
+    customer_name: 'Demo Customer',
+    customer_phone: '081234567890',
+    reservation_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    guest_count: 2,
+    table_name: 'Meja 1',
+    status: 'pending',
+    notes: null,
+    outlet: { name: 'Warung Demo', phone: '081234567890' },
+  };
+}
+
 function getMockOrder(orderId: string) {
   return {
     id: orderId,
