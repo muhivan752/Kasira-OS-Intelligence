@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = '055_more_missing_row_versions'
-down_revision = '054_add_shift_session_id_to_payments'
+down_revision = '054'
 branch_labels = None
 depends_on = None
 

@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = '054_add_shift_session_id_to_payments'
+revision = '054'
 down_revision = '053_cash_activities'
 branch_labels = None
 depends_on = None
