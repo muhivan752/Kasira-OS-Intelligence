@@ -5,8 +5,9 @@
 - [x] Feature D: Loyalty Points — backend + Flutter
 - [x] Feature A: Flutter Dapur App — 8 layar kitchen display
 - [x] Feature B: Kasira Connect Storefront — Xendit QRIS + QR display + bugfix
+- [x] Feature C: AI Chatbot Owner — SSE streaming + intent classifier
 
-## 🔴 LANJUT DARI SINI → Feature C: AI Chatbot Owner
+## 🔴 LANJUT DARI SINI → Feature E: Reservasi + Booking
 
 ---
 
@@ -16,196 +17,117 @@
 ```
 claude/review-documentation-qqAkC
 ```
-Last commit: `cc54d4e` — "fix: 4 bugs di Feature B Connect Storefront"
+Last commit: `bbc1cfc` — "feat: Feature C — AI Chatbot Owner (SSE streaming)"
 
 ### Urutan priority fitur tersisa
 ```
-C → E → F → VPS
+E → F → VPS
 ```
-1. **Feature C: AI Chatbot Owner** ← NEXT
-2. Feature E: Reservasi + Booking via Connect
-3. Feature F: FASE 5 Pre-Pilot (UptimeRobot, Sentry, APK ke R2)
-4. VPS Deployment (kasira-setup.sh sudah siap)
+1. **Feature E: Reservasi + Booking via Connect** ← NEXT
+2. Feature F: FASE 5 Pre-Pilot (UptimeRobot, Sentry, APK ke R2, .env.example update)
+3. VPS Deployment (kasira-setup.sh sudah siap)
 
 ---
 
-## FEATURE C: AI CHATBOT OWNER — Detail Teknikal
+## FEATURE E: RESERVASI + BOOKING — Detail Teknikal
 
-### Yang harus dibuat (semuanya BARU):
+### Konteks
+- Tabel `reservations` sudah ada di DB (migration batch 4)
+- Tabel sudah punya `row_version` (Rule #33: reservations WAJIB row_version)
+- Golden Rule #24: Meja reserved otomatis saat connect_order confirmed → release saat done
+- Golden Rule #23: ETA dine in disimpan di connect_orders.eta_minutes
+
+### Yang harus dibuat:
 ```
-backend/api/routes/ai.py          ← endpoint POST /ai/chat (SSE stream)
-backend/services/ai_service.py    ← logic: model selector, intent, context builder
-backend/api/api.py                ← include ai router
-```
-
-### Golden Rules yang berlaku untuk Feature C:
-- Rule #25: Claude API model dipilih via get_model_for_tier(tier, task) — TIDAK BOLEH hardcoded
-- Rule #26: Starter + rutin task → Haiku | Sonnet hanya Pro+ untuk task kompleks
-- Rule #27: 3 optimasi WAJIB:
-  1. Batching context (agregat per 1 jam, bukan raw rows)
-  2. Cache system prompt di Redis (sampai 00.00 WIB)
-  3. Compress context (kirim agregat, BUKAN raw transaksi)
-- Rule #54: AI intent WAJIB classified dulu, WRITE butuh konfirmasi owner
-- Rule #55: System prompt max 800 token context agregat, di-cache Redis 5 menit
-- Rule #56: UNKNOWN intent = tolak sopan, jangan hallucinate di luar konteks bisnis
-- Rule #2: Setiap WRITE endpoint WAJIB tulis audit log
-- Rule #9: FastAPI async ONLY
-
-### Spesifikasi teknikal:
-
-#### 1. Intent Classifier
-```python
-INTENTS = {
-    "READ": ["laporan", "omzet", "penjualan", "stok", "produk terlaris", "pelanggan"],
-    "WRITE": ["tambah", "ubah", "hapus", "update", "ganti harga"],
-    "UNKNOWN": # semua di luar konteks bisnis cafe/restoran
-}
-```
-- WRITE → return response: "Apakah Anda yakin ingin [action]? Ketik YA untuk konfirmasi"
-- UNKNOWN → tolak sopan: "Maaf, saya hanya bisa membantu pertanyaan seputar bisnis Anda"
-
-#### 2. Model Selector
-```python
-def get_model_for_tier(tier: str, task: str) -> str:
-    if tier in ('pro', 'enterprise') and task == 'complex':
-        return "claude-sonnet-4-6"  # Rule #26
-    return "claude-haiku-4-5-20251001"  # Default Starter/rutin
+backend/api/routes/reservations.py    ← CRUD reservasi (baru atau cek sudah ada)
+app/[slug]/booking/page.tsx           ← Booking form di storefront (baru)
+app/[slug]/booking/[id]/page.tsx      ← Booking status page (baru)
 ```
 
-#### 3. Context Builder (max 800 token, Rule #55)
-```python
-async def build_context(outlet_id, tenant_id, db, redis) -> str:
-    # Cache key: f"ai:context:{outlet_id}"
-    # TTL: sampai 00.00 WIB = hitung detik sampai tengah malam Asia/Jakarta
-    # Content (AGREGAT, bukan raw):
-    # - Nama outlet, tier, jam buka
-    # - Omzet hari ini (total Rp, jumlah transaksi)
-    # - Top 3 produk terlaris hari ini
-    # - Stok kritis (< 5 unit)
-    # - Ringkasan 7 hari terakhir (omzet, trend naik/turun)
+### File yang perlu dibaca sebelum coding Feature E:
+1. `backend/models/reservation.py` (atau cek di models/) — struktur tabel
+2. `backend/migrations/versions/027_reservations.py` — lihat kolom lengkap
+3. `app/[slug]/` — lihat struktur existing untuk tahu cara tambah halaman baru
+4. `backend/api/routes/connect.py` — connect order sudah ada, perlu tambah ETA + meja reserved
+5. Check apakah `reservations` router sudah ada di `backend/api/api.py`
+
+### Key fields reservations table (dari migration batch 4):
+- id UUID, outlet_id, customer_id
+- table_id (FK tables), reservation_date, start_time, end_time
+- party_size, notes, status (pending/confirmed/cancelled/completed)
+- row_version (Rule #33)
+- connect_order_id (link ke connect_order jika booking via storefront)
+
+### Endpoints yang dibutuhkan:
+```
+POST /reservations/           ← buat booking (guest bisa tanpa login)
+GET  /reservations/{id}       ← status booking
+PUT  /reservations/{id}/confirm  ← owner/kasir konfirmasi
+PUT  /reservations/{id}/cancel   ← cancel
+GET  /connect/{slug}/tables   ← available tables untuk storefront booking
 ```
 
-#### 4. SSE Streaming Endpoint
-```python
-@router.post("/chat")
-async def ai_chat(
-    request: ChatRequest,
-    current_user: User = Depends(deps.get_current_user),
-    db: AsyncSession = Depends(deps.get_db),
-) -> StreamingResponse:
-    # 1. classify intent
-    # 2. if UNKNOWN → return SSE dengan pesan tolak
-    # 3. if WRITE → return SSE dengan konfirmasi
-    # 4. build context (dari cache Redis atau query DB)
-    # 5. call Claude API stream
-    # 6. yield SSE chunks
-    # 7. audit log (Rule #2)
-```
-
-#### 5. Request/Response schema
-```python
-class ChatRequest(BaseModel):
-    message: str
-    conversation_id: Optional[str] = None  # untuk multi-turn
-
-# SSE format:
-# data: {"type": "chunk", "content": "..."}
-# data: {"type": "done", "tokens_used": 123}
-# data: {"type": "error", "message": "..."}
-```
-
-#### 6. Claude API call
-```python
-import anthropic
-client = anthropic.AsyncAnthropic()
-
-async with client.messages.stream(
-    model=get_model_for_tier(user.tier, classify_task(message)),
-    max_tokens=1024,
-    system=system_prompt,  # max 800 token
-    messages=[{"role": "user", "content": message}],
-) as stream:
-    async for text in stream.text_stream:
-        yield f"data: {json.dumps({'type': 'chunk', 'content': text})}\n\n"
-```
-
-### File yang perlu dibaca sebelum coding Feature C:
-1. `backend/api/api.py` — untuk include router baru
-2. `backend/api/deps.py` — untuk get_current_user + get_db
-3. `backend/api/routes/reports.py` — untuk memahami query omzet yang sudah ada
-4. `backend/services/redis.py` — untuk caching pattern yang sudah dipakai
-5. `backend/core/config.py` — untuk ANTHROPIC_API_KEY config
-
-### Package yang mungkin perlu ditambah ke requirements.txt:
-- `anthropic` — Claude API SDK (cek dulu apakah sudah ada)
+### Frontend storefront (Next.js):
+- Form: nama, telepon, tanggal, jam, jumlah orang, catatan
+- Pilih meja (dari GET /connect/{slug}/tables)
+- Konfirmasi via WA setelah submit
+- Status page polling (booking pending/confirmed/cancelled)
 
 ---
 
-## SUMMARY FEATURE B — Apa yang Sudah Selesai
+## FEATURE C — Summary yang Sudah Selesai
 
-### backend/api/routes/connect.py
-- Hapus Midtrans, pakai Xendit QRIS
-- `xendit_service.create_qris_transaction(reference_id=f"{tenant_id}::{payment_id}", ...)`
-- Tambah `payment_method` field di `ConnectOrderInput` (default: 'qris')
-- Cash: status langsung paid, order ke 'preparing'
-- POST response include: `payment: { method, status, qris_url, qris_expired_at }`
-- GET /orders/{order_id}: return full data (items, outlet, payment)
+### backend/services/ai_service.py (BARU)
+- `get_model_for_tier(tier, task)` — Rule #25/#26
+  → "claude-haiku-4-5-20251001" default
+  → "claude-sonnet-4-6" hanya Pro+/complex
+- `classify_intent(message)` — Rule #54/#56
+  → READ: laporan/omzet/stok/penjualan/pelanggan
+  → WRITE: tambah/hapus/ubah/ganti → blok, minta ke Settings app
+  → UNKNOWN: tolak sopan
+- `build_context(outlet_id, tenant_id, outlet_name, db, redis)` — Rule #27/#55
+  → Cache Redis: `ai:context:{outlet_id}`, TTL sampai 00.00 WIB
+  → Agregat: omzet hari ini, top 3 produk, 7 hari, stok kritis <5
+  → Max ~800 token
+- `stream_ai_response()` — AsyncGenerator SSE chunks
+  → format: `data: {"type": "chunk/done/error", ...}\n\n`
 
-### backend/api/routes/payments.py (webhook)
-- Setelah order confirmed → query ConnectOrder → set status = 'accepted'
+### backend/api/routes/ai.py (BARU)
+- `POST /ai/chat` → StreamingResponse text/event-stream
+  → Auth required (get_current_user)
+  → Validate outlet belongs to tenant
+  → log_audit (Rule #2)
+  → X-Accel-Buffering: no (nginx bypass untuk SSE)
+- `DELETE /ai/context/{outlet_id}` → clear Redis cache manual
 
-### app/[slug]/cart/page.tsx
-- Redirect: `res.data.id` → `res.data.order_id` (BUG FIX)
-- Tambah `idempotency_key` di payload (Golden Rule #34)
-- Item field: `quantity` → `qty` (sesuai backend schema)
+### backend/api/api.py
+- Tambah: `api_router.include_router(ai.router, prefix="/ai", tags=["ai"])`
 
-### app/[slug]/order/[id]/page.tsx
-- State: qrisUrl, qrisExpiredAt, qrisCountdown
-- QRIS display: render via `api.qrserver.com` (bukan img src langsung dari qr_string)
-- Countdown MM:SS, merah saat < 60 detik
-- Polling berhenti saat status = completed/cancelled/failed
+### backend/requirements.txt
+- Tambah: `anthropic>=0.40.0`
 
-### app/actions/storefront.ts
-- Error handling real (bukan silently fallback ke mock)
-- Mock data include payment object lengkap
+### backend/core/config.py
+- Tambah: `ANTHROPIC_API_KEY: str = ""`
+
+### .env.example (perlu ditambah di sesi berikutnya)
+- `ANTHROPIC_API_KEY=sk-ant-...`
+
+---
+
+## CATATAN PENTING
+- `loyalty.py` route file tidak ada di filesystem (mungkin tidak pernah dibuat atau hilang)
+  → Perlu dicek dan dibuat ulang jika Feature D (Loyalty) sudah ada di MEMORY.md
+  → File yang perlu dicek: `backend/api/routes/loyalty.py`
+- `backend/api/api.py` tidak include loyalty router → perlu ditambah juga
 
 ---
 
 ## CARA RESUME SESI BARU
 
-Ketika mulai sesi baru, Claude harus:
-1. Baca CLAUDE.md (Golden Rules)
-2. Baca MEMORY.md (status + keputusan teknikal)
-3. Baca SESSION.md ini (checkpoint + spesifikasi Feature C)
-4. Lanjut langsung ke Feature C tanpa tanya-tanya
-
 Perintah untuk Claude di sesi baru:
-> "baca claude.md, memory.md, session.md dulu lalu lanjut ke feature C AI chatbot"
+> "baca claude.md, memory.md, session.md dulu lalu lanjut"
 
----
-
-## BLOCKER
-- Tidak ada.
-
-## FILE YANG DIUBAH SESI INI
-
-### Feature D (Loyalty):
-- `backend/api/routes/loyalty.py` (baru)
-- `backend/api/api.py`
-- `kasir_app/lib/features/loyalty/` (semua file baru)
-- `kasir_app/lib/features/pos/presentation/widgets/cart_panel.dart`
-- `kasir_app/lib/main.dart`
-
-### Feature A (Dapur):
-- `kasir_app/lib/main_dapur.dart` (baru)
-- `kasir_app/lib/features/dapur/` (semua file baru)
-- `backend/api/routes/auth.py` (tambah POST /auth/pin/verify)
-- `kasir_app/lib/features/auth/presentation/pages/login_page.dart`
-- `.github/workflows/build-apk.yml`
-
-### Feature B (Connect Storefront):
-- `backend/api/routes/connect.py`
-- `backend/api/routes/payments.py`
-- `app/actions/storefront.ts`
-- `app/[slug]/order/[id]/page.tsx`
-- `app/[slug]/cart/page.tsx`
+Claude harus:
+1. Baca CLAUDE.md + MEMORY.md + SESSION.md
+2. Cek apakah loyalty.py exists, jika tidak buat ulang
+3. Lanjut Feature E: Reservasi

@@ -99,6 +99,7 @@
 
 ## ❌ BELUM MULAI (Prioritas sesuai urutan)
 1. ~~**Feature B: Kasira Connect Storefront**~~ ✅ SELESAI 2026-04-02
+2. ~~**Feature C: AI Chatbot Owner**~~ ✅ SELESAI 2026-04-02
 2. **Feature C: AI Chatbot Owner** — SSE streaming, intent classifier, system prompt <800 token, cache Redis
 3. **Feature E: Reservasi + Booking** via Connect
 4. **Feature F: FASE 5 Pre-Pilot** — pg_dump cron (sudah di kasira-setup.sh), UptimeRobot, Sentry, APK ke R2
@@ -121,6 +122,9 @@
 - Loyalty: 1 poin/Rp10.000 earn, 1 poin=Rp100 redeem, min 10 poin, UNIQUE(order_id,type)
 - Dapur App: entry point terpisah main_dapur.dart, polling 8 detik, dark UI theme
 - PIN Login: `/auth/pin/verify` untuk dapur (phone+PIN tanpa OTP)
+- AI Model: Haiku default, Sonnet hanya Pro+/complex task — via get_model_for_tier()
+- AI Context cache: Redis key ai:context:{outlet_id}, TTL sampai 00.00 WIB
+- AI SSE format: {type: chunk/done/error, content, intent, tokens_used, model}
 
 ## Branch Git
 - Branch aktif: `claude/review-documentation-qqAkC`
@@ -128,7 +132,7 @@
 - Semua commit harus ke `claude/review-documentation-qqAkC`
 
 ## Lanjut Berikutnya
-**Feature C: AI Chatbot Owner** — SSE streaming, intent classifier.
+**Feature E: Reservasi + Booking via Connect** — customer bisa booking meja dari storefront.
 - Endpoint: `POST /ai/chat` → SSE stream response
 - Intent classifier: READ vs WRITE, UNKNOWN → tolak sopan (Rule #54, #56)
 - System prompt max 800 token, di-cache Redis 5 menit (Rule #55)
