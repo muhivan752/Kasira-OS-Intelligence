@@ -1,5 +1,6 @@
 # SESSION — 2026-04-03
 # Claude update file ini otomatis tiap task selesai
+# Kalau reconnect: baca CLAUDE.md → MEMORY.md → SESSION.md ini, lalu lanjut dari "## NEXT ACTION"
 
 ## ✅ SELESAI SESI INI
 - [x] Feature E: Reservasi + Booking via Connect (sesi sebelumnya)
@@ -79,8 +80,29 @@ claude/review-documentation-qqAkC
 
 ---
 
-## CARA RESUME SESI BARU (jika ada bug/perlu perubahan)
+---
 
-> "baca claude.md, memory.md, session.md dulu lalu lanjut"
+## 🔁 CARA RECONNECT (SELALU BACA INI DULU)
 
-Semua feature sudah selesai. Sesi selanjutnya = debugging deploy atau tambah fitur baru.
+Copy-paste ke Claude Code saat mulai sesi baru:
+> "baca CLAUDE.md, MEMORY.md, SESSION.md di /var/www/kasira/ lalu lanjut dari NEXT ACTION"
+
+---
+
+## ⏭️ NEXT ACTION
+
+### ✅ R2 TIDAK DIPERLUKAN — Ganti ke GitHub Releases + raw.githubusercontent.com (GRATIS)
+
+**Yang sudah diubah**:
+- `build-apk.yml` → APK ke GitHub Releases, version.json di-commit ke repo otomatis
+- `splash_page.dart` → baca version.json dari `raw.githubusercontent.com/muhivan752/Kasira-OS-Intelligence/main/version.json`
+
+**Langkah selanjutnya (tinggal ini)**:
+1. **Trigger GitHub Actions** — buka repo → Actions → "Build & Release Kasira Flutter APK" → Run workflow
+   - version: `1.0.0`, is_mandatory: `false`, release_notes: `Initial release`
+2. **Deploy VPS** — jalankan di Ubuntu 22.04:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/muhivan752/Kasira-OS-Intelligence/main/kasira-setup.sh | sudo bash
+   ```
+   Isi saat prompted: FONNTE_TOKEN, XENDIT_API_KEY, XENDIT_WEBHOOK_TOKEN, ANTHROPIC_API_KEY, SENTRY_DSN
+3. **UptimeRobot** — setup monitor http://VPS_IP:8000/ dan http://VPS_IP:3000/

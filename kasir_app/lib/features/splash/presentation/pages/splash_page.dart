@@ -22,8 +22,10 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
   String? _updateUrl;
 
   final _storage = const FlutterSecureStorage();
+  static const _versionJsonUrl =
+      'https://raw.githubusercontent.com/muhivan752/Kasira-OS-Intelligence/main/version.json';
+
   Dio get _dio => Dio(BaseOptions(
-    baseUrl: AppConfig.apiV1,
     connectTimeout: const Duration(seconds: 5),
     receiveTimeout: const Duration(seconds: 5),
   ));
@@ -54,10 +56,11 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
       final info = await PackageInfo.fromPlatform();
       final currentVersion = info.version;
 
-      final response = await _dio.get('/auth/app/version?platform=android');
-      final data = response.data['data'];
+      final response = await _dio.get(_versionJsonUrl);
+      final appKey = info.packageName.contains('dapur') ? 'dapur' : 'pos';
+      final data = response.data[appKey] as Map<String, dynamic>;
 
-      final latestVersion = data['latest_version'] as String;
+      final latestVersion = data['version'] as String;
       final isMandatory = data['is_mandatory'] as bool;
       final downloadUrl = data['download_url'] as String?;
 
