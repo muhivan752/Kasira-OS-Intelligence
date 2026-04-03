@@ -70,8 +70,7 @@ async def send_otp(
     
     if not success:
         logger.error(f"Failed to send OTP to {request.phone}. OTP was {otp}")
-        # We might still want to return success in dev if Fonnte is not configured
-        if settings.FONNTE_TOKEN:
+        if settings.FONNTE_TOKEN and settings.ENVIRONMENT == "production":
             raise HTTPException(status_code=500, detail="Failed to send OTP via WhatsApp")
             
     return StandardResponse(data={"message": "OTP sent successfully"}, message="OTP sent successfully")
