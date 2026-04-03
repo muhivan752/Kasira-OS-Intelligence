@@ -80,6 +80,34 @@ export async function verifyOtp(phone: string, otp: string) {
   }
 }
 
+export async function registerTenant(phone: string, businessName: string, ownerName: string, pin: string) {
+  try {
+    const res = await fetch(`${API_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, business_name: businessName, owner_name: ownerName, pin }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, message: data.detail || 'Registrasi gagal' };
+    }
+
+    const token = data.data.access_token;
+    const tenantId = data.data.tenant_id;
+    const outletId = data.data.outlet_id;
+
+    const cookieStore = await cookies();
+    cookieStore.set({ name: 'token', value: token, httpOnly: true, path: '/', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 7 });
+    if (tenantId) cookieStore.set({ name: 'tenant_id', value: tenantId, httpOnly: true, path: '/', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 7 });
+    if (outletId) cookieStore.set({ name: 'outlet_id', value: outletId, httpOnly: true, path: '/', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 7 });
+
+    return { success: true };
+  } catch {
+    return { success: false, message: 'Terjadi kesalahan jaringan' };
+  }
+}
+
 export async function logout() {
   const cookieStore = await cookies();
   cookieStore.delete('token');

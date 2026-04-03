@@ -39,7 +39,7 @@ export default function LandingPage() {
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
               <Link 
-                href="/onboarding"
+                href="/register"
                 className="w-full sm:w-auto px-8 py-4 bg-emerald-500 text-white text-lg font-semibold rounded-full hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:-translate-y-0.5"
               >
                 Coba Gratis 30 Hari
@@ -271,7 +271,7 @@ export default function LandingPage() {
                 ))}
               </ul>
               <Link 
-                href="/onboarding"
+                href="/register"
                 className="w-full block text-center px-6 py-3 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 transition-colors"
               >
                 Mulai Gratis
@@ -308,7 +308,7 @@ export default function LandingPage() {
                 ))}
               </ul>
               <Link 
-                href="/onboarding"
+                href="/register"
                 className="w-full block text-center px-6 py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors"
               >
                 Mulai Gratis
@@ -456,7 +456,7 @@ export default function LandingPage() {
           </p>
           
           <Link 
-            href="/onboarding"
+            href="/register"
             className="inline-block px-10 py-5 bg-white text-emerald-600 text-xl font-bold rounded-full hover:bg-gray-50 transition-all shadow-xl hover:-translate-y-1 hover:shadow-2xl"
           >
             Coba Gratis 30 Hari Sekarang

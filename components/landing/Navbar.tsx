@@ -45,7 +45,7 @@ export default function Navbar() {
                 Masuk
               </Link>
               <Link 
-                href="/onboarding"
+                href="/register"
                 className="text-sm font-medium bg-emerald-500 text-white px-5 py-2.5 rounded-full hover:bg-emerald-600 transition-colors shadow-sm"
               >
                 Coba Gratis
@@ -88,7 +88,7 @@ export default function Navbar() {
                 Masuk
               </Link>
               <Link
-                href="/onboarding"
+                href="/register"
                 className="w-full text-center px-4 py-3 text-base font-medium bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 shadow-sm"
                 onClick={() => setIsOpen(false)}
               >
