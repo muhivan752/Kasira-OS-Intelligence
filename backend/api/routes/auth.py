@@ -21,7 +21,7 @@ from backend.schemas.auth import OTPSendRequest, OTPVerifyRequest
 from backend.schemas.response import StandardResponse
 from backend.services.fonnte import send_whatsapp_message
 from backend.services.redis import get_redis_client
-from backend.services.audit import write_audit_log
+from backend.services.audit import log_audit
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -256,10 +256,10 @@ async def verify_pin_login(
     if outlet:
         outlet_id = str(outlet.id)
 
-    await write_audit_log(
+    await log_audit(
         db=db, user_id=str(user.id), tenant_id=str(user.tenant_id),
-        action="pin_login", resource_type="user", resource_id=str(user.id),
-        details={"source": "dapur_app"},
+        action="pin_login", entity="user", entity_id=str(user.id),
+        after_state={"source": "dapur_app"},
     )
 
     token_data = Token(
