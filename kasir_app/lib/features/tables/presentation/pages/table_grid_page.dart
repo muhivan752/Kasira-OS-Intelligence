@@ -89,9 +89,10 @@ class _TableGridPageState extends State<TableGridPage> {
           // Status filter chips
           Container(
             height: 60,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             color: Colors.white,
-            child: Row(
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               children: [
                 _buildFilterChip(null, 'Semua', AppColors.primary),
                 const SizedBox(width: 8),

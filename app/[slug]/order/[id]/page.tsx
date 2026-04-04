@@ -118,7 +118,8 @@ export default function OrderStatusPage() {
   const currentIndex = getStatusIndex(order.status);
 
   return (
-    <div className="max-w-md mx-auto bg-gray-50 min-h-screen pb-24">
+    <div className="min-h-screen bg-gray-50 pb-24">
+      <div className="max-w-2xl mx-auto">
       {/* Header */}
       <div className="bg-white px-4 py-4 border-b border-gray-100 flex items-center gap-4">
         <Link href={`/${slug}`} className="p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
@@ -282,8 +283,8 @@ export default function OrderStatusPage() {
 
       {/* Action Buttons */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <div className="max-w-md mx-auto">
-          <button 
+        <div className="max-w-2xl mx-auto">
+          <button
             onClick={handleWhatsApp}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-500 text-white font-bold rounded-xl hover:bg-green-600 transition-colors"
           >
@@ -291,6 +292,7 @@ export default function OrderStatusPage() {
             Hubungi Outlet via WA
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

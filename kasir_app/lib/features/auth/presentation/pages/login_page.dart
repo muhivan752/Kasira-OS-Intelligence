@@ -310,9 +310,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       backgroundColor: AppColors.primary,
       body: Center(
         child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: Container(
-            width: 400,
-            padding: const EdgeInsets.all(40),
+            constraints: const BoxConstraints(maxWidth: 400),
+            width: double.infinity,
+            padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),

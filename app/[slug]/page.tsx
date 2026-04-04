@@ -4,15 +4,15 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getStorefront } from '@/app/actions/storefront';
 import { useCart } from './CartContext';
-import { ShoppingBag, MessageCircle, Store, Clock, MapPin, CheckCircle2 } from 'lucide-react';
+import { ShoppingBag, MessageCircle, Store, Clock, MapPin, CheckCircle2, Plus, Minus } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
 
 export default function StorefrontPage() {
   const params = useParams();
   const slug = params.slug as string;
   const router = useRouter();
-  const { items, addItem, totalItems, totalPrice } = useCart();
-  
+  const { items, addItem, updateQuantity, totalItems, totalPrice } = useCart();
+
   const [loading, setLoading] = useState(true);
   const [storeData, setStoreData] = useState<any>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -21,21 +21,26 @@ export default function StorefrontPage() {
     if (!slug) return;
     async function loadData() {
       const data = await getStorefront(slug);
-      if (data) {
-        setStoreData(data);
-      }
+      if (data) setStoreData(data);
       setLoading(false);
     }
     loadData();
   }, [slug]);
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-gray-500">Memuat menu...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!storeData) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center">
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center bg-gray-50">
         <Store className="w-16 h-16 text-gray-300 mb-4" />
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Toko Tidak Ditemukan</h1>
         <p className="text-gray-500">Toko yang Anda cari mungkin sudah tutup atau link tidak valid.</p>
@@ -45,24 +50,17 @@ export default function StorefrontPage() {
 
   const { outlet, categories, products } = storeData;
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount || 0);
-  };
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount || 0);
 
-  const filteredProducts = selectedCategory === 'all' 
-    ? products 
-    : products.filter((p: any) => p.category_id === selectedCategory);
+  const filteredProducts =
+    selectedCategory === 'all'
+      ? products
+      : products.filter((p: any) => p.category_id === selectedCategory);
 
   const handleAddToCart = (product: any) => {
     if (product.stock <= 0) return;
-    
-    addItem({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      quantity: 1,
-      image_url: product.image_url
-    });
+    addItem({ id: product.id, name: product.name, price: product.price, quantity: 1, image_url: product.image_url });
   };
 
   const handleWhatsApp = () => {
@@ -72,136 +70,238 @@ export default function StorefrontPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-white min-h-screen shadow-sm relative">
-      {/* Hero Section */}
-      <div className="relative h-48 bg-gray-200">
+    <div className="min-h-screen bg-gray-50">
+      {/* ── Hero ── */}
+      <div className="relative h-48 md:h-72 bg-gray-200">
         {outlet.cover_image_url ? (
           <img src={outlet.cover_image_url} alt={outlet.name} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
-            <Store className="w-16 h-16 text-white/50" />
+            <Store className="w-16 h-16 text-white/40" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-        
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
         <div className="absolute bottom-4 left-4 right-4 text-white">
-          <div className="flex items-center justify-between mb-1">
-            <h1 className="text-2xl font-bold">{outlet.name}</h1>
-            <span className={`px-2 py-1 rounded text-xs font-bold ${outlet.is_open ? 'bg-green-500' : 'bg-red-500'}`}>
-              {outlet.is_open ? 'BUKA' : 'TUTUP'}
-            </span>
-          </div>
-          
-          <div className="flex items-center gap-2 text-sm text-gray-200 mb-2">
-            <MapPin className="w-4 h-4" />
-            <span className="truncate">{outlet.address || 'Alamat belum diatur'}</span>
-          </div>
-          
-          <div className="flex items-center gap-2 text-sm text-gray-200">
-            <Clock className="w-4 h-4" />
-            <span>{outlet.opening_hours || 'Jam operasional belum diatur'}</span>
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="text-2xl md:text-4xl font-bold leading-tight">{outlet.name}</h1>
+              <span className={`shrink-0 px-3 py-1 rounded-full text-xs font-bold mt-1 ${outlet.is_open ? 'bg-green-500' : 'bg-red-500'}`}>
+                {outlet.is_open ? 'BUKA' : 'TUTUP'}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-200">
+              {outlet.address && (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  <span className="line-clamp-1">{outlet.address}</span>
+                </span>
+              )}
+              {outlet.opening_hours && (
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  {outlet.opening_hours}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Trust Badge */}
-      <div className="px-4 py-3 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
-        <CheckCircle2 className="w-5 h-5 text-blue-600" />
-        <span className="text-sm font-medium text-blue-900">
-          Terverifikasi Kasira {outlet.tier === 'premium' ? 'Premium' : 'Basic'}
-        </span>
+      {/* ── Trust badge ── */}
+      <div className="bg-blue-50 border-b border-blue-100">
+        <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+          <span className="text-sm font-medium text-blue-900">
+            Terverifikasi Kasira {outlet.tier === 'premium' ? 'Premium' : 'Basic'} · Zero Komisi
+          </span>
+          <button
+            onClick={handleWhatsApp}
+            className="ml-auto flex items-center gap-1.5 text-green-700 hover:text-green-800 text-sm font-medium transition-colors"
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span className="hidden sm:inline">Hubungi WA</span>
+          </button>
+        </div>
       </div>
 
-      {/* Categories */}
-      <div className="sticky top-0 bg-white z-10 border-b border-gray-100 shadow-sm">
-        <div className="flex overflow-x-auto hide-scrollbar p-4 gap-2">
-          <button
-            onClick={() => setSelectedCategory('all')}
-            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-              selectedCategory === 'all' 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            Semua Menu
-          </button>
-          {categories.map((cat: any) => (
+      {/* ── Category filter (sticky) ── */}
+      <div className="sticky top-0 bg-white z-20 border-b border-gray-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex overflow-x-auto hide-scrollbar py-3 gap-2">
             <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                selectedCategory === cat.id 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              onClick={() => setSelectedCategory('all')}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                selectedCategory === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {cat.name}
+              Semua Menu
             </button>
-          ))}
+            {categories.map((cat: any) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                  selectedCategory === cat.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Product Grid */}
-      <div className="p-4 grid grid-cols-2 gap-4">
-        {filteredProducts.map((product: any) => (
-          <div key={product.id} className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm flex flex-col">
-            <div className="aspect-square bg-gray-100 relative">
-              {product.image_url ? (
-                <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400">
-                  <Store className="w-8 h-8" />
-                </div>
-              )}
-              
-              {product.stock <= 0 && (
-                <div className="absolute inset-0 bg-white/70 flex items-center justify-center backdrop-blur-[2px]">
-                  <span className="bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm">
-                    HABIS
-                  </span>
-                </div>
-              )}
-            </div>
-            
-            <div className="p-3 flex-1 flex flex-col">
-              <h3 className="text-sm font-bold text-gray-900 line-clamp-2 mb-1">{product.name}</h3>
-              {product.description && (
-                <p className="text-xs text-gray-500 line-clamp-1 mb-2">{product.description}</p>
-              )}
-              <div className="mt-auto pt-2 flex items-center justify-between">
-                <span className="text-sm font-bold text-blue-600">
-                  {formatCurrency(product.price)}
-                </span>
-                <button
-                  onClick={() => handleAddToCart(product)}
-                  disabled={product.stock <= 0 || !outlet.is_open}
-                  className="w-8 h-8 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center hover:bg-blue-100 disabled:opacity-50 disabled:bg-gray-100 disabled:text-gray-400 transition-colors"
-                >
-                  +
-                </button>
+      {/* ── Main content ── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-32 md:pb-12">
+        <div className="md:grid md:grid-cols-3 md:gap-8 items-start">
+
+          {/* Product grid (full-width mobile / 2/3 desktop) */}
+          <div className="md:col-span-2">
+            {filteredProducts.length === 0 ? (
+              <div className="py-16 text-center text-gray-500 bg-white rounded-2xl">
+                Tidak ada produk di kategori ini.
               </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+                {filteredProducts.map((product: any) => (
+                  <div
+                    key={product.id}
+                    className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm flex flex-col"
+                  >
+                    <div className="aspect-square bg-gray-100 relative">
+                      {product.image_url ? (
+                        <img
+                          src={product.image_url}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <Store className="w-8 h-8" />
+                        </div>
+                      )}
+                      {product.stock <= 0 && (
+                        <div className="absolute inset-0 bg-white/70 flex items-center justify-center backdrop-blur-[2px]">
+                          <span className="bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm">
+                            HABIS
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3 flex-1 flex flex-col">
+                      <h3 className="text-sm font-bold text-gray-900 line-clamp-2 mb-1">{product.name}</h3>
+                      {product.description && (
+                        <p className="text-xs text-gray-500 line-clamp-1 mb-1">{product.description}</p>
+                      )}
+                      <div className="mt-auto pt-2 flex items-center justify-between">
+                        <span className="text-sm font-bold text-blue-600">{formatCurrency(product.price)}</span>
+                        <button
+                          onClick={() => handleAddToCart(product)}
+                          disabled={product.stock <= 0 || !outlet.is_open}
+                          className="w-8 h-8 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center hover:bg-blue-100 disabled:opacity-50 disabled:bg-gray-100 disabled:text-gray-400 transition-colors text-lg font-bold leading-none"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Footer - mobile only */}
+            <div className="md:hidden pt-10 pb-4 flex flex-col items-center gap-1 border-t border-gray-100 mt-8">
+              <p className="text-xs text-gray-400 font-medium">Powered by</p>
+              <Logo size="xs" variant="light" />
+              <p className="text-[10px] text-gray-400 mt-0.5">Zero Komisi</p>
             </div>
           </div>
-        ))}
-        
-        {filteredProducts.length === 0 && (
-          <div className="col-span-2 py-12 text-center text-gray-500">
-            Tidak ada produk di kategori ini.
+
+          {/* ── Cart sidebar — desktop only ── */}
+          <div className="hidden md:block sticky top-20">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="text-base font-bold text-gray-900">Pesanan Anda</h2>
+                {totalItems > 0 && (
+                  <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                    {totalItems} item
+                  </span>
+                )}
+              </div>
+
+              {items.length === 0 ? (
+                <div className="px-5 py-10 text-center">
+                  <ShoppingBag className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500">Belum ada pesanan</p>
+                  <p className="text-xs text-gray-400 mt-1">Pilih menu untuk mulai memesan</p>
+                </div>
+              ) : (
+                <>
+                  <div className="px-5 py-3 space-y-3 max-h-72 overflow-y-auto">
+                    {items.map((item) => (
+                      <div key={item.id} className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{item.name}</p>
+                          <p className="text-xs text-blue-600 font-semibold">{formatCurrency(item.price)}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors"
+                          >
+                            <Minus className="w-3 h-3 text-gray-600" />
+                          </button>
+                          <span className="text-sm font-bold w-5 text-center">{item.quantity}</span>
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors"
+                          >
+                            <Plus className="w-3 h-3 text-gray-600" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="px-5 py-4 border-t border-gray-100 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Total</span>
+                      <span className="text-lg font-bold text-gray-900">{formatCurrency(totalPrice)}</span>
+                    </div>
+                    <button
+                      onClick={() => router.push(`/${slug}/cart`)}
+                      disabled={!outlet.is_open}
+                      className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <ShoppingBag className="w-4 h-4" />
+                      Lanjut Pesan
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* WA button - desktop */}
+            <button
+              onClick={handleWhatsApp}
+              className="mt-3 w-full py-2.5 bg-green-50 text-green-700 font-medium rounded-xl hover:bg-green-100 transition-colors flex items-center justify-center gap-2 text-sm border border-green-200"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Hubungi via WhatsApp
+            </button>
+
+            {/* Footer - desktop */}
+            <div className="mt-5 flex flex-col items-center gap-1">
+              <p className="text-xs text-gray-400">Powered by</p>
+              <Logo size="xs" variant="light" />
+              <p className="text-[10px] text-gray-400 mt-0.5">Zero Komisi</p>
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Footer */}
-      <div className="py-8 flex flex-col items-center justify-center border-t border-gray-100 mt-4 gap-1">
-        <p className="text-xs text-gray-400 font-medium">Powered by</p>
-        <Logo size="xs" variant="light" />
-        <p className="text-[10px] text-gray-400 font-medium mt-1">Zero Komisi</p>
-      </div>
-
-      {/* Floating Action Buttons */}
-      <div className="fixed bottom-6 left-0 right-0 px-4 pointer-events-none flex flex-col items-center gap-3 z-50">
+      {/* ── Mobile: floating WA + cart button ── */}
+      <div className="md:hidden fixed bottom-6 left-0 right-0 px-4 pointer-events-none flex flex-col items-center z-50">
         <div className="w-full max-w-md mx-auto flex justify-between items-end pointer-events-auto">
-          {/* WA Button */}
           <button
             onClick={handleWhatsApp}
             className="w-12 h-12 bg-green-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-green-600 transition-colors"
@@ -209,7 +309,6 @@ export default function StorefrontPage() {
             <MessageCircle className="w-6 h-6" />
           </button>
 
-          {/* Cart Button */}
           {totalItems > 0 && (
             <button
               onClick={() => router.push(`/${slug}/cart`)}
