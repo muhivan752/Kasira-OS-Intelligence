@@ -91,7 +91,7 @@ class _PosPageState extends ConsumerState<PosPage> {
     final isWide = MediaQuery.of(context).size.width >= 700;
     final productsAsync = ref.watch(productsProvider);
     final cart = ref.watch(cartProvider);
-    final itemCount = cart.fold<int>(0, (sum, item) => sum + item.quantity);
+    final itemCount = cart.items.fold<int>(0, (sum, item) => sum + item.qty);
 
     return Scaffold(
       backgroundColor: AppColors.background,
