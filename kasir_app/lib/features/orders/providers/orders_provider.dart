@@ -3,6 +3,11 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/config/app_config.dart';
 
+double _toDouble(dynamic v) {
+  if (v is num) return v.toDouble();
+  return double.tryParse(v.toString()) ?? 0.0;
+}
+
 class OrderItemModel {
   final String id;
   final String productId;
@@ -81,11 +86,6 @@ class OrderModel {
           .toList(),
       createdAt: DateTime.parse(json['created_at'] as String),
     );
-  }
-
-  static double _toDouble(dynamic v) {
-    if (v is num) return v.toDouble();
-    return double.tryParse(v.toString()) ?? 0.0;
   }
 
   String get statusLabel {
