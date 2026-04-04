@@ -98,62 +98,38 @@
 
 ## ⏭️ NEXT ACTION
 
-### PRIORITAS 1 — Flutter APK via GitHub Actions
-Workflow sudah siap, tidak perlu R2. Yang perlu dilakukan:
-1. Push/merge ke GitHub (branch `claude/review-documentation-qqAkC` atau `main`)
-2. Buka GitHub → Actions → "Build & Release Kasira Flutter APK" → Run workflow
-3. Isi: version=1.0.0, is_mandatory=false, release_notes
-4. Tunggu ~5-10 menit → APK tersedia di GitHub Releases
+### PRIORITAS 1 — Rebuild Frontend VPS (BELUM SELESAI)
+Kode sudah di-push ke GitHub (commit `6fee1c7`). VPS belum di-update.
 
-**Checklist sebelum build:**
-- [ ] Repo sudah di-push ke GitHub
-- [ ] Branch `main` ada di GitHub (untuk version.json)
-- [ ] Workflow jalan dari branch yang ada `build-apk.yml`-nya
-
-**Setelah APK jadi:**
-- Download `kasira-pos-v1.0.0.apk` dari GitHub Releases
-- Install di HP → login dengan phone `628111222333`, OTP `123456`, PIN `111222`
-- Set Server URL: `http://103.189.235.164:8000`
-
-### PRIORITAS 2 — Dashboard Pro Features Teaser (belum dieksekusi)
-Buat halaman/section di dashboard yang menampilkan fitur Pro sebagai "teaser" — tampil tapi tidak bisa diakses, ada badge "Pro" + tombol "Upgrade". Tujuan: daya tarik untuk upgrade.
-
-**File yang akan dibuat/diubah:**
-- `app/dashboard/layout.tsx` — tambah section Pro di sidebar (badge "PRO" terkunci)
-- `app/dashboard/pro/page.tsx` — halaman khusus Pro features showcase
-- Atau: tambah cards di `app/dashboard/page.tsx` (overview) sebagai teaser
-
-**Fitur Pro yang ditampilkan (dari ROADMAP.md FASE 6):**
-| Fitur | Icon | Deskripsi singkat |
-|---|---|---|
-| Reservasi & Booking | CalendarCheck | Pelanggan bisa booking meja via storefront |
-| AI Chatbot Owner | Bot | Tanya laporan & insight bisnis via WA |
-| Loyalty Points | Star | Program poin pelanggan otomatis |
-| Tab / Bon | Receipt | Pembayaran cicil / bon pelanggan |
-| Multi-Outlet | Building2 | Kelola banyak cabang dalam 1 akun |
-| Laporan Lanjutan | BarChart3 | HPP, analitik tren, export Excel |
-
-**Desain teaser card:**
+SSH ke VPS lalu jalankan:
+```bash
+cd /var/www/kasira && git pull origin main && docker compose build frontend && docker compose up -d frontend
 ```
-┌─────────────────────────────┐
-│ 🔒 [Ikon] Nama Fitur  [PRO] │
-│ Deskripsi singkat 1-2 baris │
-│ [Hubungi untuk Upgrade]     │
-└─────────────────────────────┘
-```
-- Card grayscale/blur sedikit, badge PRO kuning/gold
-- Tombol "Upgrade ke Pro" → bisa link WA owner Kasira
-- Di sidebar: nav item terkunci dengan lock icon + badge PRO
+Alternatif: Login https://my.idcloudhost.com → VPS Console → jalankan perintah di atas.
 
-**Storefront booking pages** (`app/[slug]/booking/`) — pertimbangkan redirect ke halaman info "Fitur ini belum aktif di outlet ini" atau hapus routing sama sekali untuk Starter.
+**Yang sudah diubah di commit ini (belum di-apply ke VPS):**
+- `build-apk.yml` — tambah `android:usesCleartextTraffic="true"` di manifest
+- `app/[slug]/page.tsx` — storefront responsive: desktop 2-col (menu + cart sidebar), product grid 2→4 kolom
+- `app/[slug]/cart/page.tsx` — desktop 2-col (form kiri + order summary kanan)
+- `app/[slug]/order/[id]/page.tsx` — max-w-2xl (tidak cramped di desktop)
+- `kasir_app/login_page.dart` — fix overflow HP 360dp
+- `kasir_app/table_grid_page.dart` — filter chips bisa scroll horizontal
 
 ---
 
-### PRIORITAS 2 — Bug & Polish yang tersisa
-- Cek halaman **Kasir** di dashboard (`/dashboard/kasir`)
-- Cek halaman **Laporan** (`/dashboard/laporan`) — pastikan data load benar
-- **Seed produk demo** untuk test storefront: `docker exec kasira-backend-1 python -m backend.scripts.seed_demo`
-- **UptimeRobot** — monitor http://103.189.235.164:8000/ dan http://103.189.235.164:3000/
+### PRIORITAS 2 — Trigger Flutter APK Build v1.0.6
+1. Buka: `https://github.com/muhivan752/Kasira-OS-Intelligence/actions`
+2. Pilih **"Build & Release Kasira Flutter APK"** → **Run workflow**
+3. Isi: version=`1.0.6`, is_mandatory=`false`, release_notes=`fix: responsive layout + cleartext traffic`
+4. Tunggu ~10-15 menit → APK di GitHub Releases
+
+**APK sudah fix:** INTERNET permission ✓, usesCleartextTraffic ✓, login card tidak overflow ✓
+**Default URL APK:** `https://kasira.online` (sudah berjalan, nginx sudah proxy API)
+
+---
+
+### PRIORITAS 3 — Setelah pilot berjalan
+- UptimeRobot: monitor `http://103.189.235.164:8000/` dan `http://103.189.235.164:3000/`
 
 ### Cara reconnect:
 > "baca CLAUDE.md, MEMORY.md, SESSION.md di /var/www/kasira/ lalu lanjut dari NEXT ACTION"
