@@ -7,11 +7,11 @@ class AppConfig {
   static const String _keyBaseUrl = 'app_base_url';
   static const String _keyIsConfigured = 'app_server_configured';
 
-  /// Default URL — hanya dipakai di emulator/dev. Di HP asli selalu minta setup.
-  static const String defaultBaseUrl = 'http://127.0.0.1:8000';
+  /// URL backend production — sudah hardcode, merchant tidak perlu setup manual.
+  static const String defaultBaseUrl = 'http://103.189.235.164:8000';
 
   static String _baseUrl = defaultBaseUrl;
-  static bool _isConfigured = false;
+  static bool _isConfigured = true; // selalu true, skip ServerSetupPage
 
   static String get baseUrl => _baseUrl;
   static String get apiV1 => '$_baseUrl/api/v1';
@@ -22,7 +22,7 @@ class AppConfig {
   /// Load URL tersimpan dari SharedPreferences
   static Future<void> init(SharedPreferences prefs) async {
     final saved = prefs.getString(_keyBaseUrl);
-    _isConfigured = prefs.getBool(_keyIsConfigured) ?? false;
+    _isConfigured = true; // selalu skip setup
     if (saved != null && saved.isNotEmpty) {
       _baseUrl = saved;
     }
