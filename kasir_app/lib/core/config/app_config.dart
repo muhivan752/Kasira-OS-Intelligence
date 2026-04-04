@@ -23,7 +23,8 @@ class AppConfig {
   static Future<void> init(SharedPreferences prefs) async {
     final saved = prefs.getString(_keyBaseUrl);
     _isConfigured = true; // selalu skip setup
-    if (saved != null && saved.isNotEmpty) {
+    // Hanya pakai saved URL jika HTTPS — URL lama (HTTP/IP) diabaikan, kembali ke defaultBaseUrl
+    if (saved != null && saved.isNotEmpty && saved.startsWith('https://')) {
       _baseUrl = saved;
     }
     if (kDebugMode) {

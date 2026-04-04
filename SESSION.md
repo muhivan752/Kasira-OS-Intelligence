@@ -87,6 +87,15 @@
 - [x] **Fix Laporan — reports date param** — backend `GET /reports/daily` tambah `report_date` param (sebelumnya selalu return hari ini), frontend kirim `report_date` bukan `date`
 - [x] Rebuild backend + frontend container
 
+## ✅ SELESAI SESI INI (auth bug fixes - 2026-04-04)
+- [x] **Fix Dashboard login tidak bisa masuk** — root cause: `fetchWithAuth` tambah trailing slash `/users/me/` → FastAPI 307 redirect → Node.js fetch drop Authorization header → 401 → redirect balik ke login
+  - `app/actions/api.ts`: Ganti ke `BACKEND_INTERNAL_URL` (http://backend:8000) untuk server actions
+  - `app/actions/api.ts`: Tambah `redirect: 'manual'` + manual follow 307/308 dengan headers preserved
+  - `app/actions/api.ts`: Trailing slash normalization sekarang skip untuk endpoints resource (/me, /status, /pin, dll)
+  - Rebuild & restart frontend container ✅
+- [x] **Fix Flutter APK SharedPreferences URL lama** — jika user install APK baru tapi SharedPreferences masih simpan `http://` URL lama, sekarang diabaikan dan pakai `defaultBaseUrl` (https://kasira.online)
+  - `kasir_app/lib/core/config/app_config.dart`: Hanya load saved URL jika startsWith('https://')
+
 ## ⏭️ NEXT ACTION
 
 ### PRIORITAS 1 — Flutter APK via GitHub Actions

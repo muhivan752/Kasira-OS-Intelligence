@@ -2,7 +2,8 @@
 
 import { cookies } from 'next/headers';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+// Gunakan internal Docker URL untuk server actions (lebih cepat, bypass Nginx)
+const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export async function getAuthToken() {
   const cookieStore = await cookies();
@@ -23,12 +24,30 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const tenantId = cookieStore.get('tenant_id')?.value;
   if (tenantId) headers.set('X-Tenant-ID', tenantId);
 
-  // Selalu gunakan trailing slash — hindari 307 redirect yang menghilangkan Authorization header
-  const normalizedEndpoint = endpoint.replace(/^([^?]+?)(\?|$)/, (_, path, sep) =>
-    path.endsWith('/') ? `${path}${sep}` : `${path}/${sep}`
-  );
+  // Tambah trailing slash untuk collection endpoints, tapi JANGAN untuk resource endpoints
+  // seperti /me, /status, /pin, /version (akan menyebabkan 307 dan Authorization header hilang)
+  const normalizedEndpoint = endpoint.replace(/^([^?]+?)(\?|$)/, (_, path, sep) => {
+    if (path.endsWith('/')) return `${path}${sep}`;
+    // Jangan tambah trailing slash jika path berakhir dengan kata (bukan collection root)
+    const lastSegment = path.split('/').pop() || '';
+    const isCollectionRoot = lastSegment === '' || /^[a-z_-]+$/.test(lastSegment) && !['me', 'status', 'pin', 'verify', 'send', 'version', 'upload', 'daily', 'setup', 'cashier'].includes(lastSegment);
+    return isCollectionRoot ? `${path}/${sep}` : `${path}${sep}`;
+  });
 
-  const res = await fetch(`${API_URL}${normalizedEndpoint}`, { ...options, headers });
+  // Gunakan redirect: 'manual' dan follow manual untuk preserve Authorization header
+  const res = await fetch(`${API_URL}${normalizedEndpoint}`, { ...options, headers, redirect: 'manual' });
+
+  // Follow 307/308 redirect secara manual agar Authorization header tidak hilang
+  if (res.status === 307 || res.status === 308) {
+    const location = res.headers.get('location');
+    if (location) {
+      const redirectUrl = location.startsWith('http') ? location : `${API_URL}${location}`;
+      const retryRes = await fetch(redirectUrl, { ...options, headers, redirect: 'manual' });
+      if (retryRes.status === 401) throw new Error('Unauthorized');
+      return retryRes;
+    }
+  }
+
   if (res.status === 401) throw new Error('Unauthorized');
   return res;
 }

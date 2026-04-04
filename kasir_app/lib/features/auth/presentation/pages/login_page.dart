@@ -122,12 +122,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       _startTimer();
     } on DioException catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: e.response?.data['detail'] ?? 'Gagal mengirim OTP. Pastikan nomor terdaftar.',
-      );
+      String? detail;
+      try { detail = e.response?.data['detail']?.toString(); } catch (_) {}
+      final errMsg = detail ?? '[${e.type.name}] ${e.message ?? e.error?.toString() ?? 'no message'}';
+      state = state.copyWith(isLoading: false, error: errMsg);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Terjadi kesalahan sistem');
+      state = state.copyWith(isLoading: false, error: 'Exception: ${e.toString().substring(0, 80)}');
     }
   }
 
@@ -391,6 +391,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         const Text(
           'Format: 628xxx',
           style: TextStyle(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Server: ${AppConfig.baseUrl}',
+          style: const TextStyle(color: Colors.grey, fontSize: 10),
         ),
         const SizedBox(height: 24),
         TextField(
