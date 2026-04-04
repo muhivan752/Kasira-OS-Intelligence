@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.0.5",
+    "version": "1.0.6",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.5/kasira-pos-v1.0.5.apk",
-    "release_notes": "fix: INTERNET permission AndroidManifest - fix failed host lookup"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.6/kasira-pos-v1.0.6.apk",
+    "release_notes": "Bug fixes and improvements"
   },
   "dapur": {
-    "version": "1.0.5",
+    "version": "1.0.6",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.5/kasira-dapur-v1.0.5.apk",
-    "release_notes": "fix: INTERNET permission AndroidManifest - fix failed host lookup"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.6/kasira-dapur-v1.0.6.apk",
+    "release_notes": "Bug fixes and improvements"
   }
 }
