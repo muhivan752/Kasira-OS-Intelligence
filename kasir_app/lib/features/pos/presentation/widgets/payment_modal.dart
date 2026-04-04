@@ -47,6 +47,37 @@ class _PaymentModalState extends State<PaymentModal> {
   ));
   final _storage = const FlutterSecureStorage();
 
+  Future<void> _submitCashPayment(double amountPaid) async {
+    try {
+      final token = await _storage.read(key: 'access_token');
+      final tenantId = await _storage.read(key: 'tenant_id');
+      final outletId = await _storage.read(key: 'outlet_id') ?? '';
+      final change = amountPaid - widget.totalAmount;
+
+      await _dio.post(
+        '/payments/',
+        options: Options(headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+          if (tenantId != null) 'X-Tenant-ID': tenantId,
+        }),
+        data: {
+          'order_id': widget.orderId,
+          'outlet_id': outletId,
+          'payment_method': 'cash',
+          'amount_due': widget.totalAmount,
+          'amount_paid': amountPaid,
+          'change_amount': change < 0 ? 0 : change,
+        },
+      );
+    } catch (_) {
+      // Payment tetap lanjut meski gagal catat (offline fallback)
+    }
+    if (mounted) {
+      widget.onPaymentSuccess(_paymentMethod, amountPaid);
+      Navigator.pop(context);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -135,6 +166,7 @@ class _PaymentModalState extends State<PaymentModal> {
           },
         ),
         data: {
+          'order_id': widget.orderId,
           'outlet_id': outletId,
           'payment_method': 'qris',
           'amount_due': widget.totalAmount,
@@ -379,9 +411,8 @@ class _PaymentModalState extends State<PaymentModal> {
                         width: double.infinity,
                         height: 56,
                         child: ElevatedButton(
-                          onPressed: (isCash && change < 0) ? null : () {
-                            widget.onPaymentSuccess(_paymentMethod, _amountReceived);
-                            Navigator.pop(context);
+                          onPressed: (isCash && change < 0) ? null : () async {
+                            await _submitCashPayment(_amountReceived);
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: (isCash && change < 0) ? AppColors.border : AppColors.primary,
