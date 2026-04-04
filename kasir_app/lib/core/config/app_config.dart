@@ -8,7 +8,7 @@ class AppConfig {
   static const String _keyIsConfigured = 'app_server_configured';
 
   /// URL backend production — sudah hardcode, merchant tidak perlu setup manual.
-  static const String defaultBaseUrl = 'http://103.189.235.164:8000';
+  static const String defaultBaseUrl = 'https://kasira.online';
 
   static String _baseUrl = defaultBaseUrl;
   static bool _isConfigured = true; // selalu true, skip ServerSetupPage
