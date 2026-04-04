@@ -51,7 +51,7 @@ export default function LandingPage() {
                 Daftar via WhatsApp
               </a>
               <Link
-                href="/warung-demo"
+                href="/kasira-coffee"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-gray-700 text-lg font-semibold rounded-2xl border-2 border-gray-200 hover:border-gray-300 transition-all"
               >
                 Lihat Demo Storefront
@@ -389,7 +389,7 @@ export default function LandingPage() {
             <div className="flex flex-wrap justify-center gap-8 text-sm">
               <Link href="#features" className="text-gray-400 hover:text-white transition-colors">Fitur</Link>
               <Link href="#pricing" className="text-gray-400 hover:text-white transition-colors">Harga</Link>
-              <Link href="/warung-demo" className="text-gray-400 hover:text-white transition-colors">Demo</Link>
+              <Link href="/kasira-coffee" className="text-gray-400 hover:text-white transition-colors">Demo</Link>
               <Link href="/login" className="text-gray-400 hover:text-white transition-colors">Login</Link>
               <a href={waLink} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 transition-colors">WhatsApp</a>
             </div>
