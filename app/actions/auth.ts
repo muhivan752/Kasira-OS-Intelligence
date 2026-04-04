@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+const SECURE_COOKIES = process.env.NEXT_PUBLIC_SECURE_COOKIES === 'true';
 
 export async function sendOtp(phone: string) {
   try {
@@ -48,7 +49,7 @@ export async function verifyOtp(phone: string, otp: string) {
       value: token,
       httpOnly: true,
       path: '/',
-      secure: process.env.NODE_ENV === 'production',
+      secure: SECURE_COOKIES,
       maxAge: 60 * 60 * 24 * 7, // 1 week
     });
     
@@ -58,7 +59,7 @@ export async function verifyOtp(phone: string, otp: string) {
         value: tenantId,
         httpOnly: true,
         path: '/',
-        secure: process.env.NODE_ENV === 'production',
+        secure: SECURE_COOKIES,
         maxAge: 60 * 60 * 24 * 7,
       });
     }
@@ -69,7 +70,7 @@ export async function verifyOtp(phone: string, otp: string) {
         value: outletId,
         httpOnly: true,
         path: '/',
-        secure: process.env.NODE_ENV === 'production',
+        secure: SECURE_COOKIES,
         maxAge: 60 * 60 * 24 * 7,
       });
     }
@@ -98,9 +99,9 @@ export async function registerTenant(phone: string, businessName: string, ownerN
     const outletId = data.data.outlet_id;
 
     const cookieStore = await cookies();
-    cookieStore.set({ name: 'token', value: token, httpOnly: true, path: '/', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 7 });
-    if (tenantId) cookieStore.set({ name: 'tenant_id', value: tenantId, httpOnly: true, path: '/', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 7 });
-    if (outletId) cookieStore.set({ name: 'outlet_id', value: outletId, httpOnly: true, path: '/', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 7 });
+    cookieStore.set({ name: 'token', value: token, httpOnly: true, path: '/', secure: SECURE_COOKIES, maxAge: 60 * 60 * 24 * 7 });
+    if (tenantId) cookieStore.set({ name: 'tenant_id', value: tenantId, httpOnly: true, path: '/', secure: SECURE_COOKIES, maxAge: 60 * 60 * 24 * 7 });
+    if (outletId) cookieStore.set({ name: 'outlet_id', value: outletId, httpOnly: true, path: '/', secure: SECURE_COOKIES, maxAge: 60 * 60 * 24 * 7 });
 
     return { success: true };
   } catch {

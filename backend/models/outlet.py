@@ -13,6 +13,7 @@ class Outlet(BaseModel):
     is_active = Column(Boolean(), default=True)
     is_open = Column(Boolean(), default=True)
     opening_hours = Column(JSONB, nullable=True)
+    cover_image_url = Column(String, nullable=True)
     
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id"), nullable=True, index=True)

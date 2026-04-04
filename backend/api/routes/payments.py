@@ -201,7 +201,6 @@ async def create_payment(
         after_state={"amount_paid": float(payment.amount_paid), "method": payment.payment_method, "status": payment.status},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
     
     return StandardResponse(

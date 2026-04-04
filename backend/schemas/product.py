@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, computed_field
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
@@ -49,5 +49,17 @@ class ProductResponse(ProductBase):
     row_version: int
     created_at: datetime
     updated_at: datetime
-    
+
+    @computed_field
+    @property
+    def price(self) -> Decimal:
+        """Alias base_price → price untuk kompatibilitas Flutter & storefront."""
+        return self.base_price
+
+    @computed_field
+    @property
+    def stock(self) -> int:
+        """Alias stock_qty → stock untuk kompatibilitas storefront."""
+        return self.stock_qty
+
     model_config = ConfigDict(from_attributes=True)

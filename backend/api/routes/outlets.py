@@ -11,7 +11,6 @@ from backend.models.outlet import Outlet
 from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentStatus
 from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
-from backend.services.audit import log_audit
 import json
 
 router = APIRouter()
@@ -84,6 +83,60 @@ async def read_outlet(
         raise HTTPException(status_code=404, detail="Outlet not found")
     return StandardResponse(data=outlet)
 
+@router.put("/{outlet_id}", response_model=StandardResponse[OutletSchema])
+async def update_outlet(
+    request: Request,
+    outlet_id: uuid.UUID,
+    outlet_in: OutletUpdate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Update outlet info (name, phone, address, is_open, opening_hours).
+    """
+    stmt = select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at == None)
+    if not current_user.is_superuser:
+        stmt = stmt.where(Outlet.tenant_id == current_user.tenant_id)
+
+    result = await db.execute(stmt)
+    outlet = result.scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    before_state = {
+        "name": outlet.name, "phone": outlet.phone,
+        "address": outlet.address, "is_open": outlet.is_open,
+    }
+
+    update_data = outlet_in.model_dump(exclude_unset=True)
+    update_stmt = (
+        update(Outlet)
+        .where(Outlet.id == outlet_id)
+        .values(**update_data, row_version=Outlet.row_version + 1,
+                updated_at=datetime.now(timezone.utc))
+    )
+    await db.execute(update_stmt)
+
+    await log_audit(
+        db=db,
+        action="UPDATE",
+        entity="outlets",
+        entity_id=outlet_id,
+        before_state=before_state,
+        after_state=update_data,
+        user_id=current_user.id,
+        tenant_id=outlet.tenant_id,
+    )
+    await db.commit()
+
+    await db.refresh(outlet)
+    return StandardResponse(
+        success=True,
+        data=outlet,
+        request_id=request.state.request_id,
+        message="Outlet berhasil diperbarui"
+    )
+
 @router.post("/{outlet_id}/payment-setup", response_model=StandardResponse[OutletPaymentStatus])
 async def setup_payment(
     request: Request,
@@ -127,7 +180,6 @@ async def setup_payment(
         after_state={"xendit_business_id": setup_in.xendit_business_id, "xendit_connected_at": now.isoformat()},
         user_id=current_user.id,
         tenant_id=outlet.tenant_id,
-        request_id=getattr(request.state, "request_id", None)
     )
 
     await db.commit()

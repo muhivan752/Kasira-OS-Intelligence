@@ -11,6 +11,7 @@ from backend.core.database import get_db
 from backend.core.config import settings
 from backend.models.outlet import Outlet
 from backend.models.product import Product
+from backend.models.category import Category
 from backend.models.order import Order, OrderItem
 from backend.schemas.response import StandardResponse
 import redis.asyncio as redis
@@ -97,15 +98,42 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
     )
     products = products_result.scalars().all()
 
+    # Get categories for this brand
+    categories_result = await db.execute(
+        select(Category).where(
+            Category.brand_id == outlet.brand_id,
+            Category.deleted_at.is_(None)
+        )
+    )
+    categories = categories_result.scalars().all()
+
     data = {
         "outlet": {
             "id": str(outlet.id),
             "name": outlet.name,
-            "photo": "https://ui-avatars.com/api/?name=" + outlet.name, # Mock photo
+            "slug": outlet.slug,
+            "address": outlet.address,
+            "phone": outlet.phone,
+            "cover_image_url": outlet.cover_image_url,
             "is_open": outlet.is_open,
-            "opening_hours": outlet.opening_hours or "08:00 - 22:00",
-            "trust_badge": "Verified Partner" # Mock trust badge
+            "opening_hours": outlet.opening_hours if isinstance(outlet.opening_hours, str) else "",
+            "tier": "starter",
+            "trust_badge": "Verified Partner"
         },
+        "categories": [
+            {"id": str(c.id), "name": c.name} for c in categories
+        ],
+        "products": [
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "description": p.description,
+                "price": float(p.base_price),
+                "stock": p.stock_qty,
+                "category_id": str(p.category_id) if p.category_id else None,
+                "image_url": p.image_url
+            } for p in products
+        ],
         "menu": [
             {
                 "id": str(p.id),

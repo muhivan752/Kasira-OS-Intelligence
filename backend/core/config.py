@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # Encryption
     ENCRYPTION_KEY: str = ""
 
+    # App Environment
+    ENVIRONMENT: str = "development"
+
     # Claude AI
     ANTHROPIC_API_KEY: str = ""
 

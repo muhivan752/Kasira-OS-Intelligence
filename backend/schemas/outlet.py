@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 from pydantic import BaseModel, UUID4
 from datetime import datetime
 
@@ -13,9 +13,13 @@ class OutletBase(BaseModel):
 class OutletCreate(OutletBase):
     pass
 
-class OutletUpdate(OutletBase):
+class OutletUpdate(BaseModel):
     name: Optional[str] = None
-    tenant_id: Optional[UUID4] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    is_open: Optional[bool] = None
+    opening_hours: Optional[Any] = None
+    cover_image_url: Optional[str] = None
 
 class OutletPaymentSetup(BaseModel):
     xendit_business_id: str
@@ -27,6 +31,10 @@ class OutletPaymentStatus(BaseModel):
 
 class OutletInDBBase(OutletBase):
     id: UUID4
+    slug: Optional[str] = None
+    is_open: Optional[bool] = True
+    opening_hours: Optional[Any] = None
+    cover_image_url: Optional[str] = None
     row_version: int
     created_at: datetime
     updated_at: datetime

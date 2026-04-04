@@ -1,7 +1,13 @@
+import 'package:drift/drift.dart' as drift;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/database/app_database.dart';
+import '../../../core/sync/sync_provider.dart';
+import '../../../core/utils/pn_counter.dart';
 
 // ─── Model ───────────────────────────────────────────────────────────────────
 
@@ -9,6 +15,7 @@ class CartItem {
   final String productId;
   final String name;
   final double price;
+  final double? stockQty; // null = stok tidak diaktifkan
   int qty;
   String? notes;
 
@@ -16,6 +23,7 @@ class CartItem {
     required this.productId,
     required this.name,
     required this.price,
+    this.stockQty,
     this.qty = 1,
     this.notes,
   });
@@ -26,6 +34,7 @@ class CartItem {
         productId: productId,
         name: name,
         price: price,
+        stockQty: stockQty,
         qty: qty ?? this.qty,
         notes: notes ?? this.notes,
       );
@@ -33,12 +42,13 @@ class CartItem {
 
 class CartState {
   final List<CartItem> items;
-  final String orderType; // 'Dine In' | 'Takeaway'
+  final String orderType;
   final String? customerId;
   final String? tableId;
   final bool isSubmitting;
   final String? error;
   final String? submittedOrderId;
+  final bool wasOffline;
 
   const CartState({
     this.items = const [],
@@ -48,6 +58,7 @@ class CartState {
     this.isSubmitting = false,
     this.error,
     this.submittedOrderId,
+    this.wasOffline = false,
   });
 
   double get subtotal => items.fold(0, (s, i) => s + i.subtotal);
@@ -61,6 +72,7 @@ class CartState {
     String? error,
     bool clearError = false,
     String? submittedOrderId,
+    bool? wasOffline,
   }) =>
       CartState(
         items: items ?? this.items,
@@ -70,15 +82,30 @@ class CartState {
         isSubmitting: isSubmitting ?? this.isSubmitting,
         error: clearError ? null : (error ?? this.error),
         submittedOrderId: submittedOrderId ?? this.submittedOrderId,
+        wasOffline: wasOffline ?? this.wasOffline,
       );
 }
 
 // ─── Notifier ────────────────────────────────────────────────────────────────
 
 class CartNotifier extends StateNotifier<CartState> {
-  CartNotifier() : super(const CartState());
+  final AppDatabase _db;
+  CartNotifier(this._db) : super(const CartState());
 
   final _storage = const FlutterSecureStorage();
+
+  // Rule #1: UUID untuk semua PK — TIDAK BOLEH integer/timestamp
+  String _generateUuid() {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final r = now ^ (now >> 16);
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replaceAllMapped(
+      RegExp(r'[xy]'),
+      (m) {
+        final v = m.group(0) == 'x' ? (r >> (m.start * 4)) & 0xf : (r >> (m.start * 4)) & 0x3 | 0x8;
+        return v.toRadixString(16);
+      },
+    );
+  }
 
   void addItem(CartItem item) {
     final existing = state.items.indexWhere((i) => i.productId == item.productId);
@@ -111,28 +138,38 @@ class CartNotifier extends StateNotifier<CartState> {
   }
 
   void removeItem(String productId) {
-    state = state.copyWith(items: state.items.where((i) => i.productId != productId).toList());
+    state = state.copyWith(
+        items: state.items.where((i) => i.productId != productId).toList());
   }
 
   void setOrderType(String type) => state = state.copyWith(orderType: type);
-
-  void setCustomer(String? customerId) => state = state.copyWith(customerId: customerId);
-
-  void setTable(String? tableId) => state = state.copyWith(tableId: tableId);
-
+  void setCustomer(String? id) => state = state.copyWith(customerId: id);
+  void setTable(String? id) => state = state.copyWith(tableId: id);
   void clearCart() => state = const CartState();
 
   Future<String?> submitOrder() async {
     if (state.items.isEmpty) return null;
     state = state.copyWith(isSubmitting: true, clearError: true);
 
+    final isOnline = await _checkOnline();
+    try {
+      return isOnline ? await _submitOnline() : await _submitOffline();
+    } catch (_) {
+      state = state.copyWith(isSubmitting: false, error: 'Terjadi kesalahan sistem');
+      return null;
+    }
+  }
+
+  // ── Online: langsung ke backend ─────────────────────────────────────────
+  Future<String?> _submitOnline() async {
     try {
       final token = await _storage.read(key: 'access_token');
       final tenantId = await _storage.read(key: 'tenant_id');
       final outletId = await _storage.read(key: 'outlet_id');
 
       if (outletId == null || outletId.isEmpty) {
-        state = state.copyWith(isSubmitting: false, error: 'Outlet tidak ditemukan. Silakan login ulang.');
+        state = state.copyWith(
+            isSubmitting: false, error: 'Outlet tidak ditemukan. Silakan login ulang.');
         return null;
       }
 
@@ -142,6 +179,7 @@ class CartNotifier extends StateNotifier<CartState> {
         receiveTimeout: const Duration(seconds: 15),
       ));
 
+      final subtotal = state.subtotal;
       final response = await dio.post(
         '/orders/',
         options: Options(headers: {
@@ -153,29 +191,135 @@ class CartNotifier extends StateNotifier<CartState> {
           'order_type': state.orderType.toLowerCase().replaceAll(' ', '_'),
           if (state.customerId != null) 'customer_id': state.customerId,
           if (state.tableId != null) 'table_id': state.tableId,
-          'items': state.items.map((i) => {
-            'product_id': i.productId,
-            'quantity': i.qty,
-            'unit_price': i.price,
-            if (i.notes != null && i.notes!.isNotEmpty) 'notes': i.notes,
-          }).toList(),
+          'subtotal': subtotal,
+          'service_charge_amount': 0,
+          'tax_amount': 0,
+          'discount_amount': 0,
+          'total_amount': subtotal,
+          'items': state.items
+              .map((i) => {
+                    'product_id': i.productId,
+                    'quantity': i.qty,
+                    'unit_price': i.price,
+                    'total_price': i.price * i.qty,
+                    'discount_amount': 0,
+                    if (i.notes != null && i.notes!.isNotEmpty) 'notes': i.notes,
+                  })
+              .toList(),
         },
       );
 
       final orderId = response.data['data']['id'] as String;
-      state = state.copyWith(isSubmitting: false, submittedOrderId: orderId);
+      state = state.copyWith(
+          isSubmitting: false, submittedOrderId: orderId, wasOffline: false);
       return orderId;
     } on DioException catch (e) {
       final msg = e.response?.data['detail'] ?? 'Gagal membuat pesanan';
       state = state.copyWith(isSubmitting: false, error: msg.toString());
       return null;
+    }
+  }
+
+  // ── Offline: simpan ke Drift SQLite, deduct stok lokal ──────────────────
+  Future<String?> _submitOffline() async {
+    try {
+      final outletId = await _storage.read(key: 'outlet_id') ?? '';
+      final userId = await _storage.read(key: 'user_id') ?? '';
+      final shiftId = await _storage.read(key: 'shift_session_id');
+      final orderId = _generateUuid();
+      final now = DateTime.now();
+      final subtotal = state.subtotal;
+      final displayNumber = now.millisecondsSinceEpoch % 100000;
+
+      await _db.transaction(() async {
+        // 1. Simpan order lokal (isSynced: false → queue for sync)
+        await _db.into(_db.orders).insert(OrdersCompanion(
+          id: drift.Value(orderId),
+          outletId: drift.Value(outletId),
+          shiftSessionId: drift.Value(shiftId),
+          userId: drift.Value(userId),
+          customerId: drift.Value(state.customerId),
+          tableId: drift.Value(state.tableId),
+          orderNumber: drift.Value('OFFLINE-$displayNumber'),
+          displayNumber: drift.Value(displayNumber),
+          status: const drift.Value('pending'),
+          orderType: drift.Value(state.orderType.toLowerCase().replaceAll(' ', '_')),
+          subtotal: drift.Value(subtotal),
+          serviceChargeAmount: const drift.Value(0),
+          taxAmount: const drift.Value(0),
+          discountAmount: const drift.Value(0),
+          totalAmount: drift.Value(subtotal),
+          createdAt: drift.Value(now),
+          updatedAt: drift.Value(now),
+          rowVersion: const drift.Value(0),
+          isDeleted: const drift.Value(false),
+          isSynced: const drift.Value(false),
+        ));
+
+        // 2. Simpan order items + deduct stok lokal
+        for (final item in state.items) {
+          await _db.into(_db.orderItems).insert(OrderItemsCompanion(
+            id: drift.Value(_generateUuid()),
+            orderId: drift.Value(orderId),
+            productId: drift.Value(item.productId),
+            quantity: drift.Value(item.qty),
+            unitPrice: drift.Value(item.price),
+            discountAmount: const drift.Value(0),
+            totalPrice: drift.Value(item.price * item.qty),
+            notes: drift.Value(item.notes),
+            rowVersion: const drift.Value(0),
+            isDeleted: const drift.Value(false),
+            isSynced: const drift.Value(false),
+          ));
+
+            // Pure CRDT stock deduct — PNCounter, bukan LWW
+          // Increment crdtNegative[nodeId] += qty, lalu recompute stockQty cache
+          if (item.stockQty != null) {
+            final prefs = await SharedPreferences.getInstance();
+            final nodeId = prefs.getString('device_node_id') ??
+                'device_${DateTime.now().millisecondsSinceEpoch}';
+
+            final product = await (_db.select(_db.products)
+                  ..where((p) => p.id.equals(item.productId)))
+                .getSingleOrNull();
+
+            if (product != null && product.stockEnabled) {
+              final negMap = PNCounter.fromJson(product.crdtNegative);
+              final posMap = PNCounter.fromJson(product.crdtPositive);
+              final newNeg = PNCounter.increment(negMap, nodeId, amount: item.qty);
+              final newStock = PNCounter.getValue(posMap, newNeg);
+
+              await (_db.update(_db.products)
+                    ..where((p) => p.id.equals(item.productId)))
+                  .write(ProductsCompanion(
+                crdtNegative: drift.Value(PNCounter.toJson(newNeg)),
+                stockQty: drift.Value(newStock),
+                isActive: drift.Value(newStock > 0),
+                isSynced: const drift.Value(false),
+              ));
+            }
+          }
+        }
+      });
+
+      state = state.copyWith(
+          isSubmitting: false, submittedOrderId: orderId, wasOffline: true);
+      return orderId;
     } catch (e) {
-      state = state.copyWith(isSubmitting: false, error: 'Terjadi kesalahan sistem');
+      state = state.copyWith(isSubmitting: false, error: 'Gagal menyimpan pesanan offline');
       return null;
     }
   }
+
+  Future<bool> _checkOnline() async {
+    final result = await Connectivity().checkConnectivity();
+    return result != ConnectivityResult.none;
+  }
 }
 
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
 final cartProvider = StateNotifierProvider<CartNotifier, CartState>((ref) {
-  return CartNotifier();
+  final db = ref.watch(databaseProvider);
+  return CartNotifier(db);
 });

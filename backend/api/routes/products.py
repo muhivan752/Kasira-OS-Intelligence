@@ -1,5 +1,6 @@
 from typing import Any, List, Optional
 from uuid import UUID
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -8,10 +9,14 @@ from backend.core.database import get_db
 from backend.api.deps import get_current_user
 from backend.models.user import User
 from backend.models.product import Product
+from backend.models.tenant import Tenant
+from backend.models.brand import Brand
+from backend.models.outlet import Outlet
 from backend.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from backend.schemas.stock import ProductRestock
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
+from backend.services.stock_service import restock_product as svc_restock
 
 router = APIRouter()
 
@@ -24,55 +29,33 @@ async def restock_product(
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
-    Restock a product manually (Tier Starter).
+    Restock produk saat terima barang (Starter: transaction-first, Rule #19).
+    Menulis stock.restock event ke event store sebelum update cache.
     """
-    from datetime import datetime, timezone
-    
     product = await db.get(Product, product_id)
     if not product or product.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Product not found")
-        
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
     if not product.stock_enabled:
-        raise HTTPException(status_code=400, detail="Stock tracking is not enabled for this product")
-        
-    before_state = {
-        "stock_qty": product.stock_qty,
-        "is_active": product.is_active
-    }
-    
-    # Increment stock
-    new_stock = product.stock_qty + restock_in.quantity
-    
-    # If it was auto-hidden because of 0 stock, we make it active again
-    is_active = product.is_active
-    if product.stock_auto_hide and product.stock_qty <= 0 and new_stock > 0:
-        is_active = True
-        
-    stmt = (
-        update(Product)
-        .where(Product.id == product_id, Product.row_version == product.row_version)
-        .values(
-            stock_qty=new_stock,
-            is_active=is_active,
-            last_restock_at=datetime.now(timezone.utc),
-            row_version=Product.row_version + 1,
-            updated_at=datetime.now(timezone.utc)
-        )
-        .returning(Product)
+        raise HTTPException(status_code=400, detail="Tracking stok tidak aktif untuk produk ini")
+
+    tenant_stmt = select(Tenant).where(Tenant.id == current_user.tenant_id)
+    tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
+    tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
+
+    before_state = {"stock_qty": product.stock_qty, "is_active": product.is_active}
+
+    updated_product = await svc_restock(
+        db,
+        product=product,
+        quantity=restock_in.quantity,
+        outlet_id=restock_in.outlet_id,
+        user_id=current_user.id,
+        notes=restock_in.notes,
+        tier=tier,
     )
-    
-    result = await db.execute(stmt)
-    updated_product = result.scalar_one_or_none()
-    
-    if not updated_product:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Concurrent update detected. Please try again."
-        )
-        
+
     await db.commit()
-    
-    # Audit log
+
     await log_audit(
         db=db,
         action="RESTOCK",
@@ -83,18 +66,18 @@ async def restock_product(
             "stock_qty": updated_product.stock_qty,
             "is_active": updated_product.is_active,
             "restock_amount": restock_in.quantity,
-            "notes": restock_in.notes
+            "notes": restock_in.notes,
         },
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
-    
+    await db.commit()
+
     return StandardResponse(
         success=True,
         data=ProductResponse.model_validate(updated_product),
         request_id=request.state.request_id,
-        message=f"Successfully restocked {restock_in.quantity} items"
+        message=f"Berhasil restock {restock_in.quantity} item",
     )
 
 @router.post("/", response_model=StandardResponse[ProductResponse])
@@ -136,9 +119,9 @@ async def create_product(
         after_state={"name": product.name, "base_price": float(product.base_price), "sku": product.sku},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
-    
+    await db.commit()
+
     return StandardResponse(
         success=True,
         data=ProductResponse.model_validate(product),
@@ -149,7 +132,7 @@ async def create_product(
 @router.get("/", response_model=StandardResponse[List[ProductResponse]])
 async def read_products(
     request: Request,
-    brand_id: UUID,
+    brand_id: Optional[UUID] = None,
     category_id: Optional[UUID] = None,
     skip: int = 0,
     limit: int = 100,
@@ -157,8 +140,17 @@ async def read_products(
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
-    Retrieve products.
+    Retrieve products. brand_id opsional — jika tidak dikirim, infer dari tenant user (Flutter POS).
     """
+    # Jika brand_id tidak dikirim (Flutter POS), cari brand pertama milik tenant
+    if brand_id is None:
+        brand_row = (await db.execute(
+            select(Brand).where(Brand.tenant_id == current_user.tenant_id, Brand.deleted_at.is_(None))
+        )).scalars().first()
+        if not brand_row:
+            return StandardResponse(success=True, data=[], request_id=request.state.request_id)
+        brand_id = brand_row.id
+
     query = select(Product).where(
         Product.brand_id == brand_id,
         Product.deleted_at.is_(None)
@@ -266,16 +258,16 @@ async def update_product(
         entity_id=updated_product.id,
         before_state=before_state,
         after_state={
-            "name": updated_product.name, 
+            "name": updated_product.name,
             "base_price": float(updated_product.base_price),
             "stock_qty": updated_product.stock_qty,
             "is_active": updated_product.is_active
         },
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
-    
+    await db.commit()
+
     return StandardResponse(
         success=True,
         data=ProductResponse.model_validate(updated_product),
@@ -293,8 +285,6 @@ async def delete_product(
     """
     Delete a product (soft delete).
     """
-    from datetime import datetime, timezone
-    
     product = await db.get(Product, product_id)
     if not product or product.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -312,9 +302,9 @@ async def delete_product(
         after_state={"deleted": True},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
-    
+    await db.commit()
+
     return StandardResponse(
         success=True,
         data={"id": str(product_id)},

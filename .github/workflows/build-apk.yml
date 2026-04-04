@@ -51,7 +51,7 @@ jobs:
 
       - name: Recreate Platform Directories
         run: |
-          flutter create .
+          flutter create --org com.kasira --project-name kasira_kasir .
           rm -rf test/widget_test.dart
         working-directory: kasir_app
 
@@ -117,9 +117,15 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Simpan version.json, lalu push ke branch main
+          cp version.json /tmp/version.json
+          git fetch origin main
+          git checkout main
+          cp /tmp/version.json version.json
           git add version.json
           git commit -m "chore: update version.json → v${VERSION}" || echo "No changes to commit"
-          git push
+          git push origin main
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4

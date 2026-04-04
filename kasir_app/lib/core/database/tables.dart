@@ -23,6 +23,11 @@ class Products extends Table with CrdtTable {
   TextColumn get barcode => text().nullable()();
   TextColumn get imageUrl => text().nullable()();
   BoolColumn get stockEnabled => boolean().withDefault(const Constant(false))();
+  // CRDT PNCounter untuk stock — pure CRDT, tidak pernah overwrite
+  // Format JSON: {"deviceNodeId": count}
+  TextColumn get crdtPositive => text().withDefault(const Constant('{}'))(); // restock
+  TextColumn get crdtNegative => text().withDefault(const Constant('{}'))(); // sale
+  // Cache computed dari CRDT — bisa direcompute kapanpun
   RealColumn get stockQty => real().withDefault(const Constant(0.0))();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
 }

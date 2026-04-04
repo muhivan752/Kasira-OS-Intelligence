@@ -13,7 +13,18 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            // Tambah CRDT columns ke products untuk pure CRDT stock
+            await m.addColumn(products, products.crdtPositive);
+            await m.addColumn(products, products.crdtNegative);
+          }
+        },
+      );
 
   // Helper method to get unsynced records
   Future<List<ProductLocal>> getUnsyncedProducts() => 

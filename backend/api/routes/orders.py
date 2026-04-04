@@ -1,6 +1,6 @@
 from typing import Any, List, Optional
 from uuid import UUID
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +12,11 @@ from backend.api.deps import get_current_user
 from backend.models.user import User
 from backend.models.order import Order, OrderItem
 from backend.models.product import Product
+from backend.models.tenant import Tenant
 from backend.schemas.order import OrderCreate, OrderUpdateStatus, OrderResponse, OrderStatus
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
+from backend.services.stock_service import deduct_stock
 
 router = APIRouter()
 
@@ -63,34 +65,21 @@ async def create_order(
         if not product or product.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
 
-        # Deduct stock if enabled
+        # Deduct stock via event-sourced stock service (Starter: transaction-first)
         if product.stock_enabled:
-            if product.stock_qty < item_in.quantity:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Stok {product.name} tidak mencukupi. Tersedia: {product.stock_qty}"
-                )
-            
-            new_stock = product.stock_qty - item_in.quantity
-            is_active = product.is_active
-            
-            # Auto-hide if stock hits 0
-            if new_stock <= 0 and product.stock_auto_hide:
-                is_active = False
-                
-            # Update product stock
-            stmt = (
-                update(Product)
-                .where(Product.id == product.id, Product.row_version == product.row_version)
-                .values(
-                    stock_qty=new_stock,
-                    is_active=is_active,
-                    row_version=Product.row_version + 1
-                )
+            tenant_stmt = select(Tenant).where(Tenant.id == current_user.tenant_id)
+            tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
+            tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
+
+            await deduct_stock(
+                db,
+                product=product,
+                quantity=item_in.quantity,
+                outlet_id=order_in.outlet_id,
+                order_id=order.id,
+                user_id=current_user.id,
+                tier=tier,
             )
-            result = await db.execute(stmt)
-            if result.rowcount == 0:
-                raise HTTPException(status_code=409, detail="Konflik data produk, coba lagi")
 
         # Create Order Item
         order_item = OrderItem(
@@ -122,7 +111,6 @@ async def create_order(
         after_state={"order_number": order.order_number, "total_amount": float(order.total_amount)},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
 
     return StandardResponse(
@@ -137,6 +125,8 @@ async def read_orders(
     request: Request,
     outlet_id: UUID,
     status: Optional[OrderStatus] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
@@ -149,10 +139,16 @@ async def read_orders(
         Order.outlet_id == outlet_id,
         Order.deleted_at.is_(None)
     )
-    
+
     if status:
         query = query.where(Order.status == status)
-        
+    if start_date:
+        start_dt = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+        query = query.where(Order.created_at >= start_dt)
+    if end_date:
+        end_dt = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+        query = query.where(Order.created_at <= end_dt)
+
     query = query.order_by(Order.created_at.desc()).offset(skip).limit(limit)
     
     result = await db.execute(query)
@@ -247,7 +243,6 @@ async def update_order_status(
         after_state={"status": updated_order.status},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
     
     return StandardResponse(

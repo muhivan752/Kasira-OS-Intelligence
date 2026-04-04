@@ -55,6 +55,31 @@
 - [x] **VPS Deployment**
   - `kasira-setup.sh` (one-command: Docker, UFW, clone repo, .env, pg_dump cron, systemd service)
   - `backend/scripts/seed_admin.py` (idempotent: Tenant + Brand + Outlet + User admin)
+- [x] **Offline-First Pure CRDT Stock** — selesai 2026-04-03
+  - `tables.dart`: Products tambah crdtPositive + crdtNegative (G-Counter JSON)
+  - `app_database.dart`: schemaVersion 2, migration addColumn crdtPositive+crdtNegative
+  - `pn_counter.dart`: PNCounter utility (increment, merge, getValue, fromJson, toJson)
+  - `cart_provider.dart`: offline deduct = PNCounter.increment(crdtNegative, nodeId, qty) — bukan LWW
+  - `sync_service.dart`: kirim + terima crdt_positive/crdt_negative saat sync
+  - Backend sync: merge PNCounter via process_stock_sync (sudah ada di sync.py)
+  - Merge rule: max per nodeId → commutative, associative, idempoten — tidak ada conflict
+  - `cart_provider.dart`: submitOrder() cek koneksi → online=backend, offline=Drift SQLite
+  - Offline: order+items disimpan lokal (isSynced:false), stockQty deduct di Drift sebagai guard anti-oversell
+  - Backend sync: setelah order_items diproses, trigger deduct_stock (idempoten via stock.sale event check)
+  - `stock_service.py`: _is_sale_already_recorded() — skip deduct jika stock.sale event sudah ada untuk order_id ini
+  - Starter: offline jalan penuh, source of truth tetap events table saat sync ke server
+  - `backend/models/event.py` — Event model (append-only, partitioned by outlet_id)
+  - `backend/services/stock_service.py` — deduct_stock, restock_product, get_stock_history, recompute_stock_from_events
+  - `orders.py` — stock deduct sekarang lewat stock_service (tulis stock.sale event dulu)
+  - `products.py` restock — sekarang lewat stock_service (tulis stock.restock event dulu)
+  - `schemas/stock.py` — tambah outlet_id di ProductRestock
+  - Starter: events table = source of truth, products.stock_qty = cache
+  - Pro (future): + outlet_stock CRDT untuk offline sync
+- [x] **Tier Gating Pro Features** — selesai 2026-04-03
+  - `deps.py`: `require_pro_tier` dependency, PRO_TIERS = {pro, business, enterprise}
+  - `loyalty.py` + `reservations.py`: router-level gate, 403 untuk Starter
+  - `auth.py /pin/verify`: cek tier tenant → 403 Starter (Dapur App = Pro only)
+  - Starter: POS, Stock, Shift, Laporan, Connect | Pro+: Dapur, Loyalty, Reservasi, Partial Payment
 - [x] **Feature D: Loyalty Points** — selesai 2026-04-02
   - Migration 059: `customer_points` + `point_transactions` (UNIQUE order_id+type, row_version)
   - `backend/api/routes/loyalty.py` — 4 endpoint: balance, earn (idempoten), redeem (optimistic lock), history
@@ -132,13 +157,13 @@
   - UptimeRobot: manual setup di dashboard — monitor http://VPS_IP:8000/ dan http://VPS_IP:3000/
 
 ## ⏳ IN PROGRESS
-- VPS Deployment: kasira-setup.sh siap, butuh VPS Ubuntu 22.04 untuk deploy
+- VPS sudah live: Ubuntu 22.04, semua container running (backend:8000, frontend:3000, db:5432, redis:6379)
+- Admin: phone 6285270782220, OTP dev: 123456, outlet slug: kasira-coffee
 
 ## ❌ BELUM MULAI (Prioritas sesuai urutan)
-1. **VPS Deployment** — jalankan `bash kasira-setup.sh` di server Ubuntu 22.04
-   - Isi FONNTE_TOKEN, XENDIT_API_KEY, ANTHROPIC_API_KEY, SENTRY_DSN saat prompted
-   - Setelah up: setup UptimeRobot monitor untuk /health endpoint
-   - Setelah up: trigger build-apk.yml untuk upload APK ke R2 (isi GitHub Secrets dulu)
+1. **UptimeRobot** — setup monitor http://103.189.235.164:8000/ dan http://103.189.235.164:3000/
+2. **Seed produk demo** — jalankan `docker exec kasira-backend-1 python -m backend.scripts.seed_demo`
+3. **APK Build** — trigger GitHub Actions "Build & Release Kasira Flutter APK"
 
 ## Keputusan Teknikal (JANGAN DIUBAH TANPA ALASAN)
 - ORM: SQLAlchemy async (bukan Tortoise)
@@ -167,12 +192,12 @@
 - Semua commit harus ke `claude/review-documentation-qqAkC`
 
 ## Lanjut Berikutnya
-**Feature F: FASE 5 Pre-Pilot** — checklist sebelum deploy ke VPS produksi:
-- UptimeRobot monitoring setup
-- Sentry error tracking integration
-- APK upload ke Cloudflare R2 (build-apk.yml update)
-- .env.example update (tambah ANTHROPIC_API_KEY)
-- pg_dump cron sudah ada di kasira-setup.sh → verify running
+VPS sudah live. Fokus saat ini: bug fixes Owner Dashboard + pilot readiness.
+- [x] Kategori CRUD di dashboard (tambah/edit/hapus/toggle aktif)
+- [x] Produk CRUD lengkap (tambah/edit/hapus/toggle aktif + upload foto dari device)
+- [x] Fix 307 redirect bug — trailing slash normalization di fetchWithAuth
+- [x] Fix event.py metadata reserved keyword (SQLAlchemy)
+- [x] Image upload: backend /media/upload + static /uploads/ + Next.js /api/upload proxy
 
 ## Context Files Status
 - context/database.md    → ⏳ In Progress

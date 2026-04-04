@@ -104,6 +104,9 @@ class SyncService {
               barcode: p['barcode'],
               imageUrl: p['image_url'],
               stockEnabled: p['stock_enabled'] ?? false,
+              // Pure CRDT: simpan kedua G-Counter dari server
+              crdtPositive: p['crdt_positive'] ?? '{}',
+              crdtNegative: p['crdt_negative'] ?? '{}',
               stockQty: (p['stock_qty'] as num?)?.toDouble() ?? 0.0,
               isActive: p['is_active'] ?? true,
               rowVersion: p['row_version'] ?? 0,
@@ -282,6 +285,9 @@ class SyncService {
     'image_url': p.imageUrl,
     'stock_enabled': p.stockEnabled,
     'stock_qty': p.stockQty,
+    // Pure CRDT: kirim kedua G-Counter agar backend bisa merge dengan benar
+    'crdt_positive': p.crdtPositive,
+    'crdt_negative': p.crdtNegative,
     'is_active': p.isActive,
     'row_version': p.rowVersion,
     'is_deleted': p.isDeleted,

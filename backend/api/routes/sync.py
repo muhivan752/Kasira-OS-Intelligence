@@ -16,6 +16,8 @@ from backend.models.outlet import Outlet
 from backend.models.shift import Shift, CashActivity
 from backend.services.sync import process_table_sync, process_stock_sync, get_table_changes, utc_now
 from backend.services.crdt import HLC
+from backend.services.stock_service import deduct_stock as svc_deduct_stock
+from backend.models.tenant import Tenant
 
 router = APIRouter()
 
@@ -58,6 +60,26 @@ async def sync_data(
             await process_table_sync(db, Order, request.changes.orders, {"outlet_id": outlet_id}, server_hlc, conflict_strategy="financial_strict")
         if request.changes.order_items:
             await process_table_sync(db, OrderItem, request.changes.order_items, {}, server_hlc)
+            # Trigger stock deduction untuk order items yang baru sync dari offline
+            # Idempotent — skip kalau stock.sale event sudah ada untuk order ini
+            tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+            tenant = tenant_res.scalar_one_or_none()
+            tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
+            for item_data in request.changes.order_items:
+                product = await db.get(Product, item_data.get("product_id"))
+                if product and product.stock_enabled:
+                    try:
+                        await svc_deduct_stock(
+                            db,
+                            product=product,
+                            quantity=item_data.get("quantity", 1),
+                            outlet_id=outlet_id,
+                            order_id=item_data.get("order_id"),
+                            user_id=current_user.id,
+                            tier=tier,
+                        )
+                    except Exception:
+                        pass  # jangan gagalkan sync karena stock conflict
         if request.changes.payments:
             await process_table_sync(db, Payment, request.changes.payments, {"outlet_id": outlet_id}, server_hlc, conflict_strategy="financial_strict")
         if request.changes.shifts:

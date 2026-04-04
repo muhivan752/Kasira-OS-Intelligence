@@ -32,7 +32,7 @@ from backend.models.reservation import Reservation, Table
 from backend.models.user import User
 from backend.services.audit import log_audit
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(deps.require_pro_tier)])
 logger = logging.getLogger(__name__)
 
 

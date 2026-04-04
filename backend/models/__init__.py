@@ -6,9 +6,12 @@ from .user import User
 from .outlet import Outlet
 from .shift import Shift, CashActivity
 from .category import Category
-from .product import Product
+from .product import Product, ProductVariant, OutletStock
 from .order import Order, OrderItem
 from .payment import Payment
 from .audit_log import AuditLog
 from .customer import Customer
 from .connect import ConnectOutlet, ConnectOrder
+from .event import Event
+from .reservation import Table, Reservation
+from .loyalty import CustomerPoints, PointTransaction

@@ -1,10 +1,15 @@
 import uuid
 import json
+import logging
 from contextlib import asynccontextmanager
+import os
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
+
+logger = logging.getLogger(__name__)
 
 from backend.api.api import api_router
 from backend.core.config import settings
@@ -77,7 +82,7 @@ class ResponseFormatMiddleware(BaseHTTPMiddleware):
             response.headers["X-Request-ID"] = request_id
             return response
         except Exception as e:
-            # Handle unhandled exceptions with standard format
+            logger.exception(f"Unhandled exception on {request.method} {request.url.path}: {e}")
             return JSONResponse(
                 status_code=500,
                 content={
@@ -97,6 +102,11 @@ app.add_middleware(TenantMiddleware)
 from backend.schemas.response import StandardResponse
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Serve uploaded images as static files
+UPLOAD_DIR = "/app/uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 @app.get("/", response_model=StandardResponse[dict])
 async def root():

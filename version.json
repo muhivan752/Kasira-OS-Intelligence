@@ -1,0 +1,14 @@
+{
+  "pos": {
+    "version": "1.0.0",
+    "is_mandatory": false,
+    "download_url": "",
+    "release_notes": "Initial release"
+  },
+  "dapur": {
+    "version": "1.0.0",
+    "is_mandatory": false,
+    "download_url": "",
+    "release_notes": "Initial release"
+  }
+}

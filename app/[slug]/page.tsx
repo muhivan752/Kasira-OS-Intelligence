@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getStorefront } from '@/app/actions/storefront';
 import { useCart } from './CartContext';
-import { ShoppingBag, MessageCircle, Store, Clock, MapPin, CheckCircle2, CalendarCheck } from 'lucide-react';
+import { ShoppingBag, MessageCircle, Store, Clock, MapPin, CheckCircle2 } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
 
 export default function StorefrontPage() {
@@ -18,6 +18,7 @@ export default function StorefrontPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   useEffect(() => {
+    if (!slug) return;
     async function loadData() {
       const data = await getStorefront(slug);
       if (data) {
@@ -74,10 +75,10 @@ export default function StorefrontPage() {
     <div className="max-w-md mx-auto bg-white min-h-screen shadow-sm relative">
       {/* Hero Section */}
       <div className="relative h-48 bg-gray-200">
-        {outlet.logo_url ? (
-          <img src={outlet.logo_url} alt={outlet.name} className="w-full h-full object-cover" />
+        {outlet.cover_image_url ? (
+          <img src={outlet.cover_image_url} alt={outlet.name} className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full bg-blue-600 flex items-center justify-center">
+          <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
             <Store className="w-16 h-16 text-white/50" />
           </div>
         )}
@@ -199,19 +200,6 @@ export default function StorefrontPage() {
 
       {/* Floating Action Buttons */}
       <div className="fixed bottom-6 left-0 right-0 px-4 pointer-events-none flex flex-col items-center gap-3 z-50">
-        {/* Reservasi button — shown when cart is empty */}
-        {totalItems === 0 && outlet.is_open && (
-          <div className="w-full max-w-md mx-auto pointer-events-auto">
-            <button
-              onClick={() => router.push(`/${slug}/booking`)}
-              className="w-full bg-white border border-blue-200 text-blue-600 rounded-full shadow-lg px-5 py-3 flex items-center justify-center gap-2 font-semibold text-sm hover:bg-blue-50 transition-colors"
-            >
-              <CalendarCheck className="w-5 h-5" />
-              Reservasi Meja
-            </button>
-          </div>
-        )}
-
         <div className="w-full max-w-md mx-auto flex justify-between items-end pointer-events-auto">
           {/* WA Button */}
           <button

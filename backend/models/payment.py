@@ -9,7 +9,7 @@ class Payment(BaseModel):
 
     order_id = Column(UUID(as_uuid=True), ForeignKey('orders.id', ondelete='CASCADE'), nullable=True)
     outlet_id = Column(UUID(as_uuid=True), ForeignKey('outlets.id', ondelete='CASCADE'), nullable=False)
-    invoice_id = Column(UUID(as_uuid=True), ForeignKey('invoices.id', ondelete='SET NULL'), nullable=True)
+    invoice_id = Column(UUID(as_uuid=True), nullable=True)  # FK to invoices (billing Pro feature, not mapped)
     shift_session_id = Column(UUID(as_uuid=True), ForeignKey('shifts.id', ondelete='SET NULL'), nullable=True)
     
     payment_method = Column(ENUM('cash', 'qris', 'card', 'transfer', name='payment_method', create_type=False), nullable=False)

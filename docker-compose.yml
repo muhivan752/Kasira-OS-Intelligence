@@ -10,6 +10,8 @@ services:
       - db
       - redis
     restart: always
+    volumes:
+      - uploads_data:/app/uploads
 
   db:
     image: pgvector/pgvector:pg16
@@ -39,9 +41,11 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+      - BACKEND_INTERNAL_URL=http://backend:8000/api/v1
     depends_on:
       - backend
     restart: always
 
 volumes:
   postgres_data:
+  uploads_data:

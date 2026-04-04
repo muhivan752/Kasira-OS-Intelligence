@@ -48,7 +48,8 @@ async def seed_demo():
             brand = Brand(
                 id=brand_id,
                 tenant_id=tenant_id,
-                name="Kasira Demo Brand"
+                name="Kasira Demo Brand",
+                type="cafe"
             )
             db.add(brand)
             

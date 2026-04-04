@@ -42,9 +42,9 @@ async def create_category(
         after_state={"name": category.name, "brand_id": str(category.brand_id)},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
-    
+    await db.commit()
+
     return StandardResponse(
         success=True,
         data=CategoryResponse.model_validate(category),
@@ -132,9 +132,9 @@ async def update_category(
         after_state={"name": category.name, "is_active": category.is_active},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
-    
+    await db.commit()
+
     return StandardResponse(
         success=True,
         data=CategoryResponse.model_validate(category),
@@ -171,9 +171,9 @@ async def delete_category(
         after_state={"deleted": True},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
-    
+    await db.commit()
+
     return StandardResponse(
         success=True,
         data={"id": str(category_id)},

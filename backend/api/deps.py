@@ -69,3 +69,17 @@ def get_current_active_superuser(
             status_code=400, detail="Akses ditolak"
         )
     return current_user
+
+PRO_TIERS = {"pro", "business", "enterprise"}
+
+async def require_pro_tier(
+    tenant: Tenant = Depends(get_current_tenant),
+) -> Tenant:
+    """Blokir akses fitur Pro+ untuk tenant Starter."""
+    tier = getattr(tenant, "subscription_tier", "starter") or "starter"
+    if str(tier).lower() not in PRO_TIERS:
+        raise HTTPException(
+            status_code=403,
+            detail="Fitur ini hanya tersedia untuk paket Pro. Upgrade untuk mengakses."
+        )
+    return tenant

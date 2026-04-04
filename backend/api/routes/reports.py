@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from datetime import datetime, timezone, date, time
 from uuid import UUID
-from typing import Any
+from typing import Any, Optional
 
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
@@ -20,12 +20,12 @@ router = APIRouter()
 async def get_daily_report(
     request: Request,
     outlet_id: UUID,
+    report_date: Optional[date] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
-    # Get today's start and end in UTC (or local timezone if preferred, using UTC for now)
-    today = datetime.now(timezone.utc).date()
-    start_of_day = datetime.combine(today, time.min).replace(tzinfo=timezone.utc)
+    target_date = report_date or datetime.now(timezone.utc).date()
+    start_of_day = datetime.combine(target_date, time.min).replace(tzinfo=timezone.utc)
     
     # 1. Order stats (revenue, count, avg)
     # Filter: orders today, status != cancelled, paid

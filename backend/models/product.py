@@ -42,6 +42,13 @@ class Product(BaseModel):
     brand = relationship("Brand", back_populates="products")
     category = relationship("Category", back_populates="products")
 
+class ProductVariant(BaseModel):
+    __tablename__ = "product_variants"
+
+    product_id = Column(UUID(as_uuid=True), ForeignKey('products.id', ondelete='CASCADE'), nullable=False)
+    name = Column(String, nullable=False)
+    price_adjustment = Column(Numeric(12, 2), server_default='0', nullable=False)
+
 class OutletStock(BaseModel):
     __tablename__ = "outlet_stock"
 

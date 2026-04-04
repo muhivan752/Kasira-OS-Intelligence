@@ -66,7 +66,6 @@ async def open_shift(
         after_state={"starting_cash": float(shift.starting_cash)},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
 
     return StandardResponse(
@@ -185,7 +184,6 @@ async def close_shift(
         after_state={"ending_cash": float(shift.ending_cash), "expected_ending_cash": float(shift.expected_ending_cash)},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
 
     return StandardResponse(
@@ -241,7 +239,6 @@ async def add_cash_activity(
         after_state={"type": activity.activity_type, "amount": float(activity.amount)},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        request_id=request.state.request_id
     )
 
     return StandardResponse(

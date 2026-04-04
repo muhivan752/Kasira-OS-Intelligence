@@ -157,9 +157,9 @@ export default function KasirPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                          {cashier.name.charAt(0).toUpperCase()}
+                          {(cashier.full_name || '?').charAt(0).toUpperCase()}
                         </div>
-                        <p className="text-sm font-medium text-gray-900">{cashier.name}</p>
+                        <p className="text-sm font-medium text-gray-900">{cashier.full_name}</p>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">

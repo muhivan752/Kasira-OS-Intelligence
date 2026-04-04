@@ -243,6 +243,16 @@ async def verify_pin_login(
     if not user.pin_hash or not security.verify_pin(body.pin, user.pin_hash):
         raise HTTPException(status_code=401, detail="Nomor HP atau PIN salah")
 
+    # Dapur App = fitur Pro — cek tier tenant
+    tenant_stmt = select(Tenant).where(Tenant.id == user.tenant_id, Tenant.deleted_at == None)
+    tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
+    tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
+    if tier not in {"pro", "business", "enterprise"}:
+        raise HTTPException(
+            status_code=403,
+            detail="Aplikasi Dapur hanya tersedia untuk paket Pro. Upgrade untuk mengakses."
+        )
+
     from backend.core.security import create_access_token
     access_token = create_access_token(subject=str(user.id))
 
