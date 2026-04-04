@@ -37,7 +37,17 @@ async def create_order(
     result = await db.execute(text("SELECT nextval('order_display_seq')"))
     display_number = result.scalar()
     order_number = f"ORD-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{display_number}"
-    
+
+    # Calculate totals server-side from items (fallback if client sends 0)
+    from decimal import Decimal as D
+    calculated_subtotal = sum(item.total_price for item in order_in.items)
+    subtotal = order_in.subtotal if order_in.subtotal > 0 else calculated_subtotal
+    service_charge = order_in.service_charge_amount or D(0)
+    tax = order_in.tax_amount or D(0)
+    discount = order_in.discount_amount or D(0)
+    calculated_total = subtotal + service_charge + tax - discount
+    total_amount = order_in.total_amount if order_in.total_amount > 0 else calculated_total
+
     order = Order(
         outlet_id=order_in.outlet_id,
         shift_session_id=order_in.shift_session_id,
@@ -47,11 +57,11 @@ async def create_order(
         order_number=order_number,
         display_number=display_number,
         order_type=order_in.order_type,
-        subtotal=order_in.subtotal,
-        service_charge_amount=order_in.service_charge_amount,
-        tax_amount=order_in.tax_amount,
-        discount_amount=order_in.discount_amount,
-        total_amount=order_in.total_amount,
+        subtotal=subtotal,
+        service_charge_amount=service_charge,
+        tax_amount=tax,
+        discount_amount=discount,
+        total_amount=total_amount,
         notes=order_in.notes,
         status=OrderStatus.pending
     )

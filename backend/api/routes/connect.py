@@ -160,9 +160,11 @@ async def create_connect_order(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
-    if input_data.order_type not in ["pickup", "delivery"]:
-        raise HTTPException(status_code=400, detail="Tipe order harus pickup atau delivery")
-    
+    if input_data.order_type not in ["pickup", "delivery", "takeaway", "dine_in"]:
+        raise HTTPException(status_code=400, detail="Tipe order tidak valid")
+    # Map 'pickup' → 'takeaway' to match DB enum
+    db_order_type = "takeaway" if input_data.order_type == "pickup" else input_data.order_type
+
     if input_data.order_type == "delivery" and not input_data.delivery_address:
         raise HTTPException(status_code=400, detail="Alamat pengiriman wajib diisi")
 
@@ -236,6 +238,8 @@ async def create_connect_order(
         await db.flush()
 
     # Get or create customer
+    import hashlib, hmac as _hmac
+    phone_hmac = _hmac.new(b'kasira-phone-key', input_data.customer_phone.encode(), hashlib.sha256).hexdigest()
     result = await db.execute(
         select(Customer).where(
             Customer.tenant_id == outlet.tenant_id,
@@ -247,7 +251,8 @@ async def create_connect_order(
         customer = Customer(
             tenant_id=outlet.tenant_id,
             name=input_data.customer_name,
-            phone=input_data.customer_phone
+            phone=input_data.customer_phone,
+            phone_hmac=phone_hmac
         )
         db.add(customer)
         await db.flush()
@@ -255,7 +260,6 @@ async def create_connect_order(
     # Calculate totals and create order items
     subtotal = 0
     order_items = []
-    from backend.models.product import OutletStock
     for item_input in input_data.items:
         # Use with_for_update to prevent race conditions on stock
         result = await db.execute(
@@ -270,31 +274,10 @@ async def create_connect_order(
             raise HTTPException(status_code=400, detail="Produk tidak tersedia")
             
         if product.stock_enabled:
-            # Check OutletStock
-            stock_result = await db.execute(
-                select(OutletStock).where(
-                    OutletStock.product_id == product.id,
-                    OutletStock.outlet_id == outlet.id
-                ).with_for_update()
-            )
-            outlet_stock = stock_result.scalar_one_or_none()
-            
-            if not outlet_stock or outlet_stock.computed_stock < item_input.qty:
+            if product.stock_qty < item_input.qty:
                 raise HTTPException(status_code=400, detail=f"Stok habis untuk produk {product.name}")
-                
-            # Deduct stock using CRDT logic
-            from backend.services.crdt import PNCounter
-            server_node_id = "server"
-            outlet_stock.crdt_negative = PNCounter.increment(
-                outlet_stock.crdt_negative or {}, 
-                server_node_id, 
-                item_input.qty
-            )
-            outlet_stock.computed_stock = PNCounter.get_value(
-                outlet_stock.crdt_positive or {}, 
-                outlet_stock.crdt_negative
-            )
-            outlet_stock.row_version += 1
+            product.stock_qty -= item_input.qty
+            product.row_version += 1
         
         item_total = product.base_price * item_input.qty
         subtotal += item_total
@@ -323,9 +306,9 @@ async def create_connect_order(
         order_number=order_number,
         display_number=display_number,
         status="pending",
-        order_type=input_data.order_type,
+        order_type=db_order_type,
         subtotal=subtotal,
-        total_amount=subtotal, # Simplified, no tax/service charge for now
+        total_amount=subtotal,
         notes=f"Delivery Address: {input_data.delivery_address}" if input_data.order_type == "delivery" else None
     )
     db.add(order)

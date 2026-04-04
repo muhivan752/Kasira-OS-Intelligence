@@ -41,7 +41,6 @@ class _PosPageState extends ConsumerState<PosPage> {
   void _updateConnectionStatus(List<ConnectivityResult> result) {
     final offline = result.contains(ConnectivityResult.none) || result.isEmpty;
     if (_isOffline && !offline) {
-      // kembali online → sync
       ref.read(syncServiceProvider).sync().catchError((_) {});
     }
     if (mounted) setState(() => _isOffline = offline);
@@ -54,9 +53,45 @@ class _PosPageState extends ConsumerState<PosPage> {
     super.dispose();
   }
 
+  void _openCartSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        maxChildSize: 0.95,
+        minChildSize: 0.4,
+        builder: (_, controller) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Expanded(child: CartPanel()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width >= 700;
     final productsAsync = ref.watch(productsProvider);
+    final cart = ref.watch(cartProvider);
+    final itemCount = cart.fold<int>(0, (sum, item) => sum + item.quantity);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -70,84 +105,115 @@ class _PosPageState extends ConsumerState<PosPage> {
               child: const Text(
                 'Mode Offline — Transaksi tersimpan, sync saat online',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
               ),
             ),
           Expanded(
-            child: Row(
-              children: [
-                // LEFT: Products
-                Expanded(
-                  flex: 7,
-                  child: Column(
-                    children: [
-                      _buildHeader(),
-                      _buildCategories(productsAsync),
-                      Expanded(child: _buildProductGrid(productsAsync)),
-                    ],
-                  ),
-                ),
-                // RIGHT: Cart
-                Container(
-                  width: 400,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border(left: BorderSide(color: AppColors.border)),
-                  ),
-                  child: const CartPanel(),
-                ),
-              ],
-            ),
+            child: isWide
+                ? _buildTabletLayout(productsAsync)
+                : _buildPhoneLayout(context, productsAsync),
           ),
         ],
       ),
+      // Phone: floating cart button
+      floatingActionButton: isWide
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _openCartSheet(context),
+              icon: Badge(
+                label: itemCount > 0 ? Text('$itemCount') : null,
+                isLabelVisible: itemCount > 0,
+                child: const Icon(LucideIcons.shoppingCart),
+              ),
+              label: const Text('Keranjang'),
+              backgroundColor: AppColors.primary,
+            ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildTabletLayout(AsyncValue<List<ProductModel>> productsAsync) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 7,
+          child: Column(
+            children: [
+              _buildHeader(isWide: true),
+              _buildCategories(productsAsync),
+              Expanded(child: _buildProductGrid(productsAsync, crossAxisCount: 4)),
+            ],
+          ),
+        ),
+        Container(
+          width: 400,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(left: BorderSide(color: AppColors.border)),
+          ),
+          child: const CartPanel(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhoneLayout(BuildContext context, AsyncValue<List<ProductModel>> productsAsync) {
+    return Column(
+      children: [
+        _buildHeader(isWide: false),
+        _buildCategories(productsAsync),
+        Expanded(child: _buildProductGrid(productsAsync, crossAxisCount: 2)),
+      ],
+    );
+  }
+
+  Widget _buildHeader({required bool isWide}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: EdgeInsets.symmetric(
+        horizontal: isWide ? 24 : 16,
+        vertical: isWide ? 16 : 12,
+      ),
       color: Colors.white,
-      child: Row(
-        children: [
-          const Icon(LucideIcons.store, color: AppColors.primary),
-          const SizedBox(width: 12),
-          Text('Kasir', style: Theme.of(context).textTheme.titleLarge),
-          const Spacer(),
-          // Search
-          Container(
-            width: 280,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceVariant,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Cari produk...',
-                prefixIcon: Icon(LucideIcons.search, size: 18, color: AppColors.textTertiary),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 10),
+      child: SafeArea(
+        bottom: false,
+        child: Row(
+          children: [
+            const Icon(LucideIcons.store, color: AppColors.primary),
+            const SizedBox(width: 12),
+            Text('Kasir', style: TextStyle(fontSize: isWide ? 18 : 16, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Container(
+              width: isWide ? 280 : 160,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(8),
               ),
-              onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+              child: TextField(
+                controller: _searchController,
+                decoration: const InputDecoration(
+                  hintText: 'Cari produk...',
+                  prefixIcon: Icon(LucideIcons.search, size: 18, color: AppColors.textTertiary),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 10),
+                ),
+                onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          IconButton(
-            onPressed: () => ref.read(productsProvider.notifier).refresh(),
-            icon: const Icon(LucideIcons.refreshCw, color: AppColors.textSecondary),
-            tooltip: 'Refresh produk',
-          ),
-        ],
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: () => ref.read(productsProvider.notifier).refresh(),
+              icon: const Icon(LucideIcons.refreshCw, color: AppColors.textSecondary),
+              tooltip: 'Refresh',
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildCategories(AsyncValue<List<ProductModel>> productsAsync) {
-    // Kumpulkan kategori unik dari produk
     final categories = <String, String>{'all': 'Semua'};
     productsAsync.whenData((products) {
       for (final p in products) {
@@ -158,16 +224,16 @@ class _PosPageState extends ConsumerState<PosPage> {
     });
 
     return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+      height: 56,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: categories.entries.map((entry) {
           final isSelected = _selectedCategoryId == entry.key;
           return Padding(
-            padding: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.only(right: 8),
             child: ChoiceChip(
-              label: Text(entry.value),
+              label: Text(entry.value, style: const TextStyle(fontSize: 13)),
               selected: isSelected,
               onSelected: (_) {
                 setState(() => _selectedCategoryId = entry.key);
@@ -190,7 +256,7 @@ class _PosPageState extends ConsumerState<PosPage> {
     );
   }
 
-  Widget _buildProductGrid(AsyncValue<List<ProductModel>> productsAsync) {
+  Widget _buildProductGrid(AsyncValue<List<ProductModel>> productsAsync, {required int crossAxisCount}) {
     return productsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(
@@ -199,7 +265,7 @@ class _PosPageState extends ConsumerState<PosPage> {
           children: [
             const Icon(LucideIcons.wifiOff, size: 40, color: AppColors.textTertiary),
             const SizedBox(height: 12),
-            Text('Gagal memuat produk', style: Theme.of(context).textTheme.titleMedium),
+            const Text('Gagal memuat produk'),
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => ref.read(productsProvider.notifier).refresh(),
@@ -230,13 +296,13 @@ class _PosPageState extends ConsumerState<PosPage> {
         }
 
         return Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              childAspectRatio: crossAxisCount == 2 ? 0.85 : 0.75,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
             ),
             itemCount: filtered.length,
             itemBuilder: (context, index) {
@@ -252,6 +318,16 @@ class _PosPageState extends ConsumerState<PosPage> {
                     name: product.name,
                     price: product.price,
                   ));
+                  // Phone: tampilkan snackbar singkat
+                  if (MediaQuery.of(context).size.width < 700) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${product.name} ditambahkan'),
+                        duration: const Duration(milliseconds: 800),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
                 },
               );
             },

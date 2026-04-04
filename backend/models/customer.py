@@ -14,7 +14,7 @@ class Customer(BaseModel):
     name = Column(String, nullable=False)
     phone = Column(String, nullable=True)
     email = Column(String, nullable=True)
-    is_active = Column(Boolean, default=True)
+    phone_hmac = Column(String, nullable=False, default='')
     row_version = Column(
         __import__('sqlalchemy').Integer,
         server_default='0',
