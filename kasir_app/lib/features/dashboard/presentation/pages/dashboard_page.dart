@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../pos/presentation/pages/pos_page.dart';
 import '../../../orders/presentation/pages/order_list_page.dart';
 import '../../../shift/presentation/pages/shift_page.dart';
 import '../../../products/presentation/pages/product_management_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
+import '../../providers/dashboard_provider.dart';
+import '../../../orders/providers/orders_provider.dart';
+
+final _currencyFmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -136,55 +142,72 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-class _DashboardContent extends StatelessWidget {
+// ── Dashboard Content (real data) ────────────────────────────────────────────
+
+class _DashboardContent extends ConsumerWidget {
   const _DashboardContent();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isWide = MediaQuery.of(context).size.width >= 600;
-    return isWide ? _buildWide(context) : _buildPhone(context);
+    final statsAsync = ref.watch(dashboardProvider);
+    final ordersState = ref.watch(ordersProvider);
+
+    return isWide
+        ? _buildWide(context, ref, statsAsync, ordersState)
+        : _buildPhone(context, ref, statsAsync, ordersState);
   }
 
-  Widget _buildWide(BuildContext context) {
+  Widget _buildWide(BuildContext context, WidgetRef ref,
+      AsyncValue<DashboardStats> statsAsync, OrdersState ordersState) {
     return Padding(
       padding: const EdgeInsets.all(32.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(context),
+          _buildHeader(context, ref, statsAsync, isWide: true),
           const SizedBox(height: 40),
-          _buildStatsRow(context),
+          statsAsync.when(
+            loading: () => const LinearProgressIndicator(),
+            error: (_, __) => _buildStatsError(ref),
+            data: (stats) => _buildStatsRow(context, stats),
+          ),
           const SizedBox(height: 40),
           Text('Transaksi Terakhir', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 16),
-          Expanded(child: _buildOrderList(context)),
+          Expanded(child: _buildOrderList(context, ordersState, ref)),
         ],
       ),
     );
   }
 
-  Widget _buildPhone(BuildContext context) {
+  Widget _buildPhone(BuildContext context, WidgetRef ref,
+      AsyncValue<DashboardStats> statsAsync, OrdersState ordersState) {
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(context),
+            _buildHeader(context, ref, statsAsync, isWide: false),
             const SizedBox(height: 24),
-            _buildStatsColumn(context),
+            statsAsync.when(
+              loading: () => const LinearProgressIndicator(),
+              error: (_, __) => _buildStatsError(ref),
+              data: (stats) => _buildStatsColumn(context, stats),
+            ),
             const SizedBox(height: 24),
             Text('Transaksi Terakhir', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
-            _buildOrderList(context),
+            _buildOrderList(context, ordersState, ref),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 600;
+  Widget _buildHeader(BuildContext context, WidgetRef ref,
+      AsyncValue<DashboardStats> statsAsync, {required bool isWide}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -199,54 +222,89 @@ class _DashboardContent extends StatelessWidget {
                     : Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Kasira POS',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              statsAsync.when(
+                loading: () => const Text('Memuat...', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                error: (_, __) => const SizedBox.shrink(),
+                data: (stats) => Text(
+                  'Shift: ${stats.shiftStatus == "open" ? "Buka" : "Tutup"}',
+                  style: TextStyle(
+                    color: stats.shiftStatus == 'open' ? AppColors.success : AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
         ),
-        ElevatedButton.icon(
-          onPressed: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const ShiftPage()));
-          },
-          icon: const Icon(LucideIcons.logOut, size: 16),
-          label: Text(isWide ? 'Tutup Shift' : 'Shift'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.error,
-            padding: isWide
-                ? const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
-                : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
+        Row(
+          children: [
+            IconButton(
+              onPressed: () {
+                ref.read(dashboardProvider.notifier).refresh();
+                ref.read(ordersProvider.notifier).fetch();
+              },
+              icon: const Icon(LucideIcons.refreshCw, color: AppColors.textSecondary),
+              tooltip: 'Refresh',
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ShiftPage()));
+              },
+              icon: const Icon(LucideIcons.logOut, size: 16),
+              label: Text(isWide ? 'Tutup Shift' : 'Shift'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                padding: isWide
+                    ? const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
+                    : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildStatsRow(BuildContext context) {
+  Widget _buildStatsError(WidgetRef ref) {
+    return TextButton.icon(
+      onPressed: () => ref.read(dashboardProvider.notifier).refresh(),
+      icon: const Icon(LucideIcons.refreshCw, size: 16),
+      label: const Text('Gagal memuat statistik — tap untuk retry'),
+    );
+  }
+
+  Widget _buildStatsRow(BuildContext context, DashboardStats stats) {
     return Row(
       children: [
-        _buildStatCard(context, 'Pendapatan', 'Rp 2.450.000', LucideIcons.wallet, AppColors.success),
+        _buildStatCard(context, 'Pendapatan', _currencyFmt.format(stats.revenueToday),
+            LucideIcons.wallet, AppColors.success),
         const SizedBox(width: 24),
-        _buildStatCard(context, 'Transaksi', '48', LucideIcons.receipt, AppColors.info),
+        _buildStatCard(context, 'Transaksi', '${stats.orderCount}',
+            LucideIcons.receipt, AppColors.info),
         const SizedBox(width: 24),
-        _buildStatCard(context, 'Rata-rata', 'Rp 51.000', LucideIcons.barChart2, AppColors.warning),
+        _buildStatCard(context, 'Rata-rata', _currencyFmt.format(stats.avgOrderValue),
+            LucideIcons.barChart2, AppColors.warning),
       ],
     );
   }
 
-  Widget _buildStatsColumn(BuildContext context) {
+  Widget _buildStatsColumn(BuildContext context, DashboardStats stats) {
     return Column(
       children: [
         Row(
           children: [
-            Expanded(child: _buildStatCard(context, 'Pendapatan', 'Rp 2.450.000', LucideIcons.wallet, AppColors.success)),
+            Expanded(child: _buildStatCard(context, 'Pendapatan',
+                _currencyFmt.format(stats.revenueToday), LucideIcons.wallet, AppColors.success)),
             const SizedBox(width: 12),
-            Expanded(child: _buildStatCard(context, 'Transaksi', '48', LucideIcons.receipt, AppColors.info)),
+            Expanded(child: _buildStatCard(context, 'Transaksi',
+                '${stats.orderCount}', LucideIcons.receipt, AppColors.info)),
           ],
         ),
         const SizedBox(height: 12),
-        _buildStatCard(context, 'Rata-rata Transaksi', 'Rp 51.000', LucideIcons.barChart2, AppColors.warning),
+        _buildStatCard(context, 'Rata-rata Transaksi',
+            _currencyFmt.format(stats.avgOrderValue), LucideIcons.barChart2, AppColors.warning),
       ],
     );
   }
@@ -295,7 +353,31 @@ class _DashboardContent extends StatelessWidget {
     );
   }
 
-  Widget _buildOrderList(BuildContext context) {
+  Widget _buildOrderList(BuildContext context, OrdersState state, WidgetRef ref) {
+    if (state.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (state.error != null) {
+      return Center(
+        child: TextButton.icon(
+          onPressed: () => ref.read(ordersProvider.notifier).fetch(),
+          icon: const Icon(LucideIcons.refreshCw, size: 16),
+          label: Text('Gagal: ${state.error} — tap retry'),
+        ),
+      );
+    }
+    final recent = state.orders.take(5).toList();
+    if (recent.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Center(child: Text('Belum ada transaksi hari ini')),
+      );
+    }
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -305,9 +387,15 @@ class _DashboardContent extends StatelessWidget {
       child: ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: 5,
+        itemCount: recent.length,
         separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
         itemBuilder: (context, index) {
+          final order = recent[index];
+          final statusColor = order.status == 'completed'
+              ? AppColors.success
+              : order.status == 'cancelled'
+                  ? AppColors.error
+                  : AppColors.warning;
           return ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             leading: Container(
@@ -318,17 +406,20 @@ class _DashboardContent extends StatelessWidget {
               ),
               child: const Icon(LucideIcons.receipt, color: AppColors.textSecondary, size: 20),
             ),
-            title: Text('ORD-2026-${1000 + index}',
+            title: Text(order.orderNumber,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            subtitle: Text('Dine In • ${index + 1} items', style: const TextStyle(fontSize: 12)),
+            subtitle: Text(
+              '${order.orderTypeLabel} • ${order.items.length} item',
+              style: const TextStyle(fontSize: 12),
+            ),
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                const Text('Rp 75.000',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                Text('Selesai',
-                    style: TextStyle(color: AppColors.success, fontSize: 11, fontWeight: FontWeight.bold)),
+                Text(_currencyFmt.format(order.totalAmount),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(order.statusLabel,
+                    style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
               ],
             ),
           );

@@ -34,9 +34,10 @@ class OrderItemCreate(OrderItemBase):
 class OrderItemResponse(OrderItemBase):
     id: UUID
     order_id: UUID
+    product_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 class OrderBase(BaseModel):

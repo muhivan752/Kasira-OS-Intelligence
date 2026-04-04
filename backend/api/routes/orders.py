@@ -145,7 +145,9 @@ async def read_orders(
     """
     Retrieve orders.
     """
-    query = select(Order).options(selectinload(Order.items)).where(
+    query = select(Order).options(
+        selectinload(Order.items).selectinload(OrderItem.product)
+    ).where(
         Order.outlet_id == outlet_id,
         Order.deleted_at.is_(None)
     )
@@ -180,7 +182,9 @@ async def read_order(
     """
     Get order by ID.
     """
-    query = select(Order).options(selectinload(Order.items)).where(Order.id == order_id)
+    query = select(Order).options(
+        selectinload(Order.items).selectinload(OrderItem.product)
+    ).where(Order.id == order_id)
     result = await db.execute(query)
     order = result.scalar_one_or_none()
     
