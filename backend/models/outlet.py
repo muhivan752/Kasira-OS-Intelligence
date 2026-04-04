@@ -19,8 +19,9 @@ class Outlet(BaseModel):
     brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id"), nullable=True, index=True)
     row_version = Column(Integer, server_default='0', nullable=False)
     
-    xendit_business_id = Column(String, nullable=True) # sub-account id
+    xendit_business_id = Column(String, nullable=True) # sub-account id (xenPlatform Phase 2)
     xendit_connected_at = Column(DateTime(timezone=True), nullable=True)
+    xendit_api_key = Column(String, nullable=True)  # merchant's own secret key (Phase 1)
 
     brand = relationship("Brand", back_populates="outlets")
     orders = relationship("Order", back_populates="outlet")

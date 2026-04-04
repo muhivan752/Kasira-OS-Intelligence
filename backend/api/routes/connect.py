@@ -361,18 +361,18 @@ async def create_connect_order(
     qris_expired_at = None
 
     if pay_method == PaymentMethod.qris:
-        if outlet.xendit_business_id:
+        if outlet.xendit_api_key or outlet.xendit_business_id:
             try:
                 xendit_res = await xendit_service.create_qris_transaction(
                     reference_id=f"{outlet.tenant_id}::{payment.id}",
                     amount=float(payment.amount_due),
-                    for_user_id=outlet.xendit_business_id,
+                    for_user_id=outlet.xendit_business_id if not outlet.xendit_api_key else None,
                     platform_fee_percent=0.2,
+                    merchant_api_key=outlet.xendit_api_key,
                 )
                 qris_url = xendit_res.get("qr_string") or xendit_res.get("qr_url")
                 payment.qris_url = qris_url
                 payment.xendit_raw = xendit_res
-                # QRIS expired 15 menit (Golden Rule #41)
                 qris_expired_at = (
                     datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
                 ).isoformat() + "Z"

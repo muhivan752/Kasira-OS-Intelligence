@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 
 from backend.api import deps
 from backend.models.outlet import Outlet
-from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentStatus
+from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentSetupOwn, OutletPaymentStatus
 from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
 import json
@@ -197,6 +197,65 @@ async def setup_payment(
         message="Payment gateway berhasil dikonfigurasi"
     )
 
+@router.post("/{outlet_id}/payment-setup/own-key", response_model=StandardResponse[OutletPaymentStatus])
+async def setup_payment_own_key(
+    request: Request,
+    outlet_id: uuid.UUID,
+    setup_in: OutletPaymentSetupOwn,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_user),
+) -> Any:
+    """Simpan Xendit secret key milik merchant sendiri (Phase 1 pilot)."""
+    stmt = select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at == None)
+    if not current_user.is_superuser:
+        stmt = stmt.where(Outlet.tenant_id == current_user.tenant_id)
+    outlet = (await db.execute(stmt)).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    now = datetime.now(timezone.utc)
+    await db.execute(
+        update(Outlet)
+        .where(Outlet.id == outlet_id)
+        .values(xendit_api_key=setup_in.xendit_api_key, xendit_connected_at=now, row_version=Outlet.row_version + 1)
+    )
+    await log_audit(db=db, action="UPDATE", entity="outlets", entity_id=outlet_id,
+                    after_state={"xendit_mode": "own_key", "xendit_connected_at": now.isoformat()},
+                    user_id=current_user.id, tenant_id=outlet.tenant_id)
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data=OutletPaymentStatus(is_connected=True, mode="own_key", connected_at=now),
+        request_id=request.state.request_id,
+        message="Xendit API key berhasil disimpan"
+    )
+
+@router.delete("/{outlet_id}/payment-setup/own-key", response_model=StandardResponse[dict])
+async def remove_payment_own_key(
+    request: Request,
+    outlet_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_user),
+) -> Any:
+    """Hapus Xendit secret key merchant."""
+    stmt = select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at == None)
+    if not current_user.is_superuser:
+        stmt = stmt.where(Outlet.tenant_id == current_user.tenant_id)
+    outlet = (await db.execute(stmt)).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    await db.execute(
+        update(Outlet).where(Outlet.id == outlet_id)
+        .values(xendit_api_key=None, row_version=Outlet.row_version + 1)
+    )
+    await log_audit(db=db, action="UPDATE", entity="outlets", entity_id=outlet_id,
+                    after_state={"xendit_mode": "removed_own_key"},
+                    user_id=current_user.id, tenant_id=outlet.tenant_id)
+    await db.commit()
+    return StandardResponse(success=True, data={"ok": True}, message="Xendit API key dihapus")
+
 @router.get("/{outlet_id}/payment-status", response_model=StandardResponse[OutletPaymentStatus])
 async def get_payment_status(
     request: Request,
@@ -217,10 +276,14 @@ async def get_payment_status(
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
         
-    is_connected = outlet.xendit_business_id is not None
-    
+    has_own_key = outlet.xendit_api_key is not None
+    has_platform = outlet.xendit_business_id is not None
+    is_connected = has_own_key or has_platform
+    mode = "xenplatform" if has_platform else ("own_key" if has_own_key else "none")
+
     status_data = OutletPaymentStatus(
         is_connected=is_connected,
+        mode=mode,
         xendit_business_id=outlet.xendit_business_id,
         connected_at=outlet.xendit_connected_at
     )

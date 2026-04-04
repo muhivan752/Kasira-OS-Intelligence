@@ -224,6 +224,33 @@ export async function setupPayment(outletId: string, paymentData: any) {
   } catch { return { success: false, message: 'Gagal setup pembayaran' }; }
 }
 
+export async function setupPaymentOwnKey(outletId: string, xenditApiKey: string) {
+  try {
+    const res = await fetchWithAuth(`/outlets/${outletId}/payment-setup/own-key`, {
+      method: 'POST',
+      body: JSON.stringify({ xendit_api_key: xenditApiKey }),
+    });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal menyimpan API key' }; }
+}
+
+export async function removePaymentOwnKey(outletId: string) {
+  try {
+    const res = await fetchWithAuth(`/outlets/${outletId}/payment-setup/own-key`, { method: 'DELETE' });
+    const data = await res.json();
+    return { success: res.ok, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal menghapus API key' }; }
+}
+
+export async function getPaymentStatus(outletId: string) {
+  try {
+    const res = await fetchWithAuth(`/outlets/${outletId}/payment-status`);
+    const data = await res.json();
+    return data.data;
+  } catch { return null; }
+}
+
 export async function getDailyReport(outletId: string, reportDate: string) {
   try {
     const res = await fetchWithAuth(`/reports/daily?outlet_id=${outletId}&report_date=${reportDate}`);

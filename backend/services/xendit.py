@@ -31,15 +31,16 @@ class XenditService:
         """Tutup client saat aplikasi shutdown. Panggil dari FastAPI lifespan."""
         await self._client.aclose()
 
-    def _get_auth_header(self) -> str:
-        raw = f"{settings.XENDIT_API_KEY}:".encode("utf-8")
+    def _get_auth_header(self, api_key: Optional[str] = None) -> str:
+        key = api_key or settings.XENDIT_API_KEY
+        raw = f"{key}:".encode("utf-8")
         return f"Basic {base64.b64encode(raw).decode('utf-8')}"
 
-    def _get_headers(self, for_user_id: Optional[str] = None) -> Dict[str, str]:
+    def _get_headers(self, for_user_id: Optional[str] = None, api_key: Optional[str] = None) -> Dict[str, str]:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "Authorization": self._get_auth_header(),
+            "Authorization": self._get_auth_header(api_key=api_key),
         }
         if for_user_id:
             # Header krusial xenPlatform: request dilakukan atas nama Sub-Account merchant
@@ -72,26 +73,30 @@ class XenditService:
         self,
         reference_id: str,
         amount: float,
-        for_user_id: str,
+        for_user_id: Optional[str] = None,
         platform_fee_percent: float = 0.2,
+        merchant_api_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Buat transaksi QRIS untuk Sub-Account merchant.
+        Buat transaksi QRIS.
 
-        - for_user_id: xendit_business_id dari outlet (agar uang masuk ke merchant)
-        - platform_fee_percent: potongan Kasira 0.2% per transaksi
+        Phase 1 (pilot): merchant_api_key diisi → pakai key merchant langsung, no platform fee
+        Phase 2 (xenPlatform): for_user_id diisi → uang masuk ke sub-account merchant, kasira potong fee
         """
-        platform_fee = int(amount * (platform_fee_percent / 100))
         payload = {
             "reference_id": reference_id,
             "type": "DYNAMIC",
             "currency": "IDR",
             "amount": int(amount),
-            "metadata": {"kasira_platform_fee": platform_fee},
         }
+        if for_user_id and not merchant_api_key:
+            # Phase 2 xenPlatform
+            platform_fee = int(amount * (platform_fee_percent / 100))
+            payload["metadata"] = {"kasira_platform_fee": platform_fee}
+
         response = await self._client.post(
             "/qr_codes",
-            headers=self._get_headers(for_user_id=for_user_id),
+            headers=self._get_headers(for_user_id=for_user_id, api_key=merchant_api_key),
             json=payload,
         )
         response.raise_for_status()

@@ -24,8 +24,12 @@ class OutletUpdate(BaseModel):
 class OutletPaymentSetup(BaseModel):
     xendit_business_id: str
 
+class OutletPaymentSetupOwn(BaseModel):
+    xendit_api_key: str  # merchant's own Xendit secret key
+
 class OutletPaymentStatus(BaseModel):
     is_connected: bool
+    mode: str = "none"  # "own_key" | "xenplatform" | "none"
     xendit_business_id: Optional[str] = None
     connected_at: Optional[datetime] = None
 

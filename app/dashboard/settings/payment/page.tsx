@@ -1,155 +1,187 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getOutlets, setupPayment } from '@/app/actions/api';
-import { Loader2, CreditCard, CheckCircle2, AlertCircle } from 'lucide-react';
+import { getOutlets, getPaymentStatus, setupPaymentOwnKey, removePaymentOwnKey } from '@/app/actions/api';
+import { Loader2, CreditCard, CheckCircle2, AlertCircle, Eye, EyeOff, Trash2 } from 'lucide-react';
 
 export default function PaymentSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [outlet, setOutlet] = useState<any>(null);
+  const [paymentStatus, setPaymentStatus] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
-  const [formData, setFormData] = useState({
-    xendit_business_id: ''
-  });
+  const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   async function loadData() {
     setLoading(true);
     try {
       const outlets = await getOutlets();
       if (outlets && outlets.length > 0) {
-        const data = outlets[0];
-        setOutlet(data);
+        const o = outlets[0];
+        setOutlet(o);
+        const status = await getPaymentStatus(o.id);
+        setPaymentStatus(status);
       }
-    } catch (error) {
-      console.error('Failed to load outlet data', error);
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!apiKey.trim()) return;
     setSaving(true);
     setError('');
     setSuccess('');
-    
-    // In xenPlatform architecture, this setup API should be adjusted to store xendit_business_id
-    const payload = {
-      xendit_business_id: formData.xendit_business_id,
-    };
-
-    const res = await setupPayment(outlet.id, payload);
+    const res = await setupPaymentOwnKey(outlet.id, apiKey.trim());
     if (res.success) {
-      setSuccess('Sub-Account Xendit berhasil dihubungkan!');
-      setFormData({ xendit_business_id: '' });
+      setSuccess('API Key Xendit berhasil disimpan! QRIS sudah aktif.');
+      setApiKey('');
       loadData();
     } else {
-      setError(res.message || 'ID tidak valid');
+      setError(res.message || 'Gagal menyimpan API key');
     }
     setSaving(false);
   };
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>;
-  }
+  const handleRemove = async () => {
+    if (!confirm('Hapus API key Xendit? QRIS tidak akan bisa digunakan.')) return;
+    setRemoving(true);
+    setError('');
+    const res = await removePaymentOwnKey(outlet.id);
+    if (res.success) {
+      setSuccess('API key dihapus. Outlet kembali ke mode Cash Only.');
+      loadData();
+    } else {
+      setError(res.message || 'Gagal menghapus');
+    }
+    setRemoving(false);
+  };
 
-  const isConnected = !!outlet?.xendit_business_id;
+  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin w-6 h-6 text-gray-400" /></div>;
+
+  const isConnected = paymentStatus?.is_connected;
+  const mode = paymentStatus?.mode || 'none';
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Pengaturan Pembayaran</h1>
-        <p className="text-gray-500">Integrasikan QRIS Xendit (xenPlatform) untuk menerima pembayaran.</p>
+        <p className="text-gray-500 text-sm mt-1">Aktifkan QRIS dengan memasukkan Secret Key Xendit Anda.</p>
       </div>
 
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+      {/* Status card */}
+      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-            isConnected ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-          }`}>
-            <CreditCard className="w-6 h-6" />
+          <div className={`w-11 h-11 rounded-full flex items-center justify-center ${isConnected ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+            <CreditCard className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Status Integrasi</h2>
+            <p className="font-semibold text-gray-900">
+              {isConnected ? 'QRIS Aktif' : 'Cash Only'}
+            </p>
             <p className="text-sm text-gray-500">
-              {isConnected 
-                ? 'Sub-Account Xendit aktif dan siap menerima QRIS.' 
-                : 'Belum terhubung. Hanya menerima pembayaran tunai.'}
+              {mode === 'own_key' && 'Menggunakan API Key Xendit Anda sendiri'}
+              {mode === 'xenplatform' && 'Menggunakan Xendit xenPlatform (sub-account)'}
+              {mode === 'none' && 'Belum terhubung ke Xendit'}
             </p>
           </div>
         </div>
-        <div>
-          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-            isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
-            {isConnected ? 'QRIS Aktif' : 'Cash Only'}
-          </span>
-        </div>
+        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${isConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+          {isConnected ? 'Aktif' : 'Tidak Aktif'}
+        </span>
       </div>
 
+      {/* Alert */}
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-red-700 text-sm">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /><p>{error}</p>
+        </div>
+      )}
+      {success && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2 text-green-700 text-sm">
+          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /><p>{success}</p>
+        </div>
+      )}
+
+      {/* Form input own key */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900">Konfigurasi xenPlatform</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Sistem kami menggunakan arsitektur Master-Sub Account. Uang hasil transaksi langsung masuk ke rekening Anda setelah diproses oleh Kasira.
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900">API Key Xendit</h2>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Daftarkan akun Xendit Anda di{' '}
+            <a href="https://dashboard.xendit.co" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+              dashboard.xendit.co
+            </a>
+            , lalu copy Secret Key dari menu <strong>Settings → API Keys</strong>.
           </p>
         </div>
-        
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-red-600 text-sm">
-              <AlertCircle className="w-5 h-5 shrink-0" />
-              <p>{error}</p>
+        <form onSubmit={handleSave} className="p-6 space-y-4">
+          {mode === 'own_key' && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+              API Key sudah terpasang. Masukkan key baru di bawah untuk menggantinya.
             </div>
           )}
-          
-          {success && (
-            <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2 text-green-600 text-sm">
-              <CheckCircle2 className="w-5 h-5 shrink-0" />
-              <p>{success}</p>
-            </div>
-          )}
-
-          {isConnected && (
-            <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-              <p className="text-sm font-medium text-gray-700">Sub-Account ID Aktif:</p>
-              <p className="text-sm font-mono text-gray-900 mt-1">{outlet.xendit_business_id}</p>
-            </div>
-          )}
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Xendit Business ID</label>
-            <input 
-              type="text" 
-              required={!isConnected}
-              value={formData.xendit_business_id}
-              onChange={e => setFormData({...formData, xendit_business_id: e.target.value})}
-              placeholder="Masukan manual Business ID Anda..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              (Isi form manual ini hanya jika Sub-Account Anda didaftarkan di luar integrasi otomatis API Kasira.)
-            </p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Secret Key Xendit</label>
+            <div className="relative">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                placeholder="xnd_production_..."
+                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
+              />
+              <button type="button" onClick={() => setShowKey(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Key disimpan terenkripsi dan tidak pernah ditampilkan ulang.</p>
           </div>
 
-          <div className="pt-4 flex justify-end">
-            <button 
-              type="submit"
-              disabled={saving}
-              className="flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              {isConnected ? 'Perbarui ID' : 'Hubungkan'}
-            </button>
+          <div className="flex items-center justify-between pt-2">
+            {mode === 'own_key' && (
+              <button
+                type="button"
+                onClick={handleRemove}
+                disabled={removing}
+                className="flex items-center gap-1.5 text-sm text-red-600 hover:text-red-700 disabled:opacity-50"
+              >
+                {removing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Hapus API Key
+              </button>
+            )}
+            <div className={mode === 'own_key' ? '' : 'ml-auto'}>
+              <button
+                type="submit"
+                disabled={saving || !apiKey.trim()}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {mode === 'own_key' ? 'Ganti API Key' : 'Simpan & Aktifkan QRIS'}
+              </button>
+            </div>
           </div>
         </form>
+      </div>
+
+      {/* Info box */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+        <p className="font-semibold mb-1">Cara mendapatkan Secret Key Xendit:</p>
+        <ol className="list-decimal list-inside space-y-1 text-amber-700">
+          <li>Buka <strong>dashboard.xendit.co</strong> dan login</li>
+          <li>Pergi ke <strong>Settings → API Keys</strong></li>
+          <li>Klik <strong>Generate Secret Key</strong></li>
+          <li>Copy key yang diawali <code className="bg-amber-100 px-1 rounded">xnd_production_</code></li>
+          <li>Paste di kolom di atas dan klik Simpan</li>
+        </ol>
       </div>
     </div>
   );
