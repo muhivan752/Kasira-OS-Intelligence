@@ -28,13 +28,18 @@ class ProductModel {
     return ProductModel(
       id: json['id'] as String,
       name: json['name'] as String,
-      price: (json['price'] as num).toDouble(),
+      price: _toDouble(json['price']),
       stock: (json['stock_qty'] as num?)?.toInt() ?? 0,
       imageUrl: json['image_url'] as String?,
       categoryId: json['category_id'] as String?,
       categoryName: json['category_name'] as String?,
-      isAvailable: (json['is_available'] as bool?) ?? true,
+      isAvailable: (json['is_active'] as bool?) ?? true,
     );
+  }
+
+  static double _toDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
   }
 }
 

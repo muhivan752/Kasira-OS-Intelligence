@@ -28,8 +28,8 @@ class OrderItemModel {
       productId: json['product_id'] as String,
       productName: json['product_name'] as String? ?? '',
       quantity: (json['quantity'] as num).toInt(),
-      unitPrice: (json['unit_price'] as num).toDouble(),
-      totalPrice: (json['total_price'] as num).toDouble(),
+      unitPrice: _toDouble(json['unit_price']),
+      totalPrice: _toDouble(json['total_price']),
       notes: json['notes'] as String?,
     );
   }
@@ -71,16 +71,21 @@ class OrderModel {
       displayNumber: (json['display_number'] as num?)?.toInt() ?? 0,
       status: json['status'] as String,
       orderType: json['order_type'] as String,
-      totalAmount: (json['total_amount'] as num).toDouble(),
-      subtotal: (json['subtotal'] as num).toDouble(),
-      taxAmount: (json['tax_amount'] as num? ?? 0).toDouble(),
-      discountAmount: (json['discount_amount'] as num? ?? 0).toDouble(),
+      totalAmount: _toDouble(json['total_amount']),
+      subtotal: _toDouble(json['subtotal']),
+      taxAmount: _toDouble(json['tax_amount'] ?? 0),
+      discountAmount: _toDouble(json['discount_amount'] ?? 0),
       tableId: json['table_id'] as String?,
       items: (json['items'] as List? ?? [])
           .map((e) => OrderItemModel.fromJson(e as Map<String, dynamic>))
           .toList(),
       createdAt: DateTime.parse(json['created_at'] as String),
     );
+  }
+
+  static double _toDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
   }
 
   String get statusLabel {
