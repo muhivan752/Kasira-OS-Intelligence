@@ -111,3 +111,16 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 @app.get("/", response_model=StandardResponse[dict])
 async def root():
     return StandardResponse(data={"message": "Welcome to Kasira POS API"}, message="Welcome")
+
+@app.get("/health")
+async def health():
+    """Health check endpoint for uptime monitoring."""
+    from backend.core.database import engine
+    from sqlalchemy import text
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return {"status": "ok", "db": "ok"}
+    except Exception:
+        from fastapi import Response
+        return Response(status_code=503, content='{"status":"error","db":"unreachable"}')
