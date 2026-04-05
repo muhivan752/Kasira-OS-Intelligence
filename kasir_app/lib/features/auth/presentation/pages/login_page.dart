@@ -280,13 +280,48 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     super.dispose();
   }
 
+  Future<void> _checkShiftAndNavigate(BuildContext context) async {
+    try {
+      const storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'access_token');
+      final tenantId = await storage.read(key: 'tenant_id');
+      final outletId = await storage.read(key: 'outlet_id');
+
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+      ));
+
+      final response = await dio.get(
+        '/shifts/current',
+        queryParameters: {'outlet_id': outletId},
+        options: Options(headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+          if (tenantId != null) 'X-Tenant-ID': tenantId,
+        }),
+      );
+
+      final data = response.data['data'];
+      if (!context.mounted) return;
+      if (data != null && data['status'] == 'open') {
+        await storage.write(key: 'shift_session_id', value: data['id']);
+        context.go('/dashboard');
+      } else {
+        context.go('/shift/open');
+      }
+    } catch (_) {
+      if (context.mounted) context.go('/shift/open');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
     ref.listen<AuthState>(authProvider, (previous, next) {
       if (next.isSuccess && (previous?.isSuccess != true)) {
-        context.go('/dashboard');
+        _checkShiftAndNavigate(context);
       }
       if (next.error != null && next.error != previous?.error) {
         ScaffoldMessenger.of(context).showSnackBar(
