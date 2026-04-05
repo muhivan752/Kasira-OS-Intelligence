@@ -154,7 +154,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
                     return _ProductTile(
                       product: product,
                       currency: _currency,
-                      onToggle: () => _toggleAvailability(product),
+                      onToggle: () async => _toggleAvailability(product),
                     );
                   },
                 );
@@ -170,7 +170,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
 class _ProductTile extends StatefulWidget {
   final ProductModel product;
   final NumberFormat currency;
-  final VoidCallback onToggle;
+  final Future<void> Function() onToggle;
 
   const _ProductTile({
     required this.product,
