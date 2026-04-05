@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 
 enum TableStatus { available, occupied, reserved, dirty }
@@ -24,21 +27,6 @@ class TableModel {
   });
 }
 
-// Demo data - akan diganti dengan data dari API
-final _demoTables = [
-  const TableModel(id: '1', name: 'Meja 1', capacity: 2, status: TableStatus.available),
-  const TableModel(id: '2', name: 'Meja 2', capacity: 4, status: TableStatus.occupied, currentOrderId: 'ORD-001', occupiedSince: '10:30', eta: 8),
-  const TableModel(id: '3', name: 'Meja 3', capacity: 4, status: TableStatus.available),
-  const TableModel(id: '4', name: 'Meja 4', capacity: 6, status: TableStatus.reserved),
-  const TableModel(id: '5', name: 'Meja 5', capacity: 2, status: TableStatus.dirty),
-  const TableModel(id: '6', name: 'Meja 6', capacity: 4, status: TableStatus.occupied, currentOrderId: 'ORD-002', occupiedSince: '11:15', eta: 3),
-  const TableModel(id: '7', name: 'Meja 7', capacity: 8, status: TableStatus.available),
-  const TableModel(id: '8', name: 'Meja 8', capacity: 4, status: TableStatus.available),
-  const TableModel(id: '9', name: 'Meja 9', capacity: 2, status: TableStatus.occupied, currentOrderId: 'ORD-003', occupiedSince: '09:45', eta: 0),
-  const TableModel(id: '10', name: 'VIP 1', capacity: 10, status: TableStatus.reserved),
-  const TableModel(id: '11', name: 'Outdoor 1', capacity: 4, status: TableStatus.available),
-  const TableModel(id: '12', name: 'Outdoor 2', capacity: 4, status: TableStatus.dirty),
-];
 
 class TableGridPage extends StatefulWidget {
   final void Function(TableModel table)? onTableSelected;
@@ -51,18 +39,64 @@ class TableGridPage extends StatefulWidget {
 
 class _TableGridPageState extends State<TableGridPage> {
   TableStatus? _filterStatus;
+  List<TableModel> _tables = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _isLoading = true);
+    try {
+      const storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'access_token');
+      final tenantId = await storage.read(key: 'tenant_id');
+      final outletId = await storage.read(key: 'outlet_id');
+
+      final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1, connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 15)));
+      final res = await dio.get(
+        '/tables/',
+        queryParameters: {'outlet_id': outletId},
+        options: Options(headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+          if (tenantId != null) 'X-Tenant-ID': tenantId,
+        }),
+      );
+
+      final list = (res.data['data'] as List? ?? []).map((t) {
+        final statusStr = t['status'] as String? ?? 'available';
+        final status = TableStatus.values.firstWhere(
+          (s) => s.name == statusStr,
+          orElse: () => TableStatus.available,
+        );
+        return TableModel(
+          id: t['id'] as String,
+          name: t['name'] as String,
+          capacity: (t['capacity'] as num?)?.toInt() ?? 2,
+          status: status,
+        );
+      }).toList();
+
+      if (mounted) setState(() { _tables = list; _isLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<TableModel> get _filteredTables {
-    if (_filterStatus == null) return _demoTables;
-    return _demoTables.where((t) => t.status == _filterStatus).toList();
+    if (_filterStatus == null) return _tables;
+    return _tables.where((t) => t.status == _filterStatus).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final available = _demoTables.where((t) => t.status == TableStatus.available).length;
-    final occupied = _demoTables.where((t) => t.status == TableStatus.occupied).length;
-    final reserved = _demoTables.where((t) => t.status == TableStatus.reserved).length;
-    final dirty = _demoTables.where((t) => t.status == TableStatus.dirty).length;
+    final available = _tables.where((t) => t.status == TableStatus.available).length;
+    final occupied = _tables.where((t) => t.status == TableStatus.occupied).length;
+    final reserved = _tables.where((t) => t.status == TableStatus.reserved).length;
+    final dirty = _tables.where((t) => t.status == TableStatus.dirty).length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -127,21 +161,25 @@ class _TableGridPageState extends State<TableGridPage> {
 
           // Table grid
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 200,
-                  childAspectRatio: 1.0,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                ),
-                itemCount: _filteredTables.length,
-                itemBuilder: (context, index) {
-                  return _buildTableCard(_filteredTables[index]);
-                },
-              ),
-            ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _tables.isEmpty
+                    ? const Center(child: Text('Belum ada meja. Tambah di Owner Dashboard.', style: TextStyle(color: AppColors.textSecondary)))
+                    : Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                        child: GridView.builder(
+                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 200,
+                            childAspectRatio: 1.0,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                          ),
+                          itemCount: _filteredTables.length,
+                          itemBuilder: (context, index) {
+                            return _buildTableCard(_filteredTables[index]);
+                          },
+                        ),
+                      ),
           ),
         ],
       ),

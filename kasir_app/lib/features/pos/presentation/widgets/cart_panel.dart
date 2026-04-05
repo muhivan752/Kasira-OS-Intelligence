@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/cart_provider.dart';
+import '../../presentation/pages/receipt_preview_page.dart';
 import 'payment_modal.dart';
 import '../../../customers/presentation/widgets/customer_selection_modal.dart';
 
@@ -205,6 +206,11 @@ class CartPanel extends ConsumerWidget {
           totalAmount: cart.subtotal,
           orderId: orderId,
           onPaymentSuccess: (String paymentMethod, double amountPaid) {
+            final receiptItems = cart.items.map((i) => ReceiptItem(
+              name: i.name,
+              qty: i.qty,
+              price: i.price,
+            )).toList();
             ref.read(cartProvider.notifier).clearCart();
             if (context.mounted) {
               context.push('/payment/success', extra: {
@@ -214,6 +220,7 @@ class CartPanel extends ConsumerWidget {
                 'paymentMethod': paymentMethod,
                 'orderId': orderId,
                 'displayNumber': orderId.substring(0, 8).toUpperCase(),
+                'items': receiptItems,
               });
             }
           },

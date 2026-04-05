@@ -52,6 +52,7 @@ final _router = GoRouter(
           paymentMethod: extra['paymentMethod'] as String? ?? 'Cash',
           orderId: extra['orderId'] as String? ?? '',
           displayNumber: extra['displayNumber'] as String? ?? '-',
+          items: (extra['items'] as List<ReceiptItem>?) ?? [],
         );
       },
     ),

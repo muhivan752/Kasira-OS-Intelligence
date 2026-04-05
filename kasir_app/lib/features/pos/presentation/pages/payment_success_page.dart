@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import 'receipt_preview_page.dart';
 
 class PaymentSuccessPage extends StatefulWidget {
   final double totalAmount;
@@ -10,6 +11,7 @@ class PaymentSuccessPage extends StatefulWidget {
   final String paymentMethod;
   final String orderId;
   final String displayNumber;
+  final List<ReceiptItem> items;
 
   const PaymentSuccessPage({
     super.key,
@@ -18,6 +20,7 @@ class PaymentSuccessPage extends StatefulWidget {
     required this.paymentMethod,
     required this.orderId,
     required this.displayNumber,
+    this.items = const [],
   });
 
   @override
@@ -150,7 +153,10 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
                             'orderId': widget.orderId,
                             'displayNumber': widget.displayNumber,
                             'totalAmount': widget.totalAmount,
+                            'amountPaid': widget.amountPaid,
+                            'changeAmount': widget.amountPaid - widget.totalAmount,
                             'paymentMethod': widget.paymentMethod,
+                            'items': widget.items,
                           });
                         },
                         icon: const Icon(LucideIcons.receipt, size: 18),
