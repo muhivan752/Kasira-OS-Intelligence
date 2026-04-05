@@ -59,8 +59,8 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
       state = state.copyWith(savedDevice: PrinterDevice(name: name, address: mac));
     }
 
-    BluetoothPrintPlus.state.listen((s) {
-      state = state.copyWith(isConnected: s == BlePrintState.connected);
+    BluetoothPrintPlus.connectState.listen((s) {
+      state = state.copyWith(isConnected: s == ConnectState.connected);
     });
   }
 
