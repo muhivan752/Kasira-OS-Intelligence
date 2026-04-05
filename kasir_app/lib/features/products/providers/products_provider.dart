@@ -12,6 +12,7 @@ class ProductModel {
   final String? categoryId;
   final String? categoryName;
   final bool isAvailable;
+  final int rowVersion;
 
   const ProductModel({
     required this.id,
@@ -22,6 +23,7 @@ class ProductModel {
     this.categoryId,
     this.categoryName,
     this.isAvailable = true,
+    this.rowVersion = 0,
   });
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,7 @@ class ProductModel {
       categoryId: json['category_id'] as String?,
       categoryName: json['category_name'] as String?,
       isAvailable: (json['is_active'] as bool?) ?? true,
+      rowVersion: (json['row_version'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -76,7 +79,6 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
 
     final items = (response.data['data'] as List)
         .map((e) => ProductModel.fromJson(e as Map<String, dynamic>))
-        .where((p) => p.isAvailable && p.stock > 0) // Rule 20: stok=0 auto-hidden
         .toList();
     return items;
   }
@@ -84,6 +86,28 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
   Future<void> refresh({String? categoryId}) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() => _fetchProducts(categoryId: categoryId));
+  }
+
+  Future<void> toggleAvailability(String productId, bool newIsActive, int rowVersion) async {
+    final token = await _storage.read(key: 'access_token');
+    final tenantId = await _storage.read(key: 'tenant_id');
+
+    final dio = Dio(BaseOptions(
+      baseUrl: AppConfig.apiV1,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+    ));
+
+    await dio.put(
+      '/products/$productId',
+      options: Options(headers: {
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (tenantId != null) 'X-Tenant-ID': tenantId,
+      }),
+      data: {'is_active': newIsActive, 'row_version': rowVersion},
+    );
+
+    await refresh();
   }
 }
 

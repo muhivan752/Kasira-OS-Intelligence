@@ -42,6 +42,7 @@ class ProductResponse(ProductBase):
     id: UUID
     brand_id: UUID
     category_id: Optional[UUID] = None
+    category_name: Optional[str] = None
     order_count: int
     sold_today: int
     sold_total: int

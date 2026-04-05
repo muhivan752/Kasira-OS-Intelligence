@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 from sqlalchemy import Column, String, Boolean, ForeignKey, Integer, Numeric, Text, DateTime, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -41,6 +42,10 @@ class Product(BaseModel):
     # Relationships
     brand = relationship("Brand", back_populates="products")
     category = relationship("Category", back_populates="products")
+
+    @property
+    def category_name(self) -> Optional[str]:
+        return self.category.name if self.category else None
 
 class ProductVariant(BaseModel):
     __tablename__ = "product_variants"

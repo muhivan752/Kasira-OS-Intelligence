@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.orm import selectinload
 
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
@@ -158,9 +159,9 @@ async def read_products(
     
     if category_id:
         query = query.where(Product.category_id == category_id)
-        
-    query = query.offset(skip).limit(limit)
-    
+
+    query = query.options(selectinload(Product.category)).offset(skip).limit(limit)
+
     result = await db.execute(query)
     products = result.scalars().all()
     

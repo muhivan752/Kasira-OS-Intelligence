@@ -105,7 +105,7 @@ class _PosPageState extends ConsumerState<PosPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 700;
+    final isWide = MediaQuery.of(context).size.shortestSide >= 600;
     final productsAsync = ref.watch(productsProvider);
     final cart = ref.watch(cartProvider);
     final itemCount = cart.items.fold<int>(0, (sum, item) => sum + item.qty);
@@ -328,9 +328,6 @@ class _PosPageState extends ConsumerState<PosPage> {
             child: GestureDetector(
               onTap: () {
                 setState(() => _selectedCategoryId = entry.key);
-                ref
-                    .read(productsProvider.notifier)
-                    .refresh(categoryId: entry.key);
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
@@ -406,9 +403,12 @@ class _PosPageState extends ConsumerState<PosPage> {
         ),
       ),
       data: (products) {
-        final filtered = _searchQuery.isEmpty
+        final categoryFiltered = _selectedCategoryId == 'all'
             ? products
-            : products
+            : products.where((p) => p.categoryId == _selectedCategoryId).toList();
+        final filtered = _searchQuery.isEmpty
+            ? categoryFiltered
+            : categoryFiltered
                 .where((p) => p.name.toLowerCase().contains(_searchQuery))
                 .toList();
 
