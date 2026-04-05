@@ -23,12 +23,6 @@ export default function LandingPage() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center max-w-4xl mx-auto">
-            {/* Pilot badge */}
-            <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-full mb-8">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              Sedang membuka pilot untuk cafe & UMKM Indonesia
-            </div>
-
             <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 tracking-tight leading-[1.1] mb-6">
               Kasir Digital yang{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-emerald-700">
