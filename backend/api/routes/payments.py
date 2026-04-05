@@ -6,12 +6,14 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func
+from sqlalchemy.orm import selectinload
+from pydantic import BaseModel
 
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
 from backend.models.user import User
 from backend.models.payment import Payment
-from backend.models.order import Order
+from backend.models.order import Order, OrderItem
 from backend.models.outlet import Outlet
 from backend.models.shift import Shift, ShiftStatus
 from backend.schemas.payment import PaymentCreate, PaymentResponse, PaymentStatus, PaymentMethod
@@ -396,9 +398,87 @@ async def read_payment(
     payment = await db.get(Payment, payment_id)
     if not payment or payment.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Pembayaran tidak ditemukan")
-        
+
     return StandardResponse(
         success=True,
         data=PaymentResponse.model_validate(payment),
         request_id=request.state.request_id
+    )
+
+
+class SendReceiptRequest(BaseModel):
+    order_id: UUID
+    phone: str
+
+
+def _normalize_phone(phone: str) -> str:
+    """Normalize phone to international format (62xxx) for Fonnte."""
+    p = phone.strip().replace(" ", "").replace("-", "")
+    if p.startswith("0"):
+        return "62" + p[1:]
+    if p.startswith("+"):
+        return p[1:]
+    return p
+
+
+def _build_receipt_text(order: Order, outlet_name: str) -> str:
+    lines = [
+        f"*Struk Pembayaran*",
+        f"📍 {outlet_name}",
+        f"No. Order: #{order.display_number}",
+        f"Tanggal: {order.created_at.strftime('%d/%m/%Y %H:%M') if order.created_at else '-'}",
+        f"{'─' * 28}",
+    ]
+    for item in order.items:
+        name = item.product_name or 'Item'
+        qty = item.quantity
+        price = float(item.unit_price)
+        subtotal = float(item.total_price)
+        lines.append(f"{name}")
+        lines.append(f"  {qty}x Rp{price:,.0f}  =  Rp{subtotal:,.0f}")
+    lines.append(f"{'─' * 28}")
+    if order.tax_amount and float(order.tax_amount) > 0:
+        lines.append(f"Pajak       : Rp{float(order.tax_amount):,.0f}")
+    lines.append(f"*Total       : Rp{float(order.total_amount):,.0f}*")
+    lines.append(f"{'─' * 28}")
+    lines.append(f"Terima kasih! 🙏")
+    lines.append(f"_Powered by Kasira_")
+    return "\n".join(lines)
+
+
+@router.post("/send-receipt", response_model=StandardResponse[Dict[str, Any]])
+async def send_receipt_whatsapp(
+    request: Request,
+    body: SendReceiptRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Send receipt via WhatsApp to a given phone number.
+    """
+    # Load order with items
+    result = await db.execute(
+        select(Order)
+        .options(selectinload(Order.items).selectinload(OrderItem.product))
+        .where(Order.id == body.order_id, Order.deleted_at.is_(None))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order tidak ditemukan")
+
+    outlet = await db.get(Outlet, order.outlet_id)
+    outlet_name = outlet.name if outlet else "Kasira"
+
+    phone = _normalize_phone(body.phone)
+    if len(phone) < 9:
+        raise HTTPException(status_code=400, detail="Nomor HP tidak valid")
+
+    receipt_text = _build_receipt_text(order, outlet_name)
+    sent = await send_whatsapp_message(phone, receipt_text)
+
+    return StandardResponse(
+        success=sent,
+        data={"phone": phone, "sent": sent},
+        request_id=request.state.request_id,
+        message="Struk berhasil dikirim via WhatsApp" if sent else "Gagal mengirim struk"
     )

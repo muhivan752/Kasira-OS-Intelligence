@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/services/printer_service.dart';
 
@@ -395,11 +399,139 @@ class ReceiptPreviewPage extends ConsumerWidget {
   }
 
   void _shareViaWa(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Fitur kirim WA akan segera hadir'),
-        behavior: SnackBarBehavior.floating,
+    showDialog(
+      context: context,
+      builder: (_) => _SendWaDialog(orderId: orderId),
+    );
+  }
+}
+
+class _SendWaDialog extends StatefulWidget {
+  final String orderId;
+  const _SendWaDialog({required this.orderId});
+
+  @override
+  State<_SendWaDialog> createState() => _SendWaDialogState();
+}
+
+class _SendWaDialogState extends State<_SendWaDialog> {
+  final _phoneController = TextEditingController();
+  bool _isLoading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      setState(() => _error = 'Masukkan nomor HP');
+      return;
+    }
+    setState(() { _isLoading = true; _error = null; });
+
+    try {
+      const storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'access_token');
+      final tenantId = await storage.read(key: 'tenant_id');
+
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+      ));
+
+      final response = await dio.post(
+        '/payments/send-receipt',
+        options: Options(headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+          if (tenantId != null) 'X-Tenant-ID': tenantId,
+        }),
+        data: {'order_id': widget.orderId, 'phone': phone},
+      );
+
+      final sent = response.data['data']?['sent'] == true;
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(sent ? 'Struk dikirim ke $phone' : 'Gagal mengirim struk'),
+            backgroundColor: sent ? AppColors.success : AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on DioException catch (e) {
+      final detail = e.response?.data?['detail'] ?? 'Gagal mengirim';
+      if (mounted) setState(() { _isLoading = false; _error = detail.toString(); });
+    } catch (e) {
+      if (mounted) setState(() { _isLoading = false; _error = 'Terjadi kesalahan'; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Row(
+        children: [
+          Icon(LucideIcons.messageCircle, color: AppColors.primary, size: 20),
+          SizedBox(width: 8),
+          Text('Kirim Struk via WA'),
+        ],
       ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Masukkan nomor WhatsApp customer',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: '08xxxxxxxxxx',
+              prefixIcon: const Icon(LucideIcons.smartphone, size: 18),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.primary, width: 2),
+              ),
+              errorText: _error,
+            ),
+            onSubmitted: (_) => _send(),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Format: 08xxx atau 628xxx',
+            style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _send,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Kirim'),
+        ),
+      ],
     );
   }
 }
