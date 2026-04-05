@@ -1,20 +1,32 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:bluetooth_print_plus/bluetooth_print_plus.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/services/printer_service.dart';
 
-class PrinterSettingsPage extends StatefulWidget {
+class PrinterSettingsPage extends ConsumerWidget {
   const PrinterSettingsPage({super.key});
 
   @override
-  State<PrinterSettingsPage> createState() => _PrinterSettingsPageState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(printerProvider);
+    final notifier = ref.read(printerProvider.notifier);
 
-class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
-  bool _isBluetoothEnabled = true;
-  String _connectedPrinter = 'Epson TM-T82X';
+    ref.listen<PrinterState>(printerProvider, (_, next) {
+      if (next.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        notifier.clearError();
+      }
+    });
 
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -30,7 +42,7 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          // Bluetooth Toggle
+          // Status Card
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -39,87 +51,170 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
               border: Border.all(color: AppColors.border),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: (state.isConnected ? AppColors.success : AppColors.textSecondary)
+                        .withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    LucideIcons.printer,
+                    color: state.isConnected ? AppColors.success : AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        state.savedDevice?.name ?? 'Belum ada printer',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
-                      child: const Icon(LucideIcons.bluetooth, color: AppColors.primary),
-                    ),
-                    const SizedBox(width: 16),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Bluetooth', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        const SizedBox(height: 4),
-                        Text(
-                          _isBluetoothEnabled ? 'Aktif' : 'Nonaktif',
-                          style: TextStyle(color: _isBluetoothEnabled ? AppColors.success : AppColors.textSecondary),
+                      const SizedBox(height: 2),
+                      Text(
+                        state.isConnected
+                            ? 'Terhubung'
+                            : (state.savedDevice != null ? 'Tidak terhubung' : 'Scan untuk menemukan printer'),
+                        style: TextStyle(
+                          color: state.isConnected ? AppColors.success : AppColors.textSecondary,
+                          fontSize: 13,
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
-                Switch(
-                  value: _isBluetoothEnabled,
-                  onChanged: (val) => setState(() => _isBluetoothEnabled = val),
-                  activeColor: AppColors.primary,
-                ),
+                if (state.isConnected)
+                  TextButton(
+                    onPressed: notifier.disconnect,
+                    child: const Text('Putus', style: TextStyle(color: AppColors.error)),
+                  ),
               ],
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 20),
 
-          if (_isBluetoothEnabled) ...[
-            const Text('Perangkat Terhubung', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-            const SizedBox(height: 12),
-            _buildDeviceTile(
-              name: 'Epson TM-T82X',
-              macAddress: '00:11:22:33:44:55',
-              isConnected: true,
+          // Scan Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: state.isScanning ? notifier.stopScan : notifier.startScan,
+              icon: state.isScanning
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Icon(LucideIcons.bluetooth),
+              label: Text(state.isScanning ? 'Menghentikan...' : 'Scan Printer Bluetooth'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
             ),
-            
+          ),
+
+          // Scan Results
+          if (state.scanResults.isNotEmpty) ...[
             const SizedBox(height: 24),
-            const Text('Perangkat Tersedia', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-            const SizedBox(height: 12),
-            _buildDeviceTile(
-              name: 'POS Printer 58mm',
-              macAddress: 'AA:BB:CC:DD:EE:FF',
-              isConnected: false,
+            const Text(
+              'Perangkat Ditemukan',
+              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary),
             ),
-            _buildDeviceTile(
-              name: 'Zjiang ZJ-5802',
-              macAddress: '11:22:33:44:55:66',
-              isConnected: false,
+            const SizedBox(height: 12),
+            ...state.scanResults.map((device) => _DeviceTile(
+                  device: device,
+                  isConnected: state.isConnected &&
+                      state.savedDevice?.address == device.address,
+                  onConnect: () async {
+                    final ok = await notifier.connect(device);
+                    if (ok && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Terhubung ke ${device.name}'),
+                          backgroundColor: AppColors.success,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  },
+                  onTestPrint: () async {
+                    final bytes = _buildTestPrint();
+                    await notifier.printBytes(bytes);
+                  },
+                )),
+          ] else if (state.isScanning) ...[
+            const SizedBox(height: 32),
+            const Center(
+              child: Column(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text('Mencari printer...', style: TextStyle(color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+          ],
+
+          // Test print for already connected
+          if (state.isConnected && state.scanResults.isEmpty) ...[
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final bytes = _buildTestPrint();
+                await notifier.printBytes(bytes);
+              },
+              icon: const Icon(LucideIcons.printer),
+              label: const Text('Cetak Struk Tes'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: const BorderSide(color: AppColors.primary),
+                foregroundColor: AppColors.primary,
+              ),
             ),
           ],
         ],
       ),
     );
   }
+}
 
-  Widget _buildDeviceTile({required String name, required String macAddress, required bool isConnected}) {
+class _DeviceTile extends StatelessWidget {
+  final BluetoothDevice device;
+  final bool isConnected;
+  final VoidCallback onConnect;
+  final VoidCallback onTestPrint;
+
+  const _DeviceTile({
+    required this.device,
+    required this.isConnected,
+    required this.onConnect,
+    required this.onTestPrint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        leading: Icon(LucideIcons.printer, color: isConnected ? AppColors.primary : AppColors.textSecondary),
-        title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(macAddress, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        leading: Icon(
+          LucideIcons.printer,
+          color: isConnected ? AppColors.primary : AppColors.textSecondary,
+        ),
+        title: Text(
+          device.name?.isNotEmpty == true ? device.name! : 'Unknown Device',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          device.address ?? '',
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
         trailing: isConnected
             ? ElevatedButton(
-                onPressed: () {
-                  // TODO: Test Print
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Mencetak struk tes...')),
-                  );
-                },
+                onPressed: onTestPrint,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -127,9 +222,7 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
                 child: const Text('TES PRINT'),
               )
             : OutlinedButton(
-                onPressed: () {
-                  setState(() => _connectedPrinter = name);
-                },
+                onPressed: onConnect,
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -141,4 +234,18 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
       ),
     );
   }
+}
+
+Uint8List _buildTestPrint() {
+  final bytes = <int>[];
+  bytes.addAll(EscPos.init);
+  bytes.addAll(EscPos.alignCenter);
+  bytes.addAll(EscPos.boldOn);
+  bytes.addAll(EscPos.line('--- TES PRINTER ---'));
+  bytes.addAll(EscPos.boldOff);
+  bytes.addAll(EscPos.line('Kasira POS'));
+  bytes.addAll(EscPos.line('Printer terhubung dengan baik'));
+  bytes.addAll(EscPos.feedLines3);
+  bytes.addAll(EscPos.cut);
+  return Uint8List.fromList(bytes);
 }

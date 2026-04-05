@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/services/printer_service.dart';
 
 class ReceiptItem {
   final String name;
@@ -20,7 +22,7 @@ class ReceiptItem {
   double get subtotal => qty * price;
 }
 
-class ReceiptPreviewPage extends StatelessWidget {
+class ReceiptPreviewPage extends ConsumerWidget {
   final String orderId;
   final String displayNumber;
   final double totalAmount;
@@ -70,7 +72,8 @@ class ReceiptPreviewPage extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final printerState = ref.watch(printerProvider);
     final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
     final dateFormat = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
     final now = DateTime.now();
@@ -85,9 +88,12 @@ class ReceiptPreviewPage extends StatelessWidget {
         elevation: 0,
         actions: [
           IconButton(
-            onPressed: () => _printReceipt(context),
-            icon: const Icon(LucideIcons.printer, color: AppColors.primary),
-            tooltip: 'Cetak',
+            onPressed: () => _printReceipt(context, ref, now),
+            icon: Icon(
+              LucideIcons.printer,
+              color: printerState.isConnected ? AppColors.primary : AppColors.textSecondary,
+            ),
+            tooltip: printerState.isConnected ? 'Cetak' : 'Printer belum terhubung',
           ),
           IconButton(
             onPressed: () => _shareViaWa(context),
@@ -276,7 +282,7 @@ class ReceiptPreviewPage extends StatelessWidget {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () => _printReceipt(context),
+                        onPressed: () => _printReceipt(context, ref, now),
                         icon: const Icon(LucideIcons.printer, size: 18),
                         label: const Text('Cetak Struk'),
                         style: OutlinedButton.styleFrom(
@@ -338,19 +344,60 @@ class ReceiptPreviewPage extends StatelessWidget {
     );
   }
 
-  void _printReceipt(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Mengirim ke printer...'),
-        behavior: SnackBarBehavior.floating,
-      ),
+  Future<void> _printReceipt(BuildContext context, WidgetRef ref, DateTime now) async {
+    final notifier = ref.read(printerProvider.notifier);
+    final state = ref.read(printerProvider);
+
+    if (!state.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Printer belum terhubung. Hubungkan di Pengaturan > Printer.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final dateFormat = DateFormat('dd/MM/yy HH:mm', 'id_ID');
+    final data = ReceiptData(
+      outletName: outletName,
+      outletAddress: outletAddress,
+      orderNumber: displayNumber,
+      dateTime: dateFormat.format(now),
+      items: items.map((i) => ReceiptLineItem(
+        name: i.name,
+        qty: i.qty,
+        price: i.price,
+        notes: i.notes,
+      )).toList(),
+      subtotal: items.fold(0.0, (s, i) => s + i.subtotal),
+      tax: tax,
+      serviceCharge: serviceCharge,
+      total: totalAmount,
+      paymentMethod: paymentMethod,
+      amountPaid: amountPaid,
+      changeAmount: changeAmount,
     );
+
+    final bytes = buildReceipt(data);
+    final ok = await notifier.printBytes(bytes);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok ? 'Struk dikirim ke printer' : 'Gagal mencetak, coba lagi'),
+          backgroundColor: ok ? AppColors.success : AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _shareViaWa(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Mengirim struk via WhatsApp...'),
+        content: Text('Fitur kirim WA akan segera hadir'),
         behavior: SnackBarBehavior.floating,
       ),
     );
