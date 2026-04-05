@@ -130,6 +130,46 @@ async def create_product(
         message="Product created successfully"
     )
 
+@router.get("/low-stock", response_model=StandardResponse[List[ProductResponse]])
+async def read_low_stock_products(
+    request: Request,
+    brand_id: Optional[UUID] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Produk dengan stock_enabled=true dan stock_qty <= stock_low_threshold.
+    """
+    if brand_id is None:
+        brand_row = (await db.execute(
+            select(Brand).where(Brand.tenant_id == current_user.tenant_id, Brand.deleted_at.is_(None))
+        )).scalars().first()
+        if not brand_row:
+            return StandardResponse(success=True, data=[], request_id=request.state.request_id)
+        brand_id = brand_row.id
+
+    from sqlalchemy import column as col
+    query = (
+        select(Product)
+        .options(selectinload(Product.category))
+        .where(
+            Product.brand_id == brand_id,
+            Product.deleted_at.is_(None),
+            Product.stock_enabled == True,
+            Product.stock_qty <= Product.stock_low_threshold,
+        )
+        .order_by(Product.stock_qty.asc())
+    )
+    result = await db.execute(query)
+    products = result.scalars().all()
+
+    return StandardResponse(
+        success=True,
+        data=[ProductResponse.model_validate(p) for p in products],
+        request_id=request.state.request_id
+    )
+
+
 @router.get("/", response_model=StandardResponse[List[ProductResponse]])
 async def read_products(
     request: Request,
