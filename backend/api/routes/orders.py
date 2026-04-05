@@ -107,8 +107,8 @@ async def create_order(
 
     await db.commit()
     
-    # Refresh to load items
-    query = select(Order).options(selectinload(Order.items)).where(Order.id == order.id)
+    # Refresh to load items (including product for product_name)
+    query = select(Order).options(selectinload(Order.items).selectinload(OrderItem.product)).where(Order.id == order.id)
     result = await db.execute(query)
     order_loaded = result.scalar_one()
 
