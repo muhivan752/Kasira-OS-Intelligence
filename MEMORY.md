@@ -160,10 +160,22 @@
 - VPS sudah live: Ubuntu 22.04, semua container running (backend:8000, frontend:3000, db:5432, redis:6379)
 - Admin: phone 6285270782220, OTP dev: 123456, outlet slug: kasira-coffee
 
+## ✅ BUG FIX 2026-04-05 — Data Mock + Payment
+- [x] `shift_open_page.dart`: ganti TODO mock → real `POST /shifts/open`, simpan shift_session_id ke FlutterSecureStorage
+- [x] `payment_modal.dart`: cash tidak lagi silent fail — tampil error jika shift belum buka / payment gagal + kirim shift_session_id
+- [x] `backend/api/routes/customers.py`: buat route GET /customers/ + POST /customers/
+- [x] `backend/api/api.py`: include customers router
+- [x] `customer_selection_modal.dart`: ganti 5 mock hardcoded → real API call + onSelected callback ke cartProvider
+- [x] `add_customer_modal.dart`: ganti TODO → real POST /customers/
+- [x] `cart_provider.dart`: tambah customerName di CartState, setCustomer() terima name
+- [x] `cart_panel.dart`: tampilkan nama pelanggan yang dipilih, pass onSelected callback
+- NOTE: File backend harus di-`docker cp` ke container karena tidak ada volume mount kode
+
 ## ❌ BELUM MULAI (Prioritas sesuai urutan)
 1. **UptimeRobot** — setup monitor http://103.189.235.164:8000/ dan http://103.189.235.164:3000/
 2. **Seed produk demo** — jalankan `docker exec kasira-backend-1 python -m backend.scripts.seed_demo`
 3. **APK Build** — trigger GitHub Actions "Build & Release Kasira Flutter APK"
+4. **Xendit sub-account** — daftarkan outlet di Xendit untuk aktifkan QRIS (outlets.xendit_business_id masih NULL)
 
 ## Keputusan Teknikal (JANGAN DIUBAH TANPA ALASAN)
 - ORM: SQLAlchemy async (bukan Tortoise)

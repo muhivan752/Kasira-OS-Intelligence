@@ -44,6 +44,7 @@ class CartState {
   final List<CartItem> items;
   final String orderType;
   final String? customerId;
+  final String? customerName;
   final String? tableId;
   final bool isSubmitting;
   final String? error;
@@ -54,6 +55,7 @@ class CartState {
     this.items = const [],
     this.orderType = 'Dine In',
     this.customerId,
+    this.customerName,
     this.tableId,
     this.isSubmitting = false,
     this.error,
@@ -67,6 +69,8 @@ class CartState {
     List<CartItem>? items,
     String? orderType,
     String? customerId,
+    String? customerName,
+    bool clearCustomer = false,
     String? tableId,
     bool? isSubmitting,
     String? error,
@@ -77,7 +81,8 @@ class CartState {
       CartState(
         items: items ?? this.items,
         orderType: orderType ?? this.orderType,
-        customerId: customerId ?? this.customerId,
+        customerId: clearCustomer ? null : (customerId ?? this.customerId),
+        customerName: clearCustomer ? null : (customerName ?? this.customerName),
         tableId: tableId ?? this.tableId,
         isSubmitting: isSubmitting ?? this.isSubmitting,
         error: clearError ? null : (error ?? this.error),
@@ -143,7 +148,13 @@ class CartNotifier extends StateNotifier<CartState> {
   }
 
   void setOrderType(String type) => state = state.copyWith(orderType: type);
-  void setCustomer(String? id) => state = state.copyWith(customerId: id);
+  void setCustomer(String? id, {String? name}) {
+    if (id == null) {
+      state = state.copyWith(clearCustomer: true);
+    } else {
+      state = state.copyWith(customerId: id, customerName: name);
+    }
+  }
   void setTable(String? id) => state = state.copyWith(tableId: id);
   void clearCart() => state = const CartState();
 

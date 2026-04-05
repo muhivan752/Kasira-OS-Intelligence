@@ -48,10 +48,12 @@ class _PaymentModalState extends State<PaymentModal> {
   final _storage = const FlutterSecureStorage();
 
   Future<void> _submitCashPayment(double amountPaid) async {
+    setState(() => _isLoadingQris = true); // reuse loading flag for cash
     try {
       final token = await _storage.read(key: 'access_token');
       final tenantId = await _storage.read(key: 'tenant_id');
       final outletId = await _storage.read(key: 'outlet_id') ?? '';
+      final shiftId = await _storage.read(key: 'shift_session_id');
       final change = amountPaid - widget.totalAmount;
 
       await _dio.post(
@@ -67,14 +69,38 @@ class _PaymentModalState extends State<PaymentModal> {
           'amount_due': widget.totalAmount,
           'amount_paid': amountPaid,
           'change_amount': change < 0 ? 0 : change,
+          if (shiftId != null) 'shift_session_id': shiftId,
         },
       );
-    } catch (_) {
-      // Payment tetap lanjut meski gagal catat (offline fallback)
-    }
-    if (mounted) {
-      widget.onPaymentSuccess(_paymentMethod, amountPaid);
-      Navigator.pop(context);
+
+      if (mounted) {
+        setState(() => _isLoadingQris = false);
+        widget.onPaymentSuccess(_paymentMethod, amountPaid);
+        Navigator.pop(context);
+      }
+    } on DioException catch (e) {
+      final detail = e.response?.data?['detail'] ?? 'Gagal memproses pembayaran';
+      if (mounted) {
+        setState(() => _isLoadingQris = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(detail.toString()),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingQris = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Terjadi kesalahan: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -157,6 +183,7 @@ class _PaymentModalState extends State<PaymentModal> {
       final tenantId = await _storage.read(key: 'tenant_id');
       final outletId = await _storage.read(key: 'outlet_id') ?? '';
 
+      final shiftId = await _storage.read(key: 'shift_session_id');
       final response = await _dio.post(
         '/payments/',
         options: Options(
@@ -172,6 +199,7 @@ class _PaymentModalState extends State<PaymentModal> {
           'amount_due': widget.totalAmount,
           'amount_paid': widget.totalAmount,
           'change_amount': 0,
+          if (shiftId != null) 'shift_session_id': shiftId,
         },
       );
 
@@ -411,13 +439,15 @@ class _PaymentModalState extends State<PaymentModal> {
                         width: double.infinity,
                         height: 56,
                         child: ElevatedButton(
-                          onPressed: (isCash && change < 0) ? null : () async {
+                          onPressed: (isCash && change < 0) || _isLoadingQris ? null : () async {
                             await _submitCashPayment(_amountReceived);
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: (isCash && change < 0) ? AppColors.border : AppColors.primary,
+                            backgroundColor: (isCash && change < 0) || _isLoadingQris ? AppColors.border : AppColors.primary,
                           ),
-                          child: const Text('SELESAIKAN PEMBAYARAN'),
+                          child: _isLoadingQris
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('SELESAIKAN PEMBAYARAN'),
                         ),
                       ),
                     ],

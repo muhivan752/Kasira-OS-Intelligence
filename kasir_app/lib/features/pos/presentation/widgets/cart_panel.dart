@@ -80,7 +80,11 @@ class CartPanel extends ConsumerWidget {
           child: InkWell(
             onTap: () => showDialog(
               context: context,
-              builder: (_) => const CustomerSelectionModal(),
+              builder: (_) => CustomerSelectionModal(
+                onSelected: (id, name) {
+                  ref.read(cartProvider.notifier).setCustomer(id, name: name);
+                },
+              ),
             ),
             borderRadius: BorderRadius.circular(12),
             child: Container(
@@ -95,8 +99,12 @@ class CartPanel extends ConsumerWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      cart.customerId != null ? 'Pelanggan dipilih' : 'Pilih Pelanggan (opsional)',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                      cart.customerName ?? (cart.customerId != null ? 'Pelanggan dipilih' : 'Pilih Pelanggan (opsional)'),
+                      style: TextStyle(
+                        color: cart.customerId != null ? AppColors.primary : AppColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: cart.customerId != null ? FontWeight.w600 : FontWeight.normal,
+                      ),
                     ),
                   ),
                   const Icon(LucideIcons.chevronRight, color: AppColors.textSecondary, size: 16),

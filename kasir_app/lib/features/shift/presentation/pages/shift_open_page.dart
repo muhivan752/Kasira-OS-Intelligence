@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class ShiftOpenPage extends StatefulWidget {
@@ -46,11 +49,51 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Call POST /api/v1/shifts/open
-      await Future.delayed(const Duration(milliseconds: 800)); // mock delay
+      const storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'access_token');
+      final tenantId = await storage.read(key: 'tenant_id');
+      final outletId = await storage.read(key: 'outlet_id');
+
+      if (outletId == null || outletId.isEmpty) {
+        throw Exception('Outlet tidak ditemukan, silakan login ulang.');
+      }
+
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+      ));
+
+      final response = await dio.post(
+        '/shifts/open',
+        queryParameters: {'outlet_id': outletId},
+        options: Options(headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+          if (tenantId != null) 'X-Tenant-ID': tenantId,
+        }),
+        data: {
+          'starting_cash': _openingCash,
+          if (_notesController.text.trim().isNotEmpty) 'notes': _notesController.text.trim(),
+        },
+      );
+
+      final shiftId = response.data['data']['id'] as String;
+      await storage.write(key: 'shift_session_id', value: shiftId);
 
       if (mounted) {
         context.go('/dashboard');
+      }
+    } on DioException catch (e) {
+      final detail = e.response?.data?['detail'] ?? 'Gagal membuka shift';
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(detail.toString()),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
