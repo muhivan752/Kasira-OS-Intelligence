@@ -175,22 +175,21 @@ async def create_payment(
             # Send WA receipt
             if order.customer_id:
                 from backend.models.customer import Customer
+                from backend.models.user import User as UserModel
                 customer = await db.get(Customer, order.customer_id)
                 if customer and customer.phone:
                     outlet = await db.get(Outlet, payment_in.outlet_id)
                     outlet_name = outlet.name if outlet else "Kasira"
-                    struk = (
-                        f"Struk Kasira\n"
-                        f"Outlet: {outlet_name}\n"
-                        f"Order: #{order.display_number}\n\n"
-                        f"Total: Rp{float(order.total_amount):,.0f}\n"
-                        f"Telah Lunas\n\n"
-                        f"Terima kasih!"
-                    )
+                    cashier_name = "-"
+                    if order.user_id:
+                        cashier = await db.get(UserModel, order.user_id)
+                        if cashier:
+                            cashier_name = cashier.full_name
+                    struk = _build_receipt_text(order, outlet_name, cashier_name, payment_in.payment_method)
                     asyncio.create_task(
                         send_whatsapp_message(customer.phone, struk)
                     )
-        
+
     await db.commit()
     await db.refresh(payment)
     
@@ -308,18 +307,17 @@ async def xendit_webhook(
                     # Send WA receipt
                     if order.customer_id:
                         from backend.models.customer import Customer
+                        from backend.models.user import User as UserModel
                         customer = await db.get(Customer, order.customer_id)
                         if customer and customer.phone:
                             outlet = await db.get(Outlet, payment.outlet_id)
                             outlet_name = outlet.name if outlet else "Kasira"
-                            struk = (
-                                f"Struk Kasira\n"
-                                f"Outlet: {outlet_name}\n"
-                                f"Order: #{order.display_number}\n\n"
-                                f"Total: Rp{float(order.total_amount):,.0f}\n"
-                                f"Telah Lunas\n\n"
-                                f"Terima kasih!"
-                            )
+                            cashier_name = "-"
+                            if order.user_id:
+                                cashier = await db.get(UserModel, order.user_id)
+                                if cashier:
+                                    cashier_name = cashier.full_name
+                            struk = _build_receipt_text(order, outlet_name, cashier_name, payment.payment_method)
                             asyncio.create_task(
                                 send_whatsapp_message(customer.phone, struk)
                             )
@@ -421,12 +419,14 @@ def _normalize_phone(phone: str) -> str:
     return p
 
 
-def _build_receipt_text(order: Order, outlet_name: str) -> str:
+def _build_receipt_text(order: Order, outlet_name: str, cashier_name: str, payment_method: str) -> str:
+    method_label = {"cash": "Tunai", "qris": "QRIS", "card": "Kartu", "transfer": "Transfer"}.get(payment_method, payment_method.upper())
     lines = [
         f"*Struk Pembayaran*",
         f"📍 {outlet_name}",
         f"No. Order: #{order.display_number}",
         f"Tanggal: {order.created_at.strftime('%d/%m/%Y %H:%M') if order.created_at else '-'}",
+        f"Kasir: {cashier_name}",
         f"{'─' * 28}",
     ]
     for item in order.items:
@@ -440,6 +440,7 @@ def _build_receipt_text(order: Order, outlet_name: str) -> str:
     if order.tax_amount and float(order.tax_amount) > 0:
         lines.append(f"Pajak       : Rp{float(order.tax_amount):,.0f}")
     lines.append(f"*Total       : Rp{float(order.total_amount):,.0f}*")
+    lines.append(f"Pembayaran  : {method_label}")
     lines.append(f"{'─' * 28}")
     lines.append(f"Terima kasih! 🙏")
     lines.append(f"_Powered by Kasira_")
@@ -469,11 +470,29 @@ async def send_receipt_whatsapp(
     outlet = await db.get(Outlet, order.outlet_id)
     outlet_name = outlet.name if outlet else "Kasira"
 
+    cashier_name = "-"
+    if order.user_id:
+        from backend.models.user import User as UserModel
+        cashier = await db.get(UserModel, order.user_id)
+        if cashier:
+            cashier_name = cashier.full_name
+
+    payment_method = "cash"
+    payment_result = await db.execute(
+        select(Payment)
+        .where(Payment.order_id == order.id, Payment.deleted_at.is_(None))
+        .order_by(Payment.created_at.desc())
+        .limit(1)
+    )
+    latest_payment = payment_result.scalar_one_or_none()
+    if latest_payment:
+        payment_method = latest_payment.payment_method
+
     phone = _normalize_phone(body.phone)
     if len(phone) < 9:
         raise HTTPException(status_code=400, detail="Nomor HP tidak valid")
 
-    receipt_text = _build_receipt_text(order, outlet_name)
+    receipt_text = _build_receipt_text(order, outlet_name, cashier_name, payment_method)
     sent = await send_whatsapp_message(phone, receipt_text)
 
     return StandardResponse(
