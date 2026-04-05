@@ -23,12 +23,27 @@ class _PosPageState extends ConsumerState<PosPage> {
   bool _isOffline = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   final _searchController = TextEditingController();
+  late Timer _clockTimer;
+  String _timeString = '';
 
   @override
   void initState() {
     super.initState();
+    _updateClock();
+    _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) => _updateClock());
     _initConnectivity();
-    _connectivitySub = Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
+    _connectivitySub =
+        Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
+  }
+
+  void _updateClock() {
+    final now = DateTime.now();
+    final days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+    setState(() {
+      _timeString =
+          '${days[now.weekday % 7]}, ${now.day} ${months[now.month - 1]} · ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    });
   }
 
   Future<void> _initConnectivity() async {
@@ -50,6 +65,7 @@ class _PosPageState extends ConsumerState<PosPage> {
   void dispose() {
     _connectivitySub?.cancel();
     _searchController.dispose();
+    _clockTimer.cancel();
     super.dispose();
   }
 
@@ -65,15 +81,16 @@ class _PosPageState extends ConsumerState<PosPage> {
         builder: (_, controller) => Container(
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             children: [
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Container(
-                width: 40, height: 4,
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: AppColors.border,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -94,18 +111,27 @@ class _PosPageState extends ConsumerState<PosPage> {
     final itemCount = cart.items.fold<int>(0, (sum, item) => sum + item.qty);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF0F2F5),
       body: Column(
         children: [
           if (_isOffline)
             Container(
               width: double.infinity,
-              color: AppColors.error,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: const Text(
-                'Mode Offline — Transaksi tersimpan, sync saat online',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+              color: AppColors.warning,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(LucideIcons.wifiOff, size: 14, color: Colors.white),
+                  SizedBox(width: 6),
+                  Text(
+                    'Mode Offline — Transaksi disimpan & sync saat online',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12),
+                  ),
+                ],
               ),
             ),
           Expanded(
@@ -115,7 +141,6 @@ class _PosPageState extends ConsumerState<PosPage> {
           ),
         ],
       ),
-      // Phone: floating cart button
       floatingActionButton: isWide
           ? null
           : FloatingActionButton.extended(
@@ -123,10 +148,15 @@ class _PosPageState extends ConsumerState<PosPage> {
               icon: Badge(
                 label: itemCount > 0 ? Text('$itemCount') : null,
                 isLabelVisible: itemCount > 0,
+                backgroundColor: Colors.white,
+                textColor: AppColors.primary,
                 child: const Icon(LucideIcons.shoppingCart),
               ),
-              label: const Text('Keranjang'),
+              label: itemCount > 0
+                  ? Text('Keranjang ($itemCount)')
+                  : const Text('Keranjang'),
               backgroundColor: AppColors.primary,
+              elevation: 4,
             ),
     );
   }
@@ -134,6 +164,7 @@ class _PosPageState extends ConsumerState<PosPage> {
   Widget _buildTabletLayout(AsyncValue<List<ProductModel>> productsAsync) {
     return Row(
       children: [
+        // Left: product area
         Expanded(
           flex: 7,
           child: Column(
@@ -144,11 +175,17 @@ class _PosPageState extends ConsumerState<PosPage> {
             ],
           ),
         ),
+        // Right: cart
         Container(
-          width: 400,
-          decoration: const BoxDecoration(
+          width: 380,
+          decoration: BoxDecoration(
             color: Colors.white,
-            border: Border(left: BorderSide(color: AppColors.border)),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 16,
+                  offset: const Offset(-2, 0)),
+            ],
           ),
           child: const CartPanel(),
         ),
@@ -156,7 +193,8 @@ class _PosPageState extends ConsumerState<PosPage> {
     );
   }
 
-  Widget _buildPhoneLayout(BuildContext context, AsyncValue<List<ProductModel>> productsAsync) {
+  Widget _buildPhoneLayout(
+      BuildContext context, AsyncValue<List<ProductModel>> productsAsync) {
     return Column(
       children: [
         _buildHeader(isWide: false),
@@ -168,46 +206,100 @@ class _PosPageState extends ConsumerState<PosPage> {
 
   Widget _buildHeader({required bool isWide}) {
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isWide ? 24 : 16,
-        vertical: isWide ? 16 : 12,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
       ),
-      color: Colors.white,
+      padding: EdgeInsets.only(
+        top: isWide ? 0 : MediaQuery.of(context).padding.top,
+      ),
       child: SafeArea(
         bottom: false,
-        child: Row(
-          children: [
-            const Icon(LucideIcons.store, color: AppColors.primary),
-            const SizedBox(width: 12),
-            Text('Kasir', style: TextStyle(fontSize: isWide ? 18 : 16, fontWeight: FontWeight.bold)),
-            const Spacer(),
-            Container(
-              width: isWide ? 280 : 160,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: TextField(
-                controller: _searchController,
-                decoration: const InputDecoration(
-                  hintText: 'Cari produk...',
-                  prefixIcon: Icon(LucideIcons.search, size: 18, color: AppColors.textTertiary),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 10),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: isWide ? 20 : 16,
+            vertical: isWide ? 14 : 10,
+          ),
+          child: Row(
+            children: [
+              // Brand mark
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+                child: const Icon(LucideIcons.store, color: Colors.white, size: 18),
               ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: () => ref.read(productsProvider.notifier).refresh(),
-              icon: const Icon(LucideIcons.refreshCw, color: AppColors.textSecondary),
-              tooltip: 'Refresh',
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Kasira POS',
+                      style: TextStyle(
+                        fontSize: isWide ? 16 : 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (_timeString.isNotEmpty)
+                      Text(
+                        _timeString,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              // Search bar
+              Container(
+                width: isWide ? 260 : 150,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F2F5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    hintText: 'Cari produk...',
+                    hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                    prefixIcon: Icon(LucideIcons.search,
+                        size: 16, color: AppColors.textTertiary),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 10),
+                    isDense: true,
+                  ),
+                  style: const TextStyle(fontSize: 13),
+                  onChanged: (val) =>
+                      setState(() => _searchQuery = val.toLowerCase()),
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 36,
+                height: 36,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                    ref.read(productsProvider.notifier).refresh();
+                  },
+                  icon: const Icon(LucideIcons.refreshCw,
+                      color: AppColors.textSecondary, size: 18),
+                  tooltip: 'Refresh',
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -224,7 +316,8 @@ class _PosPageState extends ConsumerState<PosPage> {
     });
 
     return Container(
-      height: 56,
+      height: 50,
+      color: Colors.white,
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: ListView(
         scrollDirection: Axis.horizontal,
@@ -232,22 +325,42 @@ class _PosPageState extends ConsumerState<PosPage> {
           final isSelected = _selectedCategoryId == entry.key;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(entry.value, style: const TextStyle(fontSize: 13)),
-              selected: isSelected,
-              onSelected: (_) {
+            child: GestureDetector(
+              onTap: () {
                 setState(() => _selectedCategoryId = entry.key);
-                ref.read(productsProvider.notifier).refresh(categoryId: entry.key);
+                ref
+                    .read(productsProvider.notifier)
+                    .refresh(categoryId: entry.key);
               },
-              backgroundColor: Colors.white,
-              selectedColor: AppColors.primary,
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.white : AppColors.textPrimary,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-                side: BorderSide(color: isSelected ? AppColors.primary : AppColors.border),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.primary : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected ? AppColors.primary : AppColors.border,
+                  ),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.25),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : [],
+                ),
+                child: Text(
+                  entry.value,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight:
+                        isSelected ? FontWeight.bold : FontWeight.w500,
+                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                  ),
+                ),
               ),
             ),
           );
@@ -256,20 +369,38 @@ class _PosPageState extends ConsumerState<PosPage> {
     );
   }
 
-  Widget _buildProductGrid(AsyncValue<List<ProductModel>> productsAsync, {required int crossAxisCount}) {
+  Widget _buildProductGrid(
+    AsyncValue<List<ProductModel>> productsAsync, {
+    required int crossAxisCount,
+  }) {
     return productsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(LucideIcons.wifiOff, size: 40, color: AppColors.textTertiary),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: AppColors.surfaceVariant,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(LucideIcons.wifiOff,
+                  size: 32, color: AppColors.textTertiary),
+            ),
+            const SizedBox(height: 16),
+            const Text('Gagal memuat produk',
+                style: TextStyle(color: AppColors.textSecondary)),
             const SizedBox(height: 12),
-            const Text('Gagal memuat produk'),
-            const SizedBox(height: 8),
-            TextButton(
+            ElevatedButton.icon(
               onPressed: () => ref.read(productsProvider.notifier).refresh(),
-              child: const Text('Coba lagi'),
+              icon: const Icon(LucideIcons.refreshCw, size: 16),
+              label: const Text('Coba lagi'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
             ),
           ],
         ),
@@ -277,18 +408,24 @@ class _PosPageState extends ConsumerState<PosPage> {
       data: (products) {
         final filtered = _searchQuery.isEmpty
             ? products
-            : products.where((p) => p.name.toLowerCase().contains(_searchQuery)).toList();
+            : products
+                .where((p) => p.name.toLowerCase().contains(_searchQuery))
+                .toList();
 
         if (filtered.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(LucideIcons.packageSearch, size: 40, color: AppColors.textTertiary),
+                const Icon(LucideIcons.packageSearch,
+                    size: 40, color: AppColors.textTertiary),
                 const SizedBox(height: 12),
                 Text(
-                  _searchQuery.isNotEmpty ? 'Produk tidak ditemukan' : 'Belum ada produk',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  _searchQuery.isNotEmpty
+                      ? 'Produk "$_searchQuery" tidak ditemukan'
+                      : 'Belum ada produk',
+                  style:
+                      const TextStyle(color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -296,11 +433,11 @@ class _PosPageState extends ConsumerState<PosPage> {
         }
 
         return Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
           child: GridView.builder(
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
-              childAspectRatio: crossAxisCount == 2 ? 0.85 : 0.75,
+              childAspectRatio: crossAxisCount == 2 ? 0.82 : 0.72,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
             ),
@@ -314,17 +451,27 @@ class _PosPageState extends ConsumerState<PosPage> {
                 imageUrl: product.imageUrl ?? '',
                 onTap: () {
                   ref.read(cartProvider.notifier).addItem(CartItem(
-                    productId: product.id,
-                    name: product.name,
-                    price: product.price,
-                  ));
-                  // Phone: tampilkan snackbar singkat
+                        productId: product.id,
+                        name: product.name,
+                        price: product.price,
+                      ));
                   if (MediaQuery.of(context).size.width < 700) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('${product.name} ditambahkan'),
-                        duration: const Duration(milliseconds: 800),
+                        content: Row(
+                          children: [
+                            const Icon(LucideIcons.check,
+                                color: Colors.white, size: 16),
+                            const SizedBox(width: 8),
+                            Text('${product.name} ditambahkan'),
+                          ],
+                        ),
+                        duration: const Duration(milliseconds: 900),
                         behavior: SnackBarBehavior.floating,
+                        backgroundColor: AppColors.success,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        margin: const EdgeInsets.fromLTRB(16, 0, 16, 90),
                       ),
                     );
                   }

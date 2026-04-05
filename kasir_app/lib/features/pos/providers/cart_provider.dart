@@ -313,7 +313,7 @@ class CartNotifier extends StateNotifier<CartState> {
 
   Future<bool> _checkOnline() async {
     final result = await Connectivity().checkConnectivity();
-    return result != ConnectivityResult.none;
+    return result.isNotEmpty && !result.contains(ConnectivityResult.none);
   }
 }
 

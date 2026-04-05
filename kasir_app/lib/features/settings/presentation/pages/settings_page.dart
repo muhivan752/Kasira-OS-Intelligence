@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import 'printer_settings_page.dart';
 import 'sync_settings_page.dart';
 import 'profile_page.dart';
+import 'staff_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -78,11 +79,22 @@ class SettingsPage extends StatelessWidget {
                 ),
 
                 const SizedBox(height: 32),
-                _buildSectionTitle('Akun & Bantuan'),
+                _buildSectionTitle('Tim & Akun'),
+                _buildSettingTile(
+                  icon: LucideIcons.users,
+                  title: 'Manajemen Kasir',
+                  subtitle: 'Tambah & kelola akun kasir',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const StaffPage()),
+                    );
+                  },
+                ),
                 _buildSettingTile(
                   icon: LucideIcons.user,
-                  title: 'Profil Kasir',
-                  subtitle: 'Budi (Shift Pagi)',
+                  title: 'Profil Saya',
+                  subtitle: 'Lihat info akun',
                   onTap: () {
                     Navigator.push(
                       context,
