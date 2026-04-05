@@ -8,6 +8,8 @@ class Tenant(BaseModel):
     name = Column(String, nullable=False)
     schema_name = Column(String, unique=True, nullable=False)
     is_active = Column(Boolean(), default=True)
+    subscription_tier = Column(String, server_default="'starter'", nullable=True)
+    subscription_status = Column(String, server_default="'active'", nullable=True)
     row_version = Column(Integer, server_default='0', nullable=False)
 
     brands = relationship("Brand", back_populates="tenant")

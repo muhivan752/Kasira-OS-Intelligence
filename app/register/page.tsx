@@ -37,8 +37,8 @@ export default function RegisterPage() {
   async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    // OTP verification is done at register step — just move to details
     if (otp.length !== 6) { setError('OTP harus 6 digit'); return; }
+    // Lanjut ke detail — OTP akan diverifikasi saat submit register
     setStep('details');
   }
 
@@ -48,8 +48,7 @@ export default function RegisterPage() {
     if (pin !== pinConfirm) { setError('PIN tidak cocok'); return; }
     if (pin.length !== 6) { setError('PIN harus 6 digit'); return; }
     setLoading(true);
-    // Backend register doesn't verify OTP separately — OTP in Redis acts as proof
-    const res = await registerTenant(phone, businessName, ownerName, pin);
+    const res = await registerTenant(phone, businessName, ownerName, pin, otp);
     setLoading(false);
     if (!res.success) { setError(res.message || 'Registrasi gagal'); return; }
     router.push('/onboarding');

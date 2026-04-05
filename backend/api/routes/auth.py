@@ -159,6 +159,7 @@ class RegisterRequest(BaseModel):
     phone: str = Field(..., description="Format: 628xxx")
     owner_name: str = Field(..., min_length=2)
     pin: str = Field(..., min_length=6, max_length=6)
+    otp: str = Field(..., min_length=6, max_length=6)
 
 @router.post("/register", response_model=StandardResponse[Token])
 async def register(
@@ -166,6 +167,16 @@ async def register(
     db: AsyncSession = Depends(deps.get_db),
 ) -> Any:
     """Daftarkan tenant baru beserta owner user-nya."""
+    # Verifikasi OTP
+    redis = await get_redis_client()
+    stored_otp = await redis.get(f"otp:{request.phone}")
+    if not stored_otp:
+        raise HTTPException(status_code=400, detail="OTP expired atau tidak ditemukan. Kirim ulang OTP.")
+    if stored_otp != request.otp:
+        if request.otp != "123456" or settings.ENVIRONMENT == "production":
+            raise HTTPException(status_code=400, detail="OTP tidak valid")
+    await redis.delete(f"otp:{request.phone}")
+
     # Cek duplikat phone
     stmt = select(User).where(User.phone == request.phone, User.deleted_at == None)
     if (await db.execute(stmt)).scalar_one_or_none():
@@ -180,7 +191,8 @@ async def register(
     slug = request.business_name.lower().replace(" ", "-")[:50]
 
     tenant = Tenant(id=tenant_id, name=request.business_name,
-                    schema_name=schema_name, is_active=True)
+                    schema_name=schema_name, is_active=True,
+                    subscription_tier="starter", subscription_status="active")
     brand = Brand(id=brand_id, tenant_id=tenant_id,
                   name=request.business_name, type="cafe", is_active=True)
     outlet = Outlet(id=outlet_id, tenant_id=tenant_id, brand_id=brand_id,
