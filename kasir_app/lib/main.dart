@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'core/config/app_config.dart';
 import 'core/sync/sync_provider.dart';
 import 'core/theme/app_theme.dart';
@@ -85,6 +86,7 @@ final _router = GoRouter(
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await initializeDateFormatting('id_ID', null);
   final prefs = await SharedPreferences.getInstance();
   await AppConfig.init(prefs);
 
