@@ -143,33 +143,49 @@
 
 ---
 
+## ✅ SELESAI SESI INI (2026-04-09) — Tab/Bon + Split Bill (Pro Feature)
+
+### Backend
+- [x] Migration 062: `tabs` + `tab_splits` tables + `orders.tab_id` FK
+- [x] Models: `backend/models/tab.py` — Tab + TabSplit (row_version, relationships)
+- [x] Schemas: `backend/schemas/tab.py` — full CRUD + split bill schemas
+- [x] Routes: `backend/api/routes/tabs.py` — 10 endpoints (open, list, detail, add order, split equal/per-item/custom, pay full, pay split, cancel)
+- [x] `backend/api/api.py` — include tabs router
+- [x] `backend/models/order.py` — tambah tab_id FK + relationship
+- [x] Pro tier gate via `require_pro_tier` dependency
+- [x] Migration deployed + backend restarted in container
+
+### Split Bill Options
+1. **Bayar semua** — 1 orang bayar total (`/tabs/{id}/pay-full`)
+2. **Split rata** — total ÷ jumlah orang (`/tabs/{id}/split/equal`)
+3. **Split per item** — assign item ke orang, bayar masing-masing (`/tabs/{id}/split/per-item`)
+4. **Split custom** — kasir input nominal per orang (`/tabs/{id}/split/custom`)
+5. Setiap split bisa bayar dengan metode berbeda (cash/QRIS)
+
+### ANTHROPIC_API_KEY
+- [x] Key di-set di `.env`, backend rebuilt
+
+---
+
 ## ⏭️ NEXT ACTION
 
-### PRIORITAS 1 — Set ANTHROPIC_API_KEY (MENUNGGU USER)
-User belum beli API key. Setelah dapat key:
-1. Edit `/var/www/kasira/.env` → ganti `ANTHROPIC_API_KEY=sk-ant-xxx...`
-2. `cd /var/www/kasira && docker compose build backend && docker compose up -d backend`
-3. Test: login dashboard → AI Asisten → ketik "omzet hari ini"
+### PRIORITAS 1 — Git Commit & Push
+Perubahan belum di-commit:
+- Tab/Bon + Split Bill (migration, models, schemas, routes)
+- AI Chatbot + Register fix (sudah committed: 9b6dafc)
+- ANTHROPIC_API_KEY (✅ set, backend rebuilt)
 
-### PRIORITAS 2 — Git Commit & Push
-Semua perubahan sesi ini belum di-commit:
-- `backend/schemas/auth.py` — purpose param
-- `backend/api/routes/auth.py` — register OTP flow
-- `backend/api/routes/ai.py` — Pro tier gate
-- `backend/models/tenant.py` — sudah ada subscription_tier (container sync issue)
-- `app/actions/auth.ts` — BACKEND_INTERNAL_URL + purpose param
-- `app/register/page.tsx` — purpose register
-- `app/dashboard/ai/page.tsx` — NEW: chat UI
-- `app/api/ai/route.ts` — NEW: SSE proxy
-- `app/api/ai/outlet/route.ts` — NEW: outlet cookie helper
-- `app/dashboard/layout.tsx` — AI Asisten nav item
+### PRIORITAS 2 — Flutter UI untuk Tab/Split Bill
+Backend sudah siap, butuh Flutter kasir UI:
+- Tab management screen (buka/tutup tab per meja)
+- Split bill modal (pilih metode: rata/per-item/custom)
+- Pay split screen (bayar per orang, beda metode)
 
 ### PRIORITAS 3 — Pending
-- Rebuild frontend VPS (sudah dilakukan sesi ini)
-- UptimeRobot: monitor http://103.189.235.164:8000/ dan http://103.189.235.164:3000/
-- Xendit sub-account → isi xendit_business_id → aktifkan QRIS
-- Upgrade VPS RAM 8GB + disk 80GB
-- IdCloudHost: evaluasi pindah VPS jika masih error
+- UptimeRobot: monitor backend + frontend
+- Xendit sub-account → aktifkan QRIS
+- Upgrade VPS / evaluasi pindah dari IdCloudHost
+- Next.js dashboard: tab management page untuk owner
 
 ### Cara reconnect:
 > "baca CLAUDE.md, MEMORY.md, SESSION.md di /var/www/kasira/ lalu lanjut dari NEXT ACTION"

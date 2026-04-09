@@ -15,3 +15,4 @@ from .connect import ConnectOutlet, ConnectOrder
 from .event import Event
 from .reservation import Table, Reservation
 from .loyalty import CustomerPoints, PointTransaction
+from .tab import Tab, TabSplit

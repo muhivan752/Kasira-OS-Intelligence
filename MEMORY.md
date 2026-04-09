@@ -193,6 +193,27 @@
 - [x] `cart_panel.dart`: tampilkan nama pelanggan yang dipilih, pass onSelected callback
 - NOTE: File backend harus di-`docker cp` ke container karena tidak ada volume mount kode
 
+## ✅ TAB/BON + SPLIT BILL (2026-04-09) — Pro Feature
+- [x] Migration 062: `tabs` + `tab_splits` tables, `tab_id` FK di orders
+- [x] Models: `Tab` + `TabSplit` (SQLAlchemy, relationships, row_version)
+- [x] Schemas: `TabCreate`, `SplitEqualRequest`, `SplitPerItemRequest`, `SplitCustomRequest`, `PaySplitRequest`
+- [x] API Routes: `backend/api/routes/tabs.py` — 10 endpoints:
+  - `POST /tabs/` — buka tab (link ke meja)
+  - `GET /tabs/` — list tabs per outlet
+  - `GET /tabs/{id}` — detail tab + splits
+  - `POST /tabs/{id}/orders` — tambah order ke tab
+  - `POST /tabs/{id}/split/equal` — split rata (÷ jumlah orang)
+  - `POST /tabs/{id}/split/per-item` — split per item (assign item ke orang)
+  - `POST /tabs/{id}/split/custom` — split nominal bebas
+  - `POST /tabs/{id}/pay-full` — 1 orang bayar semua
+  - `POST /tabs/{id}/splits/{split_id}/pay` — bayar per orang (bisa beda metode: cash/QRIS)
+  - `POST /tabs/{id}/cancel` — batalkan tab
+- [x] Pro tier gate (require_pro_tier dependency)
+- [x] Semua WRITE endpoint ada audit log
+- [x] Optimistic locking (row_version) di semua update
+- [x] Idempotency key di payment
+- [x] Migration + container deployed, backend running
+
 ## ❌ BELUM MULAI (Prioritas sesuai urutan)
 1. ~~**ANTHROPIC_API_KEY**~~ — ✅ DONE 2026-04-09
 2. **Git commit + push** — semua perubahan sesi 2026-04-09 belum di-commit
@@ -226,7 +247,7 @@
 - Semua commit langsung ke `main`, push ke `origin/main`
 
 ## Lanjut Berikutnya
-VPS sudah live. Fokus: Pro features (AI chatbot done, next: tab/bon, multi-outlet).
+VPS sudah live. Fokus: Pro features (AI chatbot done, tab/bon done, next: multi-outlet).
 - [x] Kategori CRUD di dashboard (tambah/edit/hapus/toggle aktif)
 - [x] Produk CRUD lengkap (tambah/edit/hapus/toggle aktif + upload foto dari device)
 - [x] Fix 307 redirect bug — trailing slash normalization di fetchWithAuth

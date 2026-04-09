@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect, ai, reservations, loyalty, media, customers, tables
+from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect, ai, reservations, loyalty, media, customers, tables, tabs
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -20,6 +20,7 @@ api_router.include_router(loyalty.router, prefix="/loyalty", tags=["loyalty"])
 api_router.include_router(media.router, prefix="/media", tags=["media"])
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
 api_router.include_router(tables.router, prefix="/tables", tags=["tables"])
+api_router.include_router(tabs.router, prefix="/tabs", tags=["tabs"])
 
 # app/version endpoint (prefix di auth router sudah handle ini)
 # route: GET /api/v1/auth/app/version — dipanggil dari SplashPage

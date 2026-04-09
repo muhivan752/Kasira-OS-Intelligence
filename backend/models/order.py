@@ -11,6 +11,7 @@ class Order(BaseModel):
     shift_session_id = Column(UUID(as_uuid=True), ForeignKey('shifts.id', ondelete='SET NULL'), nullable=True)
     customer_id = Column(UUID(as_uuid=True), ForeignKey('customers.id', ondelete='SET NULL'), nullable=True)
     table_id = Column(UUID(as_uuid=True), ForeignKey('tables.id', ondelete='SET NULL'), nullable=True)
+    tab_id = Column(UUID(as_uuid=True), ForeignKey('tabs.id', ondelete='SET NULL'), nullable=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     
     order_number = Column(String, nullable=False)
@@ -32,7 +33,7 @@ class Order(BaseModel):
     outlet = relationship("Outlet", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="order")
-    # user, customer, table, shift relationships can be added later if needed
+    tab = relationship("Tab", back_populates="orders")
 
 class OrderItem(BaseModel):
     __tablename__ = "order_items"
