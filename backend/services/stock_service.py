@@ -100,7 +100,7 @@ async def deduct_stock(
             "stock_after": stock_after,
             "order_id": str(order_id),
         },
-        metadata={
+        event_metadata={
             "tier": tier,
             "user_id": str(user_id) if user_id else None,
             "ts": datetime.now(timezone.utc).isoformat(),
@@ -179,7 +179,7 @@ async def restock_product(
             "stock_after": stock_after,
             "notes": notes,
         },
-        metadata={
+        event_metadata={
             "tier": tier,
             "user_id": str(user_id) if user_id else None,
             "ts": datetime.now(timezone.utc).isoformat(),

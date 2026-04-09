@@ -1,7 +1,7 @@
 from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timezone, date
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.orm import selectinload
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, text
@@ -107,19 +107,17 @@ async def create_order(
     # 1. Pastikan commit sudah selesai
     await db.commit()
 
-    # 2. Ambil ulang data Order dengan "Jurus Sapu Jagat"
-    # Kita tarik Order -> Items (selectinload) -> Product (joinedload)
+    # 2. Ambil ulang data Order — selectinload di semua level (wajib untuk async)
     query = (
         select(Order)
         .options(
-            selectinload(Order.items).joinedload(OrderItem.product)
+            selectinload(Order.items).selectinload(OrderItem.product)
         )
         .where(Order.id == order.id)
     )
-    
+
     result = await db.execute(query)
-    # Gunakan .unique() karena kita pakai joinedload
-    order_loaded = result.unique().scalar_one()
+    order_loaded = result.scalar_one()
 
     # 3. Jalankan Audit Log
     await log_audit(
