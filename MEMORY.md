@@ -213,6 +213,10 @@
 - [x] Optimistic locking (row_version) di semua update
 - [x] Idempotency key di payment
 - [x] Migration + container deployed, backend running
+- [x] Flutter UI: tab_provider.dart, tab_list_page.dart, tab_detail_page.dart
+- [x] Flutter widgets: open_tab_modal.dart, split_bill_modal.dart, pay_split_modal.dart
+- [x] GoRouter: /tabs + /tabs/:tabId
+- [x] Dashboard: tombol "Tab / Bon" di header
 
 ## ❌ BELUM MULAI (Prioritas sesuai urutan)
 1. ~~**ANTHROPIC_API_KEY**~~ — ✅ DONE 2026-04-09

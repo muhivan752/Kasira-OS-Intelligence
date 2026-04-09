@@ -15,6 +15,8 @@ import 'features/pos/presentation/pages/receipt_preview_page.dart';
 import 'features/shift/presentation/pages/shift_open_page.dart';
 import 'features/splash/presentation/pages/splash_page.dart';
 import 'features/tables/presentation/pages/table_grid_page.dart';
+import 'features/tabs/presentation/pages/tab_list_page.dart';
+import 'features/tabs/presentation/pages/tab_detail_page.dart';
 
 final _router = GoRouter(
   initialLocation: '/',
@@ -79,6 +81,17 @@ final _router = GoRouter(
     GoRoute(
       path: '/stock/alerts',
       builder: (context, state) => const LowStockAlertPage(),
+    ),
+    GoRoute(
+      path: '/tabs',
+      builder: (context, state) => const TabListPage(),
+    ),
+    GoRoute(
+      path: '/tabs/:tabId',
+      builder: (context, state) {
+        final tabId = state.pathParameters['tabId'] ?? '';
+        return TabDetailPage(tabId: tabId);
+      },
     ),
   ],
 );

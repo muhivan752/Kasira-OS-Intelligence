@@ -162,6 +162,16 @@
 4. **Split custom** — kasir input nominal per orang (`/tabs/{id}/split/custom`)
 5. Setiap split bisa bayar dengan metode berbeda (cash/QRIS)
 
+### Flutter Kasir UI
+- [x] `features/tabs/providers/tab_provider.dart` — TabNotifier + TabModel + TabSplitModel (Riverpod)
+- [x] `features/tabs/presentation/pages/tab_list_page.dart` — list tabs, filter aktif/selesai, buka tab baru
+- [x] `features/tabs/presentation/pages/tab_detail_page.dart` — detail tab, list splits, bayar per split
+- [x] `features/tabs/presentation/widgets/open_tab_modal.dart` — form buka tab (nama tamu, jumlah tamu)
+- [x] `features/tabs/presentation/widgets/split_bill_modal.dart` — pilih metode (bagi rata/custom), input jumlah orang
+- [x] `features/tabs/presentation/widgets/pay_split_modal.dart` — bayar per orang (cash/QRIS), hitung kembalian
+- [x] `main.dart` — GoRouter /tabs + /tabs/:tabId
+- [x] `dashboard_page.dart` — tombol "Tab / Bon" di header dashboard
+
 ### ANTHROPIC_API_KEY
 - [x] Key di-set di `.env`, backend rebuilt
 

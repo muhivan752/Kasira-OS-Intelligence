@@ -8,6 +8,7 @@ import '../../../orders/presentation/pages/order_list_page.dart';
 import '../../../shift/presentation/pages/shift_page.dart';
 import '../../../products/presentation/pages/product_management_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
+import 'package:go_router/go_router.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 
@@ -246,6 +247,18 @@ class _DashboardContent extends ConsumerWidget {
               },
               icon: const Icon(LucideIcons.refreshCw, color: AppColors.textSecondary),
               tooltip: 'Refresh',
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: () => context.push('/tabs'),
+              icon: const Icon(LucideIcons.split, size: 16),
+              label: Text(isWide ? 'Tab / Bon' : 'Tab'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.info,
+                padding: isWide
+                    ? const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
+                    : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
             ),
             const SizedBox(width: 8),
             ElevatedButton.icon(
