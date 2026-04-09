@@ -8,7 +8,7 @@ import Navbar from '@/components/landing/Navbar';
 import FAQ from '@/components/landing/FAQ';
 
 export default function LandingPage() {
-  const waLink = 'https://wa.me/6285270782220?text=Halo%20Kasira%2C%20saya%20mau%20coba%20pilot';
+  const waLink = 'https://wa.me/6285270782220?text=Halo%20Kasira%2C%20saya%20mau%20coba%20Kasira';
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -232,7 +232,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Harga transparan</h2>
-            <p className="text-lg text-gray-500">Mulai gratis selama pilot, tidak perlu kartu kredit</p>
+            <p className="text-lg text-gray-500">Mulai gratis, tidak perlu kartu kredit</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
@@ -355,7 +355,7 @@ export default function LandingPage() {
             Siap coba Kasira?
           </h2>
           <p className="text-emerald-100 text-xl mb-10">
-            Gratis selama pilot. Kami bantu setup dari nol.
+            Kami bantu setup dari nol.
           </p>
           <a
             href={waLink}

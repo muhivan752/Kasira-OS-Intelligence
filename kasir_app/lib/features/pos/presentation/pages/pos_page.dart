@@ -6,6 +6,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/sync/sync_provider.dart';
 import '../../../products/providers/products_provider.dart';
+import '../../../dashboard/providers/dashboard_provider.dart';
+import '../../../orders/providers/orders_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../widgets/product_card.dart';
 import '../widgets/cart_panel.dart';
@@ -56,7 +58,12 @@ class _PosPageState extends ConsumerState<PosPage> {
   void _updateConnectionStatus(List<ConnectivityResult> result) {
     final offline = result.contains(ConnectivityResult.none) || result.isEmpty;
     if (_isOffline && !offline) {
-      ref.read(syncServiceProvider).sync().catchError((_) {});
+      ref.read(syncServiceProvider).sync().then((_) {
+        // Setelah sync selesai, invalidate semua provider supaya data fresh
+        ref.invalidate(dashboardProvider);
+        ref.invalidate(ordersProvider);
+        ref.invalidate(productsProvider);
+      }).catchError((_) {});
     }
     if (mounted) setState(() => _isOffline = offline);
   }

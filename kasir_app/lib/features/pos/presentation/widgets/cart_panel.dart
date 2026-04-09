@@ -8,6 +8,9 @@ import '../../providers/cart_provider.dart';
 import '../../presentation/pages/receipt_preview_page.dart';
 import 'payment_modal.dart';
 import '../../../customers/presentation/widgets/customer_selection_modal.dart';
+import '../../../dashboard/providers/dashboard_provider.dart';
+import '../../../orders/providers/orders_provider.dart';
+import '../../../products/providers/products_provider.dart';
 
 class CartPanel extends ConsumerWidget {
   const CartPanel({super.key});
@@ -212,6 +215,10 @@ class CartPanel extends ConsumerWidget {
               price: i.price,
             )).toList();
             ref.read(cartProvider.notifier).clearCart();
+            // Invalidate providers supaya dashboard & order list langsung update
+            ref.invalidate(dashboardProvider);
+            ref.invalidate(ordersProvider);
+            ref.invalidate(productsProvider);
             if (context.mounted) {
               context.push('/payment/success', extra: {
                 'totalAmount': cart.subtotal,

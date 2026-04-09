@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../dashboard/providers/dashboard_provider.dart';
+import '../../../orders/providers/orders_provider.dart';
+import '../../../products/providers/products_provider.dart';
 import 'receipt_preview_page.dart';
 
-class PaymentSuccessPage extends StatefulWidget {
+class PaymentSuccessPage extends ConsumerStatefulWidget {
   final double totalAmount;
   final double amountPaid;
   final String paymentMethod;
@@ -24,10 +28,10 @@ class PaymentSuccessPage extends StatefulWidget {
   });
 
   @override
-  State<PaymentSuccessPage> createState() => _PaymentSuccessPageState();
+  ConsumerState<PaymentSuccessPage> createState() => _PaymentSuccessPageState();
 }
 
-class _PaymentSuccessPageState extends State<PaymentSuccessPage>
+class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnim;
@@ -170,6 +174,10 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
+                          // Invalidate providers supaya dashboard langsung fresh
+                          ref.invalidate(dashboardProvider);
+                          ref.invalidate(ordersProvider);
+                          ref.invalidate(productsProvider);
                           context.go('/dashboard');
                         },
                         icon: const Icon(LucideIcons.arrowRight, size: 18),

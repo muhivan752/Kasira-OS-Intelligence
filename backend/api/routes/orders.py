@@ -1,11 +1,10 @@
 from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timezone, date
-
+from sqlalchemy.orm import selectinload, joinedload
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, text
-from sqlalchemy.orm import selectinload
 
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
@@ -105,29 +104,43 @@ async def create_order(
         )
         db.add(order_item)
 
+    # 1. Pastikan commit sudah selesai
     await db.commit()
-    
-    # Refresh to load items (including product for product_name)
-    query = select(Order).options(selectinload(Order.items).selectinload(OrderItem.product)).where(Order.id == order.id)
-    result = await db.execute(query)
-    order_loaded = result.scalar_one()
 
-    # Audit log
+    # 2. Ambil ulang data Order dengan "Jurus Sapu Jagat"
+    # Kita tarik Order -> Items (selectinload) -> Product (joinedload)
+    query = (
+        select(Order)
+        .options(
+            selectinload(Order.items).joinedload(OrderItem.product)
+        )
+        .where(Order.id == order.id)
+    )
+    
+    result = await db.execute(query)
+    # Gunakan .unique() karena kita pakai joinedload
+    order_loaded = result.unique().scalar_one()
+
+    # 3. Jalankan Audit Log
     await log_audit(
         db=db,
         action="CREATE",
         entity="order",
-        entity_id=order.id,
-        after_state={"order_number": order.order_number, "total_amount": float(order.total_amount)},
+        entity_id=order_loaded.id,
+        after_state={
+            "order_number": order_loaded.order_number, 
+            "total_amount": float(order_loaded.total_amount)
+        },
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
     )
 
+    # 4. Return Response
     return StandardResponse(
         success=True,
+        message="Order created successfully",
         data=OrderResponse.model_validate(order_loaded),
-        request_id=request.state.request_id,
-        message="Order created successfully"
+        request_id=request.state.request_id
     )
 
 @router.get("/", response_model=StandardResponse[List[OrderResponse]])
