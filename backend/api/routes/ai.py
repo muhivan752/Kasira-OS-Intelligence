@@ -25,6 +25,7 @@ from backend.api import deps
 from backend.core.database import get_db
 from backend.models.user import User
 from backend.models.outlet import Outlet
+from backend.models.tenant import Tenant
 from backend.services.redis import get_redis_client
 from backend.services.audit import log_audit
 from backend.services.ai_service import stream_ai_response
@@ -66,8 +67,19 @@ async def ai_chat(
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
 
-    # Ambil tier dari tenant (default starter jika belum ada)
-    tier = getattr(current_user, "tier", None) or getattr(outlet, "tier", None) or "starter"
+    # Ambil tier dari tenant
+    tenant_result = await db.execute(
+        select(Tenant).where(Tenant.id == current_user.tenant_id, Tenant.deleted_at.is_(None))
+    )
+    tenant = tenant_result.scalar_one_or_none()
+    tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
+
+    # AI Chatbot = Pro+ only
+    if tier not in ("pro", "business", "enterprise"):
+        raise HTTPException(
+            status_code=403,
+            detail="AI Chatbot hanya tersedia untuk paket Pro. Upgrade untuk mengakses."
+        )
 
     redis = await get_redis_client()
 

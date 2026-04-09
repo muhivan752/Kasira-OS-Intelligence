@@ -27,7 +27,7 @@ export default function RegisterPage() {
     setError('');
     const normalized = phone.startsWith('0') ? '62' + phone.slice(1) : phone;
     setLoading(true);
-    const res = await sendOtp(normalized);
+    const res = await sendOtp(normalized, 'register');
     setLoading(false);
     if (!res.success) { setError(res.message || 'Gagal kirim OTP'); return; }
     setPhone(normalized);

@@ -12,7 +12,8 @@ import {
   LogOut,
   X,
   Star,
-  Lock
+  Lock,
+  Bot
 } from 'lucide-react';
 import { logout } from '@/app/actions/auth';
 import { getCurrentUser, getOutlets } from '@/app/actions/api';
@@ -114,6 +115,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Pro Features */}
             <div className="pt-3 mt-3 border-t border-gray-100">
               <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Pro</p>
+              <Link
+                href="/dashboard/ai"
+                className={`
+                  flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                  ${pathname.startsWith('/dashboard/ai')
+                    ? 'bg-purple-50 text-purple-700'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                  }
+                `}
+              >
+                <Bot className={`w-5 h-5 ${pathname.startsWith('/dashboard/ai') ? 'text-purple-500' : 'text-gray-400'}`} />
+                <span className="flex-1">AI Asisten</span>
+                <span className="inline-flex items-center gap-0.5 bg-purple-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  PRO
+                </span>
+              </Link>
               <Link
                 href="/dashboard/pro"
                 className={`

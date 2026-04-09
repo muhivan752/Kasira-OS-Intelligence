@@ -34,15 +34,19 @@ async def send_otp(
     """
     Send OTP via WhatsApp to the given phone number
     """
-    # Check if user exists
+    # Check if user exists (skip for register purpose)
     stmt = select(User).where(User.phone == request.phone, User.deleted_at == None)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+
+    if request.purpose == "register":
+        if user:
+            raise HTTPException(status_code=400, detail="Nomor HP sudah terdaftar. Silakan login.")
+    else:
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not user.is_active:
+            raise HTTPException(status_code=400, detail="Inactive user")
         
     # Generate 6-digit OTP
     otp = str(random.randint(100000, 999999))

@@ -96,40 +96,80 @@
 - [x] **Fix Flutter APK SharedPreferences URL lama** — jika user install APK baru tapi SharedPreferences masih simpan `http://` URL lama, sekarang diabaikan dan pakai `defaultBaseUrl` (https://kasira.online)
   - `kasir_app/lib/core/config/app_config.dart`: Hanya load saved URL jika startsWith('https://')
 
+## ✅ SELESAI SESI INI (2026-04-09) — Realtime Sync + Order Bug Fix
+
+### Bug Fix 1: Data penjualan tidak realtime sync ke dashboard/laporan
+- [x] `cart_panel.dart`: tambah `ref.invalidate(dashboardProvider/ordersProvider/productsProvider)` setelah payment sukses
+- [x] `pos_page.dart`: invalidate semua provider setelah offline→online sync selesai
+- [x] `payment_success_page.dart`: convert ke `ConsumerStatefulWidget`, invalidate saat navigasi ke dashboard
+- **Efek:** Dashboard stats, order list, stock produk langsung update tanpa manual refresh
+
+### Bug Fix 2: Order >1 item crash 500 (CRITICAL)
+- [x] `orders.py`: ganti `selectinload(Order.items).joinedload(OrderItem.product)` → `selectinload().selectinload()` — joinedload trigger lazy load di async context → MissingGreenlet error
+- [x] `stock_service.py`: fix `metadata=` → `event_metadata=` (field name salah setelah rename, metadata stock event tidak tersimpan ke DB)
+- [x] Backend di-restart via `docker cp` + `docker restart`
+- [x] Tested: order 2 item + cash payment → sukses
+- **Commits:** `3358b34` (realtime sync) + `adf20a9` (order fix) — pushed to `origin/main`
+
+### Juga di commit ini (minor):
+- [x] `page.tsx` landing page: hapus kata "pilot" dari CTA copy
+
+---
+
+## ✅ SELESAI SESI INI (2026-04-09) — Register Fix + AI Chatbot Pro
+
+### Fix Register Flow
+- [x] Backend `otp/send`: tambah `purpose` param — `register` skip cek user exists, tolak jika nomor sudah terdaftar
+- [x] `backend/schemas/auth.py`: tambah `purpose: Optional[Literal["login","register"]]` di OTPSendRequest
+- [x] `app/actions/auth.ts`: `sendOtp()` terima param `purpose`, pakai `BACKEND_INTERNAL_URL` (bukan NEXT_PUBLIC)
+- [x] `app/register/page.tsx`: kirim `purpose: 'register'` saat sendOtp
+- [x] Deploy backend (docker cp + restart) + rebuild frontend
+
+### AI Chatbot Owner (Pro Feature)
+- [x] **Chat UI**: `app/dashboard/ai/page.tsx` — full chat interface, suggestion buttons, SSE streaming, model+token info
+- [x] **SSE Proxy**: `app/api/ai/route.ts` — Next.js API route proxy ke backend (handle httpOnly cookie auth)
+- [x] **Outlet Helper**: `app/api/ai/outlet/route.ts` — expose outlet_id dari httpOnly cookie ke client
+- [x] **Sidebar Nav**: `app/dashboard/layout.tsx` — tambah "AI Asisten" dengan Bot icon + PRO badge (purple theme)
+- [x] **Pro Tier Gate**: `backend/api/routes/ai.py` — query tenant.subscription_tier, 403 jika bukan Pro+
+- [x] **Tenant Model Sync**: container tenant.py tidak punya subscription_tier — docker cp fix
+- [x] **Tested**: Starter → 403 ditolak. Pro → stream OK (error karena ANTHROPIC_API_KEY placeholder)
+- [x] Admin tenant di-upgrade ke `pro` di DB untuk testing
+- **Backend AI service sudah ada sebelumnya**: `ai_service.py` (intent classifier, context builder, SSE stream, model selector)
+
+### IdCloudHost Issue
+- VPS semua service **online** (backend, frontend, db, redis, nginx, SSL valid)
+- Tapi akses publik **timeout** — masalah di jaringan IdCloudHost, bukan server
+- Backup lengkap dibuat: `/root/kasira-backup-20260409.tar.gz` (DB + uploads + .env)
+
+---
+
 ## ⏭️ NEXT ACTION
 
-### PRIORITAS 1 — Rebuild Frontend VPS (BELUM SELESAI)
-Kode sudah di-push ke GitHub (commit `6fee1c7`). VPS belum di-update.
+### PRIORITAS 1 — Set ANTHROPIC_API_KEY (MENUNGGU USER)
+User belum beli API key. Setelah dapat key:
+1. Edit `/var/www/kasira/.env` → ganti `ANTHROPIC_API_KEY=sk-ant-xxx...`
+2. `cd /var/www/kasira && docker compose build backend && docker compose up -d backend`
+3. Test: login dashboard → AI Asisten → ketik "omzet hari ini"
 
-SSH ke VPS lalu jalankan:
-```bash
-cd /var/www/kasira && git pull origin main && docker compose build frontend && docker compose up -d frontend
-```
-Alternatif: Login https://my.idcloudhost.com → VPS Console → jalankan perintah di atas.
+### PRIORITAS 2 — Git Commit & Push
+Semua perubahan sesi ini belum di-commit:
+- `backend/schemas/auth.py` — purpose param
+- `backend/api/routes/auth.py` — register OTP flow
+- `backend/api/routes/ai.py` — Pro tier gate
+- `backend/models/tenant.py` — sudah ada subscription_tier (container sync issue)
+- `app/actions/auth.ts` — BACKEND_INTERNAL_URL + purpose param
+- `app/register/page.tsx` — purpose register
+- `app/dashboard/ai/page.tsx` — NEW: chat UI
+- `app/api/ai/route.ts` — NEW: SSE proxy
+- `app/api/ai/outlet/route.ts` — NEW: outlet cookie helper
+- `app/dashboard/layout.tsx` — AI Asisten nav item
 
-**Yang sudah diubah di commit ini (belum di-apply ke VPS):**
-- `build-apk.yml` — tambah `android:usesCleartextTraffic="true"` di manifest
-- `app/[slug]/page.tsx` — storefront responsive: desktop 2-col (menu + cart sidebar), product grid 2→4 kolom
-- `app/[slug]/cart/page.tsx` — desktop 2-col (form kiri + order summary kanan)
-- `app/[slug]/order/[id]/page.tsx` — max-w-2xl (tidak cramped di desktop)
-- `kasir_app/login_page.dart` — fix overflow HP 360dp
-- `kasir_app/table_grid_page.dart` — filter chips bisa scroll horizontal
-
----
-
-### PRIORITAS 2 — Trigger Flutter APK Build v1.0.6
-1. Buka: `https://github.com/muhivan752/Kasira-OS-Intelligence/actions`
-2. Pilih **"Build & Release Kasira Flutter APK"** → **Run workflow**
-3. Isi: version=`1.0.6`, is_mandatory=`false`, release_notes=`fix: responsive layout + cleartext traffic`
-4. Tunggu ~10-15 menit → APK di GitHub Releases
-
-**APK sudah fix:** INTERNET permission ✓, usesCleartextTraffic ✓, login card tidak overflow ✓
-**Default URL APK:** `https://kasira.online` (sudah berjalan, nginx sudah proxy API)
-
----
-
-### PRIORITAS 3 — Setelah pilot berjalan
-- UptimeRobot: monitor `http://103.189.235.164:8000/` dan `http://103.189.235.164:3000/`
+### PRIORITAS 3 — Pending
+- Rebuild frontend VPS (sudah dilakukan sesi ini)
+- UptimeRobot: monitor http://103.189.235.164:8000/ dan http://103.189.235.164:3000/
+- Xendit sub-account → isi xendit_business_id → aktifkan QRIS
+- Upgrade VPS RAM 8GB + disk 80GB
+- IdCloudHost: evaluasi pindah VPS jika masih error
 
 ### Cara reconnect:
 > "baca CLAUDE.md, MEMORY.md, SESSION.md di /var/www/kasira/ lalu lanjut dari NEXT ACTION"

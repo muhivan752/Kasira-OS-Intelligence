@@ -160,6 +160,28 @@
 - VPS sudah live: Ubuntu 22.04, semua container running (backend:8000, frontend:3000, db:5432, redis:6379)
 - Admin: phone 6285270782220, OTP dev: 123456, outlet slug: kasira-coffee
 
+## ✅ AI CHATBOT OWNER (2026-04-09) — Pro Feature
+- [x] Chat UI: `app/dashboard/ai/page.tsx` (SSE streaming, suggestion buttons, purple theme)
+- [x] SSE Proxy: `app/api/ai/route.ts` (Next.js proxy, httpOnly cookie auth)
+- [x] Outlet helper: `app/api/ai/outlet/route.ts`
+- [x] Sidebar nav: `app/dashboard/layout.tsx` — "AI Asisten" + PRO badge
+- [x] Pro tier gate: `backend/api/routes/ai.py` — query tenant.subscription_tier, 403 Starter
+- [x] Tenant model container sync (subscription_tier missing di container lama)
+- [x] Admin tenant upgraded ke `pro` di DB
+- **DONE**: ANTHROPIC_API_KEY sudah di-set dan backend rebuilt (2026-04-09)
+
+## ✅ FIX REGISTER FLOW (2026-04-09)
+- [x] `otp/send` sekarang terima `purpose: "register"` — skip cek user exists, tolak jika nomor sudah terdaftar
+- [x] `auth.ts` pakai BACKEND_INTERNAL_URL + sendOtp() terima purpose param
+- [x] `register/page.tsx` kirim purpose register
+
+## ✅ BUG FIX 2026-04-09 — Realtime Sync + Order Multi-Item
+- [x] Flutter: `ref.invalidate()` dashboardProvider/ordersProvider/productsProvider setelah payment sukses & sync
+- [x] Backend: `selectinload().joinedload()` → `selectinload().selectinload()` di create_order (fix MissingGreenlet crash >1 item)
+- [x] Backend: `metadata=` → `event_metadata=` di stock_service.py (field name salah)
+- [x] `payment_success_page.dart` → ConsumerStatefulWidget (butuh ref untuk invalidate)
+- Commits: `3358b34` + `adf20a9` pushed, backend di-restart via docker cp
+
 ## ✅ BUG FIX 2026-04-05 — Data Mock + Payment
 - [x] `shift_open_page.dart`: ganti TODO mock → real `POST /shifts/open`, simpan shift_session_id ke FlutterSecureStorage
 - [x] `payment_modal.dart`: cash tidak lagi silent fail — tampil error jika shift belum buka / payment gagal + kirim shift_session_id
@@ -172,10 +194,11 @@
 - NOTE: File backend harus di-`docker cp` ke container karena tidak ada volume mount kode
 
 ## ❌ BELUM MULAI (Prioritas sesuai urutan)
-1. **UptimeRobot** — setup monitor http://103.189.235.164:8000/ dan http://103.189.235.164:3000/
-2. **Seed produk demo** — jalankan `docker exec kasira-backend-1 python -m backend.scripts.seed_demo`
-3. **APK Build** — trigger GitHub Actions "Build & Release Kasira Flutter APK"
+1. ~~**ANTHROPIC_API_KEY**~~ — ✅ DONE 2026-04-09
+2. **Git commit + push** — semua perubahan sesi 2026-04-09 belum di-commit
+3. **UptimeRobot** — setup monitor http://103.189.235.164:8000/ dan http://103.189.235.164:3000/
 4. **Xendit sub-account** — daftarkan outlet di Xendit untuk aktifkan QRIS (outlets.xendit_business_id masih NULL)
+5. **IdCloudHost** — evaluasi pindah VPS jika masih error (backup sudah ada: /root/kasira-backup-20260409.tar.gz)
 
 ## Keputusan Teknikal (JANGAN DIUBAH TANPA ALASAN)
 - ORM: SQLAlchemy async (bukan Tortoise)
@@ -199,12 +222,11 @@
 - AI SSE format: {type: chunk/done/error, content, intent, tokens_used, model}
 
 ## Branch Git
-- Branch aktif: `claude/review-documentation-qqAkC`
-- Branch fitur lama: `feat/loyalty-points` (sudah merged ke branch aktif)
-- Semua commit harus ke `claude/review-documentation-qqAkC`
+- Branch aktif: `main`
+- Semua commit langsung ke `main`, push ke `origin/main`
 
 ## Lanjut Berikutnya
-VPS sudah live. Fokus saat ini: bug fixes Owner Dashboard + pilot readiness.
+VPS sudah live. Fokus: Pro features (AI chatbot done, next: tab/bon, multi-outlet).
 - [x] Kategori CRUD di dashboard (tambah/edit/hapus/toggle aktif)
 - [x] Produk CRUD lengkap (tambah/edit/hapus/toggle aktif + upload foto dari device)
 - [x] Fix 307 redirect bug — trailing slash normalization di fetchWithAuth
