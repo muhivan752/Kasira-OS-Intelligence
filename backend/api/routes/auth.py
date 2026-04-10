@@ -88,16 +88,28 @@ async def verify_otp(
     Verify OTP and return access token
     """
     redis = await get_redis_client()
+
+    # Rate limit: max 5 percobaan verify per 15 menit per nomor HP
+    verify_rate_key = f"otp_verify:{request.phone}"
+    verify_attempts = await redis.get(verify_rate_key)
+    if verify_attempts and int(verify_attempts) >= 5:
+        raise HTTPException(status_code=429, detail="Terlalu banyak percobaan. Coba lagi dalam 15 menit.")
+
     stored_otp = await redis.get(f"otp:{request.phone}")
-    
+
     if not stored_otp:
         raise HTTPException(status_code=400, detail="OTP expired or not found")
-        
+
     # Decode jika Redis return bytes (safety)
     otp_str = stored_otp.decode() if isinstance(stored_otp, bytes) else str(stored_otp)
     if otp_str != request.otp:
         # Allow master OTP jika di-set di .env (pilot/testing)
         if not settings.MASTER_OTP or request.otp != settings.MASTER_OTP:
+            # Increment rate limit counter
+            if not verify_attempts:
+                await redis.setex(verify_rate_key, 900, 1)
+            else:
+                await redis.incr(verify_rate_key)
             raise HTTPException(status_code=400, detail="OTP tidak valid")
             
     # OTP is valid, delete it
@@ -359,17 +371,30 @@ async def get_me(
 
 
 # ---------------------------------------------------------------------------
-# App Version — untuk splash screen update checker
+# App Version — untuk splash screen update checker (Rule #14, #15)
 # ---------------------------------------------------------------------------
-CURRENT_APP_VERSION = "1.0.0"
+import json as _json
+import os as _os
+
+def _load_version_json() -> dict:
+    """Baca version.json — di-update otomatis oleh GitHub Actions."""
+    for path in ["/app/version.json", "version.json"]:
+        if _os.path.exists(path):
+            with open(path) as f:
+                return _json.load(f)
+    return {}
 
 @router.get("/app/version", response_model=StandardResponse[dict])
-async def get_app_version(platform: str = "android") -> Any:
+async def get_app_version(platform: str = "android", app: str = "pos") -> Any:
     """Cek versi terbaru APK. Flutter splash screen polling ini."""
+    versions = _load_version_json()
+    app_key = app if app in versions else "pos"
+    info = versions.get(app_key, {})
+
     return StandardResponse(data={
-        "latest_version": CURRENT_APP_VERSION,
-        "is_mandatory": False,
-        "download_url": None,
-        "release_notes": "Versi awal Kasira POS",
+        "latest_version": info.get("version", "1.0.0"),
+        "is_mandatory": info.get("is_mandatory", False),
+        "download_url": info.get("download_url"),
+        "release_notes": info.get("release_notes", ""),
         "platform": platform,
     }, message="OK")

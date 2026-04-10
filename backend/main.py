@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 import json
 import logging
@@ -37,10 +38,13 @@ if settings.SENTRY_DSN and settings.SENTRY_DSN.strip().startswith('http'):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup & shutdown lifecycle — pastikan connection pool Xendit ditutup dengan bersih."""
+    """Startup & shutdown lifecycle."""
     # ── Startup ──────────────────────────────────────────────────────────────
+    from backend.tasks.payment_reconciliation import payment_reconciliation_loop
+    reconciliation_task = asyncio.create_task(payment_reconciliation_loop())
     yield
     # ── Shutdown ─────────────────────────────────────────────────────────────
+    reconciliation_task.cancel()
     await xendit_service.close()
 
 app = FastAPI(
