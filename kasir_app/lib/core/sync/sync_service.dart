@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/app_database.dart';
 import '../utils/hlc.dart';
+import '../utils/pn_counter.dart';
 import 'package:flutter/foundation.dart';
 
 class SyncService {
@@ -89,9 +90,36 @@ class SyncService {
 
   Future<void> _applyServerChanges(Map<String, dynamic> changes) async {
     await db.transaction(() async {
-      // Apply Products
+      // Apply Products — CRDT merge: gabungkan counter lokal & server
       if (changes['products'] != null) {
         for (var p in changes['products']) {
+          final serverPos = p['crdt_positive'] ?? '{}';
+          final serverNeg = p['crdt_negative'] ?? '{}';
+
+          // Cek apakah produk sudah ada di lokal
+          final existing = await (db.select(db.products)
+                ..where((t) => t.id.equals(p['id'])))
+              .getSingleOrNull();
+
+          String mergedPos = serverPos;
+          String mergedNeg = serverNeg;
+          double mergedStock = (p['stock_qty'] as num?)?.toDouble() ?? 0.0;
+
+          if (existing != null && existing.stockEnabled) {
+            // Merge CRDT: ambil max dari setiap node
+            final localPosMap = PNCounter.fromJson(existing.crdtPositive);
+            final localNegMap = PNCounter.fromJson(existing.crdtNegative);
+            final serverPosMap = PNCounter.fromJson(serverPos);
+            final serverNegMap = PNCounter.fromJson(serverNeg);
+
+            final mPos = PNCounter.merge(localPosMap, serverPosMap);
+            final mNeg = PNCounter.merge(localNegMap, serverNegMap);
+
+            mergedPos = PNCounter.toJson(mPos);
+            mergedNeg = PNCounter.toJson(mNeg);
+            mergedStock = PNCounter.getValue(mPos, mNeg);
+          }
+
           await db.into(db.products).insertOnConflictUpdate(
             ProductLocal(
               id: p['id'],
@@ -104,10 +132,9 @@ class SyncService {
               barcode: p['barcode'],
               imageUrl: p['image_url'],
               stockEnabled: p['stock_enabled'] ?? false,
-              // Pure CRDT: simpan kedua G-Counter dari server
-              crdtPositive: p['crdt_positive'] ?? '{}',
-              crdtNegative: p['crdt_negative'] ?? '{}',
-              stockQty: (p['stock_qty'] as num?)?.toDouble() ?? 0.0,
+              crdtPositive: mergedPos,
+              crdtNegative: mergedNeg,
+              stockQty: mergedStock,
               isActive: p['is_active'] ?? true,
               rowVersion: p['row_version'] ?? 0,
               isDeleted: p['is_deleted'] ?? false,

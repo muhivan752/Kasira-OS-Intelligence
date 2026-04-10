@@ -35,6 +35,7 @@ async def get_daily_report(
     ).where(
         Order.outlet_id == outlet_id,
         Order.created_at >= start_of_day,
+        Order.deleted_at.is_(None),
         Order.status != "cancelled",
         Order.id.in_(
             select(Payment.order_id).where(Payment.status == "paid")
@@ -60,6 +61,7 @@ async def get_daily_report(
     ).where(
         Order.outlet_id == outlet_id,
         Order.created_at >= start_of_day,
+        Order.deleted_at.is_(None),
         Order.status != "cancelled",
         Order.id.in_(
             select(Payment.order_id).where(Payment.status == "paid")
@@ -89,6 +91,7 @@ async def get_daily_report(
     ).where(
         Order.outlet_id == outlet_id,
         Order.created_at >= start_of_day,
+        Order.deleted_at.is_(None),
         Order.status != "cancelled",
         Payment.status == "paid"
     ).group_by(
@@ -126,5 +129,6 @@ async def get_daily_report(
     return StandardResponse(
         success=True,
         message="Daily report retrieved successfully",
-        data=data
+        data=data,
+        request_id=request.state.request_id,
     )

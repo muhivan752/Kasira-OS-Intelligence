@@ -12,6 +12,7 @@ from backend.core.database import get_db, tenant_context
 from backend.models.user import User
 from backend.models.tenant import Tenant
 from backend.schemas.token import TokenPayload
+from backend.services.redis import get_redis_client
 
 security_bearer = HTTPBearer()
 
@@ -30,10 +31,18 @@ async def get_current_user(
             detail="Token tidak valid",
         )
     
+    # Cek blacklist (logout) di Redis
+    redis = await get_redis_client()
+    if await redis.get(f"blacklist:{token_data.sub}"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token telah di-revoke. Silakan login ulang.",
+        )
+
     stmt = select(User).where(User.id == token_data.sub, User.deleted_at == None)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="Pengguna tidak ditemukan")
     if not user.is_active:

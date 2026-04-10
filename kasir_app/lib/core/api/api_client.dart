@@ -1,11 +1,12 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
 import '../sync/sync_provider.dart';
 
-// ignore: unused_element
-const _storage = FlutterSecureStorage();
+/// Global navigator key — digunakan untuk redirect ke login dari interceptor
+final navigatorKey = GlobalKey<NavigatorState>();
 
 final apiClientProvider = Provider<Dio>((ref) {
   // rebuild provider saat prefs berubah (base URL update)
@@ -31,8 +32,16 @@ final apiClientProvider = Provider<Dio>((ref) {
       }
       return handler.next(options);
     },
-    onError: (error, handler) {
-      // 401 = token expired, bisa redirect ke login
+    onError: (error, handler) async {
+      if (error.response?.statusCode == 401) {
+        // Token expired/revoked — clear storage & redirect to login
+        const storage = FlutterSecureStorage();
+        await storage.deleteAll();
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
+      }
       return handler.next(error);
     },
   ));

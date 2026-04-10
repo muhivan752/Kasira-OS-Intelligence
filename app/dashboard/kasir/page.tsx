@@ -289,7 +289,7 @@ export default function KasirPage() {
             
             <form onSubmit={handleResetPin} className="p-6 space-y-4">
               <p className="text-sm text-gray-600">
-                Masukkan PIN baru untuk kasir <strong>{selectedCashier?.name}</strong>.
+                Masukkan PIN baru untuk kasir <strong>{selectedCashier?.full_name}</strong>.
               </p>
               
               <div>

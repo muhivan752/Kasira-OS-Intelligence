@@ -72,15 +72,15 @@ export default function LandingPage() {
               <div className="bg-gray-50 p-6">
                 <div className="grid grid-cols-3 gap-4 mb-6">
                   {[
-                    { label: 'Revenue Hari Ini', value: 'Rp 2.4jt', color: 'emerald' },
-                    { label: 'Total Order', value: '47 order', color: 'blue' },
-                    { label: 'Produk Aktif', value: '32 menu', color: 'purple' },
+                    { label: 'Revenue Hari Ini', value: 'Rp 2.4jt', bg: 'bg-emerald-100', bar: 'bg-emerald-500' },
+                    { label: 'Total Order', value: '47 order', bg: 'bg-blue-100', bar: 'bg-blue-500' },
+                    { label: 'Produk Aktif', value: '32 menu', bg: 'bg-purple-100', bar: 'bg-purple-500' },
                   ].map((stat, i) => (
                     <div key={i} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
                       <p className="text-xs text-gray-500 mb-1">{stat.label}</p>
                       <p className="text-xl font-bold text-gray-900">{stat.value}</p>
-                      <div className={`mt-2 h-1 rounded-full bg-${stat.color}-100`}>
-                        <div className={`h-1 rounded-full bg-${stat.color}-500 w-2/3`} />
+                      <div className={`mt-2 h-1 rounded-full ${stat.bg}`}>
+                        <div className={`h-1 rounded-full ${stat.bar} w-2/3`} />
                       </div>
                     </div>
                   ))}

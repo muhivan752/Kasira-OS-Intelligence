@@ -11,6 +11,8 @@ from backend.api.deps import get_current_user
 from backend.models.user import User
 from backend.models.order import Order, OrderItem
 from backend.models.product import Product
+from backend.models.outlet import Outlet
+from backend.models.shift import Shift, ShiftStatus
 from backend.models.tenant import Tenant
 from backend.schemas.order import OrderCreate, OrderUpdateStatus, OrderResponse, OrderStatus
 from backend.schemas.response import StandardResponse
@@ -31,6 +33,42 @@ async def create_order(
     """
     if not order_in.items:
         raise HTTPException(status_code=400, detail="Order harus memiliki minimal 1 item")
+
+    # Validasi outlet milik tenant user
+    outlet = (await db.execute(
+        select(Outlet).where(
+            Outlet.id == order_in.outlet_id,
+            Outlet.tenant_id == current_user.tenant_id,
+            Outlet.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=403, detail="Outlet tidak ditemukan atau bukan milik tenant Anda")
+
+    # Validasi shift terbuka
+    if order_in.shift_session_id:
+        shift = (await db.execute(
+            select(Shift).where(
+                Shift.id == order_in.shift_session_id,
+                Shift.outlet_id == order_in.outlet_id,
+                Shift.status == ShiftStatus.open,
+                Shift.deleted_at.is_(None),
+            )
+        )).scalar_one_or_none()
+        if not shift:
+            raise HTTPException(status_code=400, detail="Shift tidak ditemukan atau sudah ditutup. Buka shift terlebih dahulu.")
+    else:
+        # Cek ada shift terbuka untuk user ini
+        open_shift = (await db.execute(
+            select(Shift).where(
+                Shift.outlet_id == order_in.outlet_id,
+                Shift.user_id == current_user.id,
+                Shift.status == ShiftStatus.open,
+                Shift.deleted_at.is_(None),
+            )
+        )).scalar_one_or_none()
+        if not open_shift:
+            raise HTTPException(status_code=400, detail="Belum ada shift terbuka. Silakan buka shift terlebih dahulu.")
 
     # 1. Create Order
     result = await db.execute(text("SELECT nextval('order_display_seq')"))
@@ -68,6 +106,11 @@ async def create_order(
     await db.flush() # To get order.id
 
     # 2. Process Order Items and Deduct Stock
+    # Fetch tenant once (bukan per item)
+    tenant_stmt = select(Tenant).where(Tenant.id == current_user.tenant_id)
+    tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
+    tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
+
     for item_in in order_in.items:
         # Fetch product to check stock
         product = await db.get(Product, item_in.product_id)
@@ -76,10 +119,6 @@ async def create_order(
 
         # Deduct stock via event-sourced stock service (Starter: transaction-first)
         if product.stock_enabled:
-            tenant_stmt = select(Tenant).where(Tenant.id == current_user.tenant_id)
-            tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
-            tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
-
             await deduct_stock(
                 db,
                 product=product,

@@ -48,7 +48,16 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
     }
   }
 
-  if (res.status === 401) throw new Error('Unauthorized');
+  if (res.status === 401) {
+    // Clear auth cookies on 401 and redirect
+    const { cookies: getCookies } = await import('next/headers');
+    const cookieStore = await getCookies();
+    cookieStore.delete('token');
+    cookieStore.delete('tenant_id');
+    cookieStore.delete('outlet_id');
+    const { redirect } = await import('next/navigation');
+    redirect('/login');
+  }
   return res;
 }
 
@@ -279,18 +288,24 @@ export async function getDailyReport(outletId: string, reportDate: string) {
 }
 
 export async function getWeeklyRevenue(outletId: string) {
-  const data = [];
+  const days: { date: Date; dateStr: string }[] = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    try {
-      const res = await fetchWithAuth(`/reports/daily?outlet_id=${outletId}&report_date=${dateStr}`);
-      const json = await res.json();
-      data.push({ name: d.toLocaleDateString('id-ID', { weekday: 'short' }), revenue: json.data?.total_revenue || 0 });
-    } catch {
-      data.push({ name: d.toLocaleDateString('id-ID', { weekday: 'short' }), revenue: 0 });
-    }
+    days.push({ date: d, dateStr: d.toISOString().split('T')[0] });
   }
-  return data;
+
+  const results = await Promise.all(
+    days.map(async ({ date, dateStr }) => {
+      try {
+        const res = await fetchWithAuth(`/reports/daily?outlet_id=${outletId}&report_date=${dateStr}`);
+        const json = await res.json();
+        return { name: date.toLocaleDateString('id-ID', { weekday: 'short' }), revenue: json.data?.total_revenue || 0 };
+      } catch {
+        return { name: date.toLocaleDateString('id-ID', { weekday: 'short' }), revenue: 0 };
+      }
+    })
+  );
+
+  return results;
 }

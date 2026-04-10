@@ -95,7 +95,23 @@ export default function LaporanPage() {
             <option value="week">7 Hari Terakhir</option>
             <option value="month">30 Hari Terakhir</option>
           </select>
-          <button className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+          <button
+            onClick={() => {
+              if (!orders.length) return;
+              const header = 'No Order,Waktu,Tipe,Metode,Status,Total\n';
+              const rows = orders.map((o: any) =>
+                `${o.order_number},${o.created_at},${o.order_type},${o.payment_method || '-'},${o.status},${o.total_amount}`
+              ).join('\n');
+              const blob = new Blob([header + rows], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `laporan-${filter}-${new Date().toISOString().split('T')[0]}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
             <Download className="w-5 h-5" />
             <span className="hidden sm:inline">Export</span>
           </button>

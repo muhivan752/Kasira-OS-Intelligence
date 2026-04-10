@@ -114,5 +114,7 @@ export async function registerTenant(phone: string, businessName: string, ownerN
 export async function logout() {
   const cookieStore = await cookies();
   cookieStore.delete('token');
+  cookieStore.delete('tenant_id');
+  cookieStore.delete('outlet_id');
   redirect('/login');
 }

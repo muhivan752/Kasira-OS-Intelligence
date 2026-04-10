@@ -24,6 +24,7 @@ from uuid import UUID
 from datetime import datetime, timezone
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.product import Product
@@ -122,21 +123,29 @@ async def deduct_stock(
         else:
             current_version = product.row_version
 
-        result = await db.execute(
-            update(Product)
-            .where(Product.id == product.id, Product.row_version == current_version)
-            .values(
-                stock_qty=stock_after,
-                is_active=is_active,
-                sold_today=Product.sold_today + quantity,
-                sold_total=Product.sold_total + quantity,
-                row_version=Product.row_version + 1,
+        try:
+            result = await db.execute(
+                update(Product)
+                .where(Product.id == product.id, Product.row_version == current_version)
+                .values(
+                    stock_qty=stock_after,
+                    is_active=is_active,
+                    sold_today=Product.sold_today + quantity,
+                    sold_total=Product.sold_total + quantity,
+                    row_version=Product.row_version + 1,
+                )
+                .returning(Product)
             )
-            .returning(Product)
-        )
-        updated = result.scalar_one_or_none()
-        if updated is not None:
-            return updated
+            updated = result.scalar_one_or_none()
+            if updated is not None:
+                return updated
+        except IntegrityError:
+            # CHECK (stock_qty >= 0) violated — race condition
+            await db.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Stok {product.name} tidak mencukupi (race condition detected)"
+            )
 
     raise HTTPException(status_code=409, detail="Konflik data produk setelah 3x retry, silakan coba lagi")
 

@@ -19,8 +19,8 @@ export default function OnboardingPage() {
   // Step 2: First Menu
   const [menuData, setMenuData] = useState({ name: '', price: '' });
 
-  // Step 3: QRIS Setup
-  const [qrisData, setQrisData] = useState({ server_key: '', client_key: '', is_production: false });
+  // Step 3: QRIS Setup (Xendit)
+  const [qrisData, setQrisData] = useState({ xendit_api_key: '' });
 
   useEffect(() => {
     async function loadData() {
@@ -58,11 +58,12 @@ export default function OnboardingPage() {
     
     setSaving(true);
     const res = await createProduct({
-      outlet_id: outlet.id,
+      brand_id: outlet.brand_id,
       name: menuData.name,
-      price: parseFloat(menuData.price),
-      stock: 100, // Default stock
-      is_active: true
+      base_price: parseFloat(menuData.price),
+      stock_qty: 100,
+      stock_enabled: true,
+      is_active: true,
     });
     
     if (res.success) {
@@ -75,25 +76,19 @@ export default function OnboardingPage() {
 
   const handleStep3 = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!qrisData.server_key || !qrisData.client_key) {
-      // Skip
+
+    if (!qrisData.xendit_api_key) {
       setStep(4);
       return;
     }
-    
-    setSaving(true);
-    const payload = {
-      midtrans_server_key: qrisData.server_key,
-      midtrans_client_key: qrisData.client_key,
-      midtrans_is_production: qrisData.is_production
-    };
 
-    const res = await setupPayment(outlet.id, payload);
+    setSaving(true);
+    const { setupPaymentOwnKey } = await import('@/app/actions/api');
+    const res = await setupPaymentOwnKey(outlet.id, qrisData.xendit_api_key);
     if (res.success) {
       setStep(4);
     } else {
-      alert(res.message || 'Key tidak valid. Silakan periksa kembali atau lewati langkah ini.');
+      alert(res.message || 'API Key tidak valid. Silakan periksa kembali atau lewati langkah ini.');
     }
     setSaving(false);
   };
@@ -256,7 +251,7 @@ export default function OnboardingPage() {
             <div className="p-8">
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-gray-900">Terima Pembayaran QRIS</h2>
-                <p className="text-gray-500 mt-2">Hubungkan akun Midtrans untuk menerima pembayaran non-tunai (Opsional).</p>
+                <p className="text-gray-500 mt-2">Hubungkan akun Xendit untuk menerima pembayaran QRIS (Opsional).</p>
               </div>
               
               <form onSubmit={handleStep3} className="space-y-6 max-w-md mx-auto">
@@ -267,23 +262,12 @@ export default function OnboardingPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Server Key</label>
-                  <input 
-                    type="password" 
-                    value={qrisData.server_key}
-                    onChange={e => setQrisData({...qrisData, server_key: e.target.value})}
-                    placeholder="SB-Mid-server-..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Client Key</label>
-                  <input 
-                    type="text" 
-                    value={qrisData.client_key}
-                    onChange={e => setQrisData({...qrisData, client_key: e.target.value})}
-                    placeholder="SB-Mid-client-..."
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Xendit API Key</label>
+                  <input
+                    type="password"
+                    value={qrisData.xendit_api_key}
+                    onChange={e => setQrisData({...qrisData, xendit_api_key: e.target.value})}
+                    placeholder="xnd_production_..."
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
                   />
                 </div>
@@ -298,11 +282,11 @@ export default function OnboardingPage() {
                   </button>
                   <button 
                     type="submit"
-                    disabled={saving || Boolean(!qrisData.server_key && qrisData.client_key) || Boolean(qrisData.server_key && !qrisData.client_key)}
+                    disabled={saving}
                     className="flex items-center justify-center px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
                   >
                     {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
-                    {qrisData.server_key && qrisData.client_key ? 'Test & Lanjut' : 'Lanjut'} <ChevronRight className="w-5 h-5 ml-2" />
+                    {qrisData.xendit_api_key ? 'Simpan & Lanjut' : 'Lanjut'} <ChevronRight className="w-5 h-5 ml-2" />
                   </button>
                 </div>
               </form>

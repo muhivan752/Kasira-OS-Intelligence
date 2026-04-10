@@ -30,8 +30,13 @@ async def sync_data(
     """
     Pure CRDT Sync Engine Endpoint (Pull & Push)
     """
-    # Get user's outlet and brand context
-    result = await db.execute(select(Outlet).filter(Outlet.id == current_user.outlet_id))
+    # Get user's outlet via tenant_id (User model has no outlet_id column)
+    result = await db.execute(
+        select(Outlet).filter(
+            Outlet.tenant_id == current_user.tenant_id,
+            Outlet.deleted_at.is_(None),
+        ).limit(1)
+    )
     outlet = result.scalar_one_or_none()
     if not outlet:
         raise HTTPException(status_code=400, detail="User is not assigned to an outlet")

@@ -73,7 +73,7 @@ async def send_otp(
     success = await send_whatsapp_message(request.phone, message)
     
     if not success:
-        logger.error(f"Failed to send OTP to {request.phone}. OTP was {otp}")
+        logger.error(f"Failed to send OTP to {request.phone}")
         if settings.FONNTE_TOKEN and settings.ENVIRONMENT == "production":
             raise HTTPException(status_code=500, detail="Failed to send OTP via WhatsApp")
             
@@ -252,12 +252,31 @@ async def verify_pin_login(
     db: AsyncSession = Depends(deps.get_db),
 ) -> Any:
     """Login menggunakan phone + PIN — untuk Dapur app tanpa OTP."""
+    # Rate limit: max 5 percobaan PIN per 15 menit per nomor HP
+    redis = await get_redis_client()
+    pin_rate_key = f"pin_attempts:{body.phone}"
+    pin_attempts = await redis.get(pin_rate_key)
+    if pin_attempts and int(pin_attempts) >= 5:
+        raise HTTPException(status_code=429, detail="Terlalu banyak percobaan PIN. Coba lagi dalam 15 menit.")
+
     stmt = select(User).where(User.phone == body.phone, User.deleted_at == None)
     user = (await db.execute(stmt)).scalar_one_or_none()
     if not user or not user.is_active:
+        # Increment rate limit counter even for invalid phone
+        if not pin_attempts:
+            await redis.setex(pin_rate_key, 900, 1)
+        else:
+            await redis.incr(pin_rate_key)
         raise HTTPException(status_code=401, detail="Nomor HP atau PIN salah")
     if not user.pin_hash or not security.verify_pin(body.pin, user.pin_hash):
+        if not pin_attempts:
+            await redis.setex(pin_rate_key, 900, 1)
+        else:
+            await redis.incr(pin_rate_key)
         raise HTTPException(status_code=401, detail="Nomor HP atau PIN salah")
+
+    # Reset counter on success
+    await redis.delete(pin_rate_key)
 
     # Dapur App = fitur Pro — cek tier tenant
     tenant_stmt = select(Tenant).where(Tenant.id == user.tenant_id, Tenant.deleted_at == None)

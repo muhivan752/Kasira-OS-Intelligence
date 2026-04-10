@@ -146,6 +146,13 @@ async def create_payment(
                         
                 payment.qris_url = xendit_res.get("qr_string")
                 payment.xendit_raw = xendit_res
+                # Track QRIS expiry
+                expires_at = xendit_res.get("expires_at")
+                if expires_at:
+                    try:
+                        payment.qris_expired_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+                    except (ValueError, AttributeError):
+                        pass
                 
             except Exception as e:
                 payment.status = PaymentStatus.failed
@@ -223,9 +230,18 @@ async def xendit_webhook(
     if not xendit_callback_token or not xendit_service.verify_webhook(xendit_callback_token):
         raise HTTPException(status_code=400, detail="Invalid Verification Token")
 
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object")
+
     data = payload.get("data", payload)
-    
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Invalid data field in payload")
+
     reference_id_raw = data.get("reference_id", "")
     if "::" not in reference_id_raw:
         return {"status": "ok"}
@@ -235,8 +251,19 @@ async def xendit_webhook(
     try:
         payment_uuid = UUID(order_id_str)
         valid_tenant_id = str(UUID(tenant_id_str))
-        from sqlalchemy import text
-        await db.execute(text(f'SET search_path TO "{valid_tenant_id}", public'))
+        # Gunakan tenant_context supaya search_path di-set via get_db dengan validasi
+        from backend.core.database import tenant_context
+        # Lookup schema_name dari tenant
+        from backend.models.tenant import Tenant
+        tenant_res = await db.execute(select(Tenant).where(Tenant.id == valid_tenant_id))
+        tenant_obj = tenant_res.scalar_one_or_none()
+        if not tenant_obj:
+            return {"status": "ok"}
+        from sqlalchemy import text as sql_text
+        from backend.core.database import _SAFE_TENANT_RE
+        if not _SAFE_TENANT_RE.match(tenant_obj.schema_name):
+            return {"status": "ok"}
+        await db.execute(sql_text(f'SET search_path TO "{tenant_obj.schema_name}", public'))
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid reference_id format")
         

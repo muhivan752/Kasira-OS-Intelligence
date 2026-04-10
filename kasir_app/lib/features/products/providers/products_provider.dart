@@ -1,7 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/database/app_database.dart';
+import '../../../core/sync/sync_provider.dart';
 
 class ProductModel {
   final String id;
@@ -54,33 +57,71 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
     return _fetchProducts();
   }
 
-  Future<List<ProductModel>> _fetchProducts({String? categoryId}) async {
-    final token = await _storage.read(key: 'access_token');
-    final tenantId = await _storage.read(key: 'tenant_id');
+  Future<bool> _isOnline() async {
+    final result = await Connectivity().checkConnectivity();
+    return result.isNotEmpty && !result.contains(ConnectivityResult.none);
+  }
 
-    final dio = Dio(BaseOptions(
-      baseUrl: AppConfig.apiV1,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
-    ));
-
-    final queryParams = <String, dynamic>{
-      if (categoryId != null && categoryId != 'all') 'category_id': categoryId,
-    };
-
-    final response = await dio.get(
-      '/products/',
-      queryParameters: queryParams,
-      options: Options(headers: {
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (tenantId != null) 'X-Tenant-ID': tenantId,
-      }),
-    );
-
-    final items = (response.data['data'] as List)
-        .map((e) => ProductModel.fromJson(e as Map<String, dynamic>))
+  /// Load products dari lokal Drift DB (fallback offline)
+  Future<List<ProductModel>> _fetchFromLocal({String? categoryId}) async {
+    final db = ref.read(databaseProvider);
+    var query = db.select(db.products)
+      ..where((p) => p.isDeleted.equals(false));
+    if (categoryId != null && categoryId != 'all') {
+      query = query..where((p) => p.categoryId.equals(categoryId));
+    }
+    final rows = await query.get();
+    return rows
+        .map((p) => ProductModel(
+              id: p.id,
+              name: p.name,
+              price: p.basePrice,
+              stock: p.stockQty.toInt(),
+              imageUrl: p.imageUrl,
+              categoryId: p.categoryId,
+              isAvailable: p.isActive,
+              rowVersion: p.rowVersion,
+            ))
         .toList();
-    return items;
+  }
+
+  Future<List<ProductModel>> _fetchProducts({String? categoryId}) async {
+    final online = await _isOnline();
+    if (!online) {
+      return _fetchFromLocal(categoryId: categoryId);
+    }
+
+    try {
+      final token = await _storage.read(key: 'access_token');
+      final tenantId = await _storage.read(key: 'tenant_id');
+
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+      ));
+
+      final queryParams = <String, dynamic>{
+        if (categoryId != null && categoryId != 'all') 'category_id': categoryId,
+      };
+
+      final response = await dio.get(
+        '/products/',
+        queryParameters: queryParams,
+        options: Options(headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+          if (tenantId != null) 'X-Tenant-ID': tenantId,
+        }),
+      );
+
+      final items = (response.data['data'] as List)
+          .map((e) => ProductModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      return items;
+    } catch (_) {
+      // Network error — fallback ke lokal
+      return _fetchFromLocal(categoryId: categoryId);
+    }
   }
 
   Future<void> refresh({String? categoryId}) async {

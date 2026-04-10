@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
@@ -108,8 +109,45 @@ class SettingsPage extends StatelessWidget {
                   subtitle: 'Hubungi tim support Kasira',
                   onTap: () {},
                 ),
+
+                const SizedBox(height: 32),
+                _buildSectionTitle('Akun'),
+                _buildSettingTile(
+                  icon: LucideIcons.logOut,
+                  title: 'Keluar (Logout)',
+                  subtitle: 'Keluar dari akun dan hapus sesi',
+                  onTap: () => _confirmLogout(context),
+                ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmLogout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Konfirmasi Logout'),
+        content: const Text('Anda yakin ingin keluar? Semua data sesi akan dihapus.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              const storage = FlutterSecureStorage();
+              await storage.deleteAll();
+              if (context.mounted) {
+                context.go('/login');
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Keluar'),
           ),
         ],
       ),

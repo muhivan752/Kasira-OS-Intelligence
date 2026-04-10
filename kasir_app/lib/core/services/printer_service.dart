@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,6 +48,9 @@ class PrinterState {
 }
 
 class PrinterNotifier extends StateNotifier<PrinterState> {
+  StreamSubscription? _connectSub;
+  StreamSubscription? _scanSub;
+
   PrinterNotifier() : super(const PrinterState()) {
     _init();
   }
@@ -59,16 +63,24 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
       state = state.copyWith(savedDevice: PrinterDevice(name: name, address: mac));
     }
 
-    BluetoothPrintPlus.connectState.listen((s) {
+    _connectSub = BluetoothPrintPlus.connectState.listen((s) {
       state = state.copyWith(isConnected: s == ConnectState.connected);
     });
+  }
+
+  @override
+  void dispose() {
+    _connectSub?.cancel();
+    _scanSub?.cancel();
+    super.dispose();
   }
 
   Future<void> startScan() async {
     state = state.copyWith(isScanning: true, scanResults: [], clearError: true);
     try {
       await BluetoothPrintPlus.startScan(timeout: const Duration(seconds: 6));
-      BluetoothPrintPlus.scanResults.listen((devices) {
+      _scanSub?.cancel();
+      _scanSub = BluetoothPrintPlus.scanResults.listen((devices) {
         state = state.copyWith(scanResults: devices);
       });
     } catch (e) {

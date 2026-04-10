@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/sync/sync_provider.dart';
@@ -98,19 +99,9 @@ class CartNotifier extends StateNotifier<CartState> {
   CartNotifier(this._db) : super(const CartState());
 
   final _storage = const FlutterSecureStorage();
+  static const _uuid = Uuid();
 
-  // Rule #1: UUID untuk semua PK — TIDAK BOLEH integer/timestamp
-  String _generateUuid() {
-    final now = DateTime.now().microsecondsSinceEpoch;
-    final r = now ^ (now >> 16);
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replaceAllMapped(
-      RegExp(r'[xy]'),
-      (m) {
-        final v = m.group(0) == 'x' ? (r >> (m.start * 4)) & 0xf : (r >> (m.start * 4)) & 0x3 | 0x8;
-        return v.toRadixString(16);
-      },
-    );
-  }
+  String _generateUuid() => _uuid.v4();
 
   void addItem(CartItem item) {
     final existing = state.items.indexWhere((i) => i.productId == item.productId);

@@ -127,7 +127,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final errMsg = detail ?? '[${e.type.name}] ${e.message ?? e.error?.toString() ?? 'no message'}';
       state = state.copyWith(isLoading: false, error: errMsg);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Exception: ${e.toString().substring(0, 80)}');
+      final msg = e.toString();
+      state = state.copyWith(isLoading: false, error: 'Exception: ${msg.length > 80 ? msg.substring(0, 80) : msg}');
     }
   }
 
@@ -218,11 +219,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
 
     state = state.copyWith(isLoading: true, clearError: true);
-    
+
     try {
       final savedPin = await _storage.read(key: 'user_pin');
-      
+
       if (savedPin == pin) {
+        // Validasi token masih berlaku dengan hit /auth/me
+        final token = await _storage.read(key: 'access_token');
+        if (token != null) {
+          try {
+            final dio = Dio(BaseOptions(
+              baseUrl: AppConfig.apiV1,
+              connectTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 5),
+            ));
+            final res = await dio.get('/auth/me',
+                options: Options(headers: {'Authorization': 'Bearer $token'}));
+            if (res.statusCode != 200) {
+              state = state.copyWith(
+                isLoading: false,
+                error: 'Sesi expired. Silakan login ulang dengan OTP.',
+                step: AuthStep.inputPhone,
+              );
+              return;
+            }
+          } on DioException {
+            // Offline → izinkan PIN login tanpa validasi server
+          }
+        }
         state = state.copyWith(isLoading: false, pinAttempts: 0, isSuccess: true);
       } else {
         final attempts = state.pinAttempts + 1;

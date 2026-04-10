@@ -47,8 +47,12 @@ async def list_customers(
         Customer.deleted_at.is_(None),
     )
     if search:
+        from sqlalchemy import or_
         query = query.where(
-            Customer.name.ilike(f"%{search}%")
+            or_(
+                Customer.name.ilike(f"%{search}%"),
+                Customer.phone.ilike(f"%{search}%"),
+            )
         )
     query = query.order_by(Customer.name).offset(skip).limit(limit)
     result = await db.execute(query)
@@ -68,6 +72,16 @@ async def create_customer(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Any:
+    # Cek duplikat phone
+    if customer_in.phone:
+        dup_stmt = select(Customer).where(
+            Customer.tenant_id == current_user.tenant_id,
+            Customer.phone == customer_in.phone,
+            Customer.deleted_at.is_(None),
+        )
+        if (await db.execute(dup_stmt)).scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Pelanggan dengan nomor HP ini sudah terdaftar")
+
     customer = Customer(
         tenant_id=current_user.tenant_id,
         name=customer_in.name,
