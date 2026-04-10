@@ -7,11 +7,36 @@ import {
 import Navbar from '@/components/landing/Navbar';
 import FAQ from '@/components/landing/FAQ';
 
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Kasira',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Android, Web',
+  description: 'Kasir digital modern dengan storefront gratis, QRIS tanpa komisi, dan AI insight untuk bisnis F&B dan UMKM Indonesia.',
+  url: 'https://kasira.online',
+  offers: {
+    '@type': 'Offer',
+    price: '99000',
+    priceCurrency: 'IDR',
+    description: 'Starter plan — POS + Storefront + QRIS',
+  },
+  aggregateRating: {
+    '@type': 'AggregateRating',
+    ratingValue: '4.8',
+    ratingCount: '12',
+  },
+};
+
 export default function LandingPage() {
   const waLink = 'https://wa.me/6285270782220?text=Halo%20Kasira%2C%20saya%20mau%20coba%20Kasira';
 
   return (
     <div className="min-h-screen bg-white font-sans">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Navbar />
 
       {/* HERO */}
