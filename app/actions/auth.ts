@@ -3,9 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-const API_URL = process.env.BACKEND_INTERNAL_URL
-  ? `${process.env.BACKEND_INTERNAL_URL}/api/v1`
-  : (process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1');
+const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
 const SECURE_COOKIES = process.env.NEXT_PUBLIC_SECURE_COOKIES === 'true';
 
 export async function sendOtp(phone: string, purpose: 'login' | 'register' = 'login') {

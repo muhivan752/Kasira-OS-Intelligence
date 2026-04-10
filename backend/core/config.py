@@ -50,6 +50,6 @@ class Settings(BaseSettings):
     # Sentry Error Tracking
     SENTRY_DSN: str = ""
 
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
 settings = Settings()

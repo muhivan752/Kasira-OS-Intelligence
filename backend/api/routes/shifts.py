@@ -301,7 +301,7 @@ async def add_cash_activity(
         message="Cash activity added successfully"
     )
 
-@router.get("/{shift_id}/activities", response_model=StandardResponse[List[CashActivityResponse]])
+@router.get("/{shift_id}/activities", response_model=StandardResponse)
 async def get_cash_activities(
     request: Request,
     shift_id: UUID,
