@@ -72,6 +72,12 @@ async def restock_product(
     )
     await db.commit()
 
+    # Re-fetch with category eagerly loaded
+    result = await db.execute(
+        select(Product).options(selectinload(Product.category)).where(Product.id == product_id)
+    )
+    updated_product = result.scalar_one()
+
     return StandardResponse(
         success=True,
         data=ProductResponse.model_validate(updated_product),
@@ -118,8 +124,12 @@ async def create_product(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
     )
-    await db.commit()
-    await db.refresh(product)
+
+    # Re-fetch with category eagerly loaded (avoid MissingGreenlet on ProductResponse.category_name)
+    result = await db.execute(
+        select(Product).options(selectinload(Product.category)).where(Product.id == product.id)
+    )
+    product = result.scalar_one()
 
     return StandardResponse(
         success=True,
@@ -304,6 +314,12 @@ async def update_product(
         tenant_id=current_user.tenant_id,
     )
     await db.commit()
+
+    # Re-fetch with category eagerly loaded
+    result = await db.execute(
+        select(Product).options(selectinload(Product.category)).where(Product.id == product_id)
+    )
+    updated_product = result.scalar_one()
 
     return StandardResponse(
         success=True,
