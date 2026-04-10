@@ -138,6 +138,25 @@ async def deduct_stock(
             )
             updated = result.scalar_one_or_none()
             if updated is not None:
+                # Invalidate storefront cache saat stok berubah
+                try:
+                    from backend.core.config import settings
+                    import redis.asyncio as _redis
+                    _r = _redis.from_url(settings.REDIS_URL, decode_responses=True)
+                    # Get outlet slug for cache key
+                    from backend.models.outlet import Outlet
+                    from backend.models.brand import Brand
+                    brand = await db.get(Brand, updated.brand_id)
+                    if brand:
+                        outlet_res = await db.execute(
+                            select(Outlet).where(Outlet.brand_id == brand.id, Outlet.deleted_at.is_(None)).limit(1)
+                        )
+                        outlet = outlet_res.scalar_one_or_none()
+                        if outlet and outlet.slug:
+                            await _r.delete(f"connect:storefront:{outlet.slug}")
+                    await _r.aclose()
+                except Exception:
+                    pass  # Cache invalidation failure is non-critical
                 return updated
         except IntegrityError:
             # CHECK (stock_qty >= 0) violated — race condition
