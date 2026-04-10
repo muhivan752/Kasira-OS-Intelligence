@@ -220,24 +220,63 @@
 
 ---
 
+## ✅ SELESAI SESI INI (2026-04-10) — Production Hardening + SEO
+
+### Deploy & E2E Test
+- [x] Semua fix deployed ke container (backend + frontend rebuilt)
+- [x] **E2E Test 1 (API)**: 14/14 PASS — register, login, shift, order, payment, stock, audit
+- [x] **E2E Test 2 (Dita Coffee real merchant)**: 20/25 PASS — 5 fail = test script bukan bug
+- [x] MASTER_OTP dihapus dari .env — OTP hanya via WA Fonnte (production mode)
+- [x] APK v1.1.0 built + published di GitHub Releases
+
+### Production Hardening
+- [x] **Payment reconciliation**: asyncio background task, auto-expire pending QRIS >10 min (Rule #38)
+- [x] **OTP verify rate limit**: max 5 attempts/15min per phone (brute-force protection)
+- [x] **APK version endpoint**: reads from version.json (auto-update via GitHub Actions, Rule #14)
+- [x] **Tenant model ENUM**: subscription_tier/status pakai PostgreSQL ENUM (fix register crash)
+- [x] **Audit log auto-commit**: log_audit() sekarang commit sendiri (fix missing audit entries)
+- [x] **Product MissingGreenlet**: selectinload(category) on create/update/restock
+- [x] **Storefront cache invalidation**: Redis cache di-invalidate saat stock berubah
+
+### SEO Landing Page
+- [x] Full metadata: OG, Twitter Card, canonical, keywords, robots directive
+- [x] Dynamic OG image 1200x630 (logo + tagline + value props)
+- [x] Dynamic favicon 32x32
+- [x] robots.ts: allow /, block /dashboard/ /api/ /onboarding/
+- [x] sitemap.xml: homepage, login, register
+- [x] JSON-LD structured data (SoftwareApplication schema)
+
+### Git Commits (10 total hari ini)
+- `c89f01b` — 15 bug fixes (login, shift, connect, reports)
+- `9883770` — auth.ts double path, config extra=ignore
+- `951ed5f` — payment reconciliation + rate limit + APK version
+- `7b834dd` — tenant ENUM + audit auto-commit
+- `decd9c7` — product MissingGreenlet fix
+- `e334ab9` — storefront cache invalidation
+- `a9b6ba5` — complete SEO setup
+
+---
+
 ## ⏭️ NEXT ACTION
 
-### PRIORITAS 1 — Deploy & Test
-- Rebuild backend + frontend container
-- Test: dashboard login dengan OTP 123456
-- Test: buat order dari kasir, cek riwayat kas muncul
-- Test: tutup shift, cek total cash sales akurat
+### PRIORITAS 1 — Test Manual dari HP
+- Install APK v1.1.0 di Android → test full order flow
+- Test offline mode: matikan data → buat order → nyalain lagi → cek sync
+- Test storefront: buka kasira.online/dita-coffee dari HP lain → order
 
-### PRIORITAS 2 — Git Commit & Push
-Perubahan belum di-commit:
-- Bug fix sesi ini (auth, shifts, connect, reports, categories, products, payments)
-- Tab/Bon + Split Bill dari sesi sebelumnya
-- AI Chatbot + Register fix
+### PRIORITAS 2 — Xendit QRIS
+- Daftar Xendit sub-account untuk outlet
+- Set xendit_business_id di outlets table
+- Test QRIS payment end-to-end
 
-### PRIORITAS 3 — Pending
-- UptimeRobot: monitor backend + frontend
-- Xendit sub-account → aktifkan QRIS
-- Upgrade VPS / evaluasi pindah dari IdCloudHost
+### PRIORITAS 3 — Operational
+- UptimeRobot: monitor https://kasira.online/api/v1/auth/app/version
+- Sentry DSN: set di .env untuk error tracking
+- Backup testing: verify pg_dump cron jalan
+
+### PRIORITAS 4 — Nice to Have
+- Printer receipt queue (Rule #49) — pending_receipts SQLite di Flutter
+- PIN login offline untuk kasir (sekarang hanya OTP)
 
 ### Cara reconnect:
 > "baca CLAUDE.md, MEMORY.md, SESSION.md di /var/www/kasira/ lalu lanjut dari NEXT ACTION"
