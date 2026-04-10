@@ -31,4 +31,4 @@ async def log_audit(
         request_id=get_request_id()
     )
     db.add(audit_entry)
-    # We don't commit here, we let the caller commit the transaction
+    await db.commit()

@@ -209,9 +209,11 @@ async def register(
     schema_name = f"tenant_{str(tenant_id).replace('-', '')[:16]}"
     slug = request.business_name.lower().replace(" ", "-")[:50]
 
+    from backend.models.tenant import SubscriptionTier, SubscriptionStatus
     tenant = Tenant(id=tenant_id, name=request.business_name,
                     schema_name=schema_name, is_active=True,
-                    subscription_tier="starter", subscription_status="active")
+                    subscription_tier=SubscriptionTier.starter,
+                    subscription_status=SubscriptionStatus.active)
     brand = Brand(id=brand_id, tenant_id=tenant_id,
                   name=request.business_name, type="cafe", is_active=True)
     outlet = Outlet(id=outlet_id, tenant_id=tenant_id, brand_id=brand_id,
