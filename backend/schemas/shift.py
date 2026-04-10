@@ -51,5 +51,23 @@ class ShiftResponse(ShiftBase):
     class Config:
         from_attributes = True
 
+class CashPaymentSummary(BaseModel):
+    id: UUID
+    order_id: Optional[UUID] = None
+    display_number: Optional[int] = None
+    amount: float
+    change_amount: float = 0
+    net_amount: float  # amount - change
+    payment_method: str
+    status: str
+    paid_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class ShiftWithActivitiesResponse(ShiftResponse):
     activities: List[CashActivityResponse] = []
+    cash_payments: List[CashPaymentSummary] = []
+    total_cash_sales: float = 0
+    total_qris_sales: float = 0

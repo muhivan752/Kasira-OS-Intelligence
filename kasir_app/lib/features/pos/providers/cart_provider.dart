@@ -168,6 +168,7 @@ class CartNotifier extends StateNotifier<CartState> {
       final token = await _storage.read(key: 'access_token');
       final tenantId = await _storage.read(key: 'tenant_id');
       final outletId = await _storage.read(key: 'outlet_id');
+      final shiftId = await _storage.read(key: 'shift_session_id');
 
       if (outletId == null || outletId.isEmpty) {
         state = state.copyWith(
@@ -190,6 +191,7 @@ class CartNotifier extends StateNotifier<CartState> {
         }),
         data: {
           'outlet_id': outletId,
+          if (shiftId != null) 'shift_session_id': shiftId,
           'order_type': state.orderType.toLowerCase().replaceAll(' ', '_'),
           if (state.customerId != null) 'customer_id': state.customerId,
           if (state.tableId != null) 'table_id': state.tableId,

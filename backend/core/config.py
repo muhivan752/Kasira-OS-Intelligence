@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # App Environment
     ENVIRONMENT: str = "development"
 
+    # Master OTP — set di .env untuk bypass OTP saat pilot/testing
+    MASTER_OTP: str = ""
+
     # Claude AI
     ANTHROPIC_API_KEY: str = ""
 

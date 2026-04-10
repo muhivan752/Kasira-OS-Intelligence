@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from datetime import datetime, timezone, date, time
+from datetime import datetime, timezone, date, time, timedelta
 from uuid import UUID
 from typing import Any, Optional
 
@@ -26,7 +26,8 @@ async def get_daily_report(
 ) -> Any:
     target_date = report_date or datetime.now(timezone.utc).date()
     start_of_day = datetime.combine(target_date, time.min).replace(tzinfo=timezone.utc)
-    
+    end_of_day = datetime.combine(target_date + timedelta(days=1), time.min).replace(tzinfo=timezone.utc)
+
     # 1. Order stats (revenue, count, avg)
     # Filter: orders today, status != cancelled, paid
     order_query = select(
@@ -35,10 +36,14 @@ async def get_daily_report(
     ).where(
         Order.outlet_id == outlet_id,
         Order.created_at >= start_of_day,
+        Order.created_at < end_of_day,
         Order.deleted_at.is_(None),
         Order.status != "cancelled",
         Order.id.in_(
-            select(Payment.order_id).where(Payment.status == "paid")
+            select(Payment.order_id).where(
+                Payment.status == "paid",
+                Payment.deleted_at.is_(None),
+            )
         )
     )
     
@@ -61,10 +66,15 @@ async def get_daily_report(
     ).where(
         Order.outlet_id == outlet_id,
         Order.created_at >= start_of_day,
+        Order.created_at < end_of_day,
         Order.deleted_at.is_(None),
+        Product.deleted_at.is_(None),
         Order.status != "cancelled",
         Order.id.in_(
-            select(Payment.order_id).where(Payment.status == "paid")
+            select(Payment.order_id).where(
+                Payment.status == "paid",
+                Payment.deleted_at.is_(None),
+            )
         )
     ).group_by(
         Product.id, Product.name
@@ -91,7 +101,9 @@ async def get_daily_report(
     ).where(
         Order.outlet_id == outlet_id,
         Order.created_at >= start_of_day,
+        Order.created_at < end_of_day,
         Order.deleted_at.is_(None),
+        Payment.deleted_at.is_(None),
         Order.status != "cancelled",
         Payment.status == "paid"
     ).group_by(

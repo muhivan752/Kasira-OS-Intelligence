@@ -55,8 +55,6 @@ async def restock_product(
         tier=tier,
     )
 
-    await db.commit()
-
     await log_audit(
         db=db,
         action="RESTOCK",
@@ -108,9 +106,8 @@ async def create_product(
         is_subscription=product_in.is_subscription
     )
     db.add(product)
-    await db.commit()
-    await db.refresh(product)
-    
+    await db.flush()
+
     # Audit log
     await log_audit(
         db=db,
@@ -122,6 +119,7 @@ async def create_product(
         tenant_id=current_user.tenant_id,
     )
     await db.commit()
+    await db.refresh(product)
 
     return StandardResponse(
         success=True,
@@ -289,8 +287,6 @@ async def update_product(
             detail="Concurrent update detected. Please try again."
         )
         
-    await db.commit()
-    
     # Audit log
     await log_audit(
         db=db,
@@ -331,8 +327,7 @@ async def delete_product(
         raise HTTPException(status_code=404, detail="Product not found")
         
     product.deleted_at = datetime.now(timezone.utc)
-    await db.commit()
-    
+
     # Audit log
     await log_audit(
         db=db,

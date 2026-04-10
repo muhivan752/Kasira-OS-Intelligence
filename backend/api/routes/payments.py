@@ -193,9 +193,12 @@ async def create_payment(
                         if cashier:
                             cashier_name = cashier.full_name
                     struk = _build_receipt_text(order, outlet_name, cashier_name, payment_in.payment_method)
-                    asyncio.create_task(
-                        send_whatsapp_message(customer.phone, struk)
-                    )
+                    try:
+                        asyncio.create_task(
+                            send_whatsapp_message(customer.phone, struk)
+                        )
+                    except Exception:
+                        pass  # WA gagal tidak boleh block payment
 
     await db.commit()
     await db.refresh(payment)

@@ -13,12 +13,65 @@ from backend.models.user import User
 from backend.models.shift import Shift, CashActivity, ShiftStatus, CashActivityType
 from backend.schemas.shift import (
     ShiftCreate, ShiftClose, ShiftResponse, ShiftWithActivitiesResponse,
-    CashActivityCreate, CashActivityResponse
+    CashActivityCreate, CashActivityResponse, CashPaymentSummary
 )
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
+from backend.models.payment import Payment
+from backend.models.order import Order
 
 router = APIRouter()
+
+
+async def _enrich_shift_with_payments(db: AsyncSession, shift) -> dict:
+    """Tambahkan data cash payments ke shift response."""
+    shift_data = ShiftWithActivitiesResponse.model_validate(shift)
+
+    # Query semua payments dari shift ini
+    pay_query = select(Payment).where(
+        Payment.shift_session_id == shift.id,
+        Payment.status == 'paid',
+        Payment.deleted_at.is_(None),
+    ).order_by(Payment.created_at.desc())
+    pay_result = await db.execute(pay_query)
+    payments = pay_result.scalars().all()
+
+    total_cash = 0.0
+    total_qris = 0.0
+    cash_payments_list = []
+
+    for p in payments:
+        net = float(p.amount_paid) - float(p.change_amount or 0)
+        # Get display_number dari order
+        display_number = None
+        if p.order_id:
+            order = await db.get(Order, p.order_id)
+            if order:
+                display_number = order.display_number
+
+        cash_payments_list.append(CashPaymentSummary(
+            id=p.id,
+            order_id=p.order_id,
+            display_number=display_number,
+            amount=float(p.amount_paid),
+            change_amount=float(p.change_amount or 0),
+            net_amount=net,
+            payment_method=p.payment_method,
+            status=p.status,
+            paid_at=p.paid_at,
+            created_at=p.created_at,
+        ))
+
+        if p.payment_method == 'cash':
+            total_cash += net
+        elif p.payment_method == 'qris':
+            total_qris += net
+
+    shift_data.cash_payments = cash_payments_list
+    shift_data.total_cash_sales = total_cash
+    shift_data.total_qris_sales = total_qris
+    return shift_data
+
 
 @router.post("/open", response_model=StandardResponse[ShiftResponse])
 async def open_shift(
@@ -101,10 +154,11 @@ async def get_current_shift(
             request_id=request.state.request_id,
             message="No open shift found"
         )
-        
+
+    enriched = await _enrich_shift_with_payments(db, shift)
     return StandardResponse(
         success=True,
-        data=ShiftWithActivitiesResponse.model_validate(shift),
+        data=enriched,
         request_id=request.state.request_id
     )
 
@@ -150,7 +204,6 @@ async def close_shift(
     expense = totals.get(CashActivityType.expense, 0)
     
     # Calculate cash payments from orders
-    from backend.models.payment import Payment
     cash_payments_query = select(
         func.sum(Payment.amount_paid - Payment.change_amount).label("total_cash")
     ).where(
@@ -266,8 +319,40 @@ async def get_cash_activities(
     result = await db.execute(query)
     activities = result.scalars().all()
     
+    # Include cash payment transactions from this shift
+    pay_query = select(Payment).where(
+        Payment.shift_session_id == shift_id,
+        Payment.status == 'paid',
+        Payment.deleted_at.is_(None),
+    ).order_by(Payment.created_at.desc())
+    pay_result = await db.execute(pay_query)
+    payments = pay_result.scalars().all()
+
+    payment_items = []
+    for p in payments:
+        display_number = None
+        if p.order_id:
+            order = await db.get(Order, p.order_id)
+            if order:
+                display_number = order.display_number
+        payment_items.append(CashPaymentSummary(
+            id=p.id,
+            order_id=p.order_id,
+            display_number=display_number,
+            amount=float(p.amount_paid),
+            change_amount=float(p.change_amount or 0),
+            net_amount=float(p.amount_paid) - float(p.change_amount or 0),
+            payment_method=p.payment_method,
+            status=p.status,
+            paid_at=p.paid_at,
+            created_at=p.created_at,
+        ))
+
     return StandardResponse(
         success=True,
-        data=[CashActivityResponse.model_validate(a) for a in activities],
+        data={
+            "activities": [CashActivityResponse.model_validate(a) for a in activities],
+            "cash_payments": [cp.model_dump(mode='json') for cp in payment_items],
+        },
         request_id=request.state.request_id
     )

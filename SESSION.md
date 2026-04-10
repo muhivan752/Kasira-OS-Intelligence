@@ -177,25 +177,67 @@
 
 ---
 
+## ✅ SELESAI SESI INI (2026-04-10) — Deep Bug Fix Starter Production-Ready
+
+### CRITICAL FIX 1: Dashboard Login Gagal
+- [x] `config.py`: tambah `MASTER_OTP` setting (configurable, bukan hardcoded "123456")
+- [x] `auth.py`: OTP verify + register → pakai `settings.MASTER_OTP`, decode bytes safety
+- [x] `.env`: tambah `MASTER_OTP=123456` + `BACKEND_INTERNAL_URL=http://backend:8000`
+- **Root cause**: ENVIRONMENT=production block hardcoded dev OTP "123456", BACKEND_INTERNAL_URL tidak di-set
+
+### CRITICAL FIX 2: Riwayat Kas Tidak Sinkron
+- [x] `schemas/shift.py`: tambah `CashPaymentSummary`, `ShiftWithActivitiesResponse` sekarang include `cash_payments`, `total_cash_sales`, `total_qris_sales`
+- [x] `shifts.py`: `_enrich_shift_with_payments()` — query Payment linked ke shift, return display_number + net amount
+- [x] `shifts.py`: GET `/shifts/{id}/activities` sekarang return `{activities, cash_payments}`
+- [x] `shift_page.dart`: tampilkan Penjualan Cash, QRIS, Penerimaan Lainnya, Pengeluaran di tutup shift
+- [x] `cash_drawer_history_page.dart`: merge CashActivity + Payment transactions, sorted by time
+- **Root cause**: shift activities cuma CashActivity, payment transactions tidak termasuk
+
+### CRITICAL FIX 3: Connect Order — Stock Event + Audit Log
+- [x] `connect.py`: stok deduction sekarang via `deduct_stock()` service (event-sourced, Golden Rule #8)
+- [x] `connect.py`: tambah `log_audit()` setelah order commit (Golden Rule #2)
+- [x] `connect.py`: restructure flow — create order dulu, deduct stock dengan order_id
+
+### HIGH FIX 4: Flutter Online Order Missing shift_session_id
+- [x] `cart_provider.dart`: `_submitOnline()` sekarang baca `shift_session_id` dari SecureStorage, kirim ke backend
+
+### HIGH FIX 5: Connect Bugs
+- [x] `connect.py`: `Table.is_active == 'true'` → `True` (boolean)
+- [x] `connect.py`: idempotency key scoped ke outlet (JOIN ConnectOutlet)
+- [x] `connect.py`: `datetime.datetime.utcnow()` → `datetime.datetime.now(datetime.timezone.utc)`
+
+### HIGH FIX 6: Double Commits
+- [x] `categories.py`: 3 endpoint (create/update/delete) — hapus double commit, pakai flush+commit
+- [x] `products.py`: 4 endpoint (create/update/delete/restock) — hapus double commit
+
+### MEDIUM FIX 7: Reports
+- [x] `reports.py`: tambah `end_of_day` boundary (sebelumnya cuma `>= start_of_day`, bisa bocor next day)
+- [x] `reports.py`: tambah `Product.deleted_at.is_(None)` di top_products join
+- [x] `reports.py`: tambah `Payment.deleted_at.is_(None)` di semua subquery
+
+### OTHER
+- [x] `payments.py`: `asyncio.create_task()` WA receipt wrapped in try/except (fire-and-forget safety)
+
+---
+
 ## ⏭️ NEXT ACTION
 
-### PRIORITAS 1 — Git Commit & Push
-Perubahan belum di-commit:
-- Tab/Bon + Split Bill (migration, models, schemas, routes)
-- AI Chatbot + Register fix (sudah committed: 9b6dafc)
-- ANTHROPIC_API_KEY (✅ set, backend rebuilt)
+### PRIORITAS 1 — Deploy & Test
+- Rebuild backend + frontend container
+- Test: dashboard login dengan OTP 123456
+- Test: buat order dari kasir, cek riwayat kas muncul
+- Test: tutup shift, cek total cash sales akurat
 
-### PRIORITAS 2 — Flutter UI untuk Tab/Split Bill
-Backend sudah siap, butuh Flutter kasir UI:
-- Tab management screen (buka/tutup tab per meja)
-- Split bill modal (pilih metode: rata/per-item/custom)
-- Pay split screen (bayar per orang, beda metode)
+### PRIORITAS 2 — Git Commit & Push
+Perubahan belum di-commit:
+- Bug fix sesi ini (auth, shifts, connect, reports, categories, products, payments)
+- Tab/Bon + Split Bill dari sesi sebelumnya
+- AI Chatbot + Register fix
 
 ### PRIORITAS 3 — Pending
 - UptimeRobot: monitor backend + frontend
 - Xendit sub-account → aktifkan QRIS
 - Upgrade VPS / evaluasi pindah dari IdCloudHost
-- Next.js dashboard: tab management page untuk owner
 
 ### Cara reconnect:
 > "baca CLAUDE.md, MEMORY.md, SESSION.md di /var/www/kasira/ lalu lanjut dari NEXT ACTION"

@@ -154,6 +154,8 @@ class _ShiftPageState extends State<ShiftPage> {
     final startingCash = (_shift!['starting_cash'] as num?)?.toDouble() ?? 0;
     final expectedCash = (_shift!['expected_ending_cash'] as num?)?.toDouble();
     final activities = (_shift!['activities'] as List?) ?? [];
+    final totalCashSales = (_shift!['total_cash_sales'] as num?)?.toDouble() ?? 0;
+    final totalQrisSales = (_shift!['total_qris_sales'] as num?)?.toDouble() ?? 0;
 
     double cashIn = 0, cashOut = 0;
     for (final a in activities) {
@@ -162,7 +164,7 @@ class _ShiftPageState extends State<ShiftPage> {
       if (a['activity_type'] == 'expense') cashOut += amount;
     }
 
-    final systemTotal = expectedCash ?? (startingCash + cashIn - cashOut);
+    final systemTotal = expectedCash ?? (startingCash + cashIn - cashOut + totalCashSales);
 
     return Center(
       child: SingleChildScrollView(
@@ -186,7 +188,11 @@ class _ShiftPageState extends State<ShiftPage> {
               const SizedBox(height: 32),
               _buildRow('Uang Modal Awal', _currency.format(startingCash)),
               const SizedBox(height: 12),
-              _buildRow('Penerimaan Kas', _currency.format(cashIn)),
+              _buildRow('Penjualan Cash', _currency.format(totalCashSales)),
+              const SizedBox(height: 12),
+              _buildRow('Penjualan QRIS', _currency.format(totalQrisSales)),
+              const SizedBox(height: 12),
+              _buildRow('Penerimaan Kas Lainnya', _currency.format(cashIn)),
               const SizedBox(height: 12),
               _buildRow('Pengeluaran Kas', _currency.format(cashOut), isNegative: true),
               const Divider(height: 32),

@@ -17,6 +17,8 @@ from backend.schemas.response import StandardResponse
 import redis.asyncio as redis
 from backend.models.connect import ConnectOutlet, ConnectOrder
 from backend.models.customer import Customer
+from backend.services.audit import log_audit
+from backend.services.stock_service import deduct_stock
 import datetime
 
 router = APIRouter()
@@ -179,9 +181,12 @@ async def create_connect_order(
     if not outlet.is_open:
         raise HTTPException(status_code=400, detail="Maaf, outlet sedang tutup")
 
-    # Check idempotency key
+    # Check idempotency key (scoped ke outlet via connect_outlet)
     result = await db.execute(
-        select(ConnectOrder).where(ConnectOrder.idempotency_key == input_data.idempotency_key)
+        select(ConnectOrder).join(ConnectOutlet).where(
+            ConnectOrder.idempotency_key == input_data.idempotency_key,
+            ConnectOutlet.outlet_id == outlet.id,
+        )
     )
     existing_connect_order = result.scalar_one_or_none()
     if existing_connect_order:
@@ -257,9 +262,10 @@ async def create_connect_order(
         db.add(customer)
         await db.flush()
 
-    # Calculate totals and create order items
+    # Calculate totals and validate stock
     subtotal = 0
     order_items = []
+    stock_deductions = []  # (product, qty) — deduct setelah order dibuat (butuh order_id)
     for item_input in input_data.items:
         # Use with_for_update to prevent race conditions on stock
         result = await db.execute(
@@ -269,19 +275,18 @@ async def create_connect_order(
             ).with_for_update()
         )
         product = result.scalar_one_or_none()
-        
+
         if not product or not product.is_active:
             raise HTTPException(status_code=400, detail="Produk tidak tersedia")
-            
+
         if product.stock_enabled:
             if product.stock_qty < item_input.qty:
                 raise HTTPException(status_code=400, detail=f"Stok habis untuk produk {product.name}")
-            product.stock_qty -= item_input.qty
-            product.row_version += 1
-        
+            stock_deductions.append((product, item_input.qty))
+
         item_total = product.base_price * item_input.qty
         subtotal += item_total
-        
+
         order_items.append(OrderItem(
             product_id=product.id,
             quantity=item_input.qty,
@@ -296,10 +301,10 @@ async def create_connect_order(
         text("SELECT nextval('order_display_seq')")
     )
     display_number = result.scalar()
-    
-    today = datetime.datetime.now().strftime("%Y%m%d")
+
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
     order_number = f"ORD-{today}-{display_number}"
-    
+
     order = Order(
         outlet_id=outlet.id,
         customer_id=customer.id,
@@ -318,6 +323,18 @@ async def create_connect_order(
     for item in order_items:
         item.order_id = order.id
         db.add(item)
+
+    # Deduct stock via event-sourced service (Golden Rule #8)
+    for product, qty in stock_deductions:
+        await deduct_stock(
+            db,
+            product=product,
+            quantity=qty,
+            outlet_id=outlet.id,
+            order_id=order.id,
+            user_id=None,
+            tier="starter",
+        )
 
     # Create Payment
     from backend.models.payment import Payment
@@ -357,8 +374,8 @@ async def create_connect_order(
                 payment.qris_url = qris_url
                 payment.xendit_raw = xendit_res
                 qris_expired_at = (
-                    datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
-                ).isoformat() + "Z"
+                    datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15)
+                ).isoformat()
             except Exception as e:
                 payment.status = PaymentStatus.failed
                 payment.xendit_raw = {"error": str(e)}
@@ -383,6 +400,22 @@ async def create_connect_order(
     
     await db.commit()
     await db.refresh(order)
+
+    # Audit log (Golden Rule #2)
+    await log_audit(
+        db=db,
+        action="CREATE_CONNECT_ORDER",
+        entity="order",
+        entity_id=str(order.id),
+        after_state={
+            "display_number": order.display_number,
+            "total": float(subtotal),
+            "payment_method": input_data.payment_method,
+            "customer_phone": input_data.customer_phone,
+        },
+        user_id=None,
+        tenant_id=str(outlet.tenant_id),
+    )
 
     # Send WA confirmation
     background_tasks.add_task(
@@ -433,7 +466,7 @@ async def get_available_tables(slug: str, db: AsyncSession = Depends(get_db)):
     tables_result = await db.execute(
         select(Table).where(
             Table.outlet_id == outlet.id,
-            Table.is_active == 'true',
+            Table.is_active == True,
             Table.status == 'available',
             Table.deleted_at.is_(None),
         ).order_by(Table.name)

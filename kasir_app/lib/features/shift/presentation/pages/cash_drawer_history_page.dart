@@ -54,15 +54,51 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
         options: Options(headers: headers),
       );
 
-      final list = (res.data['data'] as List? ?? []).cast<Map<String, dynamic>>();
+      final data = res.data['data'];
+      // Backend sekarang return {activities: [...], cash_payments: [...]}
+      final List<Map<String, dynamic>> activityList;
+      final List<Map<String, dynamic>> paymentList;
+      if (data is Map) {
+        activityList = ((data['activities'] as List?) ?? []).cast<Map<String, dynamic>>();
+        paymentList = ((data['cash_payments'] as List?) ?? []).cast<Map<String, dynamic>>();
+      } else {
+        // Fallback: old format (list only)
+        activityList = (data as List? ?? []).cast<Map<String, dynamic>>();
+        paymentList = [];
+      }
+
       double totalIn = 0, totalOut = 0;
-      for (final a in list) {
+      final allItems = <Map<String, dynamic>>[];
+
+      for (final a in activityList) {
         final amount = (a['amount'] as num?)?.toDouble() ?? 0;
         if (a['activity_type'] == 'income') totalIn += amount;
         if (a['activity_type'] == 'expense') totalOut += amount;
+        allItems.add(a);
       }
 
-      if (mounted) setState(() { _activities = list; _totalIn = totalIn; _totalOut = totalOut; _isLoading = false; });
+      // Tambahkan payment transactions sebagai "income" items
+      for (final p in paymentList) {
+        final net = (p['net_amount'] as num?)?.toDouble() ?? 0;
+        final method = p['payment_method'] ?? 'cash';
+        final displayNum = p['display_number'];
+        totalIn += net;
+        allItems.add({
+          'activity_type': 'income',
+          'amount': net,
+          'description': 'Order #${displayNum ?? '-'} (${method == 'qris' ? 'QRIS' : 'Cash'})',
+          'created_at': p['paid_at'] ?? p['created_at'],
+        });
+      }
+
+      // Sort by created_at descending
+      allItems.sort((a, b) {
+        final aTime = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(2000);
+        final bTime = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(2000);
+        return bTime.compareTo(aTime);
+      });
+
+      if (mounted) setState(() { _activities = allItems; _totalIn = totalIn; _totalOut = totalOut; _isLoading = false; });
     } on DioException catch (e) {
       final msg = e.response?.data?['detail'] ?? 'Gagal memuat riwayat kas';
       if (mounted) setState(() { _error = msg.toString(); _isLoading = false; });

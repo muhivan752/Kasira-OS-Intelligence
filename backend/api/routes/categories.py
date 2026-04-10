@@ -30,9 +30,8 @@ async def create_category(
         is_active=category_in.is_active
     )
     db.add(category)
-    await db.commit()
-    await db.refresh(category)
-    
+    await db.flush()
+
     # Audit log
     await log_audit(
         db=db,
@@ -44,6 +43,7 @@ async def create_category(
         tenant_id=current_user.tenant_id,
     )
     await db.commit()
+    await db.refresh(category)
 
     return StandardResponse(
         success=True,
@@ -118,10 +118,7 @@ async def update_category(
     update_data = category_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(category, field, value)
-        
-    await db.commit()
-    await db.refresh(category)
-    
+
     # Audit log
     await log_audit(
         db=db,
@@ -134,6 +131,7 @@ async def update_category(
         tenant_id=current_user.tenant_id,
     )
     await db.commit()
+    await db.refresh(category)
 
     return StandardResponse(
         success=True,
@@ -159,8 +157,7 @@ async def delete_category(
         raise HTTPException(status_code=404, detail="Category not found")
         
     category.deleted_at = datetime.now(timezone.utc)
-    await db.commit()
-    
+
     # Audit log
     await log_audit(
         db=db,

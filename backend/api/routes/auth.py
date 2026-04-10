@@ -93,10 +93,12 @@ async def verify_otp(
     if not stored_otp:
         raise HTTPException(status_code=400, detail="OTP expired or not found")
         
-    if stored_otp != request.otp:
-        # For development, allow a master OTP if configured, or just fail
-        if request.otp != "123456" or settings.ENVIRONMENT == "production":
-            raise HTTPException(status_code=400, detail="Invalid OTP")
+    # Decode jika Redis return bytes (safety)
+    otp_str = stored_otp.decode() if isinstance(stored_otp, bytes) else str(stored_otp)
+    if otp_str != request.otp:
+        # Allow master OTP jika di-set di .env (pilot/testing)
+        if not settings.MASTER_OTP or request.otp != settings.MASTER_OTP:
+            raise HTTPException(status_code=400, detail="OTP tidak valid")
             
     # OTP is valid, delete it
     await redis.delete(f"otp:{request.phone}")
@@ -176,8 +178,9 @@ async def register(
     stored_otp = await redis.get(f"otp:{request.phone}")
     if not stored_otp:
         raise HTTPException(status_code=400, detail="OTP expired atau tidak ditemukan. Kirim ulang OTP.")
-    if stored_otp != request.otp:
-        if request.otp != "123456" or settings.ENVIRONMENT == "production":
+    otp_str_reg = stored_otp.decode() if isinstance(stored_otp, bytes) else str(stored_otp)
+    if otp_str_reg != request.otp:
+        if not settings.MASTER_OTP or request.otp != settings.MASTER_OTP:
             raise HTTPException(status_code=400, detail="OTP tidak valid")
     await redis.delete(f"otp:{request.phone}")
 
