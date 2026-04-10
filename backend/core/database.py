@@ -5,8 +5,10 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy import text
 from backend.core.config import settings
 
-# Regex ketat: hanya izinkan format tenant_XXXX (hex, max 16 char)
+# Regex ketat: hanya izinkan format tenant_XXXX (hex, max 16 char) untuk schema-per-tenant
 _SAFE_TENANT_RE = re.compile(r'^tenant_[0-9a-f]{1,16}$')
+# UUID format (used as column filter, NOT as schema name)
+_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
 
 # Context variable to store tenant_id for the current request
 tenant_context = contextvars.ContextVar("tenant_id", default="public")
@@ -33,7 +35,8 @@ async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         tenant_id = tenant_context.get()
         # Set search_path for schema-per-tenant
-        if tenant_id and tenant_id != "public":
+        # UUID tenant_ids are used as column filters only — keep search_path on public
+        if tenant_id and tenant_id != "public" and not _UUID_RE.match(tenant_id):
             # Validasi ketat: hanya tenant_<hex16> yang diizinkan
             if not _SAFE_TENANT_RE.match(tenant_id):
                 raise ValueError(f"Invalid tenant_id format: {tenant_id}")
