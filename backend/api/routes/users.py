@@ -9,10 +9,20 @@ from sqlalchemy import select
 from backend.api import deps
 from backend.core.security import get_pin_hash
 from backend.models.user import User
+from backend.models.tenant import Tenant
 from backend.schemas.user import User as UserSchema, UserCreateWithPIN, UserUpdate
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
+from sqlalchemy import func
 import json
+
+# Batas kasir per tier (tidak termasuk owner)
+CASHIER_LIMITS = {
+    "starter": 1,
+    "pro": 5,
+    "business": 999,
+    "enterprise": 999,
+}
 
 router = APIRouter()
 
@@ -63,6 +73,29 @@ async def create_cashier(
     """Create a new cashier for the current tenant. Owner only."""
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Hanya owner yang bisa menambah kasir")
+
+    # Cek limit kasir per tier
+    tenant_result = await db.execute(
+        select(Tenant).where(Tenant.id == current_user.tenant_id, Tenant.deleted_at == None)
+    )
+    tenant = tenant_result.scalar_one_or_none()
+    tier = tenant.subscription_tier.value if hasattr(tenant.subscription_tier, 'value') else str(tenant.subscription_tier or 'starter')
+    max_cashiers = CASHIER_LIMITS.get(tier, 1)
+
+    active_cashier_count = (await db.execute(
+        select(func.count(User.id)).where(
+            User.tenant_id == current_user.tenant_id,
+            User.is_superuser == False,
+            User.is_active == True,
+            User.deleted_at == None,
+        )
+    )).scalar() or 0
+
+    if active_cashier_count >= max_cashiers:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Batas kasir untuk paket {tier.capitalize()} adalah {max_cashiers}. Upgrade untuk menambah kasir.",
+        )
 
     # Validate phone format
     if not cashier_in.phone.startswith("628"):
