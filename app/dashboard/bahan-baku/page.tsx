@@ -177,86 +177,110 @@ export default function BahanBakuPage() {
         </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-        <table className="w-full min-w-[600px]">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Nama</th>
-              <th className="hidden sm:table-cell text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Unit</th>
-              <th className="hidden lg:table-cell text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Harga Beli</th>
-              <th className="text-right px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Cost/Unit</th>
-              <th className="text-right px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Stok</th>
-              <th className="hidden md:table-cell text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Tipe</th>
-              <th className="text-right px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {ingredients.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
-                  <Package className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                  Belum ada bahan baku. Klik "Tambah Bahan" untuk memulai.
-                </td>
-              </tr>
-            ) : (
-              ingredients.map((ing) => {
-                const isLow = ing.current_stock !== undefined && ing.min_stock !== undefined && ing.current_stock <= ing.min_stock;
-                return (
-                  <tr key={ing.id} className="hover:bg-gray-50">
-                    <td className="px-4 sm:px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">{ing.name}</span>
-                        {isLow && <AlertTriangle className="w-4 h-4 text-amber-500" />}
-                      </div>
-                      <span className="sm:hidden text-xs text-gray-400">{ing.base_unit}</span>
-                      {ing.used_in && ing.used_in.length > 0 ? (
-                        <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[250px]">
-                          Dipakai: {ing.used_in.map(u => `${u.product_name} (${u.qty_per_serving}${u.unit})`).join(', ')}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-amber-500 mt-0.5">Belum dipakai di menu manapun</p>
-                      )}
-                    </td>
-                    <td className="hidden sm:table-cell px-6 py-4 text-gray-600">{ing.base_unit}</td>
-                    <td className="hidden lg:table-cell px-6 py-4 text-right text-gray-600">
-                      {ing.buy_price ? (
-                        <span>{formatCurrency(ing.buy_price)} / {ing.buy_qty} {ing.base_unit}</span>
-                      ) : '-'}
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 text-right text-gray-900 text-sm">{formatCurrency(ing.cost_per_base_unit)}/{ing.base_unit}</td>
-                    <td className="px-4 sm:px-6 py-4 text-right">
-                      <span className={`font-semibold text-sm ${isLow ? 'text-red-600' : 'text-gray-900'}`}>
-                        {ing.current_stock !== undefined ? `${ing.current_stock}` : '-'}
-                      </span>
-                    </td>
-                    <td className="hidden md:table-cell px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+      {/* Summary */}
+      {ingredients.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="bg-white p-4 rounded-xl border border-gray-200">
+            <p className="text-xs text-gray-500">Total Bahan</p>
+            <p className="text-xl font-bold mt-1">{ingredients.length}</p>
+          </div>
+          <div className="bg-white p-4 rounded-xl border border-gray-200">
+            <p className="text-xs text-gray-500">Terhubung ke Menu</p>
+            <p className="text-xl font-bold text-green-600 mt-1">{ingredients.filter(i => i.used_in && i.used_in.length > 0).length}</p>
+          </div>
+          <div className="bg-white p-4 rounded-xl border border-gray-200">
+            <p className="text-xs text-gray-500">Belum Terhubung</p>
+            <p className="text-xl font-bold text-amber-500 mt-1">{ingredients.filter(i => !i.used_in || i.used_in.length === 0).length}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Ingredient Cards */}
+      {ingredients.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 px-6 py-12 text-center text-gray-400">
+          <Package className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+          Belum ada bahan baku. Klik "Tambah Bahan" untuk memulai.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {ingredients.map((ing) => {
+            const isLow = ing.current_stock !== undefined && ing.min_stock !== undefined && ing.current_stock <= ing.min_stock;
+            return (
+              <div key={ing.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+                {/* Header: name + badge + actions */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-semibold text-gray-900">{ing.name}</h3>
+                      {isLow && <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />}
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                         ing.ingredient_type === 'recipe' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'
                       }`}>
                         {ing.ingredient_type === 'recipe' ? 'Resep' : 'Overhead'}
                       </span>
-                    </td>
-                    <td className="px-4 sm:px-6 py-4">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openRestock(ing)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg" title="Restock">
-                          <RefreshCw className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => openEdit(ing)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDelete(ing.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Hapus">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => openRestock(ing)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg" title="Restock">
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => openEdit(ing)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(ing.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Hapus">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Info grid: stok + harga */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-gray-400">Stok</p>
+                    <p className={`font-semibold ${isLow ? 'text-red-600' : 'text-gray-900'}`}>
+                      {ing.current_stock !== undefined ? `${ing.current_stock} ${ing.base_unit}` : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400">Cost/Unit</p>
+                    <p className="font-medium text-gray-900">{formatCurrency(ing.cost_per_base_unit)}/{ing.base_unit}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400">Harga Beli</p>
+                    <p className="text-gray-600">
+                      {ing.buy_price > 0 ? `${formatCurrency(ing.buy_price)} / ${ing.buy_qty}${ing.base_unit}` : <span className="text-amber-500">Belum diisi</span>}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400">Satuan</p>
+                    <p className="text-gray-600">{ing.base_unit} ({ing.unit_type})</p>
+                  </div>
+                </div>
+
+                {/* Pemakaian per menu — SOURCE OF TRUTH */}
+                <div className="border-t border-gray-100 pt-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Pemakaian per Porsi</p>
+                  {ing.used_in && ing.used_in.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {ing.used_in.map((u, idx) => (
+                        <a key={idx} href="/dashboard/menu" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition">
+                          <span className="font-medium">{u.product_name}</span>
+                          <span className="text-blue-500">{u.qty_per_serving} {u.unit}</span>
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>Belum terhubung ke menu. <a href="/dashboard/menu" className="underline font-medium">Buat resep di halaman Menu</a></span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Create/Edit Modal */}
       {showModal && (
