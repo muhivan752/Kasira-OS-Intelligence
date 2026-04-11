@@ -408,20 +408,20 @@ async def build_context(
         revenue_week = float(week_row.revenue) if week_row else 0.0
         order_count_week = int(week_row.count) if week_row else 0
 
-        # 4. Stok kritis (computed_stock < 5)
+        # 4. Stok kritis (stock_qty < 5, hanya produk dengan stock_enabled)
         low_stock = await db.execute(
-            select(Product.name, OutletStock.computed_stock)
-            .join(OutletStock, Product.id == OutletStock.product_id)
+            select(Product.name, Product.stock_qty)
             .where(
-                OutletStock.outlet_id == outlet_id,
-                OutletStock.computed_stock < 5,
-                OutletStock.computed_stock >= 0,
+                Product.brand_id == brand_id,
+                Product.stock_enabled == True,
+                Product.stock_qty < 5,
+                Product.stock_qty >= 0,
                 Product.deleted_at.is_(None),
             )
             .limit(5)
         )
         low_list = [
-            f"{r.name} (sisa {int(r.computed_stock)})" for r in low_stock.all()
+            f"{r.name} (sisa {int(r.stock_qty)})" for r in low_stock.all()
         ]
 
         # 5. Reservation data
