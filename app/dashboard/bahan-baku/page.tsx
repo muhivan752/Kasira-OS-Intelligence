@@ -167,13 +167,13 @@ export default function BahanBakuPage() {
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Nama</th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Unit</th>
-              <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Harga Beli</th>
-              <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Cost/Unit</th>
-              <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Stok</th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Tipe</th>
-              <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Aksi</th>
+              <th className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Nama</th>
+              <th className="hidden sm:table-cell text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Unit</th>
+              <th className="hidden lg:table-cell text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Harga Beli</th>
+              <th className="text-right px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Cost/Unit</th>
+              <th className="text-right px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Stok</th>
+              <th className="hidden md:table-cell text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Tipe</th>
+              <th className="text-right px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -189,32 +189,33 @@ export default function BahanBakuPage() {
                 const isLow = ing.current_stock !== undefined && ing.min_stock !== undefined && ing.current_stock <= ing.min_stock;
                 return (
                   <tr key={ing.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-gray-900">{ing.name}</span>
                         {isLow && <AlertTriangle className="w-4 h-4 text-amber-500" />}
                       </div>
+                      <span className="sm:hidden text-xs text-gray-400">{ing.base_unit}</span>
                     </td>
-                    <td className="px-6 py-4 text-gray-600">{ing.base_unit}</td>
-                    <td className="px-6 py-4 text-right text-gray-600">
+                    <td className="hidden sm:table-cell px-6 py-4 text-gray-600">{ing.base_unit}</td>
+                    <td className="hidden lg:table-cell px-6 py-4 text-right text-gray-600">
                       {ing.buy_price ? (
                         <span>{formatCurrency(ing.buy_price)} / {ing.buy_qty} {ing.base_unit}</span>
                       ) : '-'}
                     </td>
-                    <td className="px-6 py-4 text-right text-gray-900">{formatCurrency(ing.cost_per_base_unit)}/{ing.base_unit}</td>
-                    <td className="px-6 py-4 text-right">
-                      <span className={`font-semibold ${isLow ? 'text-red-600' : 'text-gray-900'}`}>
-                        {ing.current_stock !== undefined ? `${ing.current_stock} ${ing.base_unit}` : '-'}
+                    <td className="px-4 sm:px-6 py-4 text-right text-gray-900 text-sm">{formatCurrency(ing.cost_per_base_unit)}/{ing.base_unit}</td>
+                    <td className="px-4 sm:px-6 py-4 text-right">
+                      <span className={`font-semibold text-sm ${isLow ? 'text-red-600' : 'text-gray-900'}`}>
+                        {ing.current_stock !== undefined ? `${ing.current_stock}` : '-'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="hidden md:table-cell px-6 py-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         ing.ingredient_type === 'recipe' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'
                       }`}>
                         {ing.ingredient_type === 'recipe' ? 'Resep' : 'Overhead'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openRestock(ing)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg" title="Restock">
                           <RefreshCw className="w-4 h-4" />
@@ -237,8 +238,8 @@ export default function BahanBakuPage() {
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold">{editingId ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}</h2>
             {error && <p className="text-red-600 text-sm">{error}</p>}
             <div className="space-y-3">
@@ -247,7 +248,7 @@ export default function BahanBakuPage() {
                 <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
                   className="w-full px-3 py-2 border rounded-lg" placeholder="Kopi Arabica Bubuk" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Satuan *</label>
                   <input value={form.base_unit} onChange={e => setForm({ ...form, base_unit: e.target.value })}
@@ -261,7 +262,7 @@ export default function BahanBakuPage() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Harga Beli (Rp) *</label>
                   <input type="number" value={form.buy_price} onChange={e => setForm({ ...form, buy_price: e.target.value })}
