@@ -47,6 +47,7 @@ class CartState {
   final String? customerId;
   final String? customerName;
   final String? tableId;
+  final String? tableName;
   final bool isSubmitting;
   final String? error;
   final String? submittedOrderId;
@@ -58,6 +59,7 @@ class CartState {
     this.customerId,
     this.customerName,
     this.tableId,
+    this.tableName,
     this.isSubmitting = false,
     this.error,
     this.submittedOrderId,
@@ -73,6 +75,8 @@ class CartState {
     String? customerName,
     bool clearCustomer = false,
     String? tableId,
+    String? tableName,
+    bool clearTable = false,
     bool? isSubmitting,
     String? error,
     bool clearError = false,
@@ -84,7 +88,8 @@ class CartState {
         orderType: orderType ?? this.orderType,
         customerId: clearCustomer ? null : (customerId ?? this.customerId),
         customerName: clearCustomer ? null : (customerName ?? this.customerName),
-        tableId: tableId ?? this.tableId,
+        tableId: clearTable ? null : (tableId ?? this.tableId),
+        tableName: clearTable ? null : (tableName ?? this.tableName),
         isSubmitting: isSubmitting ?? this.isSubmitting,
         error: clearError ? null : (error ?? this.error),
         submittedOrderId: submittedOrderId ?? this.submittedOrderId,
@@ -138,7 +143,13 @@ class CartNotifier extends StateNotifier<CartState> {
         items: state.items.where((i) => i.productId != productId).toList());
   }
 
-  void setOrderType(String type) => state = state.copyWith(orderType: type);
+  void setOrderType(String type) {
+    state = state.copyWith(orderType: type);
+    // Clear table when switching to takeaway
+    if (type == 'Takeaway') {
+      state = state.copyWith(clearTable: true);
+    }
+  }
   void setCustomer(String? id, {String? name}) {
     if (id == null) {
       state = state.copyWith(clearCustomer: true);
@@ -146,11 +157,22 @@ class CartNotifier extends StateNotifier<CartState> {
       state = state.copyWith(customerId: id, customerName: name);
     }
   }
-  void setTable(String? id) => state = state.copyWith(tableId: id);
+  void setTable(String? id, {String? name}) {
+    if (id == null) {
+      state = state.copyWith(clearTable: true);
+    } else {
+      state = state.copyWith(tableId: id, tableName: name);
+    }
+  }
   void clearCart() => state = const CartState();
 
   Future<String?> submitOrder() async {
     if (state.items.isEmpty) return null;
+    // Dine-in wajib pilih meja
+    if (state.orderType == 'Dine In' && state.tableId == null) {
+      state = state.copyWith(error: 'Pilih meja terlebih dahulu untuk Dine In');
+      return null;
+    }
     state = state.copyWith(isSubmitting: true, clearError: true);
 
     final isOnline = await _checkOnline();

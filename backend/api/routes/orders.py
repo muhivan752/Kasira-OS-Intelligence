@@ -4,7 +4,7 @@ from datetime import datetime, timezone, date
 from sqlalchemy.orm import selectinload
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, text
+from sqlalchemy import select, update, text, func
 
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
@@ -15,9 +15,10 @@ from backend.models.product import Product
 from backend.models.outlet import Outlet
 from backend.models.shift import Shift, ShiftStatus
 from backend.models.tenant import Tenant
-from backend.schemas.order import OrderCreate, OrderUpdateStatus, OrderResponse, OrderStatus
+from backend.schemas.order import OrderCreate, OrderUpdateStatus, OrderResponse, OrderStatus, OrderType
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
+from backend.models.reservation import Table
 from backend.services.stock_service import deduct_stock
 
 router = APIRouter()
@@ -45,6 +46,27 @@ async def create_order(
     )).scalar_one_or_none()
     if not outlet:
         raise HTTPException(status_code=403, detail="Outlet tidak ditemukan atau bukan milik tenant Anda")
+
+    # Validasi table untuk dine_in
+    table = None
+    if order_in.order_type == OrderType.dine_in:
+        if not order_in.table_id:
+            raise HTTPException(status_code=400, detail="Dine-in order wajib pilih meja")
+        table = (await db.execute(
+            select(Table).where(
+                Table.id == order_in.table_id,
+                Table.outlet_id == order_in.outlet_id,
+                Table.is_active == True,
+                Table.deleted_at.is_(None),
+            ).with_for_update()
+        )).scalar_one_or_none()
+        if not table:
+            raise HTTPException(status_code=404, detail="Meja tidak ditemukan")
+        if table.status not in ("available", "occupied"):
+            raise HTTPException(status_code=400, detail=f"Meja {table.name} sedang {table.status}, tidak bisa dipakai")
+    elif order_in.table_id:
+        # Takeaway/delivery should not have table
+        order_in.table_id = None
 
     # Validasi shift terbuka
     if order_in.shift_session_id:
@@ -143,6 +165,13 @@ async def create_order(
             notes=item_in.notes
         )
         db.add(order_item)
+
+    # Set table status to occupied if dine-in
+    if table and table.status == "available":
+        await db.execute(
+            update(Table).where(Table.id == table.id)
+            .values(status="occupied", row_version=Table.row_version + 1)
+        )
 
     # 1. Pastikan commit sudah selesai
     await db.commit()
@@ -315,7 +344,23 @@ async def update_order_status(
     
     if not updated_order:
         raise HTTPException(status_code=409, detail="Concurrent update detected.")
-        
+
+    # Release table when order completed/cancelled (if no other active orders on same table)
+    if status_in.status in (OrderStatus.completed, OrderStatus.cancelled) and order.table_id:
+        active_orders = (await db.execute(
+            select(func.count(Order.id)).where(
+                Order.table_id == order.table_id,
+                Order.id != order.id,
+                Order.status.notin_(["completed", "cancelled"]),
+                Order.deleted_at.is_(None),
+            )
+        )).scalar() or 0
+        if active_orders == 0:
+            await db.execute(
+                update(Table).where(Table.id == order.table_id)
+                .values(status="available", row_version=Table.row_version + 1)
+            )
+
     await db.commit()
     
     # Reload items for response

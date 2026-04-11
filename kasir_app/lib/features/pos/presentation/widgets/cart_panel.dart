@@ -11,6 +11,7 @@ import '../../../customers/presentation/widgets/customer_selection_modal.dart';
 import '../../../dashboard/providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../../products/providers/products_provider.dart';
+import '../../../tables/presentation/pages/table_grid_page.dart';
 
 class CartPanel extends ConsumerWidget {
   const CartPanel({super.key});
@@ -77,6 +78,55 @@ class CartPanel extends ConsumerWidget {
             ],
           ),
         ),
+
+        // Table Selection (Dine In only)
+        if (cart.orderType == 'Dine In')
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+            child: InkWell(
+              onTap: () => _showTablePicker(context, ref),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: cart.tableId != null
+                      ? AppColors.primary.withOpacity(0.08)
+                      : AppColors.surfaceVariant,
+                  border: Border.all(
+                    color: cart.tableId != null ? AppColors.primary : AppColors.border,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.armchair,
+                      color: cart.tableId != null ? AppColors.primary : AppColors.textSecondary,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        cart.tableName ?? 'Pilih Meja *',
+                        style: TextStyle(
+                          color: cart.tableId != null ? AppColors.primary : AppColors.textSecondary,
+                          fontSize: 13,
+                          fontWeight: cart.tableId != null ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                    if (cart.tableId != null)
+                      GestureDetector(
+                        onTap: () => ref.read(cartProvider.notifier).setTable(null),
+                        child: const Icon(LucideIcons.x, color: AppColors.textSecondary, size: 16),
+                      )
+                    else
+                      const Icon(LucideIcons.chevronRight, color: AppColors.textSecondary, size: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
 
         // Customer
         Padding(
@@ -234,6 +284,38 @@ class CartPanel extends ConsumerWidget {
         ),
       );
     }
+  }
+
+  void _showTablePicker(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: TableGridPage(
+              onTableSelected: (table) {
+                if (table.status == TableStatus.available || table.status == TableStatus.occupied) {
+                  ref.read(cartProvider.notifier).setTable(table.id, name: 'Meja ${table.name}');
+                  Navigator.pop(ctx);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Meja ${table.name} sedang ${table.status.name}'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildEmptyCart() {

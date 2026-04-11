@@ -25,9 +25,10 @@ async def read_outlets(
     """
     Retrieve outlets.
     """
-    stmt = select(Outlet).where(Outlet.deleted_at == None).offset(skip).limit(limit)
-    if not current_user.is_superuser:
-        stmt = stmt.where(Outlet.tenant_id == current_user.tenant_id)
+    stmt = select(Outlet).where(
+        Outlet.deleted_at == None,
+        Outlet.tenant_id == current_user.tenant_id
+    ).offset(skip).limit(limit)
         
     result = await db.execute(stmt)
     outlets = result.scalars().all()
@@ -73,10 +74,10 @@ async def read_outlet(
     """
     Get outlet by ID.
     """
-    stmt = select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at == None)
-    if not current_user.is_superuser:
-        stmt = stmt.where(Outlet.tenant_id == current_user.tenant_id)
-        
+    stmt = select(Outlet).where(
+        Outlet.id == outlet_id, Outlet.deleted_at == None,
+        Outlet.tenant_id == current_user.tenant_id
+    )
     result = await db.execute(stmt)
     outlet = result.scalar_one_or_none()
     if not outlet:
@@ -94,10 +95,10 @@ async def update_outlet(
     """
     Update outlet info (name, phone, address, is_open, opening_hours).
     """
-    stmt = select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at == None)
-    if not current_user.is_superuser:
-        stmt = stmt.where(Outlet.tenant_id == current_user.tenant_id)
-
+    stmt = select(Outlet).where(
+        Outlet.id == outlet_id, Outlet.deleted_at == None,
+        Outlet.tenant_id == current_user.tenant_id
+    )
     result = await db.execute(stmt)
     outlet = result.scalar_one_or_none()
     if not outlet:
@@ -152,16 +153,16 @@ async def setup_payment(
     """
     Setup payment gateway for an outlet.
     """
-    stmt = select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at == None)
-    if not current_user.is_superuser:
-        stmt = stmt.where(Outlet.tenant_id == current_user.tenant_id)
-        
+    stmt = select(Outlet).where(
+        Outlet.id == outlet_id, Outlet.deleted_at == None,
+        Outlet.tenant_id == current_user.tenant_id
+    )
     result = await db.execute(stmt)
     outlet = result.scalar_one_or_none()
-    
+
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
-        
+
     now = datetime.now(timezone.utc)
     
     update_stmt = (
@@ -210,9 +211,10 @@ async def setup_payment_own_key(
     current_user: Any = Depends(deps.get_current_user),
 ) -> Any:
     """Simpan Xendit secret key milik merchant sendiri (Phase 1 pilot)."""
-    stmt = select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at == None)
-    if not current_user.is_superuser:
-        stmt = stmt.where(Outlet.tenant_id == current_user.tenant_id)
+    stmt = select(Outlet).where(
+        Outlet.id == outlet_id, Outlet.deleted_at == None,
+        Outlet.tenant_id == current_user.tenant_id
+    )
     outlet = (await db.execute(stmt)).scalar_one_or_none()
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
@@ -243,9 +245,10 @@ async def remove_payment_own_key(
     current_user: Any = Depends(deps.get_current_user),
 ) -> Any:
     """Hapus Xendit secret key merchant."""
-    stmt = select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at == None)
-    if not current_user.is_superuser:
-        stmt = stmt.where(Outlet.tenant_id == current_user.tenant_id)
+    stmt = select(Outlet).where(
+        Outlet.id == outlet_id, Outlet.deleted_at == None,
+        Outlet.tenant_id == current_user.tenant_id
+    )
     outlet = (await db.execute(stmt)).scalar_one_or_none()
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
@@ -270,16 +273,16 @@ async def get_payment_status(
     """
     Get payment gateway status for an outlet.
     """
-    stmt = select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at == None)
-    if not current_user.is_superuser:
-        stmt = stmt.where(Outlet.tenant_id == current_user.tenant_id)
-        
+    stmt = select(Outlet).where(
+        Outlet.id == outlet_id, Outlet.deleted_at == None,
+        Outlet.tenant_id == current_user.tenant_id
+    )
     result = await db.execute(stmt)
     outlet = result.scalar_one_or_none()
-    
+
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
-        
+
     has_own_key = outlet.xendit_api_key is not None
     has_platform = outlet.xendit_business_id is not None
     is_connected = has_own_key or has_platform

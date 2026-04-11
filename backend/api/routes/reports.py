@@ -26,6 +26,18 @@ async def get_daily_report(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
+    # Validate outlet belongs to current user's tenant
+    from fastapi import HTTPException
+    outlet_check = await db.execute(
+        select(Outlet.id).where(
+            Outlet.id == outlet_id,
+            Outlet.tenant_id == current_user.tenant_id,
+            Outlet.deleted_at.is_(None),
+        )
+    )
+    if not outlet_check.scalar():
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
     target_date = report_date or datetime.now(timezone.utc).date()
     start_of_day = datetime.combine(target_date, time.min).replace(tzinfo=timezone.utc)
     end_of_day = datetime.combine(target_date + timedelta(days=1), time.min).replace(tzinfo=timezone.utc)
