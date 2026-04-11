@@ -143,6 +143,16 @@ async def validate_category_ownership(db: AsyncSession, category_id, tenant_id):
     return category
 
 
+async def get_platform_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Platform-level superadmin check via SUPERADMIN_PHONES env var."""
+    allowed = [p.strip() for p in settings.SUPERADMIN_PHONES.split(",") if p.strip()]
+    if not allowed or current_user.phone not in allowed:
+        raise HTTPException(status_code=403, detail="Akses platform admin ditolak")
+    return current_user
+
+
 PRO_TIERS = {"pro", "business", "enterprise"}
 
 async def require_pro_tier(
