@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.3.0",
+    "version": "1.4.0",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.3.0/kasira-pos-v1.3.0.apk",
-    "release_notes": "Reservation system, tier-aware dashboard, shift status fix"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.4.0/kasira-pos-v1.4.0.apk",
+    "release_notes": "Order by Meja: dine-in wajib pilih meja, tenant isolation fix"
   },
   "dapur": {
-    "version": "1.3.0",
+    "version": "1.4.0",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.3.0/kasira-dapur-v1.3.0.apk",
-    "release_notes": "Reservation system, tier-aware dashboard, shift status fix"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.4.0/kasira-dapur-v1.4.0.apk",
+    "release_notes": "Order by Meja: dine-in wajib pilih meja, tenant isolation fix"
   }
 }
