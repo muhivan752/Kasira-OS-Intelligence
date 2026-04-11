@@ -96,12 +96,32 @@ export default function ReservasiPage() {
       if (outlets && outlets.length > 0) {
         const id = outlets[0].id;
         setOutletId(id);
-        const [resvData, tableData] = await Promise.all([
+
+        // Load today's reservations + tables
+        const [todayData, tableData] = await Promise.all([
           getReservations(id, formatDate(selectedDate), statusFilter || undefined),
           getTables(id),
         ]);
-        setReservations(resvData || []);
         setTables(tableData || []);
+
+        // If no reservations today, check upcoming (no date filter)
+        if (!todayData || todayData.length === 0) {
+          const allUpcoming = await getReservations(id);
+          const upcoming = (allUpcoming || []).filter((r: any) =>
+            ['pending', 'confirmed', 'seated'].includes(r.status) && r.reservation_date >= formatDate(new Date())
+          );
+          if (upcoming.length > 0) {
+            // Navigate to the nearest upcoming reservation date
+            const nearestDate = upcoming[0].reservation_date;
+            setSelectedDate(new Date(nearestDate + 'T00:00:00'));
+            const dateData = await getReservations(id, nearestDate, statusFilter || undefined);
+            setReservations(dateData || []);
+          } else {
+            setReservations([]);
+          }
+        } else {
+          setReservations(todayData);
+        }
       }
     } catch (error) {
       console.error('Failed to load data', error);
