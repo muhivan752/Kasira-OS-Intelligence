@@ -49,7 +49,7 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>;
+    return <div className="flex items-center justify-center h-64">Memuat...</div>;
   }
 
   const formatCurrency = (amount: number) => {
@@ -59,7 +59,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Ringkasan Hari Ini</h1>
         <p className="text-gray-500">Ringkasan performa outlet Anda hari ini.</p>
       </div>
 
@@ -68,7 +68,7 @@ export default function DashboardPage() {
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Total Revenue</p>
+              <p className="text-sm font-medium text-gray-500">Total Pendapatan</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {formatCurrency(report?.revenue_today)}
               </p>
@@ -82,7 +82,7 @@ export default function DashboardPage() {
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Total Orders</p>
+              <p className="text-sm font-medium text-gray-500">Total Pesanan</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {report?.order_count || 0}
               </p>
@@ -96,7 +96,7 @@ export default function DashboardPage() {
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Active Shifts</p>
+              <p className="text-sm font-medium text-gray-500">Shift Aktif</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {report?.active_shifts || 0}
               </p>
@@ -125,7 +125,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Chart */}
         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Revenue 7 Hari Terakhir</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-4">Pendapatan 7 Hari Terakhir</h2>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
@@ -137,7 +137,7 @@ export default function DashboardPage() {
                   tickFormatter={(value) => `Rp${value / 1000}k`}
                 />
                 <Tooltip 
-                  formatter={(value: any) => [formatCurrency(Number(value)), 'Revenue']}
+                  formatter={(value: any) => [formatCurrency(Number(value)), 'Pendapatan']}
                   cursor={{ fill: '#f3f4f6' }}
                 />
                 <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />

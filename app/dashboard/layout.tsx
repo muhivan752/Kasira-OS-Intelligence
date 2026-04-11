@@ -24,7 +24,7 @@ import { Logo } from '@/components/ui/logo';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [outletName, setOutletName] = useState('Loading...');
+  const [outletName, setOutletName] = useState('Memuat...');
   const [tier, setTier] = useState('starter');
   const pathname = usePathname();
   const router = useRouter();

@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import { getOutlets, getTables, createTable, updateTable, deleteTable } from '@/app/actions/api';
 import { Loader2, Plus, X, Edit2, Trash2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { useProGuard } from '@/app/hooks/use-pro-guard';
 
 export default function MejaPage() {
+  const allowed = useProGuard();
   const [loading, setLoading] = useState(true);
   const [tables, setTables] = useState<any[]>([]);
   const [outletId, setOutletId] = useState('');
@@ -116,7 +118,7 @@ export default function MejaPage() {
     }
   };
 
-  if (loading) {
+  if (!allowed || loading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
   }
 

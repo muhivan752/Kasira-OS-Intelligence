@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { sendOtp, registerTenant } from '@/app/actions/auth';
 import { Logo } from '@/components/ui/logo';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, Coffee, Utensils, Store, ShoppingBag } from 'lucide-react';
 
 type Step = 'phone' | 'otp' | 'details';
 
@@ -21,6 +21,7 @@ export default function RegisterPage() {
   const [ownerName, setOwnerName] = useState('');
   const [pin, setPin] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
+  const [businessType, setBusinessType] = useState('cafe');
 
   async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
@@ -48,7 +49,7 @@ export default function RegisterPage() {
     if (pin !== pinConfirm) { setError('PIN tidak cocok'); return; }
     if (pin.length !== 6) { setError('PIN harus 6 digit'); return; }
     setLoading(true);
-    const res = await registerTenant(phone, businessName, ownerName, pin, otp);
+    const res = await registerTenant(phone, businessName, ownerName, pin, otp, businessType);
     setLoading(false);
     if (!res.success) { setError(res.message || 'Registrasi gagal'); return; }
     router.push('/onboarding');
@@ -133,6 +134,26 @@ export default function RegisterPage() {
               <h1 className="text-2xl font-bold text-gray-900 mb-2">Info Bisnis</h1>
               <p className="text-gray-500 mb-6">Lengkapi data untuk membuat akun</p>
               <form onSubmit={handleRegister} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tipe Bisnis</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'cafe', name: 'Cafe', icon: Coffee },
+                      { id: 'resto', name: 'Restoran', icon: Utensils },
+                      { id: 'warung', name: 'Warung', icon: Store },
+                      { id: 'other', name: 'Lainnya', icon: ShoppingBag },
+                    ].map((t) => (
+                      <label key={t.id} className={`flex items-center gap-2 p-3 cursor-pointer rounded-xl border-2 transition-all ${
+                        businessType === t.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:border-emerald-300'
+                      }`}>
+                        <input type="radio" name="btype" value={t.id} checked={businessType === t.id}
+                          onChange={e => setBusinessType(e.target.value)} className="sr-only" />
+                        <t.icon className={`w-5 h-5 ${businessType === t.id ? 'text-emerald-600' : 'text-gray-400'}`} />
+                        <span className={`text-sm font-medium ${businessType === t.id ? 'text-emerald-900' : 'text-gray-700'}`}>{t.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nama Bisnis</label>
                   <input

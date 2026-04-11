@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Package, Plus, RefreshCw, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { getIngredients, createIngredient, updateIngredient, deleteIngredient, restockIngredient, getOutlets, getCurrentUser } from '@/app/actions/api';
+import { useProGuard } from '@/app/hooks/use-pro-guard';
 
 interface Ingredient {
   id: string;
@@ -11,6 +12,8 @@ interface Ingredient {
   tracking_mode: string;
   base_unit: string;
   unit_type: string;
+  buy_price: number;
+  buy_qty: number;
   cost_per_base_unit: number;
   ingredient_type: string;
   overhead_cost_per_day?: number;
@@ -28,6 +31,7 @@ const UNIT_TYPES = [
 ];
 
 export default function BahanBakuPage() {
+  const allowed = useProGuard();
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
   const [brandId, setBrandId] = useState('');
@@ -38,7 +42,7 @@ export default function BahanBakuPage() {
   const [restockTarget, setRestockTarget] = useState<Ingredient | null>(null);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
-    name: '', base_unit: '', unit_type: 'WEIGHT', cost_per_base_unit: '',
+    name: '', base_unit: '', unit_type: 'WEIGHT', buy_price: '', buy_qty: '',
     ingredient_type: 'recipe', overhead_cost_per_day: '', row_version: 0,
   });
   const [restockForm, setRestockForm] = useState({ quantity: '', notes: '' });
@@ -67,7 +71,8 @@ export default function BahanBakuPage() {
       if (editingId) {
         await updateIngredient(editingId, {
           name: form.name, base_unit: form.base_unit, unit_type: form.unit_type,
-          cost_per_base_unit: parseFloat(form.cost_per_base_unit) || 0,
+          buy_price: parseFloat(form.buy_price) || 0,
+          buy_qty: parseFloat(form.buy_qty) || 1,
           ingredient_type: form.ingredient_type,
           overhead_cost_per_day: form.overhead_cost_per_day ? parseFloat(form.overhead_cost_per_day) : null,
           row_version: form.row_version,
@@ -76,7 +81,8 @@ export default function BahanBakuPage() {
         await createIngredient({
           brand_id: brandId, name: form.name, base_unit: form.base_unit,
           unit_type: form.unit_type, tracking_mode: 'simple',
-          cost_per_base_unit: parseFloat(form.cost_per_base_unit) || 0,
+          buy_price: parseFloat(form.buy_price) || 0,
+          buy_qty: parseFloat(form.buy_qty) || 1,
           ingredient_type: form.ingredient_type,
           overhead_cost_per_day: form.overhead_cost_per_day ? parseFloat(form.overhead_cost_per_day) : null,
         });
@@ -116,7 +122,8 @@ export default function BahanBakuPage() {
     setEditingId(ing.id);
     setForm({
       name: ing.name, base_unit: ing.base_unit, unit_type: ing.unit_type,
-      cost_per_base_unit: String(ing.cost_per_base_unit),
+      buy_price: String(ing.buy_price || 0),
+      buy_qty: String(ing.buy_qty || 1),
       ingredient_type: ing.ingredient_type,
       overhead_cost_per_day: ing.overhead_cost_per_day ? String(ing.overhead_cost_per_day) : '',
       row_version: ing.row_version,
@@ -132,13 +139,13 @@ export default function BahanBakuPage() {
 
   function resetForm() {
     setEditingId(null);
-    setForm({ name: '', base_unit: '', unit_type: 'WEIGHT', cost_per_base_unit: '', ingredient_type: 'recipe', overhead_cost_per_day: '', row_version: 0 });
+    setForm({ name: '', base_unit: '', unit_type: 'WEIGHT', buy_price: '', buy_qty: '', ingredient_type: 'recipe', overhead_cost_per_day: '', row_version: 0 });
     setError('');
   }
 
   const formatCurrency = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
 
-  if (loading) return <div className="flex items-center justify-center h-64">Loading...</div>;
+  if (!allowed || loading) return <div className="flex items-center justify-center h-64">Memuat...</div>;
 
   return (
     <div className="space-y-6">
@@ -162,7 +169,8 @@ export default function BahanBakuPage() {
             <tr>
               <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Nama</th>
               <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Unit</th>
-              <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Harga/Unit</th>
+              <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Harga Beli</th>
+              <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Cost/Unit</th>
               <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Stok</th>
               <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Tipe</th>
               <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Aksi</th>
@@ -171,7 +179,7 @@ export default function BahanBakuPage() {
           <tbody className="divide-y divide-gray-100">
             {ingredients.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
+                <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
                   <Package className="w-10 h-10 mx-auto mb-2 text-gray-300" />
                   Belum ada bahan baku. Klik "Tambah Bahan" untuk memulai.
                 </td>
@@ -188,6 +196,11 @@ export default function BahanBakuPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-gray-600">{ing.base_unit}</td>
+                    <td className="px-6 py-4 text-right text-gray-600">
+                      {ing.buy_price ? (
+                        <span>{formatCurrency(ing.buy_price)} / {ing.buy_qty} {ing.base_unit}</span>
+                      ) : '-'}
+                    </td>
                     <td className="px-6 py-4 text-right text-gray-900">{formatCurrency(ing.cost_per_base_unit)}/{ing.base_unit}</td>
                     <td className="px-6 py-4 text-right">
                       <span className={`font-semibold ${isLow ? 'text-red-600' : 'text-gray-900'}`}>
@@ -248,11 +261,27 @@ export default function BahanBakuPage() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Harga per Unit (Rp) *</label>
-                <input type="number" value={form.cost_per_base_unit} onChange={e => setForm({ ...form, cost_per_base_unit: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg" placeholder="300" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Harga Beli (Rp) *</label>
+                  <input type="number" value={form.buy_price} onChange={e => setForm({ ...form, buy_price: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg" placeholder="14000" />
+                  <p className="text-xs text-gray-400 mt-1">Contoh: Rp14.000</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Isi per Beli ({form.base_unit || 'unit'}) *</label>
+                  <input type="number" step="any" value={form.buy_qty} onChange={e => setForm({ ...form, buy_qty: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg" placeholder="1000" />
+                  <p className="text-xs text-gray-400 mt-1">Contoh: 1000 {form.base_unit || 'gram'}</p>
+                </div>
               </div>
+              {(parseFloat(form.buy_price) > 0 && parseFloat(form.buy_qty) > 0) && (
+                <div className="bg-blue-50 rounded-lg px-4 py-3">
+                  <p className="text-sm text-blue-800 font-medium">
+                    Cost per {form.base_unit || 'unit'}: {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 2 }).format(parseFloat(form.buy_price) / parseFloat(form.buy_qty))}
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipe</label>
                 <select value={form.ingredient_type} onChange={e => setForm({ ...form, ingredient_type: e.target.value })}

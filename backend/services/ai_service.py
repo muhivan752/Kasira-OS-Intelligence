@@ -37,6 +37,10 @@ READ_KEYWORDS = [
     "shift", "hari ini", "kemarin", "minggu ini", "bulan ini",
     "performa", "statistik", "analisa", "trend", "grafik", "summary",
     "total", "rata-rata", "average", "tertinggi", "terendah",
+    # Reservation queries
+    "reservasi", "booking", "book", "pesan meja", "meja kosong",
+    "meja tersedia", "available", "jadwal", "jam buka", "jam tutup",
+    "buka jam", "tutup jam", "kapan bisa", "ada meja",
 ]
 
 WRITE_KEYWORDS = [
@@ -53,6 +57,7 @@ BUSINESS_CONTEXT_KEYWORDS = [
     "omzet", "penjualan", "pendapatan", "shift", "laporan", "stok",
     "bahan", "ingredient", "supplier", "dapur", "kitchen",
     "promo", "diskon", "loyalty", "poin", "voucher",
+    "reservasi", "booking", "jam buka", "jam operasional",
 ]
 
 
@@ -146,6 +151,7 @@ async def build_context(
     from backend.models.order import Order, OrderItem
     from backend.models.payment import Payment
     from backend.models.product import Product, OutletStock
+    from backend.models.reservation import Reservation, ReservationSettings, Table
 
     today = datetime.now(timezone.utc).date()
     start_today = datetime.combine(today, dt_time.min).replace(tzinfo=timezone.utc)
@@ -230,12 +236,70 @@ async def build_context(
             f"{r.name} (sisa {int(r.computed_stock)})" for r in low_stock.all()
         ]
 
+        # 5. Reservation data
+        res_settings_row = await db.execute(
+            select(ReservationSettings).where(
+                ReservationSettings.outlet_id == outlet_id,
+                ReservationSettings.deleted_at.is_(None),
+            )
+        )
+        res_settings = res_settings_row.scalar_one_or_none()
+
+        # Today's reservations
+        today_reservations = await db.execute(
+            select(func.count(Reservation.id)).where(
+                Reservation.outlet_id == outlet_id,
+                Reservation.reservation_date == today,
+                Reservation.status.in_(["pending", "confirmed", "seated"]),
+                Reservation.deleted_at.is_(None),
+            )
+        )
+        reservation_count = today_reservations.scalar() or 0
+
+        # Available tables
+        total_tables_q = await db.execute(
+            select(func.count(Table.id)).where(
+                Table.outlet_id == outlet_id,
+                Table.is_active == True,
+                Table.deleted_at.is_(None),
+            )
+        )
+        total_tables = total_tables_q.scalar() or 0
+
+        available_tables_q = await db.execute(
+            select(func.count(Table.id)).where(
+                Table.outlet_id == outlet_id,
+                Table.is_active == True,
+                Table.status == "available",
+                Table.deleted_at.is_(None),
+            )
+        )
+        available_tables = available_tables_q.scalar() or 0
+
+        reservation_info = ""
+        if res_settings and res_settings.is_enabled:
+            open_h = res_settings.opening_hour.strftime("%H:%M") if res_settings.opening_hour else "08:00"
+            close_h = res_settings.closing_hour.strftime("%H:%M") if res_settings.closing_hour else "22:00"
+            reservation_info = f"""
+RESERVASI:
+- Jam operasional: {open_h} - {close_h}
+- Reservasi hari ini: {reservation_count} booking aktif
+- Meja: {available_tables}/{total_tables} tersedia
+- Max booking advance: {res_settings.max_advance_days} hari
+- Auto confirm: {"ya" if res_settings.auto_confirm else "perlu konfirmasi manual"}"""
+        elif total_tables > 0:
+            reservation_info = f"""
+MEJA:
+- Total: {total_tables} meja, {available_tables} tersedia sekarang
+- Reservasi: belum diaktifkan"""
+
     except Exception as e:
         logger.warning(f"Context build error: {e}")
         revenue_today = revenue_week = 0.0
         order_count_today = order_count_week = 0
         top_list = []
         low_list = []
+        reservation_info = ""
 
     today_str = today.strftime("%d %B %Y")
     context = f"""Kamu adalah asisten AI untuk {outlet_name}, sebuah cafe di Indonesia.
@@ -251,12 +315,26 @@ DATA 7 HARI TERAKHIR:
 
 STOK KRITIS (perlu restock):
 {chr(10).join("- " + s for s in low_list) if low_list else "- Semua stok aman"}
-
+{reservation_info}
 INSTRUKSI:
 - Jawab hanya pertanyaan seputar bisnis cafe ini
 - Gunakan bahasa Indonesia yang ramah dan profesional
 - Angka dalam format Rupiah (Rp x.xxx)
-- Jawaban singkat dan langsung to the point"""
+- Jawaban singkat dan langsung to the point
+- Untuk reservasi: informasikan ketersediaan meja dan jam operasional"""
+
+    # Knowledge graph context (non-blocking)
+    kg_context = ""
+    try:
+        from backend.services.knowledge_graph_service import build_ai_context_from_graph
+        kg_context = await build_ai_context_from_graph(
+            tenant_id=UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id,
+            db=db,
+        )
+    except Exception as e:
+        logger.debug(f"KG context skipped: {e}")
+
+    context += kg_context
 
     # Cache sampai 00.00 WIB
     ttl = seconds_until_midnight_wib()

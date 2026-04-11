@@ -54,6 +54,16 @@ class RecipeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class HPPIngredientDetail(BaseModel):
+    name: str
+    quantity: float
+    unit: str
+    buy_price: Decimal = Decimal("0")
+    buy_qty: float = 1
+    cost_per_unit: Decimal = Decimal("0")
+    line_cost: Decimal = Decimal("0")
+
+
 class HPPProductResponse(BaseModel):
     product_id: UUID
     product_name: str
@@ -62,3 +72,4 @@ class HPPProductResponse(BaseModel):
     margin_amount: Decimal
     margin_percent: float
     has_recipe: bool = True
+    ingredients: List[HPPIngredientDetail] = []

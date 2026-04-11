@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Bot, Send, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { useProGuard } from '@/app/hooks/use-pro-guard';
 
 interface Message {
   id: string;
@@ -20,6 +21,7 @@ const SUGGESTIONS = [
 ];
 
 export default function AIChatPage() {
+  const allowed = useProGuard();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -159,6 +161,10 @@ export default function AIChatPage() {
     setMessages([]);
     setError('');
   };
+
+  if (!allowed) {
+    return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] lg:h-[calc(100vh-6rem)] max-w-3xl mx-auto">

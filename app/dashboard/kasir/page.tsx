@@ -119,7 +119,7 @@ export default function KasirPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>;
+    return <div className="flex items-center justify-center h-64">Memuat...</div>;
   }
 
   return (

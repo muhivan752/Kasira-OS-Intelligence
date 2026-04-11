@@ -15,7 +15,7 @@ from backend.models.ingredient import Ingredient
 from backend.models.product import Product
 from backend.schemas.recipe import (
     RecipeCreate, RecipeUpdate, RecipeResponse,
-    RecipeIngredientResponse, HPPProductResponse,
+    RecipeIngredientResponse, HPPProductResponse, HPPIngredientDetail,
 )
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
@@ -166,6 +166,14 @@ async def create_recipe(
     )
     await db.commit()
 
+    # Auto-rebuild knowledge graph (non-blocking)
+    try:
+        from backend.services.knowledge_graph_service import rebuild_graph
+        await rebuild_graph(tenant_id=current_user.tenant_id, brand_id=product.brand_id, db=db)
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"KG rebuild after recipe create: {e}")
+
     # Reload with relationships
     loaded = (await db.execute(
         select(Recipe)
@@ -308,11 +316,25 @@ async def get_hpp_report(
     responses = []
     for product in products:
         recipe = recipe_map.get(product.id)
+        ingredient_details = []
         if recipe:
-            recipe_cost = sum(
-                Decimal(str(ri.quantity)) * (ri.ingredient.cost_per_base_unit if ri.ingredient else Decimal("0"))
-                for ri in recipe.ingredients if ri.deleted_at is None
-            )
+            recipe_cost = Decimal("0")
+            for ri in recipe.ingredients:
+                if ri.deleted_at is not None:
+                    continue
+                ing = ri.ingredient
+                cost_per_unit = ing.cost_per_base_unit if ing else Decimal("0")
+                line_cost = Decimal(str(ri.quantity)) * cost_per_unit
+                recipe_cost += line_cost
+                ingredient_details.append(HPPIngredientDetail(
+                    name=ing.name if ing else "?",
+                    quantity=ri.quantity,
+                    unit=ri.quantity_unit or (ing.base_unit if ing else ""),
+                    buy_price=ing.buy_price if ing and ing.buy_price else Decimal("0"),
+                    buy_qty=ing.buy_qty if ing and ing.buy_qty else 1,
+                    cost_per_unit=cost_per_unit,
+                    line_cost=line_cost,
+                ))
         else:
             recipe_cost = Decimal("0")
 
@@ -328,6 +350,7 @@ async def get_hpp_report(
             margin_amount=margin,
             margin_percent=round(margin_pct, 1),
             has_recipe=recipe is not None,
+            ingredients=ingredient_details,
         ))
 
     return StandardResponse(data=responses, request_id=request.state.request_id)

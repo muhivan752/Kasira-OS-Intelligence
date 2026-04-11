@@ -629,6 +629,7 @@ export default function MenuPage() {
                           ingredient_id: ing.id, name: ing.name,
                           quantity: 0, quantity_unit: ing.base_unit,
                           is_optional: false, cost: ing.cost_per_base_unit || 0,
+                          buy_price: ing.buy_price || 0, buy_qty: ing.buy_qty || 1,
                         }]);
                         sel.value = '';
                       }}
@@ -649,6 +650,7 @@ export default function MenuPage() {
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-gray-900 truncate">{ri.name}</p>
                                 <p className="text-xs text-gray-400">
+                                  {ri.buy_price > 0 && `${fmt(ri.buy_price)}/${ri.buy_qty}${ri.quantity_unit} → `}
                                   {fmt(ri.cost)}/{ri.quantity_unit}
                                   {ri.quantity > 0 && ` = ${fmt(lineCost)}`}
                                 </p>

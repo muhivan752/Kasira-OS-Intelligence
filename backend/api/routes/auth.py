@@ -16,6 +16,7 @@ from backend.models.user import User
 from backend.models.outlet import Outlet
 from backend.models.tenant import Tenant
 from backend.models.brand import Brand
+from backend.models.category import Category
 from backend.schemas.token import Token
 from backend.schemas.auth import OTPSendRequest, OTPVerifyRequest
 from backend.schemas.response import StandardResponse
@@ -178,6 +179,16 @@ class RegisterRequest(BaseModel):
     owner_name: str = Field(..., min_length=2)
     pin: str = Field(..., min_length=6, max_length=6)
     otp: str = Field(..., min_length=6, max_length=6)
+    business_type: str = Field("cafe", description="warung/cafe/resto/other")
+
+
+# Default categories per business type
+DEFAULT_CATEGORIES = {
+    "cafe": ["Kopi", "Non-Kopi", "Makanan", "Snack"],
+    "resto": ["Makanan Utama", "Minuman", "Cemilan", "Dessert"],
+    "warung": ["Makanan", "Minuman", "Gorengan", "Jajanan"],
+    "other": ["Produk", "Minuman", "Lainnya"],
+}
 
 @router.post("/register", response_model=StandardResponse[Token])
 async def register(
@@ -214,8 +225,9 @@ async def register(
                     schema_name=schema_name, is_active=True,
                     subscription_tier=SubscriptionTier.starter,
                     subscription_status=SubscriptionStatus.active)
+    btype = request.business_type if request.business_type in ("warung", "cafe", "resto", "other") else "cafe"
     brand = Brand(id=brand_id, tenant_id=tenant_id,
-                  name=request.business_name, type="cafe", is_active=True)
+                  name=request.business_name, type=btype, is_active=True)
     outlet = Outlet(id=outlet_id, tenant_id=tenant_id, brand_id=brand_id,
                     name=request.business_name, slug=slug, is_active=True)
     user = User(id=user_id, tenant_id=tenant_id,
@@ -223,7 +235,13 @@ async def register(
                 pin_hash=security.get_pin_hash(request.pin), is_active=True,
                 is_superuser=True)
 
-    db.add_all([tenant, brand, outlet, user])
+    # Auto-seed default categories
+    categories = [
+        Category(id=uuid.uuid4(), brand_id=brand_id, name=cat_name, is_active=True)
+        for cat_name in DEFAULT_CATEGORIES.get(btype, DEFAULT_CATEGORIES["other"])
+    ]
+
+    db.add_all([tenant, brand, outlet, user] + categories)
     await db.commit()
 
     await log_audit(db, action="register", entity="tenant", entity_id=str(tenant_id),

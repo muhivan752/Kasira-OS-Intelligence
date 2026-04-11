@@ -28,6 +28,7 @@ import {
   Armchair,
   CalendarCheck,
 } from 'lucide-react';
+import { useProGuard } from '@/app/hooks/use-pro-guard';
 import Link from 'next/link';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -58,6 +59,7 @@ function formatDisplayDate(date: Date): string {
 }
 
 export default function ReservasiPage() {
+  const allowed = useProGuard();
   const [loading, setLoading] = useState(true);
   const [outletId, setOutletId] = useState('');
   const [reservations, setReservations] = useState<any[]>([]);
@@ -249,7 +251,7 @@ export default function ReservasiPage() {
     return t ? t.name : '-';
   };
 
-  if (loading) {
+  if (!allowed || loading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
   }
 

@@ -83,6 +83,22 @@ async def ai_chat(
 
     redis = await get_redis_client()
 
+    # Rate limit: max 30 requests per 15 minutes per user
+    rate_key = f"ai_rate:{current_user.id}"
+    try:
+        current_count = await redis.incr(rate_key)
+        if current_count == 1:
+            await redis.expire(rate_key, 900)  # 15 minutes
+        if current_count > 30:
+            raise HTTPException(
+                status_code=429,
+                detail="Terlalu banyak permintaan. Coba lagi dalam beberapa menit."
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # Redis down → allow request
+
     # Audit log (Rule #2) — log request masuk
     try:
         await log_audit(

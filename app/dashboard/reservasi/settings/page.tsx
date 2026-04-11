@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import { getOutlets, getReservationSettings, updateReservationSettings } from '@/app/actions/api';
 import { Loader2, ArrowLeft, Settings } from 'lucide-react';
 import Link from 'next/link';
+import { useProGuard } from '@/app/hooks/use-pro-guard';
 
 export default function ReservationSettingsPage() {
+  const allowed = useProGuard();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [outletId, setOutletId] = useState('');
@@ -75,7 +77,7 @@ export default function ReservationSettingsPage() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount || 0);
   };
 
-  if (loading) {
+  if (!allowed || loading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
   }
 
