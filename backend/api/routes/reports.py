@@ -145,6 +145,8 @@ async def get_daily_report(
         critical_stock_result = await db.execute(critical_stock_query)
         critical_stock_items = critical_stock_result.scalar() or 0
 
+    shift_status = "open" if active_shifts > 0 else "closed"
+
     data = {
         "revenue_today": revenue_today,
         "order_count": order_count,
@@ -152,6 +154,7 @@ async def get_daily_report(
         "top_products": top_products,
         "payment_breakdown": payment_breakdown,
         "active_shifts": active_shifts,
+        "shift_status": shift_status,
         "critical_stock_items": critical_stock_items,
     }
     
