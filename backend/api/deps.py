@@ -60,7 +60,17 @@ async def get_current_tenant(
             detail="Header X-Tenant-ID wajib diisi"
         )
         
-    stmt = select(Tenant).where(Tenant.schema_name == tenant_id, Tenant.deleted_at == None)
+    # Try UUID first (frontend sends tenant UUID), fallback to schema_name
+    from sqlalchemy import or_
+    try:
+        from uuid import UUID as UUID_type
+        tid = UUID_type(tenant_id)
+        stmt = select(Tenant).where(Tenant.id == tid, Tenant.deleted_at == None)
+    except (ValueError, AttributeError):
+        stmt = select(Tenant).where(
+            or_(Tenant.schema_name == tenant_id, Tenant.name == tenant_id),
+            Tenant.deleted_at == None,
+        )
     result = await db.execute(stmt)
     tenant = result.scalar_one_or_none()
     
@@ -85,8 +95,9 @@ async def require_pro_tier(
     tenant: Tenant = Depends(get_current_tenant),
 ) -> Tenant:
     """Blokir akses fitur Pro+ untuk tenant Starter."""
-    tier = getattr(tenant, "subscription_tier", "starter") or "starter"
-    if str(tier).lower() not in PRO_TIERS:
+    raw_tier = getattr(tenant, "subscription_tier", "starter") or "starter"
+    tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
+    if tier.lower() not in PRO_TIERS:
         raise HTTPException(
             status_code=403,
             detail="Fitur ini hanya tersedia untuk paket Pro. Upgrade untuk mengakses."
