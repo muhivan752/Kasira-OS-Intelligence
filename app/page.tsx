@@ -15,17 +15,11 @@ const jsonLd = {
   operatingSystem: 'Android, Web',
   description: 'Kasir digital modern dengan storefront gratis, QRIS tanpa komisi, dan AI insight untuk bisnis F&B dan UMKM Indonesia.',
   url: 'https://kasira.online',
-  offers: {
-    '@type': 'Offer',
-    price: '99000',
-    priceCurrency: 'IDR',
-    description: 'Starter plan — POS + Storefront + QRIS',
-  },
-  aggregateRating: {
-    '@type': 'AggregateRating',
-    ratingValue: '4.8',
-    ratingCount: '12',
-  },
+  offers: [
+    { '@type': 'Offer', name: 'Starter', price: '99000', priceCurrency: 'IDR', description: 'POS + Storefront + QRIS + Laporan' },
+    { '@type': 'Offer', name: 'Pro', price: '299000', priceCurrency: 'IDR', description: 'Semua Starter + AI Insight + Kitchen Display + Reservasi' },
+    { '@type': 'Offer', name: 'Business', price: '499000', priceCurrency: 'IDR', description: 'Semua Pro + Multi Outlet + HQ Dashboard' },
+  ],
 };
 
 export default function LandingPage() {
@@ -60,15 +54,13 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <a
-                href={waLink}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                href="/register"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 bg-emerald-500 text-white text-lg font-bold rounded-2xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/25 hover:-translate-y-0.5"
               >
-                <MessageCircle className="w-5 h-5" />
-                Daftar via WhatsApp
-              </a>
+                Daftar Gratis
+                <ArrowRight className="w-5 h-5" />
+              </Link>
               <Link
                 href="/kasira-coffee"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-gray-700 text-lg font-semibold rounded-2xl border-2 border-gray-200 hover:border-gray-300 transition-all"
@@ -236,9 +228,9 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-3 gap-8 relative">
             <div className="hidden md:block absolute top-10 left-[20%] right-[20%] h-px bg-emerald-200" />
             {[
-              { step: '1', title: 'Chat WhatsApp', desc: 'Hubungi kami via WA, kami bantu setup awal gratis.' },
+              { step: '1', title: 'Daftar Online', desc: 'Masukkan nomor WA, verifikasi OTP, akun langsung aktif.' },
               { step: '2', title: 'Input Menu', desc: 'Tambah produk beserta harga. Storefront aktif otomatis.' },
-              { step: '3', title: 'Kasir Jalan', desc: 'Download app kasir, login WA, langsung transaksi hari ini.' },
+              { step: '3', title: 'Download Kasir', desc: 'Unduh app kasir Android, login, langsung transaksi hari ini.' },
             ].map(({ step, title, desc }, i) => (
               <div key={i} className="relative text-center">
                 <div className="w-20 h-20 mx-auto bg-white border-2 border-emerald-200 rounded-full flex items-center justify-center mb-5 relative z-10 shadow-sm">
@@ -282,10 +274,10 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <a href={waLink} target="_blank" rel="noopener noreferrer"
+              <Link href="/register"
                 className="w-full block text-center px-5 py-3 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 transition-colors text-sm">
-                Mulai Gratis
-              </a>
+                Daftar Sekarang
+              </Link>
             </div>
 
             {/* PRO */}
@@ -382,15 +374,24 @@ export default function LandingPage() {
           <p className="text-emerald-100 text-xl mb-10">
             Kami bantu setup dari nol.
           </p>
-          <a
-            href={waLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-3 px-10 py-5 bg-white text-emerald-600 text-lg font-bold rounded-2xl hover:bg-gray-50 transition-all shadow-xl hover:-translate-y-1"
-          >
-            <MessageCircle className="w-6 h-6" />
-            Chat WhatsApp Sekarang
-          </a>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              href="/register"
+              className="inline-flex items-center gap-3 px-10 py-5 bg-white text-emerald-600 text-lg font-bold rounded-2xl hover:bg-gray-50 transition-all shadow-xl hover:-translate-y-1"
+            >
+              Daftar Gratis Sekarang
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+            <a
+              href={waLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-3 px-8 py-5 bg-white/10 text-white text-lg font-bold rounded-2xl hover:bg-white/20 transition-all border border-white/20"
+            >
+              <MessageCircle className="w-5 h-5" />
+              Tanya via WA
+            </a>
+          </div>
           <p className="mt-5 text-emerald-200 text-sm">
             Setup 5 menit · Tidak perlu kartu kredit · Cancel kapan saja
           </p>
@@ -408,6 +409,7 @@ export default function LandingPage() {
             <div className="flex flex-wrap justify-center gap-8 text-sm">
               <Link href="#features" className="text-gray-400 hover:text-white transition-colors">Fitur</Link>
               <Link href="#pricing" className="text-gray-400 hover:text-white transition-colors">Harga</Link>
+              <Link href="/download" className="text-gray-400 hover:text-white transition-colors">Download</Link>
               <Link href="/kasira-coffee" className="text-gray-400 hover:text-white transition-colors">Demo</Link>
               <Link href="/login" className="text-gray-400 hover:text-white transition-colors">Login</Link>
               <a href={waLink} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 transition-colors">WhatsApp</a>

@@ -17,6 +17,7 @@ import {
   Crown,
   Lock,
   Package,
+  Smartphone,
 } from 'lucide-react';
 import { logout } from '@/app/actions/auth';
 import { getCurrentUser, getOutlets } from '@/app/actions/api';
@@ -72,6 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
 
   const bottomNav = [
+    { name: 'Download Kasir', href: '/download', icon: Smartphone },
     { name: 'Pengaturan', href: '/dashboard/settings', icon: Settings },
   ];
 

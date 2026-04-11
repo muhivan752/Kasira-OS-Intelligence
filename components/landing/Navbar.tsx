@@ -11,7 +11,8 @@ export default function Navbar() {
   const navLinks = [
     { name: 'Fitur', href: '#features' },
     { name: 'Harga', href: '#pricing' },
-    { name: 'Demo', href: '/warung-demo' },
+    { name: 'Download', href: '/download' },
+    { name: 'Demo', href: '/kasira-coffee' },
   ];
 
   return (
