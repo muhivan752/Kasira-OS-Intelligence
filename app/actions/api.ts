@@ -309,3 +309,139 @@ export async function getWeeklyRevenue(outletId: string) {
 
   return results;
 }
+
+// ===================== Reservations =====================
+
+export async function getReservations(outletId: string, reservationDate?: string, status?: string) {
+  try {
+    let url = `/reservations?outlet_id=${outletId}`;
+    if (reservationDate) url += `&reservation_date=${reservationDate}`;
+    if (status) url += `&status=${status}`;
+    const res = await fetchWithAuth(url);
+    const data = await res.json();
+    return data.data;
+  } catch { return []; }
+}
+
+export async function createReservation(outletId: string, payload: {
+  reservation_date: string;
+  start_time: string;
+  guest_count: number;
+  customer_name: string;
+  customer_phone: string;
+  table_id?: string;
+  notes?: string;
+  source?: string;
+}) {
+  try {
+    const res = await fetchWithAuth(`/reservations?outlet_id=${outletId}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal membuat reservasi' }; }
+}
+
+export async function confirmReservation(id: string) {
+  try {
+    const res = await fetchWithAuth(`/reservations/${id}/confirm`, { method: 'PUT' });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal konfirmasi reservasi' }; }
+}
+
+export async function seatReservation(id: string) {
+  try {
+    const res = await fetchWithAuth(`/reservations/${id}/seat`, { method: 'PUT' });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal mengubah status reservasi' }; }
+}
+
+export async function completeReservation(id: string) {
+  try {
+    const res = await fetchWithAuth(`/reservations/${id}/complete`, { method: 'PUT' });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal menyelesaikan reservasi' }; }
+}
+
+export async function cancelReservation(id: string) {
+  try {
+    const res = await fetchWithAuth(`/reservations/${id}/cancel`, { method: 'PUT' });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal membatalkan reservasi' }; }
+}
+
+export async function noShowReservation(id: string) {
+  try {
+    const res = await fetchWithAuth(`/reservations/${id}/no-show`, { method: 'PUT' });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal mengubah status reservasi' }; }
+}
+
+export async function getReservationSettings(outletId: string) {
+  try {
+    const res = await fetchWithAuth(`/reservations/settings/${outletId}`);
+    const data = await res.json();
+    return data.data;
+  } catch { return null; }
+}
+
+export async function updateReservationSettings(outletId: string, payload: any) {
+  try {
+    const res = await fetchWithAuth(`/reservations/settings/${outletId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal update pengaturan reservasi' }; }
+}
+
+// ===================== Tables =====================
+
+export async function getTables(outletId: string) {
+  try {
+    const res = await fetchWithAuth(`/tables?outlet_id=${outletId}`);
+    const data = await res.json();
+    return data.data;
+  } catch { return []; }
+}
+
+export async function createTable(outletId: string, payload: {
+  name: string;
+  capacity: number;
+  floor_section?: string;
+  is_active?: boolean;
+}) {
+  try {
+    const res = await fetchWithAuth(`/tables?outlet_id=${outletId}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal membuat meja' }; }
+}
+
+export async function updateTable(id: string, payload: any) {
+  try {
+    const res = await fetchWithAuth(`/tables/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal update meja' }; }
+}
+
+export async function deleteTable(id: string) {
+  try {
+    const res = await fetchWithAuth(`/tables/${id}`, { method: 'DELETE' });
+    return res.ok;
+  } catch { return false; }
+}

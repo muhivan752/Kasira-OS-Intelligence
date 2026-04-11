@@ -739,3 +739,213 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
         },
         message="Order status retrieved"
     )
+
+
+# ─── Storefront Reservation Endpoints (Public, no auth) ────────────────────
+
+from backend.models.reservation import Reservation, Table, ReservationSettings
+from backend.schemas.reservation import StorefrontReservationCreate
+
+
+@router.get("/{slug}/reservation/slots")
+async def get_available_slots(
+    slug: str,
+    reservation_date: datetime.date,
+    guest_count: int = 2,
+    db: AsyncSession = Depends(get_db),
+):
+    """Public: get available reservation slots for a date."""
+    outlet = (await db.execute(
+        select(Outlet).where(Outlet.slug == slug, Outlet.deleted_at.is_(None), Outlet.is_active == True)
+    )).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    settings_row = (await db.execute(
+        select(ReservationSettings).where(ReservationSettings.outlet_id == outlet.id)
+    )).scalar_one_or_none()
+
+    if not settings_row or not settings_row.is_enabled:
+        raise HTTPException(status_code=400, detail="Reservasi tidak tersedia untuk outlet ini")
+
+    # Validate date range
+    today = datetime.date.today()
+    max_date = today + datetime.timedelta(days=settings_row.max_advance_days)
+    min_dt = datetime.datetime.now() + datetime.timedelta(hours=settings_row.min_advance_hours)
+
+    if reservation_date < today:
+        raise HTTPException(status_code=400, detail="Tidak bisa reservasi untuk tanggal yang sudah lewat")
+    if reservation_date > max_date:
+        raise HTTPException(status_code=400, detail=f"Reservasi maksimal {settings_row.max_advance_days} hari ke depan")
+
+    # Generate time slots
+    slot_duration = datetime.timedelta(minutes=settings_row.slot_duration_minutes)
+    opening = datetime.datetime.combine(reservation_date, settings_row.opening_hour)
+    closing = datetime.datetime.combine(reservation_date, settings_row.closing_hour)
+
+    # Count available tables with enough capacity
+    total_tables = (await db.execute(
+        select(func.count(Table.id)).where(
+            Table.outlet_id == outlet.id, Table.deleted_at.is_(None),
+            Table.is_active == True, Table.capacity >= guest_count,
+        )
+    )).scalar() or 0
+
+    slots = []
+    current = opening
+    while current + slot_duration <= closing:
+        slot_start = current.time()
+        slot_end = (current + slot_duration).time()
+
+        # Skip slots in the past
+        if reservation_date == today and current < min_dt:
+            current += datetime.timedelta(minutes=30)  # 30 min increments
+            continue
+
+        # Count existing reservations in this slot
+        existing = (await db.execute(
+            select(func.count(Reservation.id)).where(
+                Reservation.outlet_id == outlet.id,
+                Reservation.reservation_date == reservation_date,
+                Reservation.deleted_at.is_(None),
+                Reservation.status.in_(['pending', 'confirmed', 'seated']),
+                Reservation.start_time < slot_end,
+                Reservation.end_time > slot_start,
+            )
+        )).scalar() or 0
+
+        remaining = max(0, settings_row.max_reservations_per_slot - existing)
+
+        # Check tables available for this slot
+        tables_booked = (await db.execute(
+            select(func.count(Reservation.table_id)).where(
+                Reservation.outlet_id == outlet.id,
+                Reservation.reservation_date == reservation_date,
+                Reservation.table_id.isnot(None),
+                Reservation.deleted_at.is_(None),
+                Reservation.status.in_(['pending', 'confirmed', 'seated']),
+                Reservation.start_time < slot_end,
+                Reservation.end_time > slot_start,
+            )
+        )).scalar() or 0
+
+        tables_free = max(0, total_tables - tables_booked)
+
+        slots.append({
+            "time": slot_start.strftime("%H:%M"),
+            "available": remaining > 0 and tables_free > 0,
+            "remaining_capacity": remaining,
+            "tables_available": tables_free,
+        })
+
+        current += datetime.timedelta(minutes=30)
+
+    return StandardResponse(
+        success=True,
+        data={"date": reservation_date.isoformat(), "slots": slots},
+        message="Available slots retrieved",
+    )
+
+
+@router.post("/{slug}/reservation")
+async def create_storefront_reservation(
+    slug: str,
+    body: StorefrontReservationCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Public: customer buat reservasi dari storefront."""
+    outlet = (await db.execute(
+        select(Outlet).where(Outlet.slug == slug, Outlet.deleted_at.is_(None), Outlet.is_active == True)
+    )).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    settings_row = (await db.execute(
+        select(ReservationSettings).where(ReservationSettings.outlet_id == outlet.id)
+    )).scalar_one_or_none()
+
+    if not settings_row or not settings_row.is_enabled:
+        raise HTTPException(status_code=400, detail="Reservasi tidak tersedia")
+
+    # Validate date
+    today = datetime.date.today()
+    max_date = today + datetime.timedelta(days=settings_row.max_advance_days)
+    if body.reservation_date < today or body.reservation_date > max_date:
+        raise HTTPException(status_code=400, detail="Tanggal reservasi tidak valid")
+
+    # Calculate end_time
+    slot_duration = datetime.timedelta(minutes=settings_row.slot_duration_minutes)
+    start_dt = datetime.datetime.combine(body.reservation_date, body.start_time)
+    end_time = (start_dt + slot_duration).time()
+
+    # Check slot still available
+    existing = (await db.execute(
+        select(func.count(Reservation.id)).where(
+            Reservation.outlet_id == outlet.id,
+            Reservation.reservation_date == body.reservation_date,
+            Reservation.deleted_at.is_(None),
+            Reservation.status.in_(['pending', 'confirmed', 'seated']),
+            Reservation.start_time < end_time,
+            Reservation.end_time > body.start_time,
+        )
+    )).scalar() or 0
+
+    if existing >= settings_row.max_reservations_per_slot:
+        raise HTTPException(status_code=409, detail="Slot sudah penuh, silakan pilih waktu lain")
+
+    # Auto-assign table
+    from backend.api.routes.reservations import _auto_assign_table
+    table = await _auto_assign_table(db, outlet.id, body.guest_count,
+                                      body.reservation_date, body.start_time, end_time)
+
+    # Determine initial status
+    initial_status = "confirmed" if settings_row.auto_confirm else "pending"
+
+    reservation = Reservation(
+        outlet_id=outlet.id,
+        tenant_id=outlet.tenant_id,
+        table_id=table.id if table else None,
+        reservation_date=body.reservation_date,
+        start_time=body.start_time,
+        end_time=end_time,
+        guest_count=body.guest_count,
+        customer_name=body.customer_name,
+        customer_phone=body.customer_phone,
+        source='storefront',
+        notes=body.notes,
+        status=initial_status,
+        deposit_amount=settings_row.deposit_amount if settings_row.require_deposit else None,
+        confirmed_at=datetime.datetime.now(datetime.timezone.utc) if initial_status == "confirmed" else None,
+    )
+    db.add(reservation)
+    await db.commit()
+    await db.refresh(reservation)
+
+    # WA confirmation if auto-confirmed
+    if initial_status == "confirmed" and body.customer_phone:
+        try:
+            from backend.api.routes.reservations import _send_wa_confirmation
+            import asyncio
+            asyncio.create_task(_send_wa_confirmation(
+                body.customer_phone, outlet.name, body.reservation_date, body.start_time, body.guest_count,
+            ))
+        except Exception:
+            pass
+
+    status_msg = "Reservasi dikonfirmasi" if initial_status == "confirmed" else "Reservasi diterima, menunggu konfirmasi"
+
+    return StandardResponse(
+        success=True,
+        data={
+            "id": str(reservation.id),
+            "status": initial_status,
+            "reservation_date": body.reservation_date.isoformat(),
+            "start_time": body.start_time.strftime("%H:%M"),
+            "end_time": end_time.strftime("%H:%M"),
+            "guest_count": body.guest_count,
+            "table_name": table.name if table else "Akan ditentukan",
+            "deposit_required": settings_row.require_deposit,
+            "deposit_amount": float(settings_row.deposit_amount) if settings_row.require_deposit else None,
+        },
+        message=status_msg,
+    )
