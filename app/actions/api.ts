@@ -467,7 +467,7 @@ export async function getIngredients(brandId: string, outletId?: string) {
 }
 
 export async function createIngredient(payload: any) {
-  const res = await fetchWithAuth('/ingredients', {
+  const res = await fetchWithAuth('/ingredients/', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -477,7 +477,7 @@ export async function createIngredient(payload: any) {
 }
 
 export async function updateIngredient(id: string, payload: any) {
-  const res = await fetchWithAuth(`/ingredients/${id}`, {
+  const res = await fetchWithAuth(`/ingredients/${id}/`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
@@ -488,7 +488,7 @@ export async function updateIngredient(id: string, payload: any) {
 
 export async function deleteIngredient(id: string) {
   try {
-    const res = await fetchWithAuth(`/ingredients/${id}`, { method: 'DELETE' });
+    const res = await fetchWithAuth(`/ingredients/${id}/`, { method: 'DELETE' });
     return res.ok;
   } catch { return false; }
 }
