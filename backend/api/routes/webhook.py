@@ -37,6 +37,9 @@ async def fonnte_webhook(
     - filename: media filename
     - extension: media extension
     """
+    # Temporarily disabled — remove this line when ready with dedicated number
+    return {"status": "ok", "message": "webhook disabled"}
+
     try:
         # Fonnte can send as form data or JSON
         content_type = request.headers.get("content-type", "")

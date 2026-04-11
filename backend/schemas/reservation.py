@@ -19,6 +19,7 @@ class ReservationSource(str, Enum):
     storefront = 'storefront'
     manual = 'manual'
     whatsapp = 'whatsapp'
+    pos = 'pos'
 
 
 # --- Table schemas ---
