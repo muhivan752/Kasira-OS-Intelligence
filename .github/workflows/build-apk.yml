@@ -167,11 +167,11 @@ jobs:
           # Simpan version.json, lalu push ke branch main
           cp version.json /tmp/version.json
           git fetch origin main
-          git checkout main
+          git reset --hard origin/main
           cp /tmp/version.json version.json
           git add version.json
           git commit -m "chore: update version.json → v${VERSION}" || echo "No changes to commit"
-          git push origin main
+          git push origin main || echo "Push failed, continuing to release"
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
