@@ -89,6 +89,22 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
 
+    # Get tenant tier
+    from backend.models.tenant import Tenant
+    tenant_result = await db.execute(
+        select(Tenant).where(Tenant.id == outlet.tenant_id, Tenant.deleted_at.is_(None))
+    )
+    tenant = tenant_result.scalar_one_or_none()
+    raw_tier = getattr(tenant, "subscription_tier", "starter") if tenant else "starter"
+    outlet_tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier or "starter")
+
+    # Check if reservation is enabled
+    from backend.models.reservation import ReservationSettings
+    resv_settings = (await db.execute(
+        select(ReservationSettings).where(ReservationSettings.outlet_id == outlet.id)
+    )).scalar_one_or_none()
+    reservation_enabled = resv_settings.is_enabled if resv_settings else False
+
     # Get active products with stock > 0
     products_result = await db.execute(
         select(Product).where(
@@ -119,8 +135,9 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
             "cover_image_url": outlet.cover_image_url,
             "is_open": outlet.is_open,
             "opening_hours": outlet.opening_hours if isinstance(outlet.opening_hours, str) else "",
-            "tier": "starter",
-            "trust_badge": "Verified Partner"
+            "tier": outlet_tier,
+            "trust_badge": "Verified Partner",
+            "reservation_enabled": reservation_enabled
         },
         "categories": [
             {"id": str(c.id), "name": c.name} for c in categories

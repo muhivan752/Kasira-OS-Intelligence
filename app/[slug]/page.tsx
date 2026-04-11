@@ -112,16 +112,18 @@ export default function StorefrontPage() {
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
           <span className="text-sm font-medium text-blue-900">
-            Terverifikasi Kasira {outlet.tier === 'premium' ? 'Premium' : 'Basic'} · Zero Komisi
+            Terverifikasi Kasira {outlet.tier === 'pro' ? 'Pro' : outlet.tier === 'business' ? 'Business' : outlet.tier === 'enterprise' ? 'Enterprise' : 'Basic'} · Zero Komisi
           </span>
           <div className="ml-auto flex items-center gap-3">
-            <button
-              onClick={() => router.push(`/${slug}/booking`)}
-              className="flex items-center gap-1.5 text-blue-700 hover:text-blue-800 text-sm font-medium transition-colors"
-            >
-              <CalendarDays className="w-4 h-4" />
-              <span className="hidden sm:inline">Reservasi</span>
-            </button>
+            {outlet.reservation_enabled && (
+              <button
+                onClick={() => router.push(`/${slug}/booking`)}
+                className="flex items-center gap-1.5 text-blue-700 hover:text-blue-800 text-sm font-medium transition-colors"
+              >
+                <CalendarDays className="w-4 h-4" />
+                <span className="hidden sm:inline">Reservasi</span>
+              </button>
+            )}
             <button
               onClick={handleWhatsApp}
               className="flex items-center gap-1.5 text-green-700 hover:text-green-800 text-sm font-medium transition-colors"
@@ -312,12 +314,14 @@ export default function StorefrontPage() {
       <div className="md:hidden fixed bottom-6 left-0 right-0 px-4 pointer-events-none flex flex-col items-center z-50">
         <div className="w-full max-w-md mx-auto flex justify-between items-end pointer-events-auto">
           <div className="flex gap-2">
-            <button
-              onClick={() => router.push(`/${slug}/booking`)}
-              className="w-12 h-12 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-blue-700 transition-colors"
-            >
-              <CalendarDays className="w-6 h-6" />
-            </button>
+            {outlet.reservation_enabled && (
+              <button
+                onClick={() => router.push(`/${slug}/booking`)}
+                className="w-12 h-12 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-blue-700 transition-colors"
+              >
+                <CalendarDays className="w-6 h-6" />
+              </button>
+            )}
             <button
               onClick={handleWhatsApp}
               className="w-12 h-12 bg-green-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-green-600 transition-colors"
