@@ -267,7 +267,7 @@ export default function LandingPage() {
                 </div>
               </div>
               <ul className="space-y-3 mb-7 flex-1 text-sm">
-                {['Max 3 kasir', 'Max 500 produk', 'Cash + QRIS Xendit', 'Storefront gratis', 'Laporan harian', 'Manajemen stok', 'Email support'].map((f, i) => (
+                {['1 kasir', 'Max 500 produk', 'Cash + QRIS Xendit', 'Storefront gratis', 'Laporan harian', 'Manajemen stok', 'Email support'].map((f, i) => (
                   <li key={i} className="flex items-center gap-2 text-gray-600">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                     {f}
@@ -292,7 +292,7 @@ export default function LandingPage() {
               </div>
               <ul className="space-y-3 mb-7 flex-1 text-sm">
                 <li className="text-xs font-bold text-gray-400 uppercase tracking-wide pb-2 border-b border-gray-100">Semua Starter +</li>
-                {['Max 10 kasir', 'Unlimited produk', 'Kitchen display', 'AI daily insight WA', 'Loyalty points', 'Reservasi meja', 'Export Excel/PDF', 'Priority WA support'].map((f, i) => (
+                {['Max 5 kasir', 'Unlimited produk', 'Kitchen display', 'AI daily insight WA', 'Loyalty points', 'Reservasi meja', 'Split bill', 'Priority WA support'].map((f, i) => (
                   <li key={i} className="flex items-center gap-2 text-gray-600">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                     {f}

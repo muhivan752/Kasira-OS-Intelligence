@@ -366,6 +366,14 @@ async def restock_ingredient(
     await db.commit()
     await db.refresh(ingredient)
 
+    # Invalidate AI context cache
+    try:
+        from backend.services.redis import get_redis_client
+        redis = await get_redis_client()
+        await redis.delete(f"ai:context:{restock_in.outlet_id}")
+    except Exception:
+        pass
+
     resp = IngredientResponse.model_validate(ingredient)
     resp.current_stock = stock_after
     return StandardResponse(

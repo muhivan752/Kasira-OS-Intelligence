@@ -96,6 +96,7 @@ async def deduct_stock(
         event_type="stock.sale",
         event_data={
             "product_id": str(product.id),
+            "outlet_id": str(outlet_id),
             "quantity": quantity,
             "stock_before": stock_before,
             "stock_after": stock_after,
@@ -154,6 +155,8 @@ async def deduct_stock(
                         outlet = outlet_res.scalar_one_or_none()
                         if outlet and outlet.slug:
                             await _r.delete(f"connect:storefront:{outlet.slug}")
+                        if outlet:
+                            await _r.delete(f"ai:context:{outlet.id}")
                     await _r.aclose()
                 except Exception:
                     pass  # Cache invalidation failure is non-critical
@@ -202,6 +205,7 @@ async def restock_product(
         event_type="stock.restock",
         event_data={
             "product_id": str(product.id),
+            "outlet_id": str(outlet_id),
             "quantity": quantity,
             "stock_before": stock_before,
             "stock_after": stock_after,
@@ -241,6 +245,15 @@ async def restock_product(
         )
         updated = result.scalar_one_or_none()
         if updated is not None:
+            # Invalidate AI context cache
+            try:
+                from backend.core.config import settings
+                import redis.asyncio as _redis
+                _r = _redis.from_url(settings.REDIS_URL, decode_responses=True)
+                await _r.delete(f"ai:context:{outlet_id}")
+                await _r.aclose()
+            except Exception:
+                pass
             return updated
 
     raise HTTPException(status_code=409, detail="Konflik data produk setelah 3x retry, silakan coba lagi")

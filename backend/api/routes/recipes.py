@@ -13,6 +13,7 @@ from backend.core.database import get_db
 from backend.models.recipe import Recipe, RecipeIngredient
 from backend.models.ingredient import Ingredient
 from backend.models.product import Product
+from backend.models.outlet import Outlet
 from backend.schemas.recipe import (
     RecipeCreate, RecipeUpdate, RecipeResponse,
     RecipeIngredientResponse, HPPProductResponse, HPPIngredientDetail,
@@ -166,11 +167,17 @@ async def create_recipe(
     )
     await db.commit()
 
-    # Auto-rebuild knowledge graph (non-blocking)
+    # Auto-rebuild knowledge graph + invalidate AI cache
     try:
         from backend.services.knowledge_graph_service import rebuild_graph
         await rebuild_graph(tenant_id=current_user.tenant_id, brand_id=product.brand_id, db=db)
         await db.commit()
+        # Clear AI context cache for all outlets of this brand
+        from backend.services.redis import get_redis_client
+        redis = await get_redis_client()
+        outlets = (await db.execute(select(Outlet).where(Outlet.brand_id == product.brand_id, Outlet.deleted_at.is_(None)))).scalars().all()
+        for o in outlets:
+            await redis.delete(f"ai:context:{o.id}")
     except Exception as e:
         logger.warning(f"KG rebuild after recipe create: {e}")
 
@@ -242,12 +249,17 @@ async def update_recipe(
     )
     await db.commit()
 
-    # Auto-rebuild knowledge graph
+    # Auto-rebuild knowledge graph + invalidate AI cache
     try:
         from backend.services.knowledge_graph_service import rebuild_graph
         product = (await db.execute(select(Product).where(Product.id == old_recipe.product_id))).scalar_one()
         await rebuild_graph(tenant_id=current_user.tenant_id, brand_id=product.brand_id, db=db)
         await db.commit()
+        from backend.services.redis import get_redis_client
+        redis = await get_redis_client()
+        outlets = (await db.execute(select(Outlet).where(Outlet.brand_id == product.brand_id, Outlet.deleted_at.is_(None)))).scalars().all()
+        for o in outlets:
+            await redis.delete(f"ai:context:{o.id}")
     except Exception as e:
         logger.warning(f"KG rebuild after recipe update: {e}")
 
@@ -289,12 +301,17 @@ async def delete_recipe(
     )
     await db.commit()
 
-    # Auto-rebuild knowledge graph
+    # Auto-rebuild knowledge graph + invalidate AI cache
     try:
         from backend.services.knowledge_graph_service import rebuild_graph
         product = (await db.execute(select(Product).where(Product.id == recipe.product_id))).scalar_one()
         await rebuild_graph(tenant_id=current_user.tenant_id, brand_id=product.brand_id, db=db)
         await db.commit()
+        from backend.services.redis import get_redis_client
+        redis = await get_redis_client()
+        outlets = (await db.execute(select(Outlet).where(Outlet.brand_id == product.brand_id, Outlet.deleted_at.is_(None)))).scalars().all()
+        for o in outlets:
+            await redis.delete(f"ai:context:{o.id}")
     except Exception as e:
         logger.warning(f"KG rebuild after recipe delete: {e}")
 
