@@ -12,6 +12,8 @@ class Ingredient(BaseModel):
     tracking_mode = Column(ENUM('simple', 'detail', name='tracking_mode', create_type=False), nullable=False)
     base_unit = Column(String, nullable=False)  # e.g. "gram", "ml", "pcs"
     unit_type = Column(ENUM('WEIGHT', 'VOLUME', 'COUNT', 'CUSTOM', name='unit_type', create_type=False), nullable=False)
+    buy_price = Column(Numeric(12, 2), server_default='0', nullable=False)
+    buy_qty = Column(Float, server_default='1', nullable=False)
     cost_per_base_unit = Column(Numeric(12, 2), server_default='0', nullable=False)
     ai_setup_complete = Column(Boolean, server_default='false', nullable=False)
     needs_review = Column(Boolean, server_default='false', nullable=False)

@@ -68,6 +68,14 @@ async def list_ingredients(
     return StandardResponse(data=responses, meta=meta, request_id=request.state.request_id)
 
 
+def _calc_cost(buy_price, buy_qty) -> float:
+    """Auto-calculate cost_per_base_unit = buy_price / buy_qty."""
+    from decimal import Decimal
+    bp = Decimal(str(buy_price)) if buy_price else Decimal("0")
+    bq = float(buy_qty) if buy_qty and float(buy_qty) > 0 else 1.0
+    return float(bp / Decimal(str(bq)))
+
+
 @router.post("/", response_model=StandardResponse[IngredientResponse])
 async def create_ingredient(
     request: Request,
@@ -75,13 +83,41 @@ async def create_ingredient(
     db: AsyncSession = Depends(get_db),
     current_user: Any = Depends(deps.get_current_user),
 ) -> Any:
-    ingredient = Ingredient(**ingredient_in.model_dump())
+    data = ingredient_in.model_dump()
+    # Auto-calculate cost_per_base_unit
+    data["cost_per_base_unit"] = _calc_cost(data.get("buy_price", 0), data.get("buy_qty", 1))
+
+    ingredient = Ingredient(**data)
     db.add(ingredient)
     await db.flush()
 
+    # Get outlet for event (ingredients are brand-level, pick first outlet)
+    from backend.models.outlet import Outlet as OutletModel
+    _outlet = (await db.execute(
+        select(OutletModel.id).where(OutletModel.tenant_id == current_user.tenant_id, OutletModel.deleted_at.is_(None))
+    )).scalar()
+
+    # Event store: ingredient.created
+    event = Event(
+        outlet_id=_outlet,
+        stream_id=f"ingredient:{ingredient.id}",
+        event_type="ingredient.created",
+        event_data={
+            "ingredient_id": str(ingredient.id),
+            "name": ingredient.name,
+            "buy_price": float(ingredient.buy_price),
+            "buy_qty": ingredient.buy_qty,
+            "cost_per_base_unit": float(ingredient.cost_per_base_unit),
+            "base_unit": ingredient.base_unit,
+            "user_id": str(current_user.id),
+        },
+    )
+    db.add(event)
+
     await log_audit(
         db=db, action="CREATE", entity="ingredients", entity_id=ingredient.id,
-        after_state=ingredient_in.model_dump(mode="json"),
+        after_state={"name": ingredient.name, "buy_price": float(ingredient.buy_price),
+                     "buy_qty": ingredient.buy_qty, "cost_per_base_unit": float(ingredient.cost_per_base_unit)},
         user_id=current_user.id, tenant_id=current_user.tenant_id,
     )
     await db.commit()
@@ -141,7 +177,20 @@ async def update_ingredient(
         raise HTTPException(status_code=409, detail="Data sudah diubah, silakan refresh")
 
     update_data = ingredient_in.model_dump(exclude_unset=True, exclude={"row_version"})
-    before_state = {k: getattr(ingredient, k) for k in update_data}
+
+    # Auto-recalculate cost_per_base_unit if buy_price or buy_qty changed
+    new_buy_price = update_data.get("buy_price", ingredient.buy_price)
+    new_buy_qty = update_data.get("buy_qty", ingredient.buy_qty)
+    if "buy_price" in update_data or "buy_qty" in update_data:
+        update_data["cost_per_base_unit"] = _calc_cost(new_buy_price, new_buy_qty)
+
+    old_cost = float(ingredient.cost_per_base_unit)
+    # Convert Decimal/float for JSON serialization in audit log
+    def _jsonable(v):
+        from decimal import Decimal as D
+        return float(v) if isinstance(v, D) else v
+    before_state = {k: _jsonable(getattr(ingredient, k)) for k in update_data}
+    after_state_audit = {k: _jsonable(v) for k, v in update_data.items()}
 
     await db.execute(
         update(Ingredient).where(
@@ -150,9 +199,30 @@ async def update_ingredient(
         ).values(**update_data, row_version=Ingredient.row_version + 1, updated_at=datetime.now(timezone.utc))
     )
 
+    # Event store: price change event (for knowledge graph + AI context)
+    new_cost = float(update_data.get("cost_per_base_unit", old_cost))
+    if new_cost != old_cost:
+        from backend.models.outlet import Outlet as OutletModel
+        _outlet = (await db.execute(
+            select(OutletModel.id).where(OutletModel.tenant_id == current_user.tenant_id, OutletModel.deleted_at.is_(None))
+        )).scalar()
+        event = Event(
+            outlet_id=_outlet,
+            stream_id=f"ingredient:{ingredient_id}",
+            event_type="ingredient.price_updated",
+            event_data={
+                "ingredient_id": str(ingredient_id),
+                "name": ingredient.name,
+                "before": {"buy_price": float(ingredient.buy_price or 0), "buy_qty": float(ingredient.buy_qty or 1), "cost_per_base_unit": old_cost},
+                "after": {"buy_price": float(new_buy_price or 0), "buy_qty": float(new_buy_qty or 1), "cost_per_base_unit": new_cost},
+                "user_id": str(current_user.id),
+            },
+        )
+        db.add(event)
+
     await log_audit(
         db=db, action="UPDATE", entity="ingredients", entity_id=ingredient_id,
-        before_state=before_state, after_state=update_data,
+        before_state=before_state, after_state=after_state_audit,
         user_id=current_user.id, tenant_id=current_user.tenant_id,
     )
     await db.commit()
