@@ -54,6 +54,9 @@ class IngredientResponse(BaseModel):
     current_stock: Optional[float] = None
     min_stock: Optional[float] = None
 
+    # Injected: recipe usage info
+    used_in: Optional[list] = None  # [{product_name, qty_per_serving, unit}]
+
     model_config = ConfigDict(from_attributes=True)
 
 

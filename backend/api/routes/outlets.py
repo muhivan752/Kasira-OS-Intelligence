@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.orm import selectinload
 
 from backend.api import deps
 from backend.models.outlet import Outlet
@@ -345,19 +346,42 @@ async def update_stock_mode(
 
         product_ids = [p.id for p in products]
         if product_ids:
+            from backend.models.recipe import RecipeIngredient as RI
             recipes = (await db.execute(
-                select(Recipe.product_id).where(
+                select(Recipe)
+                .options(selectinload(Recipe.ingredients))
+                .where(
                     Recipe.product_id.in_(product_ids),
                     Recipe.is_active == True,
                     Recipe.deleted_at.is_(None),
                 )
             )).scalars().all()
-            recipe_product_ids = set(recipes)
-            missing = [p.name for p in products if p.id not in recipe_product_ids]
+            recipe_map = {r.product_id: r for r in recipes}
+
+            missing = []
+            incomplete = []
+            for p in products:
+                recipe = recipe_map.get(p.id)
+                if not recipe:
+                    missing.append(p.name)
+                else:
+                    active_ings = [ri for ri in recipe.ingredients if ri.deleted_at is None and not ri.is_optional]
+                    if not active_ings:
+                        incomplete.append(f"{p.name} (belum ada bahan)")
+                    else:
+                        zero = [ri for ri in active_ings if ri.quantity <= 0]
+                        if zero:
+                            incomplete.append(f"{p.name} (qty bahan belum diisi)")
+
+            errors = []
             if missing:
+                errors.append(f"Belum punya resep: {', '.join(missing[:5])}")
+            if incomplete:
+                errors.append(f"Resep belum lengkap: {', '.join(incomplete[:5])}")
+            if errors:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Produk berikut belum punya resep: {', '.join(missing[:5])}. Tambahkan resep dulu sebelum beralih ke mode Resep."
+                    detail=f"{'. '.join(errors)}. Lengkapi resep dulu sebelum beralih ke mode Resep."
                 )
 
     before = outlet.stock_mode

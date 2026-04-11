@@ -10,7 +10,8 @@ from sqlalchemy.orm import selectinload
 from backend.api import deps
 from backend.core.database import get_db
 from backend.models.ingredient import Ingredient
-from backend.models.product import OutletStock
+from backend.models.product import Product, OutletStock
+from backend.models.recipe import Recipe, RecipeIngredient
 from backend.models.event import Event
 from backend.schemas.ingredient import IngredientCreate, IngredientUpdate, IngredientResponse, IngredientRestock
 from backend.schemas.response import StandardResponse, ResponseMeta
@@ -55,6 +56,36 @@ async def list_ingredients(
                 "min_stock": row.min_stock_base,
             }
 
+    # Load recipe usage: which products use each ingredient and how much per serving
+    usage_map: dict = {}
+    if ingredients:
+        ing_ids = [i.id for i in ingredients]
+        usage_rows = (await db.execute(
+            select(
+                RecipeIngredient.ingredient_id,
+                Product.name.label("product_name"),
+                RecipeIngredient.quantity,
+                RecipeIngredient.quantity_unit,
+            )
+            .join(Recipe, RecipeIngredient.recipe_id == Recipe.id)
+            .join(Product, Recipe.product_id == Product.id)
+            .where(
+                RecipeIngredient.ingredient_id.in_(ing_ids),
+                RecipeIngredient.deleted_at.is_(None),
+                Recipe.is_active == True,
+                Recipe.deleted_at.is_(None),
+                Product.deleted_at.is_(None),
+            )
+        )).all()
+        for row in usage_rows:
+            if row.ingredient_id not in usage_map:
+                usage_map[row.ingredient_id] = []
+            usage_map[row.ingredient_id].append({
+                "product_name": row.product_name,
+                "qty_per_serving": row.quantity,
+                "unit": row.quantity_unit,
+            })
+
     responses = []
     for ing in ingredients:
         resp = IngredientResponse.model_validate(ing)
@@ -62,6 +93,7 @@ async def list_ingredients(
         if stock_info:
             resp.current_stock = stock_info["current_stock"]
             resp.min_stock = stock_info["min_stock"]
+        resp.used_in = usage_map.get(ing.id, [])
         responses.append(resp)
 
     meta = ResponseMeta(page=(skip // limit) + 1, per_page=limit, total=len(responses))

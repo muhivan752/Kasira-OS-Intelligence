@@ -5,6 +5,12 @@ import { Package, Plus, RefreshCw, Pencil, Trash2, AlertTriangle } from 'lucide-
 import { getIngredients, createIngredient, updateIngredient, deleteIngredient, restockIngredient, getOutlets, getCurrentUser } from '@/app/actions/api';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
 
+interface UsedIn {
+  product_name: string;
+  qty_per_serving: number;
+  unit: string;
+}
+
 interface Ingredient {
   id: string;
   brand_id: string;
@@ -20,6 +26,7 @@ interface Ingredient {
   row_version: number;
   current_stock?: number;
   min_stock?: number;
+  used_in?: UsedIn[];
   created_at: string;
 }
 
@@ -195,6 +202,13 @@ export default function BahanBakuPage() {
                         {isLow && <AlertTriangle className="w-4 h-4 text-amber-500" />}
                       </div>
                       <span className="sm:hidden text-xs text-gray-400">{ing.base_unit}</span>
+                      {ing.used_in && ing.used_in.length > 0 ? (
+                        <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[250px]">
+                          Dipakai: {ing.used_in.map(u => `${u.product_name} (${u.qty_per_serving}${u.unit})`).join(', ')}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-amber-500 mt-0.5">Belum dipakai di menu manapun</p>
+                      )}
                     </td>
                     <td className="hidden sm:table-cell px-6 py-4 text-gray-600">{ing.base_unit}</td>
                     <td className="hidden lg:table-cell px-6 py-4 text-right text-gray-600">

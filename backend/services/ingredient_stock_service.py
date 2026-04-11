@@ -63,7 +63,18 @@ async def deduct_ingredients_for_product(
     ]
 
     if not active_ingredients:
-        return  # No ingredients to deduct
+        raise HTTPException(status_code=400, detail="Resep produk ini belum memiliki bahan baku. Tambahkan bahan dan jumlah per porsi di menu Resep.")
+
+    # Validate all quantities > 0
+    zero_qty = [
+        ri.ingredient.name if ri.ingredient else str(ri.ingredient_id)
+        for ri in active_ingredients if ri.quantity <= 0
+    ]
+    if zero_qty:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bahan berikut belum diisi jumlah per porsi: {', '.join(zero_qty[:5])}. Edit resep dan isi qty yang benar."
+        )
 
     # 2. Pre-check: load all outlet_stock records and verify sufficient stock
     ingredient_ids = [ri.ingredient_id for ri in active_ingredients]
