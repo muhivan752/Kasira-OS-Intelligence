@@ -1,6 +1,6 @@
 import uuid
 from typing import Optional
-from sqlalchemy import Column, String, Boolean, ForeignKey, Integer, Numeric, Text, DateTime, CheckConstraint
+from sqlalchemy import Column, String, Boolean, ForeignKey, Integer, Float, Numeric, Text, DateTime, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.core.database import Base
@@ -42,6 +42,7 @@ class Product(BaseModel):
     # Relationships
     brand = relationship("Brand", back_populates="products")
     category = relationship("Category", back_populates="products")
+    recipes = relationship("Recipe", back_populates="product")
 
     @property
     def category_name(self) -> Optional[str]:
@@ -58,14 +59,18 @@ class OutletStock(BaseModel):
     __tablename__ = "outlet_stock"
 
     outlet_id = Column(UUID(as_uuid=True), ForeignKey('outlets.id', ondelete='CASCADE'), nullable=False)
-    product_id = Column(UUID(as_uuid=True), ForeignKey('products.id', ondelete='CASCADE'), nullable=False)
-    
+    ingredient_id = Column(UUID(as_uuid=True), ForeignKey('ingredients.id', ondelete='CASCADE'), nullable=False)
+
     from sqlalchemy.dialects.postgresql import JSONB
     crdt_positive = Column(JSONB, server_default='{}', nullable=False)
     crdt_negative = Column(JSONB, server_default='{}', nullable=False)
-    computed_stock = Column(Integer, server_default='0', nullable=False)
+    computed_stock = Column(Float, server_default='0.0', nullable=False)
+    min_stock_base = Column(Float, server_default='0.0', nullable=False)
     row_version = Column(Integer, server_default='0', nullable=False)
 
     __table_args__ = (
         CheckConstraint('computed_stock >= 0', name='chk_outlet_stock_computed'),
     )
+
+    # Relationships
+    ingredient = relationship("Ingredient", back_populates="outlet_stocks")

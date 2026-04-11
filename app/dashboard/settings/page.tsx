@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { getOutlets, updateOutlet } from '@/app/actions/api';
-import { Loader2, Store, Clock, Link as LinkIcon, CreditCard, Upload, ImageOff, Image } from 'lucide-react';
+import { getOutlets, updateOutlet, updateStockMode, getCurrentUser } from '@/app/actions/api';
+import { Loader2, Store, Clock, Link as LinkIcon, CreditCard, Upload, ImageOff, Image, Package } from 'lucide-react';
 import Link from 'next/link';
 
 export default function SettingsPage() {
@@ -10,6 +10,10 @@ export default function SettingsPage() {
   const [outlet, setOutlet] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [stockMode, setStockMode] = useState('simple');
+  const [savingStockMode, setSavingStockMode] = useState(false);
+  const [stockModeError, setStockModeError] = useState('');
+  const [isPro, setIsPro] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
@@ -40,12 +44,31 @@ export default function SettingsPage() {
           is_open: data.is_open !== false,
           cover_image_url: data.cover_image_url || '',
         });
+        setStockMode(data.stock_mode || 'simple');
+      }
+      const user = await getCurrentUser();
+      if (user) {
+        const tier = user.subscription_tier || 'starter';
+        setIsPro(['pro', 'business', 'enterprise'].includes(tier));
       }
     } catch (error) {
       console.error('Failed to load outlet data', error);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleStockModeChange(mode: string) {
+    if (!outlet || mode === stockMode) return;
+    setSavingStockMode(true);
+    setStockModeError('');
+    try {
+      await updateStockMode(outlet.id, mode);
+      setStockMode(mode);
+    } catch (e: any) {
+      setStockModeError(e.message);
+    }
+    setSavingStockMode(false);
   }
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -271,6 +294,41 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
+
+          {/* Stock Mode (Pro only) */}
+          {isPro && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                <Package className="w-5 h-5 text-gray-500" />
+                <h2 className="text-lg font-bold text-gray-900">Mode Stok</h2>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-600">
+                  Pilih cara mengelola stok produk Anda.
+                </p>
+                {stockModeError && <p className="text-sm text-red-600">{stockModeError}</p>}
+                <div className="space-y-3">
+                  <label className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${stockMode === 'simple' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input type="radio" name="stock_mode" value="simple" checked={stockMode === 'simple'}
+                      onChange={() => handleStockModeChange('simple')} className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-gray-900">Sederhana</p>
+                      <p className="text-sm text-gray-500">Stok per produk, deduct langsung dari transaksi. Cocok untuk awal.</p>
+                    </div>
+                  </label>
+                  <label className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${stockMode === 'recipe' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input type="radio" name="stock_mode" value="recipe" checked={stockMode === 'recipe'}
+                      onChange={() => handleStockModeChange('recipe')} className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-gray-900">Resep & HPP</p>
+                      <p className="text-sm text-gray-500">Stok per bahan baku, deduct otomatis berdasarkan resep. Hitung HPP otomatis.</p>
+                    </div>
+                  </label>
+                </div>
+                {savingStockMode && <p className="text-sm text-blue-600">Menyimpan...</p>}
+              </div>
+            </div>
+          )}
 
           {/* Payment Settings */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

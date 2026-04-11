@@ -33,12 +33,17 @@ class OutletPaymentStatus(BaseModel):
     xendit_business_id: Optional[str] = None
     connected_at: Optional[datetime] = None
 
+class OutletStockModeUpdate(BaseModel):
+    stock_mode: str  # 'simple' | 'recipe'
+
+
 class OutletInDBBase(OutletBase):
     id: UUID4
     slug: Optional[str] = None
     is_open: Optional[bool] = True
     opening_hours: Optional[Any] = None
     cover_image_url: Optional[str] = None
+    stock_mode: str = "simple"
     row_version: int
     created_at: datetime
     updated_at: datetime

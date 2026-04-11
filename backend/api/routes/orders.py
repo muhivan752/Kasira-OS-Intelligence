@@ -20,6 +20,7 @@ from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.models.reservation import Table
 from backend.services.stock_service import deduct_stock
+from backend.services.ingredient_stock_service import deduct_ingredients_for_product
 
 router = APIRouter()
 
@@ -140,17 +141,28 @@ async def create_order(
         if not product or product.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
 
-        # Deduct stock via event-sourced stock service (Starter: transaction-first)
+        # Deduct stock — branch by outlet stock_mode
         if product.stock_enabled:
-            await deduct_stock(
-                db,
-                product=product,
-                quantity=item_in.quantity,
-                outlet_id=order_in.outlet_id,
-                order_id=order.id,
-                user_id=current_user.id,
-                tier=tier,
-            )
+            if outlet.stock_mode == "recipe":
+                await deduct_ingredients_for_product(
+                    db,
+                    product_id=product.id,
+                    quantity=item_in.quantity,
+                    outlet_id=order_in.outlet_id,
+                    order_id=order.id,
+                    user_id=current_user.id,
+                    tier=tier,
+                )
+            else:
+                await deduct_stock(
+                    db,
+                    product=product,
+                    quantity=item_in.quantity,
+                    outlet_id=order_in.outlet_id,
+                    order_id=order.id,
+                    user_id=current_user.id,
+                    tier=tier,
+                )
 
         # Create Order Item
         order_item = OrderItem(

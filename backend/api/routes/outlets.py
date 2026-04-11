@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 
 from backend.api import deps
 from backend.models.outlet import Outlet
-from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentSetupOwn, OutletPaymentStatus
+from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentSetupOwn, OutletPaymentStatus, OutletStockModeUpdate
 from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
 import json
@@ -299,4 +299,77 @@ async def get_payment_status(
         success=True,
         data=status_data,
         request_id=request.state.request_id
+    )
+
+
+@router.put("/{outlet_id}/stock-mode", response_model=StandardResponse[OutletSchema])
+async def update_stock_mode(
+    request: Request,
+    outlet_id: uuid.UUID,
+    mode_in: OutletStockModeUpdate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_user),
+) -> Any:
+    """Switch stock mode between 'simple' and 'recipe' (Pro only)."""
+    from backend.api.deps import require_pro_tier
+    await require_pro_tier(current_user=current_user, db=db)
+
+    stmt = select(Outlet).where(
+        Outlet.id == outlet_id, Outlet.deleted_at == None,
+        Outlet.tenant_id == current_user.tenant_id,
+    )
+    outlet = (await db.execute(stmt)).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    if mode_in.stock_mode not in ("simple", "recipe"):
+        raise HTTPException(status_code=400, detail="Stock mode harus 'simple' atau 'recipe'")
+
+    # If switching to recipe, validate all stock-enabled products have active recipes
+    if mode_in.stock_mode == "recipe":
+        from backend.models.product import Product
+        from backend.models.recipe import Recipe
+
+        products = (await db.execute(
+            select(Product).where(
+                Product.brand_id == outlet.brand_id,
+                Product.stock_enabled == True,
+                Product.deleted_at.is_(None),
+            )
+        )).scalars().all()
+
+        product_ids = [p.id for p in products]
+        if product_ids:
+            recipes = (await db.execute(
+                select(Recipe.product_id).where(
+                    Recipe.product_id.in_(product_ids),
+                    Recipe.is_active == True,
+                    Recipe.deleted_at.is_(None),
+                )
+            )).scalars().all()
+            recipe_product_ids = set(recipes)
+            missing = [p.name for p in products if p.id not in recipe_product_ids]
+            if missing:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Produk berikut belum punya resep: {', '.join(missing[:5])}. Tambahkan resep dulu sebelum beralih ke mode Resep."
+                )
+
+    before = outlet.stock_mode
+    await db.execute(
+        update(Outlet).where(Outlet.id == outlet_id)
+        .values(stock_mode=mode_in.stock_mode, row_version=Outlet.row_version + 1, updated_at=datetime.now(timezone.utc))
+    )
+    await log_audit(
+        db=db, action="UPDATE", entity="outlets", entity_id=outlet_id,
+        before_state={"stock_mode": before}, after_state={"stock_mode": mode_in.stock_mode},
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+    await db.refresh(outlet)
+
+    return StandardResponse(
+        success=True, data=outlet,
+        message=f"Mode stok diubah ke '{mode_in.stock_mode}'",
+        request_id=request.state.request_id,
     )

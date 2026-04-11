@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Boolean, ForeignKey, Integer, DateTime
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM
 from sqlalchemy.orm import relationship
 from backend.models.base import BaseModel
 
@@ -22,6 +22,8 @@ class Outlet(BaseModel):
     xendit_business_id = Column(String, nullable=True) # sub-account id (xenPlatform Phase 2)
     xendit_connected_at = Column(DateTime(timezone=True), nullable=True)
     xendit_api_key = Column(String, nullable=True)  # merchant's own secret key (Phase 1)
+
+    stock_mode = Column(ENUM('simple', 'recipe', name='stock_mode_type', create_type=False), server_default='simple', nullable=False)
 
     brand = relationship("Brand", back_populates="outlets")
     orders = relationship("Order", back_populates="outlet")

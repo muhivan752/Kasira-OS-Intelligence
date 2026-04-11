@@ -445,3 +445,112 @@ export async function deleteTable(id: string) {
     return res.ok;
   } catch { return false; }
 }
+
+// ===================== Ingredients (Pro) =====================
+
+export async function getIngredients(brandId: string, outletId?: string) {
+  try {
+    let url = `/ingredients?brand_id=${brandId}`;
+    if (outletId) url += `&outlet_id=${outletId}`;
+    const res = await fetchWithAuth(url);
+    const data = await res.json();
+    return data.data;
+  } catch { return []; }
+}
+
+export async function createIngredient(payload: any) {
+  const res = await fetchWithAuth('/ingredients', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Gagal menambahkan bahan baku');
+  return data.data;
+}
+
+export async function updateIngredient(id: string, payload: any) {
+  const res = await fetchWithAuth(`/ingredients/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Gagal mengupdate bahan baku');
+  return data.data;
+}
+
+export async function deleteIngredient(id: string) {
+  try {
+    const res = await fetchWithAuth(`/ingredients/${id}`, { method: 'DELETE' });
+    return res.ok;
+  } catch { return false; }
+}
+
+export async function restockIngredient(id: string, payload: { outlet_id: string; quantity: number; notes?: string }) {
+  const res = await fetchWithAuth(`/ingredients/${id}/restock`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Gagal restock');
+  return data.data;
+}
+
+// ===================== Recipes (Pro) =====================
+
+export async function getRecipes(params: { product_id?: string; brand_id?: string }) {
+  try {
+    const qs = new URLSearchParams();
+    if (params.product_id) qs.set('product_id', params.product_id);
+    if (params.brand_id) qs.set('brand_id', params.brand_id);
+    const res = await fetchWithAuth(`/recipes?${qs.toString()}`);
+    const data = await res.json();
+    return data.data;
+  } catch { return []; }
+}
+
+export async function createRecipe(payload: any) {
+  const res = await fetchWithAuth('/recipes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Gagal membuat resep');
+  return data.data;
+}
+
+export async function updateRecipe(id: string, payload: any) {
+  const res = await fetchWithAuth(`/recipes/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Gagal mengupdate resep');
+  return data.data;
+}
+
+export async function deleteRecipe(id: string) {
+  try {
+    const res = await fetchWithAuth(`/recipes/${id}`, { method: 'DELETE' });
+    return res.ok;
+  } catch { return false; }
+}
+
+export async function getHPPReport(brandId: string) {
+  try {
+    const res = await fetchWithAuth(`/recipes/hpp?brand_id=${brandId}`);
+    const data = await res.json();
+    return data.data;
+  } catch { return []; }
+}
+
+// ===================== Stock Mode =====================
+
+export async function updateStockMode(outletId: string, stockMode: string) {
+  const res = await fetchWithAuth(`/outlets/${outletId}/stock-mode`, {
+    method: 'PUT',
+    body: JSON.stringify({ stock_mode: stockMode }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Gagal mengubah mode stok');
+  return data.data;
+}
