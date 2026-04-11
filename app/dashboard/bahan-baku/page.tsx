@@ -74,6 +74,14 @@ export default function BahanBakuPage() {
 
   async function handleSave() {
     setError('');
+    if (!form.buy_price || parseFloat(form.buy_price) <= 0) {
+      setError('Harga beli harus diisi dan lebih dari 0');
+      return;
+    }
+    if (!form.buy_qty || parseFloat(form.buy_qty) <= 0) {
+      setError('Isi per beli harus diisi dan lebih dari 0');
+      return;
+    }
     try {
       if (editingId) {
         await updateIngredient(editingId, {
@@ -129,8 +137,8 @@ export default function BahanBakuPage() {
     setEditingId(ing.id);
     setForm({
       name: ing.name, base_unit: ing.base_unit, unit_type: ing.unit_type,
-      buy_price: String(ing.buy_price || 0),
-      buy_qty: String(ing.buy_qty || 1),
+      buy_price: ing.buy_price > 0 ? String(ing.buy_price) : '',
+      buy_qty: ing.buy_qty > 0 ? String(ing.buy_qty) : '',
       ingredient_type: ing.ingredient_type,
       overhead_cost_per_day: ing.overhead_cost_per_day ? String(ing.overhead_cost_per_day) : '',
       row_version: ing.row_version,
@@ -315,7 +323,7 @@ export default function BahanBakuPage() {
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button onClick={() => { setShowModal(false); resetForm(); }} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Batal</button>
-              <button onClick={handleSave} disabled={!form.name || !form.base_unit}
+              <button onClick={handleSave} disabled={!form.name || !form.base_unit || !form.buy_price || !form.buy_qty}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {editingId ? 'Simpan' : 'Tambah'}
               </button>
