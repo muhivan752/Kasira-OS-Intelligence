@@ -197,9 +197,54 @@ export default function BahanBakuPage() {
 
       {/* Ingredient Cards */}
       {ingredients.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 px-6 py-12 text-center text-gray-400">
-          <Package className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-          Belum ada bahan baku. Klik "Tambah Bahan" untuk memulai.
+        <div className="bg-white rounded-xl border border-gray-200 p-6 sm:p-8">
+          <div className="max-w-lg mx-auto">
+            <div className="text-center mb-6">
+              <Package className="w-12 h-12 mx-auto mb-3 text-blue-400" />
+              <h2 className="text-lg font-bold text-gray-900">Mulai Kelola Bahan Baku</h2>
+              <p className="text-sm text-gray-500 mt-1">Dengan bahan baku, sistem otomatis hitung HPP dan kurangi stok saat ada pesanan.</p>
+            </div>
+            <div className="space-y-4 mb-6">
+              <div className="flex gap-3 items-start">
+                <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold shrink-0">1</div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Tambah bahan baku</p>
+                  <p className="text-xs text-gray-500">Klik tombol "Tambah Bahan" di atas. Isi nama, satuan, harga beli, dan isi per beli.</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Contoh: Kopi Arabica — Rp120.000 / 1000 gram</p>
+                </div>
+              </div>
+              <div className="flex gap-3 items-start">
+                <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold shrink-0">2</div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Restock stok awal</p>
+                  <p className="text-xs text-gray-500">Setelah bahan ditambah, klik tombol restock untuk isi jumlah stok yang tersedia.</p>
+                </div>
+              </div>
+              <div className="flex gap-3 items-start">
+                <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold shrink-0">3</div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Hubungkan ke menu (Resep)</p>
+                  <p className="text-xs text-gray-500">Buka halaman <a href="/dashboard/menu" className="text-blue-600 underline font-medium">Menu</a> → edit produk → tab Resep → pilih bahan dan isi jumlah per porsi.</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Contoh: Kopi Hitam butuh 15g Kopi Arabica + 10g Gula per porsi</p>
+                </div>
+              </div>
+              <div className="flex gap-3 items-start">
+                <div className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-sm font-bold shrink-0">4</div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Otomatis!</p>
+                  <p className="text-xs text-gray-500">Setiap pesanan masuk, stok bahan baku berkurang otomatis sesuai resep. Anda tinggal pantau dan restock.</p>
+                </div>
+              </div>
+            </div>
+            <div className="text-center">
+              <button
+                onClick={() => { resetForm(); setShowModal(true); }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+              >
+                <Plus className="w-4 h-4" /> Tambah Bahan Pertama
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
