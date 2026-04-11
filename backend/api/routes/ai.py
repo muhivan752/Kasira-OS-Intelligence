@@ -124,6 +124,7 @@ async def ai_chat(
                 tier=tier,
                 db=db,
                 redis_client=redis,
+                user_id=str(current_user.id),
             ):
                 yield chunk
         except Exception as e:

@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 INTENT_READ = "READ"
 INTENT_WRITE = "WRITE"
+INTENT_RESTOCK = "RESTOCK"
 INTENT_UNKNOWN = "UNKNOWN"
 
 # Keywords untuk intent classification (Bahasa Indonesia + sedikit Inggris)
@@ -43,10 +44,16 @@ READ_KEYWORDS = [
     "buka jam", "tutup jam", "kapan bisa", "ada meja",
 ]
 
+RESTOCK_KEYWORDS = [
+    "restock", "tambah stok", "masukin stok", "isi stok", "stok masuk",
+    "baru beli", "beli bahan", "datang bahan", "terima bahan",
+    "update stok", "nambah stok", "restok",
+]
+
 WRITE_KEYWORDS = [
     "tambah", "buat", "create", "hapus", "delete", "ubah", "update",
     "ganti", "edit", "set", "jadikan", "nonaktifkan", "aktifkan",
-    "harga", "nama produk", "stok tambah", "restock", "diskon",
+    "harga", "nama produk", "diskon",
     "promo", "tutup outlet", "buka outlet",
 ]
 
@@ -86,13 +93,194 @@ def classify_intent(message: str) -> str:
     # Cek apakah pesan relevan dengan konteks bisnis
     has_business_context = any(kw in msg_lower for kw in BUSINESS_CONTEXT_KEYWORDS)
     has_read = any(kw in msg_lower for kw in READ_KEYWORDS)
+    has_restock = any(kw in msg_lower for kw in RESTOCK_KEYWORDS)
     has_write = any(kw in msg_lower for kw in WRITE_KEYWORDS)
 
+    if has_restock:
+        return INTENT_RESTOCK
     if has_write:
         return INTENT_WRITE
     if has_read or has_business_context:
         return INTENT_READ
     return INTENT_UNKNOWN
+
+
+# ─── Restock via AI ──────────────────────────────────────────────────────────
+
+UNIT_ALIASES = {
+    "kg": ("gram", 1000), "kilo": ("gram", 1000), "kilogram": ("gram", 1000),
+    "g": ("gram", 1), "gram": ("gram", 1), "gr": ("gram", 1),
+    "l": ("ml", 1000), "liter": ("ml", 1000),
+    "ml": ("ml", 1), "mililiter": ("ml", 1),
+    "pcs": ("pcs", 1), "butir": ("pcs", 1), "buah": ("pcs", 1), "biji": ("pcs", 1),
+    "tray": ("pcs", 30), "dus": ("pcs", 12), "lusin": ("pcs", 12),
+    "bungkus": ("bungkus", 1), "bks": ("bungkus", 1), "pack": ("bungkus", 1),
+}
+
+
+async def parse_restock_intent(message: str, outlet_id: str, tenant_id: str, db: AsyncSession) -> dict:
+    """
+    Parse restock message and find matching ingredient.
+    Returns: {success, ingredient_id, ingredient_name, quantity, unit, error}
+    """
+    import re
+    from backend.models.ingredient import Ingredient
+    from backend.models.product import OutletStock
+
+    msg = message.lower().strip()
+
+    # Load all ingredients for this tenant
+    from backend.models.outlet import Outlet
+    outlet = (await db.execute(
+        select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    if not outlet:
+        return {"success": False, "error": "Outlet tidak ditemukan"}
+
+    ingredients = (await db.execute(
+        select(Ingredient).where(
+            Ingredient.brand_id == outlet.brand_id,
+            Ingredient.deleted_at.is_(None),
+        )
+    )).scalars().all()
+
+    if not ingredients:
+        return {"success": False, "error": "Belum ada bahan baku. Tambahkan bahan dulu di halaman Bahan Baku."}
+
+    # Try to parse quantity + unit from message
+    # Patterns: "1kg", "1 kg", "500 gram", "2 liter", "30 butir"
+    qty_match = re.search(r'(\d+(?:[.,]\d+)?)\s*(kg|kilo|kilogram|gram|gr|g|liter|l|ml|mililiter|pcs|butir|buah|biji|tray|dus|lusin|bungkus|bks|pack)\b', msg)
+
+    raw_qty = None
+    raw_unit = None
+    if qty_match:
+        raw_qty = float(qty_match.group(1).replace(',', '.'))
+        raw_unit = qty_match.group(2)
+
+    # Convert to base unit
+    base_unit = None
+    final_qty = None
+    if raw_unit and raw_unit in UNIT_ALIASES:
+        base_unit, multiplier = UNIT_ALIASES[raw_unit]
+        final_qty = raw_qty * multiplier
+
+    # Fuzzy match ingredient name
+    best_match = None
+    best_score = 0
+    msg_words = set(re.findall(r'[a-zA-Z]+', msg))
+
+    for ing in ingredients:
+        ing_words = set(re.findall(r'[a-zA-Z]+', ing.name.lower()))
+        # Simple word overlap score
+        overlap = len(msg_words & ing_words)
+        if overlap > best_score:
+            best_score = overlap
+            best_match = ing
+        # Also try substring match
+        if ing.name.lower() in msg or any(w in msg for w in ing_words if len(w) > 3):
+            if overlap >= best_score:
+                best_match = ing
+                best_score = max(overlap, 1)
+
+    if not best_match or best_score == 0:
+        names = ", ".join([i.name for i in ingredients[:10]])
+        return {"success": False, "error": f"Bahan tidak ditemukan. Bahan yang tersedia: {names}"}
+
+    if final_qty is None or final_qty <= 0:
+        return {"success": False, "error": f"Berapa jumlah {best_match.name} yang mau di-restock? Contoh: 'restock {best_match.name} 1kg'"}
+
+    # Validate unit compatibility
+    if base_unit and base_unit != best_match.base_unit:
+        # Auto-convert if possible (e.g., user says "1kg" but ingredient uses "gram")
+        if base_unit == "gram" and best_match.base_unit == "gram":
+            pass  # OK
+        elif base_unit == "ml" and best_match.base_unit == "ml":
+            pass  # OK
+        else:
+            return {"success": False, "error": f"{best_match.name} dihitung dalam {best_match.base_unit}, tapi Anda memasukkan {raw_unit}. Coba: 'restock {best_match.name} {int(final_qty)} {best_match.base_unit}'"}
+
+    # Get current stock
+    stock_row = (await db.execute(
+        select(OutletStock).where(
+            OutletStock.outlet_id == outlet_id,
+            OutletStock.ingredient_id == best_match.id,
+            OutletStock.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    current_stock = float(stock_row.computed_stock) if stock_row else 0
+
+    return {
+        "success": True,
+        "ingredient_id": str(best_match.id),
+        "ingredient_name": best_match.name,
+        "quantity": final_qty,
+        "unit": best_match.base_unit,
+        "current_stock": current_stock,
+        "stock_after": current_stock + final_qty,
+    }
+
+
+async def execute_restock(ingredient_id: str, outlet_id: str, quantity: float, user_id: str, db: AsyncSession) -> bool:
+    """Execute the actual restock operation."""
+    from backend.models.product import OutletStock
+    from backend.models.event import Event
+    from sqlalchemy import update as sql_update
+
+    ing_uuid = UUID(ingredient_id) if isinstance(ingredient_id, str) else ingredient_id
+    out_uuid = UUID(outlet_id) if isinstance(outlet_id, str) else outlet_id
+
+    stock = (await db.execute(
+        select(OutletStock).where(
+            OutletStock.outlet_id == out_uuid,
+            OutletStock.ingredient_id == ing_uuid,
+            OutletStock.deleted_at.is_(None),
+        ).with_for_update()
+    )).scalar_one_or_none()
+
+    if not stock:
+        # Auto-create stock record if ingredient exists but no stock entry yet
+        import uuid as uuid_mod
+        stock = OutletStock(
+            id=uuid_mod.uuid4(),
+            outlet_id=out_uuid,
+            ingredient_id=ing_uuid,
+            computed_stock=0,
+            row_version=0,
+        )
+        db.add(stock)
+        await db.flush()
+
+    stock_before = float(stock.computed_stock)
+    stock_after = stock_before + quantity
+    now = datetime.now(timezone.utc)
+
+    # Update stock
+    await db.execute(
+        sql_update(OutletStock).where(OutletStock.id == stock.id).values(
+            computed_stock=stock_after,
+            row_version=OutletStock.row_version + 1,
+            updated_at=now,
+        )
+    )
+
+    # Event store (append-only)
+    event = Event(
+        outlet_id=outlet_id,
+        stream_id=f"ingredient:{ingredient_id}",
+        event_type="stock.ingredient_restock",
+        event_data={
+            "ingredient_id": ingredient_id,
+            "outlet_id": outlet_id,
+            "quantity": quantity,
+            "stock_before": stock_before,
+            "stock_after": stock_after,
+            "source": "ai_chat",
+            "user_id": user_id,
+        },
+    )
+    db.add(event)
+    await db.commit()
+    return True
 
 
 def classify_task_complexity(message: str) -> str:
@@ -356,6 +544,7 @@ async def stream_ai_response(
     tier: str,
     db: AsyncSession,
     redis_client,
+    user_id: str = "",
 ) -> AsyncGenerator[str, None]:
     """
     Generator untuk SSE stream.
@@ -377,12 +566,47 @@ async def stream_ai_response(
         yield sse({"type": "done", "intent": intent, "tokens_used": 0})
         return
 
+    if intent == INTENT_RESTOCK:
+        # Parse and execute restock
+        result = await parse_restock_intent(message, outlet_id, tenant_id, db)
+        if not result["success"]:
+            yield sse({"type": "chunk", "content": result["error"]})
+            yield sse({"type": "done", "intent": intent, "tokens_used": 0})
+            return
+
+        # Execute restock
+        ok = await execute_restock(
+            ingredient_id=result["ingredient_id"],
+            outlet_id=outlet_id,
+            quantity=result["quantity"],
+            user_id=user_id,
+            db=db,
+        )
+        if ok:
+            qty_display = f"{result['quantity']:,.0f}" if result['quantity'] == int(result['quantity']) else f"{result['quantity']:,.1f}"
+            yield sse({"type": "chunk", "content": (
+                f"Stok **{result['ingredient_name']}** berhasil ditambah **{qty_display} {result['unit']}**.\n\n"
+                f"Stok sekarang: **{result['stock_after']:,.0f} {result['unit']}**"
+            )})
+        else:
+            yield sse({"type": "chunk", "content": f"Gagal restock {result['ingredient_name']}. Coba lagi atau restock manual di halaman Bahan Baku."})
+
+        # Invalidate context cache (stock changed)
+        try:
+            await redis_client.delete(f"ai:context:{outlet_id}")
+        except Exception:
+            pass
+
+        yield sse({"type": "done", "intent": intent, "tokens_used": 0})
+        return
+
     if intent == INTENT_WRITE:
         yield sse({
             "type": "chunk",
-            "content": "⚠️ Permintaan ini akan mengubah data bisnis Anda. "
+            "content": "Permintaan ini akan mengubah data bisnis Anda. "
                        "Silakan lakukan perubahan langsung di menu pengaturan aplikasi Kasira "
-                       "untuk memastikan keamanan data.",
+                       "untuk memastikan keamanan data.\n\n"
+                       "Untuk restock bahan baku, coba: *restock kopi arabica 1kg*",
         })
         yield sse({"type": "done", "intent": intent, "tokens_used": 0})
         return
