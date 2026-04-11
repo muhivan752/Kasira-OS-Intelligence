@@ -213,6 +213,7 @@ async def restock_ingredient(
 
     # Append event
     event = Event(
+        outlet_id=restock_in.outlet_id,
         stream_id=f"ingredient:{ingredient_id}",
         event_type="stock.ingredient_restock",
         event_data={

@@ -5,8 +5,9 @@ import {
   getOutlets, getProducts, getCategories,
   toggleProductActive, createProduct, updateProduct, deleteProduct,
   createCategory, updateCategory, deleteCategory,
+  getIngredients, getRecipes, createRecipe, updateRecipe, getCurrentUser,
 } from '@/app/actions/api';
-import { Plus, Search, Edit2, Loader2, X, Trash2, Tag, Upload, ImageOff } from 'lucide-react';
+import { Plus, Search, Edit2, Loader2, X, Trash2, Tag, Upload, ImageOff, Package, FlaskConical } from 'lucide-react';
 import { useRef } from 'react';
 
 export default function MenuPage() {
@@ -16,6 +17,9 @@ export default function MenuPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [brandId, setBrandId] = useState('');
+  const [outletId, setOutletId] = useState('');
+  const [stockMode, setStockMode] = useState('simple');
+  const [isPro, setIsPro] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -31,6 +35,14 @@ export default function MenuPage() {
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Recipe state (inside product modal)
+  const [modalTab, setModalTab] = useState<'info' | 'resep'>('info');
+  const [allIngredients, setAllIngredients] = useState<any[]>([]);
+  const [recipeIngredients, setRecipeIngredients] = useState<any[]>([]);
+  const [existingRecipeId, setExistingRecipeId] = useState<string | null>(null);
+  const [savingRecipe, setSavingRecipe] = useState(false);
+  const [recipeError, setRecipeError] = useState('');
+
   // Category modal
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [editingCat, setEditingCat] = useState<any>(null);
@@ -43,16 +55,22 @@ export default function MenuPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const outlets = await getOutlets();
+      const [outlets, user] = await Promise.all([getOutlets(), getCurrentUser()]);
       if (outlets?.length > 0) {
         const outlet = outlets[0];
         setBrandId(outlet.brand_id);
+        setOutletId(outlet.id);
+        setStockMode(outlet.stock_mode || 'simple');
         const [prods, cats] = await Promise.all([
           getProducts(outlet.brand_id),
           getCategories(outlet.brand_id),
         ]);
         setProducts(prods || []);
         setCategories(cats || []);
+      }
+      if (user) {
+        const tier = user.subscription_tier || 'starter';
+        setIsPro(['pro', 'business', 'enterprise'].includes(tier));
       }
     } finally {
       setLoading(false);
@@ -83,7 +101,12 @@ export default function MenuPage() {
     setDeletingProductId(null);
   };
 
-  const openProductModal = (product: any = null) => {
+  const openProductModal = async (product: any = null) => {
+    setModalTab('info');
+    setRecipeIngredients([]);
+    setExistingRecipeId(null);
+    setRecipeError('');
+
     if (product) {
       setEditingProduct(product);
       setProductForm({
@@ -95,6 +118,28 @@ export default function MenuPage() {
         image_url: product.image_url || '',
         is_active: product.is_active,
       });
+      // Load recipe & ingredients for Pro
+      if (isPro) {
+        const [ings, recipes] = await Promise.all([
+          getIngredients(brandId),
+          getRecipes({ product_id: product.id }),
+        ]);
+        setAllIngredients(ings || []);
+        if (recipes?.length > 0) {
+          const recipe = recipes[0];
+          setExistingRecipeId(recipe.id);
+          setRecipeIngredients(
+            recipe.ingredients.map((ri: any) => ({
+              ingredient_id: ri.ingredient_id,
+              name: ri.ingredient_name || '',
+              quantity: ri.quantity,
+              quantity_unit: ri.quantity_unit,
+              is_optional: ri.is_optional,
+              cost: ri.ingredient_cost || 0,
+            }))
+          );
+        }
+      }
     } else {
       setEditingProduct(null);
       setProductForm({
@@ -102,6 +147,10 @@ export default function MenuPage() {
         category_id: categories.length > 0 ? categories[0].id : '',
         image_url: '', is_active: true,
       });
+      if (isPro) {
+        const ings = await getIngredients(brandId);
+        setAllIngredients(ings || []);
+      }
     }
     setIsProductModalOpen(true);
   };
@@ -424,7 +473,7 @@ export default function MenuPage() {
       {/* ── Modal Produk ── */}
       {isProductModalOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-10 bg-gray-900/50 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <h3 className="text-base font-bold text-gray-900">
                 {editingProduct ? 'Edit Produk' : 'Tambah Produk'}
@@ -433,115 +482,266 @@ export default function MenuPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleProductSubmit} className="p-5 space-y-4">
-              {/* Nama */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk <span className="text-red-500">*</span></label>
-                <input type="text" required autoFocus
-                  value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-              </div>
 
-              {/* Kategori */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Kategori
-                  {categories.length === 0 && (
-                    <span className="ml-1 text-xs text-amber-500">— tambah dulu di tab Kategori</span>
+            {/* Tabs — Info / Resep */}
+            {isPro && editingProduct && (
+              <div className="flex border-b border-gray-200 px-5">
+                <button onClick={() => setModalTab('info')}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                    modalTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}>
+                  Info Produk
+                </button>
+                <button onClick={() => setModalTab('resep')}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                    modalTab === 'resep' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}>
+                  <FlaskConical className="w-3.5 h-3.5" />
+                  Resep
+                  {recipeIngredients.length > 0 && (
+                    <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">{recipeIngredients.length}</span>
                   )}
-                </label>
-                <select value={productForm.category_id}
-                  onChange={e => setProductForm({ ...productForm, category_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                  <option value="">Tanpa Kategori</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                </button>
               </div>
+            )}
 
-              {/* Harga & Stok */}
-              <div className="grid grid-cols-2 gap-3">
+            {/* Tab: Info Produk */}
+            {modalTab === 'info' && (
+              <form onSubmit={handleProductSubmit} className="p-5 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Harga (Rp) <span className="text-red-500">*</span></label>
-                  <input type="number" required min="0"
-                    value={productForm.base_price} onChange={e => setProductForm({ ...productForm, base_price: e.target.value })}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk <span className="text-red-500">*</span></label>
+                  <input type="text" required autoFocus
+                    value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Stok <span className="text-red-500">*</span></label>
-                  <input type="number" required min="0"
-                    value={productForm.stock_qty} onChange={e => setProductForm({ ...productForm, stock_qty: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Kategori
+                    {categories.length === 0 && <span className="ml-1 text-xs text-amber-500">— tambah dulu di tab Kategori</span>}
+                  </label>
+                  <select value={productForm.category_id}
+                    onChange={e => setProductForm({ ...productForm, category_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    <option value="">Tanpa Kategori</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
-              </div>
-
-              {/* Gambar */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Foto Produk (Opsional)</label>
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-                  onChange={handleImageUpload} />
-                {productForm.image_url ? (
-                  <div className="flex items-center gap-3">
-                    <img src={productForm.image_url} alt="preview"
-                      className="h-20 w-20 rounded-lg object-cover border border-gray-200 flex-shrink-0"
-                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                    <div className="flex flex-col gap-1.5">
-                      <button type="button" onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50">
-                        {uploadingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                        Ganti foto
-                      </button>
-                      <button type="button" onClick={() => setProductForm(f => ({ ...f, image_url: '' }))}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50">
-                        <ImageOff className="w-3.5 h-3.5" /> Hapus foto
-                      </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Harga (Rp) <span className="text-red-500">*</span></label>
+                    <input type="number" required min="0"
+                      value={productForm.base_price} onChange={e => setProductForm({ ...productForm, base_price: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Stok <span className="text-red-500">*</span></label>
+                    <input type="number" required min="0"
+                      value={productForm.stock_qty} onChange={e => setProductForm({ ...productForm, stock_qty: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Foto Produk (Opsional)</label>
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                  {productForm.image_url ? (
+                    <div className="flex items-center gap-3">
+                      <img src={productForm.image_url} alt="preview"
+                        className="h-20 w-20 rounded-lg object-cover border border-gray-200 flex-shrink-0"
+                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      <div className="flex flex-col gap-1.5">
+                        <button type="button" onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50">
+                          {uploadingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                          Ganti foto
+                        </button>
+                        <button type="button" onClick={() => setProductForm(f => ({ ...f, image_url: '' }))}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50">
+                          <ImageOff className="w-3.5 h-3.5" /> Hapus foto
+                        </button>
+                      </div>
                     </div>
+                  ) : (
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingImage}
+                      className="w-full flex flex-col items-center justify-center gap-2 h-24 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50">
+                      {uploadingImage ? <Loader2 className="w-6 h-6 animate-spin text-blue-500" /> : <Upload className="w-6 h-6 text-gray-400" />}
+                      <span className="text-xs text-gray-500">{uploadingImage ? 'Mengupload...' : 'Klik untuk pilih foto dari perangkat'}</span>
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi (Opsional)</label>
+                  <textarea rows={2}
+                    value={productForm.description} onChange={e => setProductForm({ ...productForm, description: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => setProductForm({ ...productForm, is_active: !productForm.is_active })}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      productForm.is_active ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}>
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      productForm.is_active ? 'translate-x-4' : 'translate-x-0.5'
+                    }`} />
+                  </button>
+                  <span className="text-sm text-gray-600">{productForm.is_active ? 'Aktif di kasir' : 'Disembunyikan'}</span>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setIsProductModalOpen(false)}
+                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Batal</button>
+                  <button type="submit" disabled={savingProduct}
+                    className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    {savingProduct && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                    Simpan
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Tab: Resep / Recipe Builder */}
+            {modalTab === 'resep' && editingProduct && (
+              <div className="p-5 space-y-4">
+                {recipeError && <p className="text-sm text-red-600">{recipeError}</p>}
+
+                {allIngredients.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400">
+                    <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm">Belum ada bahan baku. Tambahkan di halaman Bahan Baku.</p>
                   </div>
                 ) : (
-                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingImage}
-                    className="w-full flex flex-col items-center justify-center gap-2 h-24 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50">
-                    {uploadingImage
-                      ? <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                      : <Upload className="w-6 h-6 text-gray-400" />}
-                    <span className="text-xs text-gray-500">
-                      {uploadingImage ? 'Mengupload...' : 'Klik untuk pilih foto dari perangkat'}
-                    </span>
-                  </button>
+                  <>
+                    {/* Add ingredient row */}
+                    <div className="flex gap-2">
+                      <select id="add-ingredient" className="flex-1 px-3 py-2 border rounded-lg text-sm bg-white">
+                        <option value="">Pilih bahan baku...</option>
+                        {allIngredients
+                          .filter(ing => !recipeIngredients.some(ri => ri.ingredient_id === ing.id))
+                          .map(ing => (
+                            <option key={ing.id} value={ing.id}>{ing.name} ({ing.base_unit})</option>
+                          ))}
+                      </select>
+                      <button type="button" onClick={() => {
+                        const sel = document.getElementById('add-ingredient') as HTMLSelectElement;
+                        const ingId = sel.value;
+                        if (!ingId) return;
+                        const ing = allIngredients.find(i => i.id === ingId);
+                        if (!ing) return;
+                        setRecipeIngredients([...recipeIngredients, {
+                          ingredient_id: ing.id, name: ing.name,
+                          quantity: 0, quantity_unit: ing.base_unit,
+                          is_optional: false, cost: ing.cost_per_base_unit || 0,
+                        }]);
+                        sel.value = '';
+                      }}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Ingredient list */}
+                    {recipeIngredients.length === 0 ? (
+                      <p className="text-sm text-gray-400 text-center py-4">Belum ada bahan. Pilih dari dropdown di atas.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {recipeIngredients.map((ri, idx) => {
+                          const lineCost = ri.quantity * ri.cost;
+                          return (
+                            <div key={ri.ingredient_id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{ri.name}</p>
+                                <p className="text-xs text-gray-400">
+                                  {fmt(ri.cost)}/{ri.quantity_unit}
+                                  {ri.quantity > 0 && ` = ${fmt(lineCost)}`}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <input type="number" step="any" min="0" placeholder="Qty"
+                                  value={ri.quantity || ''}
+                                  onChange={e => {
+                                    const updated = [...recipeIngredients];
+                                    updated[idx] = { ...updated[idx], quantity: parseFloat(e.target.value) || 0 };
+                                    setRecipeIngredients(updated);
+                                  }}
+                                  className="w-20 px-2 py-1.5 border rounded-lg text-sm text-right" />
+                                <span className="text-xs text-gray-500 w-10">{ri.quantity_unit}</span>
+                              </div>
+                              <button type="button" onClick={() => {
+                                setRecipeIngredients(recipeIngredients.filter((_, i) => i !== idx));
+                              }} className="p-1 text-red-400 hover:text-red-600">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* HPP Summary */}
+                    {recipeIngredients.length > 0 && (
+                      <div className="bg-blue-50 rounded-lg p-4 space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">HPP (Harga Pokok)</span>
+                          <span className="font-bold text-gray-900">
+                            {fmt(recipeIngredients.reduce((s, ri) => s + ri.quantity * ri.cost, 0))}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Harga Jual</span>
+                          <span className="font-medium text-gray-900">{fmt(parseFloat(productForm.base_price) || 0)}</span>
+                        </div>
+                        {(() => {
+                          const hpp = recipeIngredients.reduce((s, ri) => s + ri.quantity * ri.cost, 0);
+                          const price = parseFloat(productForm.base_price) || 0;
+                          const margin = price - hpp;
+                          const pct = price > 0 ? (margin / price * 100) : 0;
+                          return (
+                            <div className="flex justify-between text-sm pt-2 border-t border-blue-200">
+                              <span className="text-gray-600">Margin</span>
+                              <span className={`font-bold ${pct < 20 ? 'text-red-600' : pct < 40 ? 'text-amber-600' : 'text-green-600'}`}>
+                                {fmt(margin)} ({pct.toFixed(1)}%)
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </>
                 )}
-              </div>
 
-              {/* Deskripsi */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi (Opsional)</label>
-                <textarea rows={2}
-                  value={productForm.description} onChange={e => setProductForm({ ...productForm, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setIsProductModalOpen(false)}
+                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Batal</button>
+                  <button type="button" disabled={savingRecipe || recipeIngredients.length === 0}
+                    onClick={async () => {
+                      setSavingRecipe(true);
+                      setRecipeError('');
+                      try {
+                        const payload = {
+                          product_id: editingProduct.id,
+                          ingredients: recipeIngredients.map(ri => ({
+                            ingredient_id: ri.ingredient_id,
+                            quantity: ri.quantity,
+                            quantity_unit: ri.quantity_unit,
+                            is_optional: ri.is_optional,
+                          })),
+                        };
+                        if (existingRecipeId) {
+                          await updateRecipe(existingRecipeId, { ingredients: payload.ingredients });
+                        } else {
+                          await createRecipe(payload);
+                        }
+                        setIsProductModalOpen(false);
+                      } catch (e: any) {
+                        setRecipeError(e.message);
+                      }
+                      setSavingRecipe(false);
+                    }}
+                    className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    {savingRecipe && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                    Simpan Resep
+                  </button>
+                </div>
               </div>
-
-              {/* Status */}
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={() => setProductForm({ ...productForm, is_active: !productForm.is_active })}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                    productForm.is_active ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}>
-                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                    productForm.is_active ? 'translate-x-4' : 'translate-x-0.5'
-                  }`} />
-                </button>
-                <span className="text-sm text-gray-600">{productForm.is_active ? 'Aktif di kasir' : 'Disembunyikan'}</span>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setIsProductModalOpen(false)}
-                  className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
-                  Batal
-                </button>
-                <button type="submit" disabled={savingProduct}
-                  className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                  {savingProduct && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                  Simpan
-                </button>
-              </div>
-            </form>
+            )}
           </div>
         </div>
       )}

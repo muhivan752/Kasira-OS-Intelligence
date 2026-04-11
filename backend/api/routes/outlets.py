@@ -311,8 +311,13 @@ async def update_stock_mode(
     current_user: Any = Depends(deps.get_current_user),
 ) -> Any:
     """Switch stock mode between 'simple' and 'recipe' (Pro only)."""
-    from backend.api.deps import require_pro_tier
-    await require_pro_tier(current_user=current_user, db=db)
+    from backend.models.tenant import Tenant
+    from backend.api.deps import PRO_TIERS
+    tenant = (await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))).scalar_one_or_none()
+    raw_tier = getattr(tenant, "subscription_tier", "starter") or "starter"
+    tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
+    if tier.lower() not in PRO_TIERS:
+        raise HTTPException(status_code=403, detail="Fitur ini hanya tersedia untuk paket Pro")
 
     stmt = select(Outlet).where(
         Outlet.id == outlet_id, Outlet.deleted_at == None,

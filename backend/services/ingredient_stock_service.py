@@ -111,6 +111,7 @@ async def deduct_ingredients_for_product(
 
         # Append event
         event = Event(
+            outlet_id=outlet_id,
             stream_id=f"ingredient:{ri.ingredient_id}",
             event_type="stock.ingredient_sale",
             event_data={
