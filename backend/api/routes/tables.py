@@ -12,7 +12,7 @@ from backend.schemas.reservation import TableCreate, TableUpdate, TableResponse
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(deps.require_pro_tier)])
 
 
 @router.get("/", response_model=StandardResponse[List[TableResponse]])

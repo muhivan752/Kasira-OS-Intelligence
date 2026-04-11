@@ -1,7 +1,7 @@
 """
-Kasira Webhook Routes — Fonnte incoming WhatsApp messages
+Kasira Webhook Routes — Fontte incoming WhatsApp messages
 
-POST /webhook/fonnte — receives incoming WA messages from Fonnte webhook
+POST /webhook/fontte — receives incoming WA messages from Fontte webhook
 """
 
 import logging
@@ -21,15 +21,15 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.post("/fonnte")
-async def fonnte_webhook(
+@router.post("/fontte")
+async def fontte_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """
-    Receive incoming WhatsApp messages from Fonnte webhook.
+    Receive incoming WhatsApp messages from Fontte webhook.
 
-    Fonnte sends form data or JSON with fields:
+    Fontte sends form data or JSON with fields:
     - device: device/phone number that received the message
     - sender: customer phone number
     - message: message text
@@ -37,11 +37,13 @@ async def fonnte_webhook(
     - filename: media filename
     - extension: media extension
     """
-    # Temporarily disabled — remove this line when ready with dedicated number
+    # DISABLED: WA Bot dimatikan sampai nomor dedicated siap.
+    # Jangan enable sampai Ivan konfirmasi nomor baru.
     return {"status": "ok", "message": "webhook disabled"}
 
+    # --- code below is unreachable until re-enabled ---
     try:
-        # Fonnte can send as form data or JSON
+        # Fontte can send as form data or JSON
         content_type = request.headers.get("content-type", "")
         if "json" in content_type:
             body = await request.json()
@@ -61,7 +63,7 @@ async def fonnte_webhook(
         if sender.startswith("0"):
             sender = "62" + sender[1:]
 
-        # Skip messages from groups (Fonnte prefixes group messages)
+        # Skip messages from groups (Fontte prefixes group messages)
         if sender.endswith("@g.us") or "@" in sender:
             return {"status": "ok", "message": "ignored — group message"}
 
@@ -72,8 +74,6 @@ async def fonnte_webhook(
         logger.info(f"WA incoming: {sender} → {message[:50]}...")
 
         # Find which outlet this phone belongs to
-        # For now: match by outlet phone number or use first active outlet
-        # TODO: when multi-outlet support is added, match by device number
         outlet = None
 
         # Try to find outlet by phone matching the device
@@ -127,7 +127,7 @@ async def fonnte_webhook(
             db=db,
         )
 
-        # Send reply via Fonnte
+        # Send reply via Fontte
         if response:
             await send_whatsapp_message(sender, response)
 

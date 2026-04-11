@@ -49,9 +49,14 @@ async def create_order(
         raise HTTPException(status_code=403, detail="Outlet tidak ditemukan atau bukan milik tenant Anda")
 
     # Validasi table untuk dine_in
+    # Pro: wajib pilih meja. Starter: boleh dine-in tanpa meja.
+    tenant_stmt = select(Tenant).where(Tenant.id == current_user.tenant_id)
+    tenant_check = (await db.execute(tenant_stmt)).scalar_one_or_none()
+    is_pro = str(getattr(tenant_check, "subscription_tier", "starter") or "starter").lower() in ("pro", "business", "enterprise")
+
     table = None
     if order_in.order_type == OrderType.dine_in:
-        if not order_in.table_id:
+        if not order_in.table_id and is_pro:
             raise HTTPException(status_code=400, detail="Dine-in order wajib pilih meja")
         table = (await db.execute(
             select(Table).where(
