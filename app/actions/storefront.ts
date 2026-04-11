@@ -58,6 +58,49 @@ export async function getAvailableTables(slug: string) {
   }
 }
 
+export async function getReservationSlots(slug: string, date: string, guestCount: number) {
+  if (!slug || !date) return null;
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/connect/${slug}/reservation/slots?reservation_date=${date}&guest_count=${guestCount}`,
+      { cache: 'no-store' }
+    );
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      return { error: errBody.detail || 'Gagal memuat slot' };
+    }
+    const data = await res.json();
+    return data.data;
+  } catch {
+    return { error: 'Gagal menghubungi server' };
+  }
+}
+
+export async function createReservationPublic(slug: string, payload: {
+  reservation_date: string;
+  start_time: string;
+  guest_count: number;
+  customer_name: string;
+  customer_phone: string;
+  notes?: string;
+}) {
+  try {
+    const res = await fetch(`${BACKEND_URL}/connect/${slug}/reservation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      return { success: false, data: null, message: errBody.detail || `Gagal membuat reservasi (${res.status})` };
+    }
+    const data = await res.json();
+    return { success: true, data: data.data, message: data.message };
+  } catch {
+    return { success: false, data: null, message: 'Gagal menghubungi server' };
+  }
+}
+
 export async function createBooking(slug: string, bookingData: any) {
   try {
     const res = await fetch(`${BACKEND_URL}/connect/${slug}/booking`, {

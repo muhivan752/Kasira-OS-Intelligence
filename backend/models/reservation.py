@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, String, Integer, DateTime, Date, Time, Text,
-    ForeignKey, Boolean, Numeric,
+    ForeignKey, Boolean, Numeric, Float,
 )
 from sqlalchemy.dialects.postgresql import UUID, ENUM
 from sqlalchemy.orm import relationship
@@ -19,8 +19,8 @@ class Table(BaseModel):
         server_default="'available'",
         nullable=False,
     )
-    position_x = Column(String, nullable=True)
-    position_y = Column(String, nullable=True)
+    position_x = Column(Float, nullable=True)
+    position_y = Column(Float, nullable=True)
     is_active = Column(Boolean, server_default='true', nullable=False)
     row_version = Column(Integer, server_default='0', nullable=False)
 
