@@ -18,6 +18,7 @@ from backend.schemas.stock import ProductRestock
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.services.stock_service import restock_product as svc_restock
+from backend.api.deps import validate_brand_ownership, validate_product_ownership
 
 router = APIRouter()
 
@@ -33,9 +34,7 @@ async def restock_product(
     Restock produk saat terima barang (Starter: transaction-first, Rule #19).
     Menulis stock.restock event ke event store sebelum update cache.
     """
-    product = await db.get(Product, product_id)
-    if not product or product.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+    product = await validate_product_ownership(db, product_id, current_user.tenant_id)
     if not product.stock_enabled:
         raise HTTPException(status_code=400, detail="Tracking stok tidak aktif untuk produk ini")
 
@@ -95,6 +94,7 @@ async def create_product(
     """
     Create new product.
     """
+    await validate_brand_ownership(db, product_in.brand_id, current_user.tenant_id)
     product = Product(
         brand_id=product_in.brand_id,
         category_id=product_in.category_id,
@@ -199,6 +199,8 @@ async def read_products(
         if not brand_row:
             return StandardResponse(success=True, data=[], request_id=request.state.request_id)
         brand_id = brand_row.id
+    else:
+        await validate_brand_ownership(db, brand_id, current_user.tenant_id)
 
     query = select(Product).where(
         Product.brand_id == brand_id,
@@ -229,10 +231,8 @@ async def read_product(
     """
     Get product by ID.
     """
-    product = await db.get(Product, product_id)
-    if not product or product.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Product not found")
-        
+    product = await validate_product_ownership(db, product_id, current_user.tenant_id)
+
     return StandardResponse(
         success=True,
         data=ProductResponse.model_validate(product),
@@ -250,10 +250,8 @@ async def update_product(
     """
     Update a product with optimistic locking.
     """
-    # 1. Fetch current product
-    product = await db.get(Product, product_id)
-    if not product or product.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Product not found")
+    # 1. Fetch current product with tenant validation
+    product = await validate_product_ownership(db, product_id, current_user.tenant_id)
         
     # 2. Check row_version for optimistic locking
     if product.row_version != product_in.row_version:
@@ -338,9 +336,7 @@ async def delete_product(
     """
     Delete a product (soft delete).
     """
-    product = await db.get(Product, product_id)
-    if not product or product.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Product not found")
+    product = await validate_product_ownership(db, product_id, current_user.tenant_id)
         
     product.deleted_at = datetime.now(timezone.utc)
 

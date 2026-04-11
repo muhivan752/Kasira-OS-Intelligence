@@ -375,8 +375,10 @@ async def update_order_status(
 
     await db.commit()
     
-    # Reload items for response
-    query = select(Order).options(selectinload(Order.items)).where(Order.id == order_id)
+    # Reload items for response (selectinload product to avoid MissingGreenlet on product_name)
+    query = select(Order).options(
+        selectinload(Order.items).selectinload(OrderItem.product)
+    ).where(Order.id == order_id)
     result = await db.execute(query)
     updated_order_loaded = result.scalar_one()
     

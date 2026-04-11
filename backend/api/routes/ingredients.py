@@ -97,6 +97,7 @@ async def create_ingredient(
 async def get_ingredient(
     request: Request,
     ingredient_id: uuid.UUID,
+    outlet_id: Optional[uuid.UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: Any = Depends(deps.get_current_user),
 ) -> Any:
@@ -106,7 +107,20 @@ async def get_ingredient(
     if not ingredient:
         raise HTTPException(status_code=404, detail="Bahan baku tidak ditemukan")
 
-    return StandardResponse(data=IngredientResponse.model_validate(ingredient), request_id=request.state.request_id)
+    resp = IngredientResponse.model_validate(ingredient)
+    if outlet_id:
+        stock_row = (await db.execute(
+            select(OutletStock.computed_stock, OutletStock.min_stock_base).where(
+                OutletStock.outlet_id == outlet_id,
+                OutletStock.ingredient_id == ingredient_id,
+                OutletStock.deleted_at.is_(None),
+            )
+        )).first()
+        if stock_row:
+            resp.current_stock = stock_row.computed_stock
+            resp.min_stock = stock_row.min_stock_base
+
+    return StandardResponse(data=resp, request_id=request.state.request_id)
 
 
 @router.put("/{ingredient_id}", response_model=StandardResponse[IngredientResponse])

@@ -31,11 +31,19 @@ class TableCreate(BaseModel):
     is_active: bool = True
 
 
+class TableStatus(str, Enum):
+    available = 'available'
+    occupied = 'occupied'
+    reserved = 'reserved'
+    closed = 'closed'
+
+
 class TableUpdate(BaseModel):
     name: Optional[str] = None
     capacity: Optional[int] = Field(None, ge=1, le=50)
     floor_section: Optional[str] = None
     is_active: Optional[bool] = None
+    status: Optional[TableStatus] = None
 
 
 class TableResponse(BaseModel):

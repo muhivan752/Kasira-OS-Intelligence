@@ -89,6 +89,60 @@ def get_current_active_superuser(
         )
     return current_user
 
+async def validate_brand_ownership(db: AsyncSession, brand_id, tenant_id) -> None:
+    """Pastikan brand_id milik tenant user. Raise 403 kalau bukan."""
+    from backend.models.brand import Brand
+    from uuid import UUID as UUID_type
+    stmt = select(Brand).where(
+        Brand.id == (brand_id if isinstance(brand_id, UUID_type) else UUID_type(str(brand_id))),
+        Brand.tenant_id == tenant_id,
+        Brand.deleted_at.is_(None),
+    )
+    result = await db.execute(stmt)
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Akses ditolak: brand bukan milik tenant Anda")
+
+
+async def validate_product_ownership(db: AsyncSession, product_id, tenant_id):
+    """Fetch product dan validasi tenant ownership via brand. Return product atau raise."""
+    from backend.models.product import Product
+    from backend.models.brand import Brand
+    stmt = (
+        select(Product)
+        .join(Brand, Product.brand_id == Brand.id)
+        .where(
+            Product.id == product_id,
+            Product.deleted_at.is_(None),
+            Brand.tenant_id == tenant_id,
+        )
+    )
+    result = await db.execute(stmt)
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+    return product
+
+
+async def validate_category_ownership(db: AsyncSession, category_id, tenant_id):
+    """Fetch category dan validasi tenant ownership via brand. Return category atau raise."""
+    from backend.models.category import Category
+    from backend.models.brand import Brand
+    stmt = (
+        select(Category)
+        .join(Brand, Category.brand_id == Brand.id)
+        .where(
+            Category.id == category_id,
+            Category.deleted_at.is_(None),
+            Brand.tenant_id == tenant_id,
+        )
+    )
+    result = await db.execute(stmt)
+    category = result.scalar_one_or_none()
+    if not category:
+        raise HTTPException(status_code=404, detail="Kategori tidak ditemukan")
+    return category
+
+
 PRO_TIERS = {"pro", "business", "enterprise"}
 
 async def require_pro_tier(

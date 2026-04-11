@@ -11,6 +11,7 @@ from backend.models.category import Category
 from backend.schemas.category import CategoryCreate, CategoryUpdate, CategoryResponse
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
+from backend.api.deps import validate_brand_ownership, validate_category_ownership
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ async def create_category(
     """
     Create new category.
     """
+    await validate_brand_ownership(db, category_in.brand_id, current_user.tenant_id)
     category = Category(
         brand_id=category_in.brand_id,
         name=category_in.name,
@@ -64,6 +66,7 @@ async def read_categories(
     """
     Retrieve categories.
     """
+    await validate_brand_ownership(db, brand_id, current_user.tenant_id)
     query = select(Category).where(
         Category.brand_id == brand_id,
         Category.deleted_at.is_(None)
@@ -88,10 +91,8 @@ async def read_category(
     """
     Get category by ID.
     """
-    category = await db.get(Category, category_id)
-    if not category or category.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Category not found")
-        
+    category = await validate_category_ownership(db, category_id, current_user.tenant_id)
+
     return StandardResponse(
         success=True,
         data=CategoryResponse.model_validate(category),
@@ -109,9 +110,7 @@ async def update_category(
     """
     Update a category.
     """
-    category = await db.get(Category, category_id)
-    if not category or category.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Category not found")
+    category = await validate_category_ownership(db, category_id, current_user.tenant_id)
         
     before_state = {"name": category.name, "is_active": category.is_active}
     
@@ -151,10 +150,8 @@ async def delete_category(
     Delete a category (soft delete).
     """
     from datetime import datetime, timezone
-    
-    category = await db.get(Category, category_id)
-    if not category or category.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Category not found")
+
+    category = await validate_category_ownership(db, category_id, current_user.tenant_id)
         
     category.deleted_at = datetime.now(timezone.utc)
 

@@ -16,3 +16,5 @@ from .event import Event
 from .reservation import Table, Reservation
 from .loyalty import CustomerPoints, PointTransaction
 from .tab import Tab, TabSplit
+from .ingredient import Ingredient
+from .recipe import Recipe, RecipeIngredient

@@ -26,6 +26,75 @@ from backend.services.fonnte import send_whatsapp_message
 
 router = APIRouter()
 
+
+async def _try_earn_loyalty_points(db: AsyncSession, order: Order, outlet_id: UUID, user_id: UUID, tenant_id: UUID):
+    """Auto-earn loyalty points setelah order fully paid. Pro+ only, silently skip jika gagal."""
+    try:
+        if not order.customer_id:
+            return
+        from backend.models.tenant import Tenant
+        tenant = (await db.execute(
+            select(Tenant).where(Tenant.id == tenant_id)
+        )).scalar_one_or_none()
+        if not tenant:
+            return
+        raw_tier = getattr(tenant, "subscription_tier", "starter") or "starter"
+        tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
+        if tier.lower() not in {"pro", "business", "enterprise"}:
+            return
+
+        from backend.models.loyalty import CustomerPoints, PointTransaction
+        POINTS_PER_RUPIAH = 10_000
+
+        # Idempotency check — Rule #35
+        existing = (await db.execute(
+            select(PointTransaction).where(
+                PointTransaction.order_id == order.id,
+                PointTransaction.type == 'earn',
+            )
+        )).scalar_one_or_none()
+        if existing:
+            return
+
+        points_earned = int(float(order.total_amount) // POINTS_PER_RUPIAH)
+        if points_earned == 0:
+            return
+
+        cp = (await db.execute(
+            select(CustomerPoints).where(
+                CustomerPoints.customer_id == order.customer_id,
+                CustomerPoints.outlet_id == outlet_id,
+                CustomerPoints.deleted_at.is_(None),
+            ).with_for_update()
+        )).scalar_one_or_none()
+
+        if not cp:
+            cp = CustomerPoints(
+                customer_id=order.customer_id,
+                outlet_id=outlet_id,
+                balance=0,
+                lifetime_earned=0,
+            )
+            db.add(cp)
+            await db.flush()
+
+        cp.balance += points_earned
+        cp.lifetime_earned += points_earned
+        cp.row_version += 1
+
+        txn = PointTransaction(
+            customer_id=order.customer_id,
+            outlet_id=outlet_id,
+            order_id=order.id,
+            type='earn',
+            points=points_earned,
+            description=f"Earn dari transaksi Rp{int(order.total_amount):,}",
+        )
+        db.add(txn)
+    except Exception:
+        pass  # Loyalty gagal tidak boleh block payment
+
+
 @router.post("/", response_model=StandardResponse[PaymentResponse])
 async def create_payment(
     request: Request,
@@ -52,9 +121,14 @@ async def create_payment(
                 message="Payment already processed (idempotent)"
             )
 
-    # Verify order exists if provided
+    # Verify order exists if provided (selectinload items+product for receipt)
     if payment_in.order_id:
-        order = await db.get(Order, payment_in.order_id)
+        order_result = await db.execute(
+            select(Order).options(
+                selectinload(Order.items).selectinload(OrderItem.product)
+            ).where(Order.id == payment_in.order_id)
+        )
+        order = order_result.scalar_one_or_none()
         if not order or order.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Order tidak ditemukan")
         if order.status == OrderStatus.completed:
@@ -200,9 +274,12 @@ async def create_payment(
                     except Exception:
                         pass  # WA gagal tidak boleh block payment
 
+            # Auto-earn loyalty points (Pro+)
+            await _try_earn_loyalty_points(db, order, payment_in.outlet_id, current_user.id, current_user.tenant_id)
+
     await db.commit()
     await db.refresh(payment)
-    
+
     # Audit log
     await log_audit(
         db=db,
@@ -351,9 +428,19 @@ async def xendit_webhook(
                             asyncio.create_task(
                                 send_whatsapp_message(customer.phone, struk)
                             )
-                
+
+                    # Auto-earn loyalty points (Pro+)
+                    # Use payment.outlet_id; no current_user in webhook context
+                    outlet_for_loyalty = await db.get(Outlet, payment.outlet_id)
+                    if outlet_for_loyalty:
+                        await _try_earn_loyalty_points(
+                            db, order, payment.outlet_id,
+                            order.user_id or payment.outlet_id,  # fallback if no user
+                            outlet_for_loyalty.tenant_id,
+                        )
+
         await db.commit()
-        
+
     return {"status": "ok"}
 
 @router.get("/{payment_id}/status", response_model=StandardResponse[Dict[str, Any]])
