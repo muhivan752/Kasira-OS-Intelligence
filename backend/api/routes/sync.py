@@ -69,7 +69,7 @@ async def sync_data(
             # Idempotent — skip kalau stock.sale event sudah ada untuk order ini
             tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
             tenant = tenant_res.scalar_one_or_none()
-            tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
+            tier = getattr(getattr(tenant, "subscription_tier", None), "value", "starter")
             for item_data in request.changes.order_items:
                 product = await db.get(Product, item_data.get("product_id"))
                 if product and product.stock_enabled:

@@ -40,7 +40,7 @@ async def restock_product(
 
     tenant_stmt = select(Tenant).where(Tenant.id == current_user.tenant_id)
     tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
-    tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
+    tier = getattr(getattr(tenant, "subscription_tier", None), "value", "starter")
 
     before_state = {"stock_qty": product.stock_qty, "is_active": product.is_active}
 

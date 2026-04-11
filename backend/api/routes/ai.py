@@ -72,7 +72,7 @@ async def ai_chat(
         select(Tenant).where(Tenant.id == current_user.tenant_id, Tenant.deleted_at.is_(None))
     )
     tenant = tenant_result.scalar_one_or_none()
-    tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
+    tier = getattr(getattr(tenant, "subscription_tier", None), "value", "starter")
 
     # AI Chatbot = Pro+ only
     if tier not in ("pro", "business", "enterprise"):

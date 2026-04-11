@@ -317,7 +317,7 @@ async def verify_pin_login(
     # Dapur App = fitur Pro — cek tier tenant
     tenant_stmt = select(Tenant).where(Tenant.id == user.tenant_id, Tenant.deleted_at == None)
     tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
-    tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
+    tier = getattr(getattr(tenant, "subscription_tier", None), "value", "starter")
     if tier not in {"pro", "business", "enterprise"}:
         raise HTTPException(
             status_code=403,

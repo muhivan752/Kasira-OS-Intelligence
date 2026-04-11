@@ -52,7 +52,7 @@ async def create_order(
     # Pro: wajib pilih meja. Starter: boleh dine-in tanpa meja.
     tenant_stmt = select(Tenant).where(Tenant.id == current_user.tenant_id)
     tenant_check = (await db.execute(tenant_stmt)).scalar_one_or_none()
-    is_pro = str(getattr(tenant_check, "subscription_tier", "starter") or "starter").lower() in ("pro", "business", "enterprise")
+    is_pro = getattr(getattr(tenant_check, "subscription_tier", None), "value", "starter") in ("pro", "business", "enterprise")
 
     table = None
     if order_in.order_type == OrderType.dine_in:
@@ -138,7 +138,7 @@ async def create_order(
     # Fetch tenant once (bukan per item)
     tenant_stmt = select(Tenant).where(Tenant.id == current_user.tenant_id)
     tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
-    tier = str(getattr(tenant, "subscription_tier", "starter") or "starter").lower()
+    tier = getattr(getattr(tenant_check, "subscription_tier", None), "value", "starter")
 
     for item_in in order_in.items:
         # Fetch product to check stock
