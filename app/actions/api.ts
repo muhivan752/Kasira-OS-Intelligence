@@ -95,7 +95,7 @@ export async function getCategories(brandId: string) {
 
 export async function createCategory(brandId: string, name: string) {
   try {
-    const res = await fetchWithAuth('/categories', {
+    const res = await fetchWithAuth('/categories/', {
       method: 'POST',
       body: JSON.stringify({ brand_id: brandId, name }),
     });
@@ -106,7 +106,7 @@ export async function createCategory(brandId: string, name: string) {
 
 export async function updateCategory(categoryId: string, payload: { name?: string; is_active?: boolean }) {
   try {
-    const res = await fetchWithAuth(`/categories/${categoryId}`, {
+    const res = await fetchWithAuth(`/categories/${categoryId}/`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
@@ -117,14 +117,14 @@ export async function updateCategory(categoryId: string, payload: { name?: strin
 
 export async function deleteCategory(categoryId: string) {
   try {
-    const res = await fetchWithAuth(`/categories/${categoryId}`, { method: 'DELETE' });
+    const res = await fetchWithAuth(`/categories/${categoryId}/`, { method: 'DELETE' });
     return res.ok;
   } catch { return false; }
 }
 
 export async function createProduct(productData: any) {
   try {
-    const res = await fetchWithAuth('/products', {
+    const res = await fetchWithAuth('/products/', {
       method: 'POST',
       body: JSON.stringify(productData),
     });
@@ -135,7 +135,7 @@ export async function createProduct(productData: any) {
 
 export async function updateProduct(productId: string, productData: any) {
   try {
-    const res = await fetchWithAuth(`/products/${productId}`, {
+    const res = await fetchWithAuth(`/products/${productId}/`, {
       method: 'PUT',
       body: JSON.stringify(productData),
     });
@@ -146,14 +146,14 @@ export async function updateProduct(productId: string, productData: any) {
 
 export async function deleteProduct(productId: string) {
   try {
-    const res = await fetchWithAuth(`/products/${productId}`, { method: 'DELETE' });
+    const res = await fetchWithAuth(`/products/${productId}/`, { method: 'DELETE' });
     return res.ok;
   } catch { return false; }
 }
 
 export async function toggleProductActive(productId: string, isActive: boolean, rowVersion: number) {
   try {
-    const res = await fetchWithAuth(`/products/${productId}`, {
+    const res = await fetchWithAuth(`/products/${productId}/`, {
       method: 'PUT',
       body: JSON.stringify({ is_active: isActive, row_version: rowVersion }),
     });
@@ -190,7 +190,7 @@ export async function getCashiers(outletId: string) {
 
 export async function createCashier(cashierData: any) {
   try {
-    const res = await fetchWithAuth('/users/cashier', {
+    const res = await fetchWithAuth('/users/cashier/', {
       method: 'POST',
       body: JSON.stringify(cashierData),
     });
@@ -201,7 +201,7 @@ export async function createCashier(cashierData: any) {
 
 export async function toggleCashierActive(userId: string, isActive: boolean) {
   try {
-    const res = await fetchWithAuth(`/users/${userId}/status`, {
+    const res = await fetchWithAuth(`/users/${userId}/status/`, {
       method: 'PUT',
       body: JSON.stringify({ is_active: isActive }),
     });
@@ -211,7 +211,7 @@ export async function toggleCashierActive(userId: string, isActive: boolean) {
 
 export async function resetCashierPin(userId: string, newPin: string) {
   try {
-    const res = await fetchWithAuth(`/users/${userId}/pin`, {
+    const res = await fetchWithAuth(`/users/${userId}/pin/`, {
       method: 'PUT',
       body: JSON.stringify({ pin: newPin }),
     });
@@ -232,7 +232,7 @@ export async function getOrders(outletId: string, startDate?: string, endDate?: 
 
 export async function updateOutlet(outletId: string, outletData: any) {
   try {
-    const res = await fetchWithAuth(`/outlets/${outletId}`, {
+    const res = await fetchWithAuth(`/outlets/${outletId}/`, {
       method: 'PUT',
       body: JSON.stringify(outletData),
     });
@@ -243,7 +243,7 @@ export async function updateOutlet(outletId: string, outletData: any) {
 
 export async function setupPayment(outletId: string, paymentData: any) {
   try {
-    const res = await fetchWithAuth(`/outlets/${outletId}/payment-setup`, {
+    const res = await fetchWithAuth(`/outlets/${outletId}/payment-setup/`, {
       method: 'POST',
       body: JSON.stringify(paymentData),
     });
@@ -254,7 +254,7 @@ export async function setupPayment(outletId: string, paymentData: any) {
 
 export async function setupPaymentOwnKey(outletId: string, xenditApiKey: string) {
   try {
-    const res = await fetchWithAuth(`/outlets/${outletId}/payment-setup/own-key`, {
+    const res = await fetchWithAuth(`/outlets/${outletId}/payment-setup/own-key/`, {
       method: 'POST',
       body: JSON.stringify({ xendit_api_key: xenditApiKey }),
     });
@@ -265,7 +265,7 @@ export async function setupPaymentOwnKey(outletId: string, xenditApiKey: string)
 
 export async function removePaymentOwnKey(outletId: string) {
   try {
-    const res = await fetchWithAuth(`/outlets/${outletId}/payment-setup/own-key`, { method: 'DELETE' });
+    const res = await fetchWithAuth(`/outlets/${outletId}/payment-setup/own-key/`, { method: 'DELETE' });
     const data = await res.json();
     return { success: res.ok, message: data.message || data.detail };
   } catch { return { success: false, message: 'Gagal menghapus API key' }; }
@@ -342,7 +342,7 @@ export async function createReservation(outletId: string, payload: {
   source?: string;
 }) {
   try {
-    const res = await fetchWithAuth(`/reservations?outlet_id=${outletId}`, {
+    const res = await fetchWithAuth(`/reservations/?outlet_id=${outletId}`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -353,7 +353,7 @@ export async function createReservation(outletId: string, payload: {
 
 export async function confirmReservation(id: string) {
   try {
-    const res = await fetchWithAuth(`/reservations/${id}/confirm`, { method: 'PUT' });
+    const res = await fetchWithAuth(`/reservations/${id}/confirm/`, { method: 'PUT' });
     const data = await res.json();
     return { success: res.ok, data: data.data, message: data.message || data.detail };
   } catch { return { success: false, message: 'Gagal konfirmasi reservasi' }; }
@@ -361,7 +361,7 @@ export async function confirmReservation(id: string) {
 
 export async function seatReservation(id: string) {
   try {
-    const res = await fetchWithAuth(`/reservations/${id}/seat`, { method: 'PUT' });
+    const res = await fetchWithAuth(`/reservations/${id}/seat/`, { method: 'PUT' });
     const data = await res.json();
     return { success: res.ok, data: data.data, message: data.message || data.detail };
   } catch { return { success: false, message: 'Gagal mengubah status reservasi' }; }
@@ -369,7 +369,7 @@ export async function seatReservation(id: string) {
 
 export async function completeReservation(id: string) {
   try {
-    const res = await fetchWithAuth(`/reservations/${id}/complete`, { method: 'PUT' });
+    const res = await fetchWithAuth(`/reservations/${id}/complete/`, { method: 'PUT' });
     const data = await res.json();
     return { success: res.ok, data: data.data, message: data.message || data.detail };
   } catch { return { success: false, message: 'Gagal menyelesaikan reservasi' }; }
@@ -377,7 +377,7 @@ export async function completeReservation(id: string) {
 
 export async function cancelReservation(id: string) {
   try {
-    const res = await fetchWithAuth(`/reservations/${id}/cancel`, { method: 'PUT' });
+    const res = await fetchWithAuth(`/reservations/${id}/cancel/`, { method: 'PUT' });
     const data = await res.json();
     return { success: res.ok, data: data.data, message: data.message || data.detail };
   } catch { return { success: false, message: 'Gagal membatalkan reservasi' }; }
@@ -385,7 +385,7 @@ export async function cancelReservation(id: string) {
 
 export async function noShowReservation(id: string) {
   try {
-    const res = await fetchWithAuth(`/reservations/${id}/no-show`, { method: 'PUT' });
+    const res = await fetchWithAuth(`/reservations/${id}/no-show/`, { method: 'PUT' });
     const data = await res.json();
     return { success: res.ok, data: data.data, message: data.message || data.detail };
   } catch { return { success: false, message: 'Gagal mengubah status reservasi' }; }
@@ -401,7 +401,7 @@ export async function getReservationSettings(outletId: string) {
 
 export async function updateReservationSettings(outletId: string, payload: any) {
   try {
-    const res = await fetchWithAuth(`/reservations/settings/${outletId}`, {
+    const res = await fetchWithAuth(`/reservations/settings/${outletId}/`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
@@ -427,7 +427,7 @@ export async function createTable(outletId: string, payload: {
   is_active?: boolean;
 }) {
   try {
-    const res = await fetchWithAuth(`/tables?outlet_id=${outletId}`, {
+    const res = await fetchWithAuth(`/tables?outlet_id=${outletId}/`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -438,7 +438,7 @@ export async function createTable(outletId: string, payload: {
 
 export async function updateTable(id: string, payload: any) {
   try {
-    const res = await fetchWithAuth(`/tables/${id}`, {
+    const res = await fetchWithAuth(`/tables/${id}/`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
@@ -449,7 +449,7 @@ export async function updateTable(id: string, payload: any) {
 
 export async function deleteTable(id: string) {
   try {
-    const res = await fetchWithAuth(`/tables/${id}`, { method: 'DELETE' });
+    const res = await fetchWithAuth(`/tables/${id}/`, { method: 'DELETE' });
     return res.ok;
   } catch { return false; }
 }
@@ -494,7 +494,7 @@ export async function deleteIngredient(id: string) {
 }
 
 export async function restockIngredient(id: string, payload: { outlet_id: string; quantity: number; notes?: string }) {
-  const res = await fetchWithAuth(`/ingredients/${id}/restock`, {
+  const res = await fetchWithAuth(`/ingredients/${id}/restock/`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -517,7 +517,7 @@ export async function getRecipes(params: { product_id?: string; brand_id?: strin
 }
 
 export async function createRecipe(payload: any) {
-  const res = await fetchWithAuth('/recipes', {
+  const res = await fetchWithAuth('/recipes/', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -527,7 +527,7 @@ export async function createRecipe(payload: any) {
 }
 
 export async function updateRecipe(id: string, payload: any) {
-  const res = await fetchWithAuth(`/recipes/${id}`, {
+  const res = await fetchWithAuth(`/recipes/${id}/`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
@@ -538,7 +538,7 @@ export async function updateRecipe(id: string, payload: any) {
 
 export async function deleteRecipe(id: string) {
   try {
-    const res = await fetchWithAuth(`/recipes/${id}`, { method: 'DELETE' });
+    const res = await fetchWithAuth(`/recipes/${id}/`, { method: 'DELETE' });
     return res.ok;
   } catch { return false; }
 }
@@ -554,7 +554,7 @@ export async function getHPPReport(brandId: string) {
 // ===================== Stock Mode =====================
 
 export async function updateStockMode(outletId: string, stockMode: string) {
-  const res = await fetchWithAuth(`/outlets/${outletId}/stock-mode`, {
+  const res = await fetchWithAuth(`/outlets/${outletId}/stock-mode/`, {
     method: 'PUT',
     body: JSON.stringify({ stock_mode: stockMode }),
   });
