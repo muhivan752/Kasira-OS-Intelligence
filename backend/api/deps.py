@@ -47,6 +47,19 @@ async def get_current_user(
         raise HTTPException(status_code=404, detail="Pengguna tidak ditemukan")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Akun tidak aktif")
+
+    # Cek apakah tenant masih aktif (skip untuk platform admin)
+    allowed_phones = [p.strip() for p in settings.SUPERADMIN_PHONES.split(",") if p.strip()]
+    if user.phone not in allowed_phones:
+        tenant_stmt = select(Tenant).where(Tenant.id == user.tenant_id, Tenant.deleted_at == None)
+        tenant_result = await db.execute(tenant_stmt)
+        tenant = tenant_result.scalar_one_or_none()
+        if tenant and not tenant.is_active:
+            raise HTTPException(
+                status_code=403,
+                detail="Langganan bisnis Anda telah dihentikan. Hubungi admin untuk informasi lebih lanjut.",
+            )
+
     return user
 
 async def get_current_tenant(
