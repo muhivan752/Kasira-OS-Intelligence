@@ -129,6 +129,10 @@ async def update_outlet(
     )
     await db.commit()
 
+    # Invalidate storefront cache
+    from backend.api.routes.connect import invalidate_storefront_cache
+    await invalidate_storefront_cache(outlet_id, db)
+
     await db.refresh(outlet)
     return StandardResponse(
         success=True,

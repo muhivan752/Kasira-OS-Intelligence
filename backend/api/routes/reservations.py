@@ -213,6 +213,10 @@ async def update_reservation_settings(
     await db.commit()
     await db.refresh(settings)
 
+    # Invalidate storefront cache (tier/reservation_enabled might change)
+    from backend.api.routes.connect import invalidate_storefront_cache
+    await invalidate_storefront_cache(outlet_id, db)
+
     await log_audit(db=db, action="UPDATE", entity="reservation_settings", entity_id=settings.id,
                     after_state=update_data, user_id=current_user.id, tenant_id=current_user.tenant_id)
 

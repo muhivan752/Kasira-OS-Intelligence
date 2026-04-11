@@ -26,6 +26,33 @@ router = APIRouter()
 # Redis client
 redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
+
+async def invalidate_storefront_cache(outlet_id: uuid.UUID, db: AsyncSession):
+    """Invalidate storefront cache for an outlet. Call when tier/settings change."""
+    try:
+        result = await db.execute(
+            select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at.is_(None))
+        )
+        outlet = result.scalar_one_or_none()
+        if outlet and outlet.slug:
+            await redis_client.delete(f"connect:storefront:{outlet.slug}")
+    except Exception:
+        pass
+
+
+async def invalidate_storefront_cache_by_tenant(tenant_id: uuid.UUID, db: AsyncSession):
+    """Invalidate storefront cache for ALL outlets of a tenant."""
+    try:
+        result = await db.execute(
+            select(Outlet).where(Outlet.tenant_id == tenant_id, Outlet.deleted_at.is_(None))
+        )
+        outlets = result.scalars().all()
+        for outlet in outlets:
+            if outlet.slug:
+                await redis_client.delete(f"connect:storefront:{outlet.slug}")
+    except Exception:
+        pass
+
 class ConnectOrderItemInput(BaseModel):
     product_id: uuid.UUID
     qty: int = Field(gt=0)
