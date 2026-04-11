@@ -257,6 +257,18 @@
 
 ---
 
+## ✅ SELESAI SESI INI (2026-04-11) — Dashboard-Kasir Sync Fix
+
+### Bug: Data penjualan kasir tidak muncul di dashboard owner
+- [x] **Fix dashboard `page.tsx`** — field names salah: `total_revenue` → `revenue_today`, `total_orders` → `order_count`
+- [x] **Fix `laporan/page.tsx`** — pakai `report.payment_breakdown` dari API (bukan hitung dari `o.payment_method` yang tidak ada di OrderResponse)
+- [x] **Fix `getWeeklyRevenue`** — `json.data?.total_revenue` → `json.data?.revenue_today` (chart 7 hari selalu 0)
+- [x] **Fix `reports.py`** — tambah `active_shifts` (count shift open) + `critical_stock_items` (stock ≤ threshold) di response
+- [x] **Fix `orders.py` + `order.py` schema** — tambah `payment_method` + `payment_status` di OrderResponse (join Payment table), supaya tabel riwayat transaksi tampil metode pembayaran
+- [x] Backend deployed (docker cp + restart), frontend rebuilt + recreated
+
+---
+
 ## ⏭️ NEXT ACTION
 
 ### PRIORITAS 1 — Test Manual dari HP

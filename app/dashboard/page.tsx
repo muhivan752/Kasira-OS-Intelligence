@@ -70,7 +70,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm font-medium text-gray-500">Total Revenue</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {formatCurrency(report?.total_revenue)}
+                {formatCurrency(report?.revenue_today)}
               </p>
             </div>
             <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
@@ -84,7 +84,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm font-medium text-gray-500">Total Orders</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {report?.total_orders || 0}
+                {report?.order_count || 0}
               </p>
             </div>
             <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center text-green-600">

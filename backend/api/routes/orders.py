@@ -10,6 +10,7 @@ from backend.core.database import get_db
 from backend.api.deps import get_current_user
 from backend.models.user import User
 from backend.models.order import Order, OrderItem
+from backend.models.payment import Payment
 from backend.models.product import Product
 from backend.models.outlet import Outlet
 from backend.models.shift import Shift, ShiftStatus
@@ -212,13 +213,38 @@ async def read_orders(
         query = query.where(Order.created_at <= end_dt)
 
     query = query.order_by(Order.created_at.desc()).offset(skip).limit(limit)
-    
+
     result = await db.execute(query)
     orders = result.scalars().all()
-    
+
+    # Fetch payment info for these orders in one query
+    order_ids = [o.id for o in orders]
+    payment_map: dict = {}
+    if order_ids:
+        pay_result = await db.execute(
+            select(Payment.order_id, Payment.payment_method, Payment.status).where(
+                Payment.order_id.in_(order_ids),
+                Payment.deleted_at.is_(None),
+            )
+        )
+        for row in pay_result.all():
+            payment_map[row.order_id] = {
+                "payment_method": row.payment_method,
+                "payment_status": row.status,
+            }
+
+    order_responses = []
+    for o in orders:
+        resp = OrderResponse.model_validate(o)
+        pay_info = payment_map.get(o.id)
+        if pay_info:
+            resp.payment_method = pay_info["payment_method"]
+            resp.payment_status = pay_info["payment_status"]
+        order_responses.append(resp)
+
     return StandardResponse(
         success=True,
-        data=[OrderResponse.model_validate(o) for o in orders],
+        data=order_responses,
         request_id=request.state.request_id
     )
 

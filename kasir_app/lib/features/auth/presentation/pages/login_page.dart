@@ -161,14 +161,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
     
     try {
       final response = await _dio.post('/api/v1/auth/otp/verify', data: {
-        'phone': state.phone, 
+        'phone': state.phone,
         'otp': otp
       });
-      
-      final data = response.data['data'];
-      final token = data['access_token'] as String;
-      final tenantId = data['tenant_id'] as String?;
-      final outletId = data['outlet_id'] as String?;
+
+      final respData = response.data is String
+          ? (await _dio.options('')).data  // should not happen, but safety
+          : response.data as Map<String, dynamic>;
+      final data = respData['data'] as Map<String, dynamic>;
+      final token = data['access_token']?.toString() ?? '';
+      final tenantId = data['tenant_id']?.toString();
+      final outletId = data['outlet_id']?.toString();
+
+      if (token.isEmpty) {
+        state = state.copyWith(isLoading: false, error: 'Token tidak ditemukan dalam response');
+        return;
+      }
 
       await _storage.write(key: 'access_token', value: token);
       await _storage.write(key: 'phone', value: state.phone);
@@ -188,8 +196,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isLoading: false,
         error: e.response?.data['detail'] ?? 'Kode OTP salah atau kedaluwarsa',
       );
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Terjadi kesalahan sistem');
+    } catch (e, stack) {
+      debugPrint('[AUTH] verifyOtp error: $e');
+      debugPrint('[AUTH] stack: $stack');
+      state = state.copyWith(isLoading: false, error: 'Terjadi kesalahan sistem: $e');
     }
   }
 

@@ -70,5 +70,7 @@ class OrderResponse(OrderBase):
     created_at: datetime
     updated_at: datetime
     items: List[OrderItemResponse] = []
-    
+    payment_method: Optional[str] = None
+    payment_status: Optional[str] = None
+
     model_config = ConfigDict(from_attributes=True)

@@ -69,10 +69,10 @@ export default function LaporanPage() {
     });
   };
 
-  // Calculate breakdown from orders
-  const totalCash = orders.filter(o => o.payment_method === 'cash').reduce((sum, o) => sum + parseFloat(o.total_amount), 0);
-  const totalQris = orders.filter(o => o.payment_method === 'qris').reduce((sum, o) => sum + parseFloat(o.total_amount), 0);
-  const totalRevenue = totalCash + totalQris;
+  // Use payment breakdown from daily report (backend joins Payment table)
+  const totalCash = report?.payment_breakdown?.cash || 0;
+  const totalQris = report?.payment_breakdown?.qris || 0;
+  const totalRevenue = report?.revenue_today || (totalCash + totalQris);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Loading...</div>;

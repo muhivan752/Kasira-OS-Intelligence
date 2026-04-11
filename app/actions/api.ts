@@ -300,7 +300,7 @@ export async function getWeeklyRevenue(outletId: string) {
       try {
         const res = await fetchWithAuth(`/reports/daily?outlet_id=${outletId}&report_date=${dateStr}`);
         const json = await res.json();
-        return { name: date.toLocaleDateString('id-ID', { weekday: 'short' }), revenue: json.data?.total_revenue || 0 };
+        return { name: date.toLocaleDateString('id-ID', { weekday: 'short' }), revenue: json.data?.revenue_today || 0 };
       } catch {
         return { name: date.toLocaleDateString('id-ID', { weekday: 'short' }), revenue: 0 };
       }

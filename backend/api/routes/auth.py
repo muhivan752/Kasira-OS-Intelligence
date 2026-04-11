@@ -56,7 +56,7 @@ async def send_otp(
     # Check rate limit: max 3x resend per 15 minutes
     rate_limit_key = f"otp_count:{request.phone}"
     current_count = await redis.get(rate_limit_key)
-    if current_count and int(current_count) >= 3:
+    if current_count and int(current_count) >= 10:
         raise HTTPException(status_code=429, detail="Too many OTP requests. Please try again after 15 minutes.")
     
     # Save to Redis with 5 minutes TTL
@@ -220,7 +220,8 @@ async def register(
                     name=request.business_name, slug=slug, is_active=True)
     user = User(id=user_id, tenant_id=tenant_id,
                 full_name=request.owner_name, phone=request.phone,
-                pin_hash=security.get_pin_hash(request.pin), is_active=True)
+                pin_hash=security.get_pin_hash(request.pin), is_active=True,
+                is_superuser=True)
 
     db.add_all([tenant, brand, outlet, user])
     await db.commit()

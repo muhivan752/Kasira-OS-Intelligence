@@ -12,6 +12,8 @@ from backend.models.order import Order, OrderItem
 from backend.models.payment import Payment
 from backend.models.shift import Shift, ShiftStatus
 from backend.models.product import Product
+from backend.models.product import Product as ProductModel
+from backend.models.outlet import Outlet
 from backend.schemas.response import StandardResponse
 
 router = APIRouter()
@@ -119,23 +121,38 @@ async def get_daily_report(
         else:
             payment_breakdown[method] = float(row.total)
             
-    # 4. Shift status
-    shift_query = select(Shift).where(
+    # 4. Active shifts count
+    active_shifts_query = select(func.count(Shift.id)).where(
         Shift.outlet_id == outlet_id,
-        Shift.status == ShiftStatus.open
-    ).limit(1)
-    
-    shift_result = await db.execute(shift_query)
-    active_shift = shift_result.scalar_one_or_none()
-    shift_status = "open" if active_shift else "closed"
-    
+        Shift.status == ShiftStatus.open,
+        Shift.deleted_at.is_(None),
+    )
+    active_shifts_result = await db.execute(active_shifts_query)
+    active_shifts = active_shifts_result.scalar() or 0
+
+    # 5. Critical stock items (stock_qty <= stock_low_threshold)
+    # Products are scoped by brand_id, get it from outlet
+    outlet_row = await db.execute(select(Outlet.brand_id).where(Outlet.id == outlet_id))
+    brand_id = outlet_row.scalar()
+    critical_stock_items = 0
+    if brand_id:
+        critical_stock_query = select(func.count(ProductModel.id)).where(
+            ProductModel.brand_id == brand_id,
+            ProductModel.deleted_at.is_(None),
+            ProductModel.stock_enabled == True,
+            ProductModel.stock_qty <= ProductModel.stock_low_threshold,
+        )
+        critical_stock_result = await db.execute(critical_stock_query)
+        critical_stock_items = critical_stock_result.scalar() or 0
+
     data = {
         "revenue_today": revenue_today,
         "order_count": order_count,
         "avg_order_value": avg_order_value,
         "top_products": top_products,
         "payment_breakdown": payment_breakdown,
-        "shift_status": shift_status
+        "active_shifts": active_shifts,
+        "critical_stock_items": critical_stock_items,
     }
     
     return StandardResponse(
