@@ -30,11 +30,13 @@ interface Ingredient {
   created_at: string;
 }
 
-const UNIT_TYPES = [
-  { value: 'WEIGHT', label: 'Berat (gram, kg)' },
-  { value: 'VOLUME', label: 'Volume (ml, liter)' },
-  { value: 'COUNT', label: 'Satuan (pcs, bungkus)' },
-  { value: 'CUSTOM', label: 'Custom' },
+const UNIT_OPTIONS = [
+  { value: 'gram', label: 'Gram (g)', type: 'WEIGHT', example: 'Kopi, Gula, Tepung' },
+  { value: 'kg', label: 'Kilogram (kg)', type: 'WEIGHT', example: 'Beras, Ayam, Sayur' },
+  { value: 'ml', label: 'Mililiter (ml)', type: 'VOLUME', example: 'Susu, Kecap, Minyak' },
+  { value: 'liter', label: 'Liter (L)', type: 'VOLUME', example: 'Air, Minyak Goreng' },
+  { value: 'pcs', label: 'Butir / Pcs', type: 'COUNT', example: 'Telur, Teh Celup, Roti' },
+  { value: 'bungkus', label: 'Bungkus', type: 'COUNT', example: 'Bumbu, Mie Instan' },
 ];
 
 export default function BahanBakuPage() {
@@ -333,62 +335,85 @@ export default function BahanBakuPage() {
           <div className="bg-white rounded-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold">{editingId ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}</h2>
             {error && <p className="text-red-600 text-sm">{error}</p>}
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Bahan *</label>
                 <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg" placeholder="Kopi Arabica Bubuk" />
+                  className="w-full px-3 py-2.5 border rounded-lg text-base" placeholder="Contoh: Kopi Arabica" />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Satuan *</label>
-                  <input value={form.base_unit} onChange={e => setForm({ ...form, base_unit: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg" placeholder="gram" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Satuan</label>
-                  <select value={form.unit_type} onChange={e => setForm({ ...form, unit_type: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg">
-                    {UNIT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Harga Beli (Rp) *</label>
-                  <input type="number" value={form.buy_price} onChange={e => setForm({ ...form, buy_price: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg" placeholder="14000" />
-                  <p className="text-xs text-gray-400 mt-1">Contoh: Rp14.000</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Isi per Beli ({form.base_unit || 'unit'}) *</label>
-                  <input type="number" step="any" value={form.buy_qty} onChange={e => setForm({ ...form, buy_qty: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg" placeholder="1000" />
-                  <p className="text-xs text-gray-400 mt-1">Contoh: 1000 {form.base_unit || 'gram'}</p>
-                </div>
-              </div>
-              {(parseFloat(form.buy_price) > 0 && parseFloat(form.buy_qty) > 0) && (
-                <div className="bg-blue-50 rounded-lg px-4 py-3">
-                  <p className="text-sm text-blue-800 font-medium">
-                    Cost per {form.base_unit || 'unit'}: {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 2 }).format(parseFloat(form.buy_price) / parseFloat(form.buy_qty))}
-                  </p>
-                </div>
-              )}
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tipe</label>
-                <select value={form.ingredient_type} onChange={e => setForm({ ...form, ingredient_type: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg">
-                  <option value="recipe">Resep (bahan langsung)</option>
-                  <option value="overhead">Overhead (biaya harian)</option>
-                </select>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Dihitung Dalam *</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {UNIT_OPTIONS.map(u => (
+                    <label key={u.value} className={`flex flex-col p-3 cursor-pointer rounded-lg border-2 transition-all ${
+                      form.base_unit === u.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
+                    }`}>
+                      <input type="radio" name="unit" value={u.value} checked={form.base_unit === u.value}
+                        onChange={() => setForm({ ...form, base_unit: u.value, unit_type: u.type })} className="sr-only" />
+                      <span className={`text-sm font-medium ${form.base_unit === u.value ? 'text-blue-700' : 'text-gray-900'}`}>{u.label}</span>
+                      <span className="text-xs text-gray-400 mt-0.5">{u.example}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Jenis Bahan</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className={`flex flex-col p-3 cursor-pointer rounded-lg border-2 transition-all ${
+                    form.ingredient_type === 'recipe' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
+                  }`}>
+                    <input type="radio" name="ingtype" value="recipe" checked={form.ingredient_type === 'recipe'}
+                      onChange={() => setForm({ ...form, ingredient_type: 'recipe' })} className="sr-only" />
+                    <span className={`text-sm font-medium ${form.ingredient_type === 'recipe' ? 'text-blue-700' : 'text-gray-900'}`}>Bahan Resep</span>
+                    <span className="text-xs text-gray-400 mt-0.5">Bisa dihitung per porsi. Kopi, Gula, Telur</span>
+                  </label>
+                  <label className={`flex flex-col p-3 cursor-pointer rounded-lg border-2 transition-all ${
+                    form.ingredient_type === 'overhead' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
+                  }`}>
+                    <input type="radio" name="ingtype" value="overhead" checked={form.ingredient_type === 'overhead'}
+                      onChange={() => setForm({ ...form, ingredient_type: 'overhead' })} className="sr-only" />
+                    <span className={`text-sm font-medium ${form.ingredient_type === 'overhead' ? 'text-blue-700' : 'text-gray-900'}`}>Biaya Operasional</span>
+                    <span className="text-xs text-gray-400 mt-0.5">Susah dihitung pasti. Es batu, Air, Gas</span>
+                  </label>
+                </div>
+              </div>
+
               {form.ingredient_type === 'overhead' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Biaya Overhead/Hari (Rp)</label>
-                  <input type="number" value={form.overhead_cost_per_day} onChange={e => setForm({ ...form, overhead_cost_per_day: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg" placeholder="50000" />
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs text-amber-700">Biaya operasional tidak dikurangi per pesanan, tapi dihitung sebagai biaya harian tetap.</p>
+                  <div className="mt-2">
+                    <label className="block text-xs text-amber-600 mb-1">Estimasi Biaya per Hari (Rp)</label>
+                    <input type="number" value={form.overhead_cost_per_day} onChange={e => setForm({ ...form, overhead_cost_per_day: e.target.value })}
+                      className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm" placeholder="50000" />
+                  </div>
                 </div>
               )}
+
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-medium text-gray-700">Harga Beli</p>
+                <p className="text-xs text-gray-400">Isi sesuai nota belanja. Contoh: beli Gula 1kg seharga Rp14.000</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Total Harga (Rp) *</label>
+                    <input type="number" value={form.buy_price} onChange={e => setForm({ ...form, buy_price: e.target.value })}
+                      className="w-full px-3 py-2.5 border rounded-lg text-base" placeholder="14000" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Isi ({form.base_unit || '...'}) *</label>
+                    <input type="number" step="any" value={form.buy_qty} onChange={e => setForm({ ...form, buy_qty: e.target.value })}
+                      className="w-full px-3 py-2.5 border rounded-lg text-base" placeholder="1000" />
+                  </div>
+                </div>
+                {(parseFloat(form.buy_price) > 0 && parseFloat(form.buy_qty) > 0) && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    <p className="text-sm text-green-800 font-medium">
+                      Harga per {form.base_unit || 'unit'}: {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 2 }).format(parseFloat(form.buy_price) / parseFloat(form.buy_qty))}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button onClick={() => { setShowModal(false); resetForm(); }} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Batal</button>
