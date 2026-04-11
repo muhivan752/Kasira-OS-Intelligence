@@ -8,6 +8,7 @@ import '../../../orders/presentation/pages/order_list_page.dart';
 import '../../../shift/presentation/pages/shift_page.dart';
 import '../../../products/presentation/pages/product_management_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
+import '../../../reservations/presentation/pages/reservation_list_page.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
@@ -28,6 +29,7 @@ class _DashboardPageState extends State<DashboardPage> {
     const _DashboardContent(),
     const PosPage(),
     const OrderListPage(),
+    const ReservationListPage(),
     const ProductManagementPage(),
     const SettingsPage(),
   ];
@@ -36,6 +38,7 @@ class _DashboardPageState extends State<DashboardPage> {
     (icon: LucideIcons.layoutDashboard, label: 'Beranda'),
     (icon: LucideIcons.monitorPlay, label: 'POS'),
     (icon: LucideIcons.receipt, label: 'Pesanan'),
+    (icon: LucideIcons.calendarCheck, label: 'Reservasi'),
     (icon: LucideIcons.package, label: 'Produk'),
     (icon: LucideIcons.settings, label: 'Setting'),
   ];
@@ -73,7 +76,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 const SizedBox(height: 48),
                 ...List.generate(_navItems.length - 1, (i) => _buildSideNavItem(i)),
                 const Spacer(),
-                _buildSideNavItem(4),
+                _buildSideNavItem(_navItems.length - 1),
                 const SizedBox(height: 24),
               ],
             ),

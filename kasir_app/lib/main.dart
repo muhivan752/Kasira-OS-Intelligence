@@ -15,6 +15,8 @@ import 'features/pos/presentation/pages/receipt_preview_page.dart';
 import 'features/shift/presentation/pages/shift_open_page.dart';
 import 'features/splash/presentation/pages/splash_page.dart';
 import 'features/tables/presentation/pages/table_grid_page.dart';
+import 'features/reservations/presentation/pages/reservation_list_page.dart';
+import 'features/reservations/presentation/pages/table_grid_page.dart';
 import 'features/tabs/presentation/pages/tab_list_page.dart';
 import 'features/tabs/presentation/pages/tab_detail_page.dart';
 
@@ -44,6 +46,14 @@ final _router = GoRouter(
     GoRoute(
       path: '/tables',
       builder: (context, state) => const TableGridPage(),
+    ),
+    GoRoute(
+      path: '/reservations',
+      builder: (context, state) => const ReservationListPage(),
+    ),
+    GoRoute(
+      path: '/reservations/tables',
+      builder: (context, state) => const ReservationTableGridPage(),
     ),
     GoRoute(
       path: '/payment/success',
