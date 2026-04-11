@@ -231,14 +231,27 @@ async def create_user(
     await db.refresh(db_user)
     return StandardResponse(data=db_user, message="User created successfully")
 
-@router.get("/me", response_model=StandardResponse[UserSchema])
+@router.get("/me", response_model=StandardResponse)
 async def read_user_me(
     current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
 ) -> Any:
     """
-    Get current user.
+    Get current user with tenant tier.
     """
-    return StandardResponse(data=current_user)
+    from backend.models.tenant import Tenant
+    tier = "starter"
+    if current_user.tenant_id:
+        tenant = (await db.execute(
+            select(Tenant).where(Tenant.id == current_user.tenant_id)
+        )).scalar_one_or_none()
+        if tenant:
+            raw_tier = getattr(tenant, "subscription_tier", "starter")
+            tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier or "starter")
+
+    user_data = UserSchema.model_validate(current_user).model_dump()
+    user_data["subscription_tier"] = tier
+    return StandardResponse(data=user_data)
 
 @router.get("/{user_id}", response_model=StandardResponse[UserSchema])
 async def read_user_by_id(

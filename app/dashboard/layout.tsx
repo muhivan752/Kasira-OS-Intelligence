@@ -12,27 +12,23 @@ import {
   LogOut,
   X,
   Star,
-  Lock,
   Bot,
-  CalendarDays
+  CalendarDays,
+  Crown,
+  Lock,
 } from 'lucide-react';
 import { logout } from '@/app/actions/auth';
 import { getCurrentUser, getOutlets } from '@/app/actions/api';
 import { Logo } from '@/components/ui/logo';
 
-const navigation = [
-  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Menu', href: '/dashboard/menu', icon: MenuIcon },
-  { name: 'Kasir', href: '/dashboard/kasir', icon: Users },
-  { name: 'Laporan', href: '/dashboard/laporan', icon: BarChart3 },
-  { name: 'Pengaturan', href: '/dashboard/settings', icon: Settings },
-];
-
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [outletName, setOutletName] = useState('Loading...');
+  const [tier, setTier] = useState('starter');
   const pathname = usePathname();
   const router = useRouter();
+
+  const isPro = ['pro', 'business', 'enterprise'].includes(tier);
 
   useEffect(() => {
     async function loadData() {
@@ -42,6 +38,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           router.push('/login');
           return;
         }
+        setTier(user.subscription_tier || 'starter');
         const outlets = await getOutlets();
         if (outlets && outlets.length > 0) {
           setOutletName(outlets[0].name);
@@ -59,11 +56,51 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     await logout();
   };
 
+  // Build navigation based on tier
+  const mainNav = [
+    { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Menu', href: '/dashboard/menu', icon: MenuIcon },
+    { name: 'Kasir', href: '/dashboard/kasir', icon: Users },
+    { name: 'Laporan', href: '/dashboard/laporan', icon: BarChart3 },
+  ];
+
+  const proNav = [
+    { name: 'Reservasi', href: '/dashboard/reservasi', icon: CalendarDays },
+    { name: 'AI Asisten', href: '/dashboard/ai', icon: Bot },
+  ];
+
+  const bottomNav = [
+    { name: 'Pengaturan', href: '/dashboard/settings', icon: Settings },
+  ];
+
+  const renderNavItem = (item: { name: string; href: string; icon: any }, locked = false) => {
+    const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+    return (
+      <Link
+        key={item.name}
+        href={locked ? '/dashboard/pro' : item.href}
+        className={`
+          flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+          ${isActive
+            ? 'bg-blue-50 text-blue-700'
+            : locked
+              ? 'text-gray-400 hover:bg-gray-50'
+              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+          }
+        `}
+      >
+        <item.icon className={`w-5 h-5 ${isActive ? 'text-blue-700' : locked ? 'text-gray-300' : 'text-gray-400'}`} />
+        <span className="flex-1">{item.name}</span>
+        {locked && <Lock className="w-3.5 h-3.5 text-gray-300" />}
+      </Link>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-40 bg-gray-900/80 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
@@ -77,13 +114,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="h-full flex flex-col">
           {/* Sidebar Header */}
           <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <Logo size="sm" variant="light" showWordmark={false} />
-              <span className="text-lg font-bold text-gray-900 truncate max-w-[150px]">
-                {outletName}
-              </span>
+              <div className="min-w-0">
+                <span className="text-base font-bold text-gray-900 truncate block max-w-[140px]">
+                  {outletName}
+                </span>
+              </div>
+              {isPro && (
+                <span className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
+                  <Crown className="w-3 h-3" />
+                  PRO
+                </span>
+              )}
             </div>
-            <button 
+            <button
               onClick={() => setSidebarOpen(false)}
               className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-md"
             >
@@ -93,78 +138,40 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-            {navigation.map((item) => {
-              const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
-              return (
+            {/* Main navigation — always visible */}
+            {mainNav.map((item) => renderNavItem(item))}
+
+            {/* Pro features — unlocked for Pro, locked for Starter */}
+            {isPro ? (
+              <>
+                {proNav.map((item) => renderNavItem(item))}
+              </>
+            ) : (
+              <div className="pt-3 mt-3 border-t border-gray-100">
+                <p className="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Upgrade ke Pro</p>
+                {proNav.map((item) => renderNavItem(item, true))}
                 <Link
-                  key={item.name}
-                  href={item.href}
+                  href="/dashboard/pro"
                   className={`
-                    flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                    ${isActive
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                    flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mt-1
+                    ${pathname.startsWith('/dashboard/pro')
+                      ? 'bg-yellow-50 text-yellow-700'
+                      : 'text-yellow-600 hover:bg-yellow-50'
                     }
                   `}
                 >
-                  <item.icon className={`w-5 h-5 ${isActive ? 'text-blue-700' : 'text-gray-400'}`} />
-                  {item.name}
+                  <Star className={`w-5 h-5 ${pathname.startsWith('/dashboard/pro') ? 'text-yellow-500' : 'text-yellow-400'}`} />
+                  <span className="flex-1">Lihat Fitur Pro</span>
                 </Link>
-              );
-            })}
+              </div>
+            )}
 
-            {/* Pro Features */}
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Bottom nav */}
             <div className="pt-3 mt-3 border-t border-gray-100">
-              <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Pro</p>
-              <Link
-                href="/dashboard/reservasi"
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                  ${pathname.startsWith('/dashboard/reservasi')
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-                  }
-                `}
-              >
-                <CalendarDays className={`w-5 h-5 ${pathname.startsWith('/dashboard/reservasi') ? 'text-blue-500' : 'text-gray-400'}`} />
-                <span className="flex-1">Reservasi</span>
-                <span className="inline-flex items-center gap-0.5 bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                  PRO
-                </span>
-              </Link>
-              <Link
-                href="/dashboard/ai"
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                  ${pathname.startsWith('/dashboard/ai')
-                    ? 'bg-purple-50 text-purple-700'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-                  }
-                `}
-              >
-                <Bot className={`w-5 h-5 ${pathname.startsWith('/dashboard/ai') ? 'text-purple-500' : 'text-gray-400'}`} />
-                <span className="flex-1">AI Asisten</span>
-                <span className="inline-flex items-center gap-0.5 bg-purple-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                  PRO
-                </span>
-              </Link>
-              <Link
-                href="/dashboard/pro"
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                  ${pathname.startsWith('/dashboard/pro')
-                    ? 'bg-yellow-50 text-yellow-700'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-                  }
-                `}
-              >
-                <Star className={`w-5 h-5 ${pathname.startsWith('/dashboard/pro') ? 'text-yellow-500' : 'text-gray-400'}`} />
-                <span className="flex-1">Fitur Pro</span>
-                <span className="inline-flex items-center gap-0.5 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                  <Lock className="w-2.5 h-2.5" />
-                  PRO
-                </span>
-              </Link>
+              {bottomNav.map((item) => renderNavItem(item))}
             </div>
           </nav>
 
@@ -190,6 +197,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="text-lg font-bold text-gray-900 truncate max-w-[150px]">
               {outletName}
             </span>
+            {isPro && (
+              <span className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <Crown className="w-3 h-3" />
+                PRO
+              </span>
+            )}
           </div>
           <button
             onClick={() => setSidebarOpen(true)}
