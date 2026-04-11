@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -166,7 +167,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       });
 
       final respData = response.data is String
-          ? (await _dio.options('')).data  // should not happen, but safety
+          ? json.decode(response.data as String) as Map<String, dynamic>
           : response.data as Map<String, dynamic>;
       final data = respData['data'] as Map<String, dynamic>;
       final token = data['access_token']?.toString() ?? '';
