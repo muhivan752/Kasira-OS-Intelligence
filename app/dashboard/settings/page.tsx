@@ -312,8 +312,8 @@ export default function SettingsPage() {
                     <input type="radio" name="stock_mode" value="simple" checked={stockMode === 'simple'}
                       onChange={() => handleStockModeChange('simple')} className="mt-0.5" />
                     <div>
-                      <p className="font-medium text-gray-900">Sederhana</p>
-                      <p className="text-sm text-gray-500">Stok per produk, deduct langsung dari transaksi. Cocok untuk awal.</p>
+                      <p className="font-medium text-gray-900">Stok Sederhana</p>
+                      <p className="text-sm text-gray-500">Stok per produk, berkurang otomatis setiap transaksi. Menu Bahan Baku & HPP tidak aktif.</p>
                     </div>
                   </label>
                   <label className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${stockMode === 'recipe' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
@@ -321,7 +321,7 @@ export default function SettingsPage() {
                       onChange={() => handleStockModeChange('recipe')} className="mt-0.5" />
                     <div>
                       <p className="font-medium text-gray-900">Resep & HPP</p>
-                      <p className="text-sm text-gray-500">Stok per bahan baku, deduct otomatis berdasarkan resep. Hitung HPP otomatis.</p>
+                      <p className="text-sm text-gray-500">Stok per bahan baku, berkurang otomatis berdasarkan resep. HPP dihitung otomatis. Stok produk tidak ditampilkan.</p>
                     </div>
                   </label>
                 </div>

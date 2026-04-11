@@ -186,8 +186,8 @@ export default function MenuPage() {
       name: productForm.name,
       description: productForm.description || null,
       base_price: parseFloat(productForm.base_price),
-      stock_qty: parseInt(productForm.stock_qty),
-      stock_enabled: true,
+      stock_qty: stockMode === 'recipe' ? 0 : parseInt(productForm.stock_qty || '0'),
+      stock_enabled: stockMode === 'simple',
       category_id: productForm.category_id || null,
       image_url: productForm.image_url || null,
       is_active: productForm.is_active,
@@ -345,7 +345,7 @@ export default function MenuPage() {
                     <th className="px-4 py-3">Produk</th>
                     <th className="px-4 py-3">Kategori</th>
                     <th className="px-4 py-3">Harga</th>
-                    <th className="px-4 py-3">Stok</th>
+                    {stockMode === 'simple' && <th className="px-4 py-3">Stok</th>}
                     <th className="px-4 py-3">Aktif</th>
                     <th className="px-4 py-3 text-right">Aksi</th>
                   </tr>
@@ -371,11 +371,13 @@ export default function MenuPage() {
                           || <span className="text-gray-300 italic text-xs">—</span>}
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">{fmt(p.base_price)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          p.stock_qty <= 5 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                        }`}>{p.stock_qty}</span>
-                      </td>
+                      {stockMode === 'simple' && (
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            p.stock_qty <= 5 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                          }`}>{p.stock_qty}</span>
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <button onClick={() => handleToggleActive(p)}
                           className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
@@ -533,12 +535,14 @@ export default function MenuPage() {
                       value={productForm.base_price} onChange={e => setProductForm({ ...productForm, base_price: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Stok <span className="text-red-500">*</span></label>
-                    <input type="number" required min="0"
-                      value={productForm.stock_qty} onChange={e => setProductForm({ ...productForm, stock_qty: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                  </div>
+                  {stockMode === 'simple' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Stok <span className="text-red-500">*</span></label>
+                      <input type="number" required min="0"
+                        value={productForm.stock_qty} onChange={e => setProductForm({ ...productForm, stock_qty: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Foto Produk (Opsional)</label>

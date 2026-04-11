@@ -27,6 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [outletName, setOutletName] = useState('Memuat...');
   const [tier, setTier] = useState('starter');
+  const [stockMode, setStockMode] = useState('simple');
   const pathname = usePathname();
   const router = useRouter();
 
@@ -44,6 +45,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const outlets = await getOutlets();
         if (outlets && outlets.length > 0) {
           setOutletName(outlets[0].name);
+          setStockMode(outlets[0].stock_mode || 'simple');
         } else {
           setOutletName('Belum ada Outlet');
         }
@@ -67,7 +69,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
 
   const proNav = [
-    { name: 'Bahan Baku', href: '/dashboard/bahan-baku', icon: Package },
+    ...(stockMode === 'recipe' ? [{ name: 'Bahan Baku', href: '/dashboard/bahan-baku', icon: Package }] : []),
     { name: 'Reservasi', href: '/dashboard/reservasi', icon: CalendarDays },
     { name: 'AI Asisten', href: '/dashboard/ai', icon: Bot },
   ];
