@@ -18,6 +18,142 @@ from backend.schemas.response import StandardResponse
 
 router = APIRouter()
 
+
+@router.get("/summary", response_model=StandardResponse)
+async def get_report_summary(
+    request: Request,
+    outlet_id: UUID,
+    start_date: date,
+    end_date: date,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Ringkasan penjualan day-by-day untuk range tanggal."""
+    from fastapi import HTTPException
+
+    # Validate outlet
+    outlet_check = await db.execute(
+        select(Outlet.id).where(
+            Outlet.id == outlet_id,
+            Outlet.tenant_id == current_user.tenant_id,
+            Outlet.deleted_at.is_(None),
+        )
+    )
+    if not outlet_check.scalar():
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    # Max 90 days
+    if (end_date - start_date).days > 90:
+        raise HTTPException(status_code=400, detail="Maksimal range 90 hari")
+
+    start_dt = datetime.combine(start_date, time.min).replace(tzinfo=timezone.utc)
+    end_dt = datetime.combine(end_date + timedelta(days=1), time.min).replace(tzinfo=timezone.utc)
+
+    # Revenue + order count per day
+    from sqlalchemy import cast, Date
+    daily_query = (
+        select(
+            cast(Order.created_at, Date).label("day"),
+            func.count(Order.id).label("orders"),
+            func.coalesce(func.sum(Order.total_amount), 0).label("revenue"),
+        )
+        .where(
+            Order.outlet_id == outlet_id,
+            Order.created_at >= start_dt,
+            Order.created_at < end_dt,
+            Order.deleted_at.is_(None),
+            Order.status != "cancelled",
+            Order.id.in_(
+                select(Payment.order_id).where(
+                    Payment.status == "paid",
+                    Payment.deleted_at.is_(None),
+                )
+            ),
+        )
+        .group_by("day")
+        .order_by("day")
+    )
+    daily_result = await db.execute(daily_query)
+    daily_rows = daily_result.all()
+
+    # Payment breakdown per day
+    payment_query = (
+        select(
+            cast(Order.created_at, Date).label("day"),
+            Payment.payment_method,
+            func.sum(Payment.amount_paid).label("total"),
+        )
+        .select_from(Payment)
+        .join(Order, Payment.order_id == Order.id)
+        .where(
+            Order.outlet_id == outlet_id,
+            Order.created_at >= start_dt,
+            Order.created_at < end_dt,
+            Order.deleted_at.is_(None),
+            Order.status != "cancelled",
+            Payment.status == "paid",
+            Payment.deleted_at.is_(None),
+        )
+        .group_by("day", Payment.payment_method)
+    )
+    payment_result = await db.execute(payment_query)
+
+    # Build payment map: {date: {cash: X, qris: Y}}
+    payment_map: dict = {}
+    for row in payment_result.all():
+        d = str(row.day)
+        if d not in payment_map:
+            payment_map[d] = {"cash": 0.0, "qris": 0.0}
+        method = (row.payment_method or "").lower()
+        if method in payment_map[d]:
+            payment_map[d][method] = float(row.total)
+        else:
+            payment_map[d][method] = float(row.total)
+
+    # Build days array
+    days = []
+    total_revenue = 0.0
+    total_orders = 0
+    total_cash = 0.0
+    total_qris = 0.0
+
+    for row in daily_rows:
+        d = str(row.day)
+        pm = payment_map.get(d, {"cash": 0.0, "qris": 0.0})
+        rev = float(row.revenue)
+        ords = int(row.orders)
+        days.append({
+            "date": d,
+            "revenue": rev,
+            "orders": ords,
+            "cash": pm.get("cash", 0.0),
+            "qris": pm.get("qris", 0.0),
+        })
+        total_revenue += rev
+        total_orders += ords
+        total_cash += pm.get("cash", 0.0)
+        total_qris += pm.get("qris", 0.0)
+
+    num_days = (end_date - start_date).days + 1
+
+    return StandardResponse(
+        success=True,
+        data={
+            "days": days,
+            "total": {
+                "revenue": total_revenue,
+                "orders": total_orders,
+                "cash": total_cash,
+                "qris": total_qris,
+                "avg_per_day": total_revenue / num_days if num_days > 0 else 0,
+            },
+            "start_date": str(start_date),
+            "end_date": str(end_date),
+        },
+        request_id=request.state.request_id,
+    )
+
+
 @router.get("/daily", response_model=StandardResponse)
 async def get_daily_report(
     request: Request,

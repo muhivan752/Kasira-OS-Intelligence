@@ -287,6 +287,14 @@ export async function getDailyReport(outletId: string, reportDate: string) {
   } catch { return null; }
 }
 
+export async function getReportSummary(outletId: string, startDate: string, endDate: string) {
+  try {
+    const res = await fetchWithAuth(`/reports/summary?outlet_id=${outletId}&start_date=${startDate}&end_date=${endDate}`);
+    const data = await res.json();
+    return data.data;
+  } catch { return null; }
+}
+
 export async function getWeeklyRevenue(outletId: string) {
   const days: { date: Date; dateStr: string }[] = [];
   for (let i = 6; i >= 0; i--) {
