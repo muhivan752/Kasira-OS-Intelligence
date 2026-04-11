@@ -349,6 +349,13 @@ async def build_context(
         # Set tenant schema
         await db.execute(text(f'SET search_path TO "{tenant_id}", public'))
 
+        # Get brand_id from outlet
+        from backend.models.outlet import Outlet
+        outlet_row = await db.execute(
+            select(Outlet.brand_id).where(Outlet.id == outlet_id)
+        )
+        brand_id = outlet_row.scalar()
+
         # 1. Omzet hari ini
         today_stats = await db.execute(
             select(

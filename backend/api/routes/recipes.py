@@ -242,6 +242,15 @@ async def update_recipe(
     )
     await db.commit()
 
+    # Auto-rebuild knowledge graph
+    try:
+        from backend.services.knowledge_graph_service import rebuild_graph
+        product = (await db.execute(select(Product).where(Product.id == old_recipe.product_id))).scalar_one()
+        await rebuild_graph(tenant_id=current_user.tenant_id, brand_id=product.brand_id, db=db)
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"KG rebuild after recipe update: {e}")
+
     loaded = (await db.execute(
         select(Recipe)
         .options(
@@ -279,6 +288,15 @@ async def delete_recipe(
         user_id=current_user.id, tenant_id=current_user.tenant_id,
     )
     await db.commit()
+
+    # Auto-rebuild knowledge graph
+    try:
+        from backend.services.knowledge_graph_service import rebuild_graph
+        product = (await db.execute(select(Product).where(Product.id == recipe.product_id))).scalar_one()
+        await rebuild_graph(tenant_id=current_user.tenant_id, brand_id=product.brand_id, db=db)
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"KG rebuild after recipe delete: {e}")
 
     return StandardResponse(success=True, data={"ok": True}, message="Resep dihapus", request_id=request.state.request_id)
 
