@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.1.0/kasira-pos-v1.1.0.apk",
-    "release_notes": "Fix dashboard login, riwayat kas sync, 15 bug fixes for Starter production readiness"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.2.0/kasira-pos-v1.2.0.apk",
+    "release_notes": "Fix dashboard-kasir sync, OTP error handling, register owner fix, payment method in orders"
   },
   "dapur": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.1.0/kasira-dapur-v1.1.0.apk",
-    "release_notes": "Fix dashboard login, riwayat kas sync, 15 bug fixes for Starter production readiness"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.2.0/kasira-dapur-v1.2.0.apk",
+    "release_notes": "Fix dashboard-kasir sync, OTP error handling, register owner fix, payment method in orders"
   }
 }
