@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.7.0",
-    "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.7.0/kasira-pos-v1.7.0.apk",
-    "release_notes": "Fix BT printer force close saat scan, referral system, RLS security"
+    "version": "1.7.1",
+    "is_mandatory": true,
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.7.1/kasira-pos-v1.7.1.apk",
+    "release_notes": "Fix BT printer: print_bluetooth_thermal, fix storefront booking+order flow"
   },
   "dapur": {
-    "version": "1.7.0",
-    "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.7.0/kasira-dapur-v1.7.0.apk",
-    "release_notes": "Fix BT printer force close saat scan, referral system, RLS security"
+    "version": "1.7.1",
+    "is_mandatory": true,
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.7.1/kasira-dapur-v1.7.1.apk",
+    "release_notes": "Fix BT printer: print_bluetooth_thermal, fix storefront booking+order flow"
   }
 }
