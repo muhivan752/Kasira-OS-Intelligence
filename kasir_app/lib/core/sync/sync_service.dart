@@ -319,7 +319,7 @@ class SyncService {
               id: ri['id'],
               recipeId: ri['recipe_id'],
               ingredientId: ri['ingredient_id'],
-              quantity: (ri['quantity'] as num).toDouble(),
+              quantity: _toDouble(ri['quantity']),
               quantityUnit: ri['quantity_unit'],
               notes: ri['notes'],
               isOptional: ri['is_optional'] ?? false,
