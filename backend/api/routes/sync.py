@@ -18,6 +18,8 @@ from backend.services.sync import process_table_sync, process_stock_sync, get_ta
 from backend.services.crdt import HLC
 from backend.services.stock_service import deduct_stock as svc_deduct_stock
 from backend.models.tenant import Tenant
+from backend.models.ingredient import Ingredient
+from backend.models.recipe import Recipe, RecipeIngredient
 
 router = APIRouter()
 
@@ -113,7 +115,10 @@ async def sync_data(
         payments=await get_table_changes(db, Payment, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id),
         shifts=await get_table_changes(db, Shift, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id),
         cash_activities=[],
-        outlet_stock=[]
+        outlet_stock=[],
+        ingredients=await get_table_changes(db, Ingredient, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id),
+        recipes=[],
+        recipe_ingredients=[]
     )
     
     # Custom pull for order_items
@@ -203,6 +208,62 @@ async def sync_data(
         
     pull_changes.outlet_stock = stock_result
     
+    # Custom pull for recipes (read-only, no row_version — filter via product.brand_id)
+    stmt_recipe = select(Recipe).join(Product).filter(Product.brand_id == brand_id)
+    if client_last_sync_hlc and client_last_sync_hlc.timestamp > 0:
+        last_sync_dt = datetime.fromtimestamp(client_last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
+        stmt_recipe = stmt_recipe.filter(Recipe.updated_at >= last_sync_dt)
+    result = await db.execute(stmt_recipe)
+    recipe_records = result.scalars().all()
+    recipe_result = []
+    for r in recipe_records:
+        record_dict = {}
+        for c in r.__table__.columns:
+            val = getattr(r, c.name)
+            if isinstance(val, datetime):
+                record_dict[c.name] = val.isoformat()
+            elif isinstance(val, uuid.UUID):
+                record_dict[c.name] = str(val)
+            else:
+                record_dict[c.name] = val
+        record_dict["is_deleted"] = getattr(r, "deleted_at", None) is not None
+        r_updated_at = getattr(r, "updated_at")
+        if r_updated_at.tzinfo is None:
+            r_updated_at = r_updated_at.replace(tzinfo=timezone.utc)
+        r_timestamp = int(r_updated_at.timestamp() * 1000)
+        r_hlc = HLC(timestamp=r_timestamp, counter=0, node_id=server_node_id)
+        record_dict["hlc"] = r_hlc.to_string()
+        recipe_result.append(record_dict)
+    pull_changes.recipes = recipe_result
+
+    # Custom pull for recipe_ingredients (join via recipe→product.brand_id)
+    stmt_ri = select(RecipeIngredient).join(Recipe).join(Product).filter(Product.brand_id == brand_id)
+    if client_last_sync_hlc and client_last_sync_hlc.timestamp > 0:
+        last_sync_dt = datetime.fromtimestamp(client_last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
+        stmt_ri = stmt_ri.filter(RecipeIngredient.updated_at >= last_sync_dt)
+    result = await db.execute(stmt_ri)
+    ri_records = result.scalars().all()
+    ri_result = []
+    for r in ri_records:
+        record_dict = {}
+        for c in r.__table__.columns:
+            val = getattr(r, c.name)
+            if isinstance(val, datetime):
+                record_dict[c.name] = val.isoformat()
+            elif isinstance(val, uuid.UUID):
+                record_dict[c.name] = str(val)
+            else:
+                record_dict[c.name] = val
+        record_dict["is_deleted"] = getattr(r, "deleted_at", None) is not None
+        r_updated_at = getattr(r, "updated_at")
+        if r_updated_at.tzinfo is None:
+            r_updated_at = r_updated_at.replace(tzinfo=timezone.utc)
+        r_timestamp = int(r_updated_at.timestamp() * 1000)
+        r_hlc = HLC(timestamp=r_timestamp, counter=0, node_id=server_node_id)
+        record_dict["hlc"] = r_hlc.to_string()
+        ri_result.append(record_dict)
+    pull_changes.recipe_ingredients = ri_result
+
     # Custom pull for cash_activities
     stmt = select(CashActivity).join(Shift).filter(Shift.outlet_id == outlet_id)
     if client_last_sync_hlc and client_last_sync_hlc.timestamp > 0:

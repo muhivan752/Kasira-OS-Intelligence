@@ -99,3 +99,34 @@ class CashActivities extends Table with CrdtTable {
   RealColumn get amount => real()();
   TextColumn get description => text()();
 }
+
+@DataClassName('IngredientLocal')
+class Ingredients extends Table with CrdtTable {
+  TextColumn get brandId => text()();
+  TextColumn get name => text()();
+  TextColumn get trackingMode => text()(); // simple, detail
+  TextColumn get baseUnit => text()(); // gram, ml, pcs
+  TextColumn get unitType => text()(); // WEIGHT, VOLUME, COUNT, CUSTOM
+  RealColumn get buyPrice => real().withDefault(const Constant(0.0))();
+  RealColumn get buyQty => real().withDefault(const Constant(1.0))();
+  RealColumn get costPerBaseUnit => real().withDefault(const Constant(0.0))();
+  TextColumn get ingredientType => text().withDefault(const Constant('recipe'))();
+}
+
+@DataClassName('RecipeLocal')
+class Recipes extends Table with CrdtTable {
+  TextColumn get productId => text()();
+  IntColumn get version => integer().withDefault(const Constant(1))();
+  BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+  TextColumn get notes => text().nullable()();
+}
+
+@DataClassName('RecipeIngredientLocal')
+class RecipeIngredients extends Table with CrdtTable {
+  TextColumn get recipeId => text()();
+  TextColumn get ingredientId => text()();
+  RealColumn get quantity => real()();
+  TextColumn get quantityUnit => text()();
+  TextColumn get notes => text().nullable()();
+  BoolColumn get isOptional => boolean().withDefault(const Constant(false))();
+}

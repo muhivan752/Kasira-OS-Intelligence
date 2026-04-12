@@ -11,6 +11,7 @@ import '../../../orders/providers/orders_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../widgets/product_card.dart';
 import '../widgets/cart_panel.dart';
+import '../../../products/presentation/widgets/product_detail_sheet.dart';
 
 class PosPage extends ConsumerStatefulWidget {
   const PosPage({super.key});
@@ -457,6 +458,12 @@ class _PosPageState extends ConsumerState<PosPage> {
                 stock: product.stock,
                 imageUrl: product.imageUrl ?? '',
                 isBestSeller: product.isBestSeller,
+                onLongPress: () => ProductDetailSheet.show(
+                  context,
+                  productId: product.id,
+                  productName: product.name,
+                  sellingPrice: product.price,
+                ),
                 onTap: () {
                   ref.read(cartProvider.notifier).addItem(CartItem(
                         productId: product.id,

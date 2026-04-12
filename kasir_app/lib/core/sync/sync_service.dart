@@ -267,6 +267,70 @@ class SyncService {
           );
         }
       }
+
+      // Apply Ingredients (read-only from server)
+      if (changes['ingredients'] != null) {
+        for (var ing in changes['ingredients']) {
+          await db.into(db.ingredients).insertOnConflictUpdate(
+            IngredientLocal(
+              id: ing['id'],
+              brandId: ing['brand_id'],
+              name: ing['name'],
+              trackingMode: ing['tracking_mode'] ?? 'simple',
+              baseUnit: ing['base_unit'] ?? 'pcs',
+              unitType: ing['unit_type'] ?? 'COUNT',
+              buyPrice: _toDouble(ing['buy_price']),
+              buyQty: _toDouble(ing['buy_qty'], fallback: 1.0),
+              costPerBaseUnit: _toDouble(ing['cost_per_base_unit']),
+              ingredientType: ing['ingredient_type'] ?? 'recipe',
+              rowVersion: ing['row_version'] ?? 0,
+              isDeleted: ing['is_deleted'] ?? false,
+              lastModifiedHlc: ing['hlc'],
+              isSynced: true,
+            ),
+          );
+        }
+      }
+
+      // Apply Recipes (read-only from server)
+      if (changes['recipes'] != null) {
+        for (var r in changes['recipes']) {
+          await db.into(db.recipes).insertOnConflictUpdate(
+            RecipeLocal(
+              id: r['id'],
+              productId: r['product_id'],
+              version: r['version'] ?? 1,
+              isActive: r['is_active'] ?? true,
+              notes: r['notes'],
+              rowVersion: 0,
+              isDeleted: r['is_deleted'] ?? false,
+              lastModifiedHlc: r['hlc'],
+              isSynced: true,
+            ),
+          );
+        }
+      }
+
+      // Apply Recipe Ingredients (read-only from server)
+      if (changes['recipe_ingredients'] != null) {
+        for (var ri in changes['recipe_ingredients']) {
+          await db.into(db.recipeIngredients).insertOnConflictUpdate(
+            RecipeIngredientLocal(
+              id: ri['id'],
+              recipeId: ri['recipe_id'],
+              ingredientId: ri['ingredient_id'],
+              quantity: (ri['quantity'] as num).toDouble(),
+              quantityUnit: ri['quantity_unit'],
+              notes: ri['notes'],
+              isOptional: ri['is_optional'] ?? false,
+              rowVersion: 0,
+              isDeleted: ri['is_deleted'] ?? false,
+              lastModifiedHlc: ri['hlc'],
+              isSynced: true,
+            ),
+          );
+        }
+      }
     });
   }
 
@@ -392,6 +456,12 @@ class SyncService {
     'is_deleted': s.isDeleted,
     'hlc': s.lastModifiedHlc,
   };
+
+  static double _toDouble(dynamic v, {double fallback = 0.0}) {
+    if (v == null) return fallback;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? fallback;
+  }
 
   Map<String, dynamic> _cashActivityToJson(CashActivityLocal ca) => {
     'id': ca.id,

@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/products_provider.dart';
+import '../widgets/product_detail_sheet.dart';
 
 class ProductManagementPage extends ConsumerStatefulWidget {
   const ProductManagementPage({super.key});
@@ -155,6 +156,12 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
                       product: product,
                       currency: _currency,
                       onToggle: () async => _toggleAvailability(product),
+                      onTap: () => ProductDetailSheet.show(
+                        context,
+                        productId: product.id,
+                        productName: product.name,
+                        sellingPrice: product.price,
+                      ),
                     );
                   },
                 );
@@ -171,11 +178,13 @@ class _ProductTile extends StatefulWidget {
   final ProductModel product;
   final NumberFormat currency;
   final Future<void> Function() onToggle;
+  final VoidCallback? onTap;
 
   const _ProductTile({
     required this.product,
     required this.currency,
     required this.onToggle,
+    this.onTap,
   });
 
   @override
@@ -191,9 +200,12 @@ class _ProductTileState extends State<_ProductTile> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
           children: [
             // Product image / icon
             Container(
@@ -312,6 +324,7 @@ class _ProductTileState extends State<_ProductTile> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

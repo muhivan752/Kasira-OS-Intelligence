@@ -10,6 +10,7 @@ class ProductCard extends StatelessWidget {
   final int stock;
   final String imageUrl;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool isBestSeller;
 
   const ProductCard({
@@ -19,6 +20,7 @@ class ProductCard extends StatelessWidget {
     required this.stock,
     required this.imageUrl,
     required this.onTap,
+    this.onLongPress,
     this.isBestSeller = false,
   });
 
@@ -35,6 +37,7 @@ class ProductCard extends StatelessWidget {
       elevation: 0,
       child: InkWell(
         onTap: isOutOfStock ? null : onTap,
+        onLongPress: onLongPress,
         splashColor: AppColors.primary.withOpacity(0.08),
         highlightColor: AppColors.primary.withOpacity(0.04),
         child: Container(

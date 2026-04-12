@@ -8,20 +8,24 @@ import 'tables.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [Products, Orders, OrderItems, Payments, Shifts, CashActivities])
+@DriftDatabase(tables: [Products, Orders, OrderItems, Payments, Shifts, CashActivities, Ingredients, Recipes, RecipeIngredients])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (m, from, to) async {
           if (from < 2) {
-            // Tambah CRDT columns ke products untuk pure CRDT stock
             await m.addColumn(products, products.crdtPositive);
             await m.addColumn(products, products.crdtNegative);
+          }
+          if (from < 3) {
+            await m.createTable(ingredients);
+            await m.createTable(recipes);
+            await m.createTable(recipeIngredients);
           }
         },
       );
