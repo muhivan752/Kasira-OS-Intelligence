@@ -85,6 +85,14 @@ export async function getProducts(brandId: string) {
   } catch { return []; }
 }
 
+export async function getBestSellers(limit: number = 5) {
+  try {
+    const res = await fetchWithAuth(`/products/best-sellers?limit=${limit}`);
+    const data = await res.json();
+    return data.data;
+  } catch { return []; }
+}
+
 export async function getCategories(brandId: string) {
   try {
     const res = await fetchWithAuth(`/categories?brand_id=${brandId}`);
@@ -560,5 +568,21 @@ export async function updateStockMode(outletId: string, stockMode: string) {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Gagal mengubah mode stok');
+  return data.data;
+}
+
+export async function getTaxConfig(outletId: string) {
+  const res = await fetchWithAuth(`/outlets/${outletId}/tax-config`);
+  const data = await res.json();
+  return data.data;
+}
+
+export async function updateTaxConfig(outletId: string, config: any) {
+  const res = await fetchWithAuth(`/outlets/${outletId}/tax-config/`, {
+    method: 'PUT',
+    body: JSON.stringify(config),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Gagal menyimpan pengaturan pajak');
   return data.data;
 }

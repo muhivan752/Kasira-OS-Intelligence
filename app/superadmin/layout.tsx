@@ -10,9 +10,11 @@ import {
   X,
   Menu as MenuIcon,
   Shield,
+  FileText,
 } from 'lucide-react';
 import { logout } from '@/app/actions/auth';
 import { getCurrentUser } from '@/app/actions/api';
+import { checkSuperadminAccess } from '@/app/actions/superadmin';
 
 export default function SuperadminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -27,6 +29,11 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
         const user = await getCurrentUser();
         if (!user) {
           router.push('/login');
+          return;
+        }
+        const isSuperadmin = await checkSuperadminAccess();
+        if (!isSuperadmin) {
+          router.push('/dashboard');
           return;
         }
         setAdminName(user.full_name || 'Admin');
@@ -45,6 +52,7 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
   const nav = [
     { name: 'Overview', href: '/superadmin', icon: LayoutDashboard },
     { name: 'Tenants', href: '/superadmin/tenants', icon: Building2 },
+    { name: 'Audit Log', href: '/superadmin/audit', icon: FileText },
   ];
 
   if (loading) {

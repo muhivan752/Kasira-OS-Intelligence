@@ -14,6 +14,7 @@ from sqlalchemy import select, func, case, text
 from backend.api import deps
 from backend.models.tenant import Tenant, SubscriptionTier, SubscriptionStatus
 from backend.models.user import User
+from backend.models.audit_log import AuditLog
 from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
 import json
@@ -322,3 +323,97 @@ async def update_status(
         data={"id": str(tenant.id), "is_active": payload.is_active},
         message=f"Tenant {status_label}",
     )
+
+
+# ── Audit Logs ──────────────────────────────────────────
+
+class AuditLogItem(BaseModel):
+    id: uuid.UUID
+    tenant_id: Optional[uuid.UUID] = None
+    user_id: Optional[uuid.UUID] = None
+    action: str
+    entity: str
+    entity_id: uuid.UUID
+    before_state: Optional[dict] = None
+    after_state: Optional[dict] = None
+    request_id: Optional[str] = None
+    created_at: datetime
+    tenant_name: Optional[str] = None
+    user_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/audit-logs", response_model=StandardResponse[list[AuditLogItem]])
+async def list_audit_logs(
+    db: AsyncSession = Depends(deps.get_db),
+    admin: User = Depends(deps.get_platform_admin),
+    skip: int = 0,
+    limit: int = 50,
+    tenant_id: Optional[uuid.UUID] = Query(None),
+    entity: Optional[str] = Query(None),
+    action: Optional[str] = Query(None),
+) -> Any:
+    """List audit logs with optional filters."""
+    stmt = select(AuditLog)
+
+    if tenant_id:
+        stmt = stmt.where(AuditLog.tenant_id == tenant_id)
+    if entity:
+        stmt = stmt.where(AuditLog.entity == entity)
+    if action:
+        stmt = stmt.where(AuditLog.action == action)
+
+    stmt = stmt.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    logs = result.scalars().all()
+
+    # Count total
+    count_stmt = select(func.count(AuditLog.id))
+    if tenant_id:
+        count_stmt = count_stmt.where(AuditLog.tenant_id == tenant_id)
+    if entity:
+        count_stmt = count_stmt.where(AuditLog.entity == entity)
+    if action:
+        count_stmt = count_stmt.where(AuditLog.action == action)
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    # Enrich with tenant/user names
+    tenant_cache: dict[uuid.UUID, str] = {}
+    user_cache: dict[uuid.UUID, str] = {}
+
+    items = []
+    for log in logs:
+        t_name = None
+        u_name = None
+
+        if log.tenant_id:
+            if log.tenant_id not in tenant_cache:
+                t = (await db.execute(select(Tenant.name).where(Tenant.id == log.tenant_id))).scalar_one_or_none()
+                tenant_cache[log.tenant_id] = t or ""
+            t_name = tenant_cache[log.tenant_id] or None
+
+        if log.user_id:
+            if log.user_id not in user_cache:
+                u = (await db.execute(select(User.full_name).where(User.id == log.user_id))).scalar_one_or_none()
+                user_cache[log.user_id] = u or ""
+            u_name = user_cache[log.user_id] or None
+
+        items.append(AuditLogItem(
+            id=log.id,
+            tenant_id=log.tenant_id,
+            user_id=log.user_id,
+            action=log.action,
+            entity=log.entity,
+            entity_id=log.entity_id,
+            before_state=log.before_state,
+            after_state=log.after_state,
+            request_id=log.request_id,
+            created_at=log.created_at,
+            tenant_name=t_name,
+            user_name=u_name,
+        ))
+
+    meta = ResponseMeta(page=(skip // limit) + 1, per_page=limit, total=total)
+    return StandardResponse(data=items, meta=meta)

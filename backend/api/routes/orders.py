@@ -106,13 +106,45 @@ async def create_order(
 
     # Calculate totals server-side from items (fallback if client sends 0)
     from decimal import Decimal as D
+    from backend.models.outlet_tax_config import OutletTaxConfig
+
     calculated_subtotal = sum(item.total_price for item in order_in.items)
     subtotal = order_in.subtotal if order_in.subtotal > 0 else calculated_subtotal
-    service_charge = order_in.service_charge_amount or D(0)
-    tax = order_in.tax_amount or D(0)
     discount = order_in.discount_amount or D(0)
-    calculated_total = subtotal + service_charge + tax - discount
-    total_amount = order_in.total_amount if order_in.total_amount > 0 else calculated_total
+
+    # Auto-calculate tax & service charge from outlet config
+    tax_config = (await db.execute(
+        select(OutletTaxConfig).where(
+            OutletTaxConfig.outlet_id == order_in.outlet_id,
+            OutletTaxConfig.deleted_at == None,
+        )
+    )).scalar_one_or_none()
+
+    taxable_amount = subtotal - discount  # tax calculated after discount
+
+    if tax_config and tax_config.pb1_enabled and tax_config.tax_pct > 0:
+        if tax_config.tax_inclusive:
+            # Harga sudah termasuk pajak — extract tax from subtotal
+            tax = taxable_amount - (taxable_amount / D(str(1 + tax_config.tax_pct / 100)))
+        else:
+            tax = taxable_amount * D(str(tax_config.tax_pct / 100))
+        tax = tax.quantize(D("1"))  # round to whole rupiah
+    else:
+        tax = order_in.tax_amount or D(0)
+
+    if tax_config and tax_config.service_charge_enabled and tax_config.service_charge_pct > 0:
+        service_charge = taxable_amount * D(str(tax_config.service_charge_pct / 100))
+        service_charge = service_charge.quantize(D("1"))
+    else:
+        service_charge = order_in.service_charge_amount or D(0)
+
+    if tax_config and tax_config.tax_inclusive:
+        # Total = subtotal (sudah termasuk tax) + service charge - discount
+        calculated_total = subtotal + service_charge - discount
+    else:
+        calculated_total = subtotal + service_charge + tax - discount
+
+    total_amount = calculated_total if (tax_config and (tax_config.pb1_enabled or tax_config.service_charge_enabled)) else (order_in.total_amount if order_in.total_amount > 0 else calculated_total)
 
     order = Order(
         outlet_id=order_in.outlet_id,

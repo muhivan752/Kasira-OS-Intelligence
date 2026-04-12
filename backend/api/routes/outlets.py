@@ -9,7 +9,8 @@ from sqlalchemy.orm import selectinload
 
 from backend.api import deps
 from backend.models.outlet import Outlet
-from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentSetupOwn, OutletPaymentStatus, OutletStockModeUpdate
+from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentSetupOwn, OutletPaymentStatus, OutletStockModeUpdate, TaxConfigResponse, TaxConfigUpdate
+from backend.models.outlet_tax_config import OutletTaxConfig
 from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
 import json
@@ -401,4 +402,96 @@ async def update_stock_mode(
         success=True, data=outlet,
         message=f"Mode stok diubah ke '{mode_in.stock_mode}'",
         request_id=request.state.request_id,
+    )
+
+
+# ── Tax & Service Charge Config ─────────────────────────
+
+@router.get("/{outlet_id}/tax-config", response_model=StandardResponse[TaxConfigResponse])
+async def get_tax_config(
+    request: Request,
+    outlet_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_user),
+) -> Any:
+    """Get tax & service charge configuration for an outlet."""
+    # Validate outlet ownership
+    outlet = (await db.execute(
+        select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at == None, Outlet.tenant_id == current_user.tenant_id)
+    )).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    config = (await db.execute(
+        select(OutletTaxConfig).where(OutletTaxConfig.outlet_id == outlet_id, OutletTaxConfig.deleted_at == None)
+    )).scalar_one_or_none()
+
+    if not config:
+        # Return defaults
+        return StandardResponse(data=TaxConfigResponse(), request_id=request.state.request_id)
+
+    return StandardResponse(
+        data=TaxConfigResponse.model_validate(config),
+        request_id=request.state.request_id,
+    )
+
+
+@router.put("/{outlet_id}/tax-config", response_model=StandardResponse[TaxConfigResponse])
+async def update_tax_config(
+    request: Request,
+    outlet_id: uuid.UUID,
+    config_in: TaxConfigUpdate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_active_superuser),
+) -> Any:
+    """Update tax & service charge configuration (owner only)."""
+    outlet = (await db.execute(
+        select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at == None, Outlet.tenant_id == current_user.tenant_id)
+    )).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    # Validate percentages
+    if config_in.tax_pct is not None and (config_in.tax_pct < 0 or config_in.tax_pct > 100):
+        raise HTTPException(status_code=400, detail="Persentase pajak harus 0-100%")
+    if config_in.service_charge_pct is not None and (config_in.service_charge_pct < 0 or config_in.service_charge_pct > 100):
+        raise HTTPException(status_code=400, detail="Persentase service charge harus 0-100%")
+
+    config = (await db.execute(
+        select(OutletTaxConfig).where(OutletTaxConfig.outlet_id == outlet_id, OutletTaxConfig.deleted_at == None)
+    )).scalar_one_or_none()
+
+    update_data = config_in.model_dump(exclude_unset=True)
+
+    if not config:
+        # Create new config
+        config = OutletTaxConfig(outlet_id=outlet_id, **update_data)
+        db.add(config)
+        await db.flush()
+        before_state = None
+    else:
+        before_state = {
+            "pb1_enabled": config.pb1_enabled,
+            "tax_pct": config.tax_pct,
+            "service_charge_enabled": config.service_charge_enabled,
+            "service_charge_pct": config.service_charge_pct,
+            "tax_inclusive": config.tax_inclusive,
+        }
+        for k, v in update_data.items():
+            setattr(config, k, v)
+        config.row_version += 1
+
+    await log_audit(
+        db=db, action="UPDATE", entity="outlet_tax_config", entity_id=outlet_id,
+        before_state=before_state,
+        after_state=update_data,
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+    await db.refresh(config)
+
+    return StandardResponse(
+        data=TaxConfigResponse.model_validate(config),
+        request_id=request.state.request_id,
+        message="Pengaturan pajak berhasil disimpan",
     )

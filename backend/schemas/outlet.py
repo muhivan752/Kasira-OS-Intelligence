@@ -56,3 +56,24 @@ class OutletInDBBase(OutletBase):
 
 class Outlet(OutletInDBBase):
     pass
+
+
+# ── Tax Config ──────────────────────────────────────────
+
+class TaxConfigResponse(BaseModel):
+    pb1_enabled: bool = False
+    tax_pct: float = 10.0
+    service_charge_enabled: bool = False
+    service_charge_pct: float = 0.0
+    tax_inclusive: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class TaxConfigUpdate(BaseModel):
+    pb1_enabled: Optional[bool] = None
+    tax_pct: Optional[float] = None
+    service_charge_enabled: Optional[bool] = None
+    service_charge_pct: Optional[float] = None
+    tax_inclusive: Optional[bool] = None

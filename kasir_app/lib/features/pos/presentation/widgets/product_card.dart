@@ -10,6 +10,7 @@ class ProductCard extends StatelessWidget {
   final int stock;
   final String imageUrl;
   final VoidCallback onTap;
+  final bool isBestSeller;
 
   const ProductCard({
     super.key,
@@ -18,6 +19,7 @@ class ProductCard extends StatelessWidget {
     required this.stock,
     required this.imageUrl,
     required this.onTap,
+    this.isBestSeller = false,
   });
 
   @override
@@ -125,6 +127,43 @@ class ProductCard extends StatelessWidget {
                   ),
                 ],
               ),
+
+              // Best seller badge
+              if (isBestSeller && !isOutOfStock)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B),
+                      borderRadius: BorderRadius.circular(6),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFF59E0B).withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.flame, size: 10, color: Colors.white),
+                        SizedBox(width: 3),
+                        Text(
+                          'Populer',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 9,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
 
               // Out of stock overlay
               if (isOutOfStock)

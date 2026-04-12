@@ -16,6 +16,8 @@ class ProductModel {
   final String? categoryName;
   final bool isAvailable;
   final int rowVersion;
+  final int soldTotal;
+  final bool isBestSeller;
 
   const ProductModel({
     required this.id,
@@ -27,7 +29,25 @@ class ProductModel {
     this.categoryName,
     this.isAvailable = true,
     this.rowVersion = 0,
+    this.soldTotal = 0,
+    this.isBestSeller = false,
   });
+
+  ProductModel copyWith({bool? isBestSeller}) {
+    return ProductModel(
+      id: id,
+      name: name,
+      price: price,
+      stock: stock,
+      imageUrl: imageUrl,
+      categoryId: categoryId,
+      categoryName: categoryName,
+      isAvailable: isAvailable,
+      rowVersion: rowVersion,
+      soldTotal: soldTotal,
+      isBestSeller: isBestSeller ?? this.isBestSeller,
+    );
+  }
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
     return ProductModel(
@@ -40,6 +60,7 @@ class ProductModel {
       categoryName: json['category_name'] as String?,
       isAvailable: (json['is_active'] as bool?) ?? true,
       rowVersion: (json['row_version'] as num?)?.toInt() ?? 0,
+      soldTotal: (json['sold_total'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -114,9 +135,21 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
         }),
       );
 
-      final items = (response.data['data'] as List)
+      var items = (response.data['data'] as List)
           .map((e) => ProductModel.fromJson(e as Map<String, dynamic>))
           .toList();
+
+      // Mark top 3 by sold_total as best sellers
+      final sorted = [...items]..sort((a, b) => b.soldTotal.compareTo(a.soldTotal));
+      final bestSellerIds = sorted
+          .where((p) => p.soldTotal > 0)
+          .take(3)
+          .map((p) => p.id)
+          .toSet();
+      items = items.map((p) =>
+          bestSellerIds.contains(p.id) ? p.copyWith(isBestSeller: true) : p
+      ).toList();
+
       return items;
     } catch (_) {
       // Network error — fallback ke lokal

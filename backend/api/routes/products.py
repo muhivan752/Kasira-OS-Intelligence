@@ -221,6 +221,44 @@ async def read_products(
         request_id=request.state.request_id
     )
 
+@router.get("/best-sellers", response_model=StandardResponse[List[ProductResponse]])
+async def read_best_sellers(
+    request: Request,
+    brand_id: Optional[UUID] = None,
+    outlet_id: Optional[UUID] = None,
+    limit: int = 5,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Top products by sold_total."""
+    if brand_id is None:
+        brand_row = (await db.execute(
+            select(Brand).where(Brand.tenant_id == current_user.tenant_id, Brand.deleted_at.is_(None))
+        )).scalars().first()
+        if not brand_row:
+            return StandardResponse(success=True, data=[], request_id=request.state.request_id)
+        brand_id = brand_row.id
+
+    query = (
+        select(Product)
+        .options(selectinload(Product.category))
+        .where(
+            Product.brand_id == brand_id,
+            Product.deleted_at.is_(None),
+            Product.sold_total > 0,
+        )
+        .order_by(Product.sold_total.desc())
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    products = result.scalars().all()
+
+    return StandardResponse(
+        success=True,
+        data=[ProductResponse.model_validate(p) for p in products],
+        request_id=request.state.request_id
+    )
+
 @router.get("/{product_id}", response_model=StandardResponse[ProductResponse])
 async def read_product(
     request: Request,

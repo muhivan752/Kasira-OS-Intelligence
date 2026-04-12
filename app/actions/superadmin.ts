@@ -63,6 +63,27 @@ export async function updateTenantTier(tenantId: string, tier: string) {
   } catch { return { success: false, message: 'Gagal update tier' }; }
 }
 
+export async function checkSuperadminAccess(): Promise<boolean> {
+  try {
+    const res = await saFetch('/superadmin/stats');
+    return res.ok;
+  } catch { return false; }
+}
+
+export async function getSuperadminAuditLogs(params?: { tenant_id?: string; entity?: string; limit?: number; skip?: number }) {
+  try {
+    const qs = new URLSearchParams();
+    if (params?.tenant_id) qs.set('tenant_id', params.tenant_id);
+    if (params?.entity) qs.set('entity', params.entity);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.skip) qs.set('skip', String(params.skip));
+    const q = qs.toString();
+    const res = await saFetch(`/superadmin/audit-logs${q ? `?${q}` : ''}`);
+    const data = await res.json();
+    return { logs: data.data || [], meta: data.meta };
+  } catch { return { logs: [], meta: null }; }
+}
+
 export async function updateTenantStatus(tenantId: string, isActive: boolean, subscriptionStatus?: string) {
   try {
     const res = await saFetch(`/superadmin/tenants/${tenantId}/status`, {

@@ -78,6 +78,7 @@ services:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
       - BACKEND_INTERNAL_URL=http://backend:8000/api/v1
       - NEXT_PUBLIC_SECURE_COOKIES=true
+      - NODE_OPTIONS=--max-old-space-size=384
     depends_on:
       backend:
         condition: service_healthy
@@ -92,6 +93,7 @@ services:
       resources:
         limits:
           memory: 512M
+          cpus: '1.0'
 
 volumes:
   postgres_data:

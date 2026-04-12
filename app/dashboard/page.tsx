@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getOutlets, getDailyReport, getWeeklyRevenue } from '@/app/actions/api';
+import { getOutlets, getDailyReport, getWeeklyRevenue, getBestSellers } from '@/app/actions/api';
 import { 
   BarChart, 
   Bar, 
@@ -11,17 +11,19 @@ import {
   Tooltip, 
   ResponsiveContainer 
 } from 'recharts';
-import { 
-  TrendingUp, 
-  ShoppingCart, 
-  Clock, 
-  AlertTriangle 
+import {
+  TrendingUp,
+  ShoppingCart,
+  Clock,
+  AlertTriangle,
+  Award
 } from 'lucide-react';
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
+  const [bestSellers, setBestSellers] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadData() {
@@ -31,13 +33,15 @@ export default function DashboardPage() {
           const outletId = outlets[0].id;
           const today = new Date().toISOString().split('T')[0];
           
-          const [daily, weekly] = await Promise.all([
+          const [daily, weekly, bestSellersData] = await Promise.all([
             getDailyReport(outletId, today),
-            getWeeklyRevenue(outletId)
+            getWeeklyRevenue(outletId),
+            getBestSellers(5)
           ]);
-          
+
           setReport(daily);
           setChartData(weekly);
+          setBestSellers(bestSellersData || []);
         }
       } catch (error) {
         console.error('Failed to load dashboard data', error);
@@ -146,9 +150,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Top Products */}
+        {/* Top Products Today */}
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Top 5 Menu</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-4">Top 5 Hari Ini</h2>
           <div className="space-y-4">
             {report?.top_products?.length > 0 ? (
               report.top_products.slice(0, 5).map((product: any, index: number) => (
@@ -173,6 +177,37 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Best Seller All Time */}
+      {bestSellers.length > 0 && (
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Award className="w-5 h-5 text-yellow-500" />
+            <h2 className="text-lg font-bold text-gray-900">Best Seller</h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {bestSellers.map((product: any, index: number) => (
+              <div key={product.id} className="relative text-center p-4 rounded-xl border border-gray-100 bg-gray-50">
+                {index === 0 && (
+                  <span className="absolute -top-2 -right-2 bg-yellow-400 text-white text-xs font-bold px-2 py-0.5 rounded-full">#1</span>
+                )}
+                {index === 1 && (
+                  <span className="absolute -top-2 -right-2 bg-gray-400 text-white text-xs font-bold px-2 py-0.5 rounded-full">#2</span>
+                )}
+                {index === 2 && (
+                  <span className="absolute -top-2 -right-2 bg-amber-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">#3</span>
+                )}
+                {index > 2 && (
+                  <span className="absolute -top-2 -right-2 bg-gray-300 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">#{index + 1}</span>
+                )}
+                <p className="text-sm font-semibold text-gray-900 mt-1">{product.name}</p>
+                <p className="text-xs text-gray-500 mt-1">{product.sold_total} terjual</p>
+                <p className="text-sm font-bold text-blue-600 mt-1">{formatCurrency(Number(product.base_price))}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

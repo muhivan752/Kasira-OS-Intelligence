@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { getOutlets, updateOutlet, updateStockMode, getCurrentUser } from '@/app/actions/api';
-import { Loader2, Store, Clock, Link as LinkIcon, CreditCard, Upload, ImageOff, Image, Package } from 'lucide-react';
+import { getOutlets, updateOutlet, updateStockMode, getCurrentUser, getTaxConfig, updateTaxConfig } from '@/app/actions/api';
+import { Loader2, Store, Clock, Link as LinkIcon, CreditCard, Upload, ImageOff, Image, Package, Receipt } from 'lucide-react';
 import Link from 'next/link';
 
 export default function SettingsPage() {
@@ -15,6 +15,17 @@ export default function SettingsPage() {
   const [stockModeError, setStockModeError] = useState('');
   const [isPro, setIsPro] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
+
+  // Tax config state
+  const [taxConfig, setTaxConfig] = useState({
+    pb1_enabled: false,
+    tax_pct: 10,
+    service_charge_enabled: false,
+    service_charge_pct: 5,
+    tax_inclusive: false,
+  });
+  const [savingTax, setSavingTax] = useState(false);
+  const [taxSaved, setTaxSaved] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -45,6 +56,12 @@ export default function SettingsPage() {
           cover_image_url: data.cover_image_url || '',
         });
         setStockMode(data.stock_mode || 'simple');
+
+        // Load tax config
+        try {
+          const tc = await getTaxConfig(data.id);
+          if (tc) setTaxConfig(tc);
+        } catch {}
       }
       const user = await getCurrentUser();
       if (user) {
@@ -69,6 +86,19 @@ export default function SettingsPage() {
       setStockModeError(e.message);
     }
     setSavingStockMode(false);
+  }
+
+  async function handleTaxSave() {
+    if (!outlet) return;
+    setSavingTax(true);
+    try {
+      await updateTaxConfig(outlet.id, taxConfig);
+      setTaxSaved(true);
+      setTimeout(() => setTaxSaved(false), 2000);
+    } catch (e: any) {
+      alert(e.message || 'Gagal menyimpan');
+    }
+    setSavingTax(false);
   }
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -329,6 +359,156 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+
+          {/* Tax & Service Charge */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-bold text-gray-900">Pajak & Service Charge</h2>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* PB1 / Pajak Restoran */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Pajak (PB1)</p>
+                    <p className="text-xs text-gray-500">Pajak restoran yang dikenakan ke pelanggan</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTaxConfig(c => ({ ...c, pb1_enabled: !c.pb1_enabled }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      taxConfig.pb1_enabled ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      taxConfig.pb1_enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+                {taxConfig.pb1_enabled && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={taxConfig.tax_pct}
+                      onChange={e => setTaxConfig(c => ({ ...c, tax_pct: parseFloat(e.target.value) || 0 }))}
+                      className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                    <span className="text-sm text-gray-500">%</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Service Charge */}
+              <div className="border-t border-gray-100 pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Service Charge</p>
+                    <p className="text-xs text-gray-500">Biaya layanan tambahan</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTaxConfig(c => ({ ...c, service_charge_enabled: !c.service_charge_enabled }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      taxConfig.service_charge_enabled ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      taxConfig.service_charge_enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+                {taxConfig.service_charge_enabled && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={taxConfig.service_charge_pct}
+                      onChange={e => setTaxConfig(c => ({ ...c, service_charge_pct: parseFloat(e.target.value) || 0 }))}
+                      className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                    <span className="text-sm text-gray-500">%</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Tax Inclusive */}
+              {taxConfig.pb1_enabled && (
+                <div className="border-t border-gray-100 pt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Harga Termasuk Pajak</p>
+                      <p className="text-xs text-gray-500">Harga menu sudah include pajak</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTaxConfig(c => ({ ...c, tax_inclusive: !c.tax_inclusive }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        taxConfig.tax_inclusive ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        taxConfig.tax_inclusive ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Preview */}
+              {(taxConfig.pb1_enabled || taxConfig.service_charge_enabled) && (
+                <div className="border-t border-gray-100 pt-4">
+                  <p className="text-xs text-gray-500 mb-2">Contoh pesanan Rp100.000:</p>
+                  <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1">
+                    <div className="flex justify-between text-gray-600">
+                      <span>Subtotal</span><span>Rp100.000</span>
+                    </div>
+                    {taxConfig.pb1_enabled && !taxConfig.tax_inclusive && (
+                      <div className="flex justify-between text-gray-600">
+                        <span>Pajak ({taxConfig.tax_pct}%)</span>
+                        <span>Rp{(100000 * taxConfig.tax_pct / 100).toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                    {taxConfig.pb1_enabled && taxConfig.tax_inclusive && (
+                      <div className="flex justify-between text-gray-400 italic">
+                        <span>Pajak ({taxConfig.tax_pct}%, termasuk)</span>
+                        <span>Rp{Math.round(100000 - 100000 / (1 + taxConfig.tax_pct / 100)).toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                    {taxConfig.service_charge_enabled && (
+                      <div className="flex justify-between text-gray-600">
+                        <span>Service ({taxConfig.service_charge_pct}%)</span>
+                        <span>Rp{(100000 * taxConfig.service_charge_pct / 100).toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-1">
+                      <span>Total</span>
+                      <span>Rp{(() => {
+                        let total = 100000;
+                        if (taxConfig.service_charge_enabled) total += 100000 * taxConfig.service_charge_pct / 100;
+                        if (taxConfig.pb1_enabled && !taxConfig.tax_inclusive) total += 100000 * taxConfig.tax_pct / 100;
+                        return Math.round(total).toLocaleString('id-ID');
+                      })()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={handleTaxSave}
+                disabled={savingTax}
+                className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {savingTax ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {taxSaved ? 'Tersimpan!' : 'Simpan Pengaturan Pajak'}
+              </button>
+            </div>
+          </div>
 
           {/* Payment Settings */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

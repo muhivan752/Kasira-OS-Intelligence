@@ -456,6 +456,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                 price: product.price,
                 stock: product.stock,
                 imageUrl: product.imageUrl ?? '',
+                isBestSeller: product.isBestSeller,
                 onTap: () {
                   ref.read(cartProvider.notifier).addItem(CartItem(
                         productId: product.id,
