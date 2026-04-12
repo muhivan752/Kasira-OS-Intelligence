@@ -24,15 +24,61 @@ const jsonLd = {
   ],
 };
 
+const organizationLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'Kasira',
+  url: 'https://kasira.online',
+  logo: 'https://kasira.online/favicon.svg',
+  description: 'Platform POS digital untuk UMKM dan bisnis F&B Indonesia.',
+  contactPoint: {
+    '@type': 'ContactPoint',
+    telephone: '+62-852-7078-2220',
+    contactType: 'customer service',
+    availableLanguage: 'Indonesian',
+  },
+};
+
+const faqLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    {
+      '@type': 'Question',
+      name: 'Apakah benar-benar gratis 30 hari?',
+      acceptedAnswer: { '@type': 'Answer', text: 'Ya, gratis penuh 30 hari tanpa perlu kartu kredit. Cancel kapan saja.' },
+    },
+    {
+      '@type': 'Question',
+      name: 'Apakah QRIS ada biaya komisi ke Kasira?',
+      acceptedAnswer: { '@type': 'Answer', text: 'Tidak ada. Kasira zero komisi selamanya. Lo daftar Midtrans sendiri, uang langsung masuk ke rekening lo.' },
+    },
+    {
+      '@type': 'Question',
+      name: 'Bisa pakai di HP Android biasa?',
+      acceptedAnswer: { '@type': 'Answer', text: 'Ya, app kasir bisa diinstall di HP Android manapun. Tidak perlu tablet khusus.' },
+    },
+    {
+      '@type': 'Question',
+      name: 'Bagaimana kalau internet mati?',
+      acceptedAnswer: { '@type': 'Answer', text: 'App kasir tetap bisa transaksi saat offline. Data otomatis sync saat internet kembali.' },
+    },
+    {
+      '@type': 'Question',
+      name: 'Apakah data saya aman?',
+      acceptedAnswer: { '@type': 'Answer', text: 'Data tersimpan di server Indonesia dengan enkripsi AES-256. Backup otomatis tiap 6 jam.' },
+    },
+  ],
+};
+
 export default function LandingPage() {
   const waLink = 'https://wa.me/6285270782220?text=Halo%20Kasira%2C%20saya%20tertarik%20untuk%20coba';
 
   return (
     <div className="min-h-screen bg-white font-sans">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
       <Navbar />
 
       {/* ═══════════════ HERO ═══════════════ */}

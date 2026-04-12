@@ -59,9 +59,24 @@ export const metadata: Metadata = {
   },
 };
 
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID || '';
+
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="id" className={`${plusJakarta.variable} ${syne.variable}`}>
+      <head>
+        {GA_ID && (
+          <>
+            <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} />
+            <script dangerouslySetInnerHTML={{ __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', '${GA_ID}');
+            `}} />
+          </>
+        )}
+      </head>
       <body className="font-sans antialiased" suppressHydrationWarning>{children}</body>
     </html>
   );

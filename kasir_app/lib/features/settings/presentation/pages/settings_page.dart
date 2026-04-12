@@ -43,12 +43,13 @@ class SettingsPage extends StatelessWidget {
                     );
                   },
                 ),
-                _buildSettingTile(
-                  icon: LucideIcons.monitorSpeaker,
-                  title: 'Layar Pelanggan (Customer Display)',
-                  subtitle: 'Tidak Terhubung',
-                  onTap: () {},
-                ),
+                // Customer Display — hidden until feature is built
+                // _buildSettingTile(
+                //   icon: LucideIcons.monitorSpeaker,
+                //   title: 'Layar Pelanggan (Customer Display)',
+                //   subtitle: 'Tidak Terhubung',
+                //   onTap: () {},
+                // ),
                 
                 const SizedBox(height: 32),
                 _buildSectionTitle('Sistem & Data'),
