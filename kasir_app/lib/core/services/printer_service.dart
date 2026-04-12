@@ -107,20 +107,6 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
 
     if (!await _requestPermissions()) return;
 
-    // Check if Bluetooth is enabled
-    try {
-      final btEnabled = await BluetoothPrintPlus.isBluetoothEnabled;
-      if (btEnabled != true) {
-        state = state.copyWith(
-          isScanning: false,
-          error: 'Bluetooth belum aktif. Nyalakan Bluetooth di Pengaturan HP.',
-        );
-        return;
-      }
-    } catch (_) {
-      // Some devices don't support this check — continue anyway
-    }
-
     try {
       // Subscribe to results BEFORE starting scan to avoid missing early results
       _scanSub?.cancel();
