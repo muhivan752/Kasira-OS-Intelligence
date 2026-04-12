@@ -23,6 +23,7 @@ from backend.services.audit import log_audit
 from backend.services.xendit import xendit_service
 from backend.utils.encryption import decrypt_field
 from backend.services.fonnte import send_whatsapp_message
+from backend.models.event import Event
 
 router = APIRouter()
 
@@ -276,6 +277,28 @@ async def create_payment(
 
             # Auto-earn loyalty points (Pro+)
             await _try_earn_loyalty_points(db, order, payment_in.outlet_id, current_user.id, current_user.tenant_id)
+
+    # Append payment event to event store
+    pay_evt_type = "payment.completed" if payment.status == PaymentStatus.paid else "payment.pending"
+    db.add(Event(
+        outlet_id=payment_in.outlet_id,
+        stream_id=f"payment:{payment.id}",
+        event_type=pay_evt_type,
+        event_data={
+            "payment_id": str(payment.id),
+            "order_id": str(payment_in.order_id) if payment_in.order_id else None,
+            "outlet_id": str(payment_in.outlet_id),
+            "method": payment.payment_method.value if hasattr(payment.payment_method, 'value') else str(payment.payment_method),
+            "amount_due": float(payment.amount_due),
+            "amount_paid": float(payment.amount_paid),
+            "change_amount": float(payment.change_amount) if payment.change_amount else 0,
+            "source": "pos",
+        },
+        event_metadata={
+            "user_id": str(current_user.id),
+            "ts": datetime.now(timezone.utc).isoformat(),
+        },
+    ))
 
     await db.commit()
     await db.refresh(payment)
@@ -544,6 +567,27 @@ async def xendit_webhook(
                             order.user_id or payment.outlet_id,  # fallback if no user
                             outlet_for_loyalty.tenant_id,
                         )
+
+        # Append payment event from webhook
+        wh_event_type = "payment.completed" if new_status == PaymentStatus.paid else "payment.failed"
+        db.add(Event(
+            outlet_id=payment.outlet_id,
+            stream_id=f"payment:{payment.id}",
+            event_type=wh_event_type,
+            event_data={
+                "payment_id": str(payment.id),
+                "order_id": str(payment.order_id) if payment.order_id else None,
+                "outlet_id": str(payment.outlet_id),
+                "method": payment.payment_method.value if hasattr(payment.payment_method, 'value') else str(payment.payment_method),
+                "amount_due": float(payment.amount_due),
+                "amount_paid": float(gross_amount),
+                "xendit_status": status_code,
+                "source": "xendit_webhook",
+            },
+            event_metadata={
+                "ts": datetime.now(timezone.utc).isoformat(),
+            },
+        ))
 
         await db.commit()
 

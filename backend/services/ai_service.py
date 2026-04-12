@@ -16,6 +16,7 @@ from datetime import datetime, timezone, time as dt_time, timedelta
 from typing import AsyncGenerator, Optional
 from uuid import UUID
 
+import sqlalchemy
 from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -431,7 +432,80 @@ async def build_context(
             f"{r.name} (sisa {int(r.stock_qty)})" for r in low_stock.all()
         ]
 
-        # 5. Reservation data
+        # 5. Event-sourced insights (order patterns, cancel rate, payment methods)
+        from backend.models.event import Event
+
+        # Cancel rate today
+        cancel_count_q = await db.execute(
+            select(func.count(Event.id)).where(
+                Event.outlet_id == outlet_id,
+                Event.event_type == "order.cancelled",
+                Event.created_at >= start_today,
+            )
+        )
+        cancel_count = cancel_count_q.scalar() or 0
+
+        # Payment method breakdown today (from events)
+        pay_methods_q = await db.execute(
+            select(
+                Event.event_data["method"].astext.label("method"),
+                func.count(Event.id).label("cnt"),
+                func.coalesce(func.sum(Event.event_data["amount_paid"].astext.cast(sqlalchemy.Numeric)), 0).label("total"),
+            ).where(
+                Event.outlet_id == outlet_id,
+                Event.event_type == "payment.completed",
+                Event.created_at >= start_today,
+            ).group_by(Event.event_data["method"].astext)
+        )
+        pay_breakdown = []
+        try:
+            for r in pay_methods_q.all():
+                pay_breakdown.append(f"{r.method}: {r.cnt}x (Rp{float(r.total):,.0f})")
+        except Exception:
+            pass
+
+        # Storefront vs POS ratio today
+        source_q = await db.execute(
+            select(
+                Event.event_data["source"].astext.label("source"),
+                func.count(Event.id).label("cnt"),
+            ).where(
+                Event.outlet_id == outlet_id,
+                Event.event_type == "order.created",
+                Event.created_at >= start_today,
+            ).group_by(Event.event_data["source"].astext)
+        )
+        source_breakdown = []
+        try:
+            for r in source_q.all():
+                source_breakdown.append(f"{r.source}: {r.cnt} order")
+        except Exception:
+            pass
+
+        # Peak hour (from order.created events this week)
+        peak_hour_q = await db.execute(
+            select(
+                func.extract("hour", Event.created_at).label("hour"),
+                func.count(Event.id).label("cnt"),
+            ).where(
+                Event.outlet_id == outlet_id,
+                Event.event_type == "order.created",
+                Event.created_at >= start_week,
+            ).group_by(func.extract("hour", Event.created_at))
+            .order_by(func.count(Event.id).desc())
+            .limit(3)
+        )
+        peak_hours = []
+        try:
+            for r in peak_hour_q.all():
+                h = int(r.hour) + 7  # UTC → WIB
+                if h >= 24:
+                    h -= 24
+                peak_hours.append(f"{h:02d}:00 ({r.cnt} order)")
+        except Exception:
+            pass
+
+        # 6. Reservation data
         res_settings_row = await db.execute(
             select(ReservationSettings).where(
                 ReservationSettings.outlet_id == outlet_id,
@@ -495,6 +569,10 @@ MEJA:
         top_list = []
         low_list = []
         reservation_info = ""
+        cancel_count = 0
+        pay_breakdown = []
+        source_breakdown = []
+        peak_hours = []
 
     today_str = today.strftime("%d %B %Y")
     context = f"""Kamu adalah asisten AI untuk {outlet_name}, sebuah cafe di Indonesia.
@@ -510,6 +588,12 @@ DATA 7 HARI TERAKHIR:
 
 STOK KRITIS (perlu restock):
 {chr(10).join("- " + s for s in low_list) if low_list else "- Semua stok aman"}
+
+INSIGHT OPERASIONAL:
+- Order dibatalkan hari ini: {cancel_count}
+- Sumber order: {", ".join(source_breakdown) if source_breakdown else "belum ada data"}
+- Metode bayar: {", ".join(pay_breakdown) if pay_breakdown else "belum ada data"}
+- Jam tersibuk (7 hari): {", ".join(peak_hours) if peak_hours else "belum cukup data"}
 {reservation_info}
 INSTRUKSI:
 - Jawab hanya pertanyaan seputar bisnis cafe ini

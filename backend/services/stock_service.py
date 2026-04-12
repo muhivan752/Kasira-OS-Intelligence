@@ -172,6 +172,95 @@ async def deduct_stock(
     raise HTTPException(status_code=409, detail="Konflik data produk setelah 3x retry, silakan coba lagi")
 
 
+async def restore_stock_on_cancel(
+    db: AsyncSession,
+    *,
+    product: Product,
+    quantity: int,
+    outlet_id: UUID,
+    order_id: UUID,
+    tier: str = "starter",
+) -> Product:
+    """
+    Kembalikan stok saat order dibatalkan.
+    - Tulis event stock.cancel_return ke events table
+    - Update products.stock_qty cache
+    - Re-aktifkan produk jika sebelumnya auto-hidden karena stok 0
+    """
+    from fastapi import HTTPException
+
+    stock_before = product.stock_qty
+    stock_after = stock_before + quantity
+
+    is_active = True if stock_before == 0 and product.stock_auto_hide else product.is_active
+
+    event = Event(
+        outlet_id=outlet_id,
+        stream_id=f"product:{product.id}",
+        event_type="stock.cancel_return",
+        event_data={
+            "product_id": str(product.id),
+            "outlet_id": str(outlet_id),
+            "quantity": quantity,
+            "stock_before": stock_before,
+            "stock_after": stock_after,
+            "order_id": str(order_id),
+        },
+        event_metadata={
+            "tier": tier,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    db.add(event)
+
+    for attempt in range(3):
+        if attempt > 0:
+            refreshed = await db.get(Product, product.id)
+            if not refreshed:
+                raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+            stock_before = refreshed.stock_qty
+            stock_after = stock_before + quantity
+            is_active = True if stock_before == 0 and refreshed.stock_auto_hide else refreshed.is_active
+            current_version = refreshed.row_version
+        else:
+            current_version = product.row_version
+
+        result = await db.execute(
+            update(Product)
+            .where(Product.id == product.id, Product.row_version == current_version)
+            .values(
+                stock_qty=stock_after,
+                is_active=is_active,
+                row_version=Product.row_version + 1,
+            )
+            .returning(Product)
+        )
+        updated = result.scalar_one_or_none()
+        if updated is not None:
+            try:
+                from backend.core.config import settings
+                import redis.asyncio as _redis
+                _r = _redis.from_url(settings.REDIS_URL, decode_responses=True)
+                from backend.models.outlet import Outlet
+                from backend.models.brand import Brand
+                brand = await db.get(Brand, updated.brand_id)
+                if brand:
+                    outlet_res = await db.execute(
+                        select(Outlet).where(Outlet.brand_id == brand.id, Outlet.deleted_at.is_(None)).limit(1)
+                    )
+                    outlet = outlet_res.scalar_one_or_none()
+                    if outlet and outlet.slug:
+                        await _r.delete(f"connect:storefront:{outlet.slug}")
+                    if outlet:
+                        await _r.delete(f"ai:context:{outlet.id}")
+                await _r.aclose()
+            except Exception:
+                pass
+            return updated
+
+    raise HTTPException(status_code=409, detail="Konflik data produk setelah 3x retry, silakan coba lagi")
+
+
 async def restock_product(
     db: AsyncSession,
     *,
@@ -272,7 +361,7 @@ async def get_stock_history(
         .where(
             Event.stream_id == f"product:{product_id}",
             Event.outlet_id == outlet_id,
-            Event.event_type.in_(["stock.sale", "stock.restock", "stock.adjustment", "stock.waste"]),
+            Event.event_type.in_(["stock.sale", "stock.restock", "stock.adjustment", "stock.waste", "stock.cancel_return"]),
         )
         .order_by(Event.created_at.desc())
         .limit(limit)
@@ -295,7 +384,7 @@ async def recompute_stock_from_events(
         .where(
             Event.stream_id == f"product:{product_id}",
             Event.outlet_id == outlet_id,
-            Event.event_type.in_(["stock.sale", "stock.restock", "stock.adjustment", "stock.waste"]),
+            Event.event_type.in_(["stock.sale", "stock.restock", "stock.adjustment", "stock.waste", "stock.cancel_return"]),
         )
         .order_by(Event.created_at.asc())
     )
@@ -304,7 +393,7 @@ async def recompute_stock_from_events(
     stock = 0
     for event in events:
         data = event.event_data or {}
-        if event.event_type in ("stock.restock",):
+        if event.event_type in ("stock.restock", "stock.cancel_return"):
             stock += data.get("quantity", 0)
         elif event.event_type in ("stock.sale", "stock.waste"):
             stock -= data.get("quantity", 0)

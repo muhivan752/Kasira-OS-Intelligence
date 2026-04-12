@@ -19,8 +19,9 @@ from backend.schemas.order import OrderCreate, OrderUpdateStatus, OrderResponse,
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.models.reservation import Table
-from backend.services.stock_service import deduct_stock
+from backend.services.stock_service import deduct_stock, restore_stock_on_cancel
 from backend.services.ingredient_stock_service import deduct_ingredients_for_product
+from backend.models.event import Event
 
 router = APIRouter()
 
@@ -222,6 +223,38 @@ async def create_order(
             .values(status="occupied", row_version=Table.row_version + 1)
         )
 
+    # Append order.created event to event store
+    db.add(Event(
+        outlet_id=order.outlet_id,
+        stream_id=f"order:{order.id}",
+        event_type="order.created",
+        event_data={
+            "order_id": str(order.id),
+            "outlet_id": str(order.outlet_id),
+            "order_number": order_number,
+            "display_number": display_number,
+            "order_type": order_in.order_type,
+            "subtotal": float(subtotal),
+            "tax_amount": float(tax),
+            "service_charge": float(service_charge),
+            "discount_amount": float(discount),
+            "total_amount": float(total_amount),
+            "item_count": len(order_in.items),
+            "items": [
+                {"product_id": str(i.product_id), "qty": i.quantity, "unit_price": float(i.unit_price)}
+                for i in order_in.items
+            ],
+            "customer_id": str(order_in.customer_id) if order_in.customer_id else None,
+            "table_id": str(order_in.table_id) if order_in.table_id else None,
+            "source": "pos",
+        },
+        event_metadata={
+            "tier": tier,
+            "user_id": str(current_user.id),
+            "ts": datetime.now(timezone.utc).isoformat(),
+        },
+    ))
+
     # 1. Pastikan commit sudah selesai
     await db.commit()
 
@@ -396,6 +429,27 @@ async def update_order_status(
     if not updated_order:
         raise HTTPException(status_code=409, detail="Concurrent update detected.")
 
+    # Restore stock when order cancelled
+    if status_in.status == OrderStatus.cancelled:
+        # Get tenant tier
+        outlet = await db.get(Outlet, order.outlet_id)
+        tier = "starter"
+        if outlet and outlet.tenant_id:
+            tenant = await db.get(Tenant, outlet.tenant_id)
+            if tenant:
+                tier = tenant.subscription_tier or "starter"
+        for item in order.items:
+            product = await db.get(Product, item.product_id)
+            if product and product.stock_enabled:
+                await restore_stock_on_cancel(
+                    db,
+                    product=product,
+                    quantity=item.quantity,
+                    outlet_id=order.outlet_id,
+                    order_id=order.id,
+                    tier=tier,
+                )
+
     # Release table when order completed/cancelled (if no other active orders on same table)
     if status_in.status in (OrderStatus.completed, OrderStatus.cancelled) and order.table_id:
         active_orders = (await db.execute(
@@ -412,15 +466,40 @@ async def update_order_status(
                 .values(status="available", row_version=Table.row_version + 1)
             )
 
+    # Append order lifecycle event to event store
+    status_val = status_in.status.value if hasattr(status_in.status, 'value') else str(status_in.status)
+    event_type = f"order.{status_val}"
+    db.add(Event(
+        outlet_id=order.outlet_id,
+        stream_id=f"order:{order.id}",
+        event_type=event_type,
+        event_data={
+            "order_id": str(order.id),
+            "outlet_id": str(order.outlet_id),
+            "order_number": order.order_number,
+            "from_status": before_state["status"].value if hasattr(before_state["status"], 'value') else str(before_state["status"]),
+            "to_status": status_val,
+            "total_amount": float(order.total_amount),
+            "order_type": order.order_type,
+            "item_count": len(order.items),
+            "table_id": str(order.table_id) if order.table_id else None,
+            "customer_id": str(order.customer_id) if order.customer_id else None,
+        },
+        event_metadata={
+            "user_id": str(current_user.id),
+            "ts": datetime.now(timezone.utc).isoformat(),
+        },
+    ))
+
     await db.commit()
-    
+
     # Reload items for response (selectinload product to avoid MissingGreenlet on product_name)
     query = select(Order).options(
         selectinload(Order.items).selectinload(OrderItem.product)
     ).where(Order.id == order_id)
     result = await db.execute(query)
     updated_order_loaded = result.scalar_one()
-    
+
     # Audit log
     await log_audit(
         db=db,

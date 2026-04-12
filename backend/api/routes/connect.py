@@ -19,6 +19,7 @@ from backend.models.connect import ConnectOutlet, ConnectOrder
 from backend.models.customer import Customer
 from backend.services.audit import log_audit
 from backend.services.stock_service import deduct_stock
+from backend.models.event import Event
 import datetime
 
 router = APIRouter()
@@ -441,7 +442,53 @@ async def create_connect_order(
         raw_payload=input_data.model_dump(mode='json')
     )
     db.add(connect_order)
-    
+
+    # Append order.created event (storefront source)
+    db.add(Event(
+        outlet_id=outlet.id,
+        stream_id=f"order:{order.id}",
+        event_type="order.created",
+        event_data={
+            "order_id": str(order.id),
+            "outlet_id": str(outlet.id),
+            "order_number": order_number,
+            "display_number": display_number,
+            "order_type": input_data.order_type,
+            "total_amount": float(subtotal),
+            "item_count": len(order_items),
+            "items": [
+                {"product_id": str(i.product_id), "qty": i.quantity, "unit_price": float(i.unit_price)}
+                for i in order_items
+            ],
+            "customer_id": str(customer.id),
+            "customer_phone": input_data.customer_phone,
+            "payment_method": input_data.payment_method,
+            "source": "storefront",
+        },
+        event_metadata={
+            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        },
+    ))
+
+    # Append payment event
+    pay_event_type = "payment.completed" if payment.status == "paid" else "payment.pending"
+    db.add(Event(
+        outlet_id=outlet.id,
+        stream_id=f"payment:{payment.id}",
+        event_type=pay_event_type,
+        event_data={
+            "payment_id": str(payment.id),
+            "order_id": str(order.id),
+            "outlet_id": str(outlet.id),
+            "method": input_data.payment_method,
+            "amount": float(subtotal),
+            "source": "storefront",
+        },
+        event_metadata={
+            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        },
+    ))
+
     await db.commit()
     await db.refresh(order)
 
