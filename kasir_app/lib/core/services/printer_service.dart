@@ -134,13 +134,13 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
   Future<bool> connect(BluetoothInfo device) async {
     state = state.copyWith(clearError: true);
     try {
-      final ok = await PrintBluetoothThermal.connect(macPrinterAddress: device.macAdpilesress);
+      final ok = await PrintBluetoothThermal.connect(macPrinterAddress: device.macAdress);
       if (ok) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_prefKeyMac, device.macAdpilesress);
+        await prefs.setString(_prefKeyMac, device.macAdress);
         await prefs.setString(_prefKeyName, device.name);
         state = state.copyWith(
-          savedDevice: PrinterDevice(name: device.name, address: device.macAdpilesress),
+          savedDevice: PrinterDevice(name: device.name, address: device.macAdress),
           isConnected: true,
         );
         return true;

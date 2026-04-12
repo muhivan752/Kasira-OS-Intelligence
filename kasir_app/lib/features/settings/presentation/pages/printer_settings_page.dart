@@ -134,7 +134,7 @@ class PrinterSettingsPage extends ConsumerWidget {
             ...state.scanResults.map((device) => _DeviceTile(
                   device: device,
                   isConnected: state.isConnected &&
-                      state.savedDevice?.address == device.macAdpilesress,
+                      state.savedDevice?.address == device.macAdress,
                   onConnect: () async {
                     final ok = await notifier.connect(device);
                     if (ok && context.mounted) {
@@ -217,7 +217,7 @@ class _DeviceTile extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
-          device.macAdpilesress,
+          device.macAdress,
           style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
         trailing: isConnected
