@@ -196,6 +196,38 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
       state = state.copyWith(isLoading: false, error: 'Terjadi kesalahan');
     }
   }
+
+  Future<bool> updateStatus(String orderId, String newStatus, int rowVersion) async {
+    try {
+      final token = await _storage.read(key: 'access_token');
+      final tenantId = await _storage.read(key: 'tenant_id');
+
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+      ));
+
+      await dio.put(
+        '/orders/$orderId/status',
+        data: {'status': newStatus, 'row_version': rowVersion},
+        options: Options(headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+          if (tenantId != null) 'X-Tenant-ID': tenantId,
+        }),
+      );
+
+      // Refresh list
+      await fetch(status: state.statusFilter);
+      return true;
+    } catch (e) {
+      final msg = e is DioException
+          ? (e.response?.data?['detail'] ?? 'Gagal update status')
+          : 'Terjadi kesalahan';
+      state = state.copyWith(error: msg.toString());
+      return false;
+    }
+  }
 }
 
 final ordersProvider = StateNotifierProvider<OrdersNotifier, OrdersState>(

@@ -368,18 +368,20 @@ async def update_order_status(
     
     if not order or order.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Order tidak ditemukan")
-        
-    if order.row_version != status_in.row_version:
+
+    # Use client row_version if provided and matches, otherwise use server's current version
+    current_rv = order.row_version
+    if status_in.row_version > 0 and status_in.row_version != current_rv:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Order telah diubah, silakan refresh"
         )
-        
+
     before_state = {"status": order.status}
-    
+
     stmt = (
         update(Order)
-        .where(Order.id == order_id, Order.row_version == status_in.row_version)
+        .where(Order.id == order_id, Order.row_version == current_rv)
         .values(
             status=status_in.status,
             row_version=Order.row_version + 1,

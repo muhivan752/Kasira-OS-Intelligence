@@ -7,20 +7,58 @@ import '../../providers/orders_provider.dart';
 
 final _currencyFmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
-class OrderDetailModal extends ConsumerWidget {
+class OrderDetailModal extends ConsumerStatefulWidget {
   final String orderId;
 
   const OrderDetailModal({super.key, required this.orderId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final orderAsync = ref.watch(orderDetailProvider(orderId));
+  ConsumerState<OrderDetailModal> createState() => _OrderDetailModalState();
+}
+
+class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
+  bool _updating = false;
+
+  Future<void> _updateStatus(String orderId, String newStatus, int rowVersion) async {
+    setState(() => _updating = true);
+    final notifier = ref.read(ordersProvider.notifier);
+    final ok = await notifier.updateStatus(orderId, newStatus, rowVersion);
+    if (mounted) {
+      setState(() => _updating = false);
+      if (ok) {
+        ref.invalidate(orderDetailProvider(orderId));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Status diubah ke ${_statusLabel(newStatus)}'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'pending': return 'Menunggu';
+      case 'preparing': return 'Diproses';
+      case 'ready': return 'Siap';
+      case 'served': return 'Disajikan';
+      case 'completed': return 'Selesai';
+      case 'cancelled': return 'Dibatalkan';
+      default: return status;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final orderAsync = ref.watch(orderDetailProvider(widget.orderId));
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Container(
         width: 500,
-        constraints: const BoxConstraints(maxHeight: 600),
+        constraints: const BoxConstraints(maxHeight: 700),
         padding: const EdgeInsets.all(32),
         child: orderAsync.when(
           loading: () => const SizedBox(
@@ -38,7 +76,7 @@ class OrderDetailModal extends ConsumerWidget {
                   const Text('Gagal memuat detail pesanan'),
                   const SizedBox(height: 8),
                   TextButton(
-                    onPressed: () => ref.invalidate(orderDetailProvider(orderId)),
+                    onPressed: () => ref.invalidate(orderDetailProvider(widget.orderId)),
                     child: const Text('Coba lagi'),
                   ),
                 ],
@@ -149,8 +187,97 @@ class OrderDetailModal extends ConsumerWidget {
             ),
           ],
         ),
+
+        // ── Action Buttons ──
+        if (order.status != 'completed' && order.status != 'cancelled') ...[
+          const SizedBox(height: 20),
+          const Divider(height: 1, color: AppColors.border),
+          const SizedBox(height: 16),
+          if (_updating)
+            const Center(child: CircularProgressIndicator())
+          else
+            _buildActionButtons(order),
+        ],
       ],
     );
+  }
+
+  Widget _buildActionButtons(OrderModel order) {
+    final rv = 0; // row_version - server will validate
+
+    switch (order.status) {
+      case 'pending':
+        return Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _updateStatus(order.id, 'cancelled', rv),
+                icon: const Icon(LucideIcons.x, size: 18),
+                label: const Text('Tolak'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: ElevatedButton.icon(
+                onPressed: () => _updateStatus(order.id, 'preparing', rv),
+                icon: const Icon(LucideIcons.chefHat, size: 18),
+                label: const Text('Terima & Proses'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ],
+        );
+      case 'preparing':
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => _updateStatus(order.id, 'ready', rv),
+            icon: const Icon(LucideIcons.check, size: 18),
+            label: const Text('Tandai Siap'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.info,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        );
+      case 'ready':
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => _updateStatus(order.id, 'completed', rv),
+            icon: const Icon(LucideIcons.checkCircle, size: 18),
+            label: const Text('Selesai'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        );
+      case 'served':
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => _updateStatus(order.id, 'completed', rv),
+            icon: const Icon(LucideIcons.checkCircle, size: 18),
+            label: const Text('Selesai'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
   }
 
   Widget _buildBadge(String label, String value, Color color) {
