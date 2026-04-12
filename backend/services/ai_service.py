@@ -625,6 +625,20 @@ INSTRUKSI:
 
     context += kg_context
 
+    # Cross-tenant benchmark context (platform intelligence)
+    platform_context = ""
+    try:
+        from backend.services.platform_intelligence import build_cross_tenant_context
+        platform_context = await build_cross_tenant_context(
+            tenant_id=UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id,
+            outlet_id=UUID(outlet_id) if isinstance(outlet_id, str) else outlet_id,
+            db=db,
+        )
+    except Exception as e:
+        logger.debug(f"Platform context skipped: {e}")
+
+    context += platform_context
+
     # Cache sampai 00.00 WIB
     ttl = seconds_until_midnight_wib()
     try:
