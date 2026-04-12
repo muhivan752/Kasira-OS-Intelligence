@@ -510,6 +510,25 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* Billing */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-bold text-gray-900">Langganan & Billing</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                Kelola paket langganan, lihat invoice, dan bayar tagihan.
+              </p>
+              <Link
+                href="/dashboard/settings/billing"
+                className="block w-full text-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors"
+              >
+                Kelola Langganan
+              </Link>
+            </div>
+          </div>
+
           {/* Payment Settings */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">

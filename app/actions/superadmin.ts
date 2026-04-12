@@ -84,6 +84,37 @@ export async function getSuperadminAuditLogs(params?: { tenant_id?: string; enti
   } catch { return { logs: [], meta: null }; }
 }
 
+// ── Billing ──────────────────────────────────────────────
+
+export async function getTenantInvoices(tenantId: string) {
+  try {
+    const res = await saFetch(`/superadmin/billing/${tenantId}/invoices`);
+    const data = await res.json();
+    return data.data || [];
+  } catch { return []; }
+}
+
+export async function generateTenantInvoice(tenantId: string) {
+  try {
+    const res = await saFetch(`/superadmin/billing/${tenantId}/generate`, { method: 'POST' });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, data: null, message: 'Gagal generate invoice' }; }
+}
+
+export async function activateTenantBilling(tenantId: string) {
+  try {
+    const res = await saFetch(`/superadmin/billing/${tenantId}/activate`, { method: 'POST' });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, data: null, message: 'Gagal activate tenant' }; }
+}
+
+export async function skipTenantBilling(tenantId: string) {
+  // Skip billing = activate without generating invoice, just set active + next_billing_date
+  return activateTenantBilling(tenantId);
+}
+
 export async function updateTenantStatus(tenantId: string, isActive: boolean, subscriptionStatus?: string) {
   try {
     const res = await saFetch(`/superadmin/tenants/${tenantId}/status`, {

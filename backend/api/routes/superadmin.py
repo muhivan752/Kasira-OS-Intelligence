@@ -3,8 +3,9 @@ Platform Superadmin routes — tenant management, stats, tier/status changes.
 Protected by SUPERADMIN_PHONES env var.
 """
 import uuid
+import calendar
 from typing import Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, date as date_type
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -15,9 +16,23 @@ from backend.api import deps
 from backend.models.tenant import Tenant, SubscriptionTier, SubscriptionStatus
 from backend.models.user import User
 from backend.models.audit_log import AuditLog
+from backend.models.subscription_invoice import SubscriptionInvoice
 from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
+from backend.services.xendit import xendit_service
 import json
+import logging
+
+sa_logger = logging.getLogger(__name__)
+
+
+def _add_month(d: date_type) -> date_type:
+    """Add 1 month, clamp day."""
+    if d.month == 12:
+        return d.replace(year=d.year + 1, month=1, day=min(d.day, 31))
+    next_m = d.month + 1
+    max_day = calendar.monthrange(d.year, next_m)[1]
+    return d.replace(month=next_m, day=min(d.day, max_day))
 
 router = APIRouter()
 
@@ -417,3 +432,249 @@ async def list_audit_logs(
 
     meta = ResponseMeta(page=(skip // limit) + 1, per_page=limit, total=total)
     return StandardResponse(data=items, meta=meta)
+
+
+# ── Billing Management ───────────────────────────────────
+
+TIER_PRICES = {
+    "starter": 99_000,
+    "pro": 299_000,
+    "business": 499_000,
+    "enterprise": 0,
+}
+
+TIER_LABELS = {
+    "starter": "Starter",
+    "pro": "Pro",
+    "business": "Business",
+    "enterprise": "Enterprise",
+}
+
+
+class BillingOverviewItem(BaseModel):
+    tenant_id: uuid.UUID
+    tenant_name: str
+    tier: Optional[str] = None
+    subscription_status: Optional[str] = None
+    is_active: bool
+    next_billing_date: Optional[datetime] = None
+    last_invoice_status: Optional[str] = None
+    last_invoice_amount: Optional[int] = None
+    last_paid_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/billing", response_model=StandardResponse[list[BillingOverviewItem]])
+async def billing_overview(
+    db: AsyncSession = Depends(deps.get_db),
+    admin: User = Depends(deps.get_platform_admin),
+) -> Any:
+    """Overview billing semua tenant."""
+    tenants_stmt = select(Tenant).where(Tenant.deleted_at.is_(None)).order_by(Tenant.created_at.desc())
+    tenants = (await db.execute(tenants_stmt)).scalars().all()
+
+    items = []
+    for t in tenants:
+        tier_raw = getattr(t, "subscription_tier", "starter") or "starter"
+        tier = tier_raw.value if hasattr(tier_raw, "value") else str(tier_raw)
+        status_raw = getattr(t, "subscription_status", "active") or "active"
+        sub_status = status_raw.value if hasattr(status_raw, "value") else str(status_raw)
+
+        inv_stmt = (
+            select(SubscriptionInvoice)
+            .where(SubscriptionInvoice.tenant_id == t.id, SubscriptionInvoice.deleted_at.is_(None))
+            .order_by(SubscriptionInvoice.created_at.desc())
+            .limit(1)
+        )
+        inv = (await db.execute(inv_stmt)).scalar_one_or_none()
+
+        items.append(BillingOverviewItem(
+            tenant_id=t.id,
+            tenant_name=t.name,
+            tier=tier,
+            subscription_status=sub_status,
+            is_active=t.is_active,
+            next_billing_date=t.next_billing_date,
+            last_invoice_status=inv.status if inv else None,
+            last_invoice_amount=inv.amount if inv else None,
+            last_paid_at=inv.paid_at if inv else None,
+        ))
+
+    return StandardResponse(data=items, message="Billing overview")
+
+
+@router.get("/billing/{tenant_id}/invoices", response_model=StandardResponse[list])
+async def get_tenant_invoices(
+    tenant_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    admin: User = Depends(deps.get_platform_admin),
+) -> Any:
+    """List invoices for a specific tenant."""
+    from sqlalchemy import desc
+    stmt = (
+        select(SubscriptionInvoice)
+        .where(SubscriptionInvoice.tenant_id == tenant_id, SubscriptionInvoice.deleted_at.is_(None))
+        .order_by(desc(SubscriptionInvoice.created_at))
+        .limit(50)
+    )
+    invoices = (await db.execute(stmt)).scalars().all()
+    return StandardResponse(
+        data=[
+            {
+                "id": str(inv.id),
+                "tier": inv.tier,
+                "amount": inv.amount,
+                "billing_period_start": inv.billing_period_start.isoformat() if inv.billing_period_start else None,
+                "billing_period_end": inv.billing_period_end.isoformat() if inv.billing_period_end else None,
+                "due_date": inv.due_date.isoformat() if inv.due_date else None,
+                "status": inv.status,
+                "xendit_invoice_url": inv.xendit_invoice_url,
+                "paid_at": inv.paid_at.isoformat() if inv.paid_at else None,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                "notes": inv.notes,
+            }
+            for inv in invoices
+        ],
+        message="Tenant invoices",
+    )
+
+
+@router.post("/billing/{tenant_id}/generate", response_model=StandardResponse[dict])
+async def generate_invoice(
+    tenant_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    admin: User = Depends(deps.get_platform_admin),
+) -> Any:
+    """Generate invoice manual untuk tenant."""
+    tenant = (await db.execute(
+        select(Tenant).where(Tenant.id == tenant_id, Tenant.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant tidak ditemukan")
+
+    tier = getattr(tenant, "subscription_tier", "starter") or "starter"
+    tier = tier.value if hasattr(tier, "value") else str(tier)
+    price = TIER_PRICES.get(tier, 0)
+
+    if price == 0:
+        raise HTTPException(status_code=400, detail="Tier enterprise tidak di-billing otomatis")
+
+    today = date_type.today()
+    period_start = today.replace(day=1)
+    period_end = _add_month(period_start) - timedelta(days=1)
+
+    existing = (await db.execute(
+        select(SubscriptionInvoice).where(
+            SubscriptionInvoice.tenant_id == tenant.id,
+            SubscriptionInvoice.billing_period_start == period_start,
+            SubscriptionInvoice.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+
+    if existing:
+        return StandardResponse(
+            data={"invoice_id": str(existing.id), "status": existing.status},
+            message="Invoice untuk periode ini sudah ada",
+        )
+
+    invoice = SubscriptionInvoice(
+        tenant_id=tenant.id,
+        tier=tier,
+        amount=price,
+        billing_period_start=period_start,
+        billing_period_end=period_end,
+        due_date=today,
+        status="pending",
+        notes="Manual generate by admin",
+    )
+    db.add(invoice)
+    await db.flush()
+
+    external_id = f"sub::{tenant.id}::{invoice.id}"
+    tier_label = TIER_LABELS.get(tier, tier)
+    try:
+        xendit_resp = await xendit_service.create_invoice(
+            external_id=external_id,
+            amount=price,
+            payer_email=tenant.owner_email or f"{tenant.schema_name}@kasira.online",
+            description=f"Langganan Kasira {tier_label} - {period_start.strftime('%b %Y')}",
+        )
+        invoice.xendit_invoice_id = xendit_resp.get("id")
+        invoice.xendit_invoice_url = xendit_resp.get("invoice_url")
+    except Exception as e:
+        sa_logger.error(f"Xendit create_invoice failed for tenant {tenant.id}: {e}")
+        invoice.notes = f"Manual generate - Xendit failed: {str(e)[:200]}"
+
+    await log_audit(
+        db=db, action="GENERATE_INVOICE", entity="subscription_invoices",
+        entity_id=invoice.id, after_state={"tier": tier, "amount": price},
+        user_id=admin.id, tenant_id=tenant.id,
+    )
+    await db.commit()
+
+    return StandardResponse(
+        data={
+            "invoice_id": str(invoice.id),
+            "xendit_invoice_url": invoice.xendit_invoice_url,
+            "amount": price,
+        },
+        message="Invoice berhasil dibuat",
+    )
+
+
+@router.post("/billing/{tenant_id}/activate", response_model=StandardResponse[dict])
+async def activate_tenant_billing(
+    tenant_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    admin: User = Depends(deps.get_platform_admin),
+) -> Any:
+    """Manual activate: mark latest unpaid invoice as paid, reactivate tenant."""
+    tenant = (await db.execute(
+        select(Tenant).where(Tenant.id == tenant_id, Tenant.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant tidak ditemukan")
+
+    inv_stmt = (
+        select(SubscriptionInvoice)
+        .where(
+            SubscriptionInvoice.tenant_id == tenant.id,
+            SubscriptionInvoice.status.in_(["pending", "expired", "grace", "suspended"]),
+            SubscriptionInvoice.deleted_at.is_(None),
+        )
+        .order_by(SubscriptionInvoice.created_at.desc())
+        .limit(1)
+    )
+    invoice = (await db.execute(inv_stmt)).scalar_one_or_none()
+
+    if invoice:
+        invoice.status = "paid"
+        invoice.paid_at = datetime.now(timezone.utc)
+        invoice.notes = (invoice.notes or "") + " | Manual activate by admin"
+        invoice.row_version += 1
+
+    tenant.subscription_status = SubscriptionStatus.active
+    tenant.is_active = True
+    tenant.row_version += 1
+
+    today = date_type.today()
+    billing_day = min(tenant.billing_day or 1, 28)
+    next_date = today.replace(day=billing_day)
+    if next_date <= today:
+        next_date = _add_month(next_date)
+    tenant.next_billing_date = next_date
+
+    await log_audit(
+        db=db, action="MANUAL_ACTIVATE", entity="tenants",
+        entity_id=tenant.id,
+        after_state={"subscription_status": "active", "is_active": True},
+        user_id=admin.id, tenant_id=tenant.id,
+    )
+    await db.commit()
+
+    return StandardResponse(
+        data={"id": str(tenant.id), "is_active": True, "next_billing_date": str(tenant.next_billing_date)},
+        message="Tenant diaktifkan",
+    )

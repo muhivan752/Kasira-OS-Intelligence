@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, String, Boolean, Integer, Enum
+from sqlalchemy import Column, String, Boolean, Integer, Date, Enum
 from sqlalchemy.orm import relationship
 from backend.models.base import BaseModel
 
@@ -34,5 +34,10 @@ class Tenant(BaseModel):
         server_default="active", nullable=True
     )
     row_version = Column(Integer, server_default='0', nullable=False)
+
+    # Billing
+    billing_day = Column(Integer, server_default='1', nullable=False)
+    next_billing_date = Column(Date, nullable=True)
+    owner_email = Column(String, nullable=True)
 
     brands = relationship("Brand", back_populates="tenant")

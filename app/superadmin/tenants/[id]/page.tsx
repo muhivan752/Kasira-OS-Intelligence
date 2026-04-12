@@ -16,8 +16,24 @@ import {
   Power,
   PowerOff,
   Check,
+  CreditCard,
+  FileText,
+  Zap,
+  SkipForward,
+  ExternalLink,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
 } from 'lucide-react';
-import { getSuperadminTenantDetail, updateTenantTier, updateTenantStatus } from '@/app/actions/superadmin';
+import {
+  getSuperadminTenantDetail,
+  updateTenantTier,
+  updateTenantStatus,
+  getTenantInvoices,
+  generateTenantInvoice,
+  activateTenantBilling,
+} from '@/app/actions/superadmin';
 
 export default function TenantDetailPage() {
   const params = useParams();
@@ -29,6 +45,8 @@ export default function TenantDetailPage() {
   const [tierValue, setTierValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [billingAction, setBillingAction] = useState('');
 
   async function load() {
     const data = await getSuperadminTenantDetail(tenantId);
@@ -38,6 +56,8 @@ export default function TenantDetailPage() {
     }
     setTenant(data);
     setTierValue(data.subscription_tier || 'starter');
+    const invs = await getTenantInvoices(tenantId);
+    setInvoices(invs);
     setLoading(false);
   }
 
@@ -69,6 +89,47 @@ export default function TenantDetailPage() {
       await load();
     }
     setSaving(false);
+  };
+
+  const handleGenerateInvoice = async () => {
+    setBillingAction('generate');
+    const result = await generateTenantInvoice(tenantId);
+    if (result.success) {
+      showToast(result.message || 'Invoice dibuat');
+      await load();
+    } else {
+      showToast(result.message || 'Gagal');
+    }
+    setBillingAction('');
+  };
+
+  const handleActivateBilling = async () => {
+    setBillingAction('activate');
+    const result = await activateTenantBilling(tenantId);
+    if (result.success) {
+      showToast('Tenant diaktifkan + invoice marked paid');
+      await load();
+    } else {
+      showToast(result.message || 'Gagal');
+    }
+    setBillingAction('');
+  };
+
+  const handleSkipBilling = async () => {
+    setBillingAction('skip');
+    // Skip = activate tenant without needing payment
+    const result = await activateTenantBilling(tenantId);
+    if (result.success) {
+      showToast('Billing di-skip, tenant aktif');
+      await load();
+    } else {
+      showToast(result.message || 'Gagal');
+    }
+    setBillingAction('');
+  };
+
+  const TIER_PRICES: Record<string, number> = {
+    starter: 99000, pro: 299000, business: 499000, enterprise: 0,
   };
 
   if (loading) {
@@ -210,6 +271,94 @@ export default function TenantDetailPage() {
         </div>
       </div>
 
+      {/* Billing Section */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl">
+        <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+            <CreditCard className="w-4 h-4" /> Billing
+          </h2>
+          <span className="text-xs text-gray-500">
+            {formatCurrency(TIER_PRICES[tenant.subscription_tier || 'starter'] || 0)}/bulan
+          </span>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Actions */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleGenerateInvoice}
+              disabled={!!billingAction}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 rounded-lg text-xs font-medium disabled:opacity-50 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              {billingAction === 'generate' ? 'Loading...' : 'Generate Invoice'}
+            </button>
+
+            <button
+              onClick={handleActivateBilling}
+              disabled={!!billingAction}
+              className="flex items-center gap-1.5 px-3 py-2 bg-green-600/10 text-green-400 hover:bg-green-600/20 rounded-lg text-xs font-medium disabled:opacity-50 transition-colors"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              {billingAction === 'activate' ? 'Loading...' : 'Activate (Mark Paid)'}
+            </button>
+
+            <button
+              onClick={handleSkipBilling}
+              disabled={!!billingAction}
+              className="flex items-center gap-1.5 px-3 py-2 bg-amber-600/10 text-amber-400 hover:bg-amber-600/20 rounded-lg text-xs font-medium disabled:opacity-50 transition-colors"
+            >
+              <SkipForward className="w-3.5 h-3.5" />
+              {billingAction === 'skip' ? 'Loading...' : 'Skip Billing'}
+            </button>
+          </div>
+
+          {/* Invoice History */}
+          {invoices.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-800">
+                    <th className="text-left text-xs font-semibold text-gray-500 uppercase px-3 py-2">Periode</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 uppercase px-3 py-2">Amount</th>
+                    <th className="text-center text-xs font-semibold text-gray-500 uppercase px-3 py-2">Status</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 uppercase px-3 py-2">Paid</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 uppercase px-3 py-2">Link</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800">
+                  {invoices.map((inv: any) => (
+                    <tr key={inv.id}>
+                      <td className="px-3 py-2 text-xs text-gray-300">
+                        {inv.billing_period_start ? new Date(inv.billing_period_start).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' }) : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-white font-medium">{formatCurrency(inv.amount)}</td>
+                      <td className="px-3 py-2 text-center">
+                        <InvoiceStatusBadge status={inv.status} />
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-400">
+                        {inv.paid_at ? new Date(inv.paid_at).toLocaleDateString('id-ID') : '-'}
+                      </td>
+                      <td className="px-3 py-2">
+                        {inv.xendit_invoice_url ? (
+                          <a href={inv.xendit_invoice_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        ) : (
+                          <span className="text-gray-600 text-xs">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center text-gray-600 text-xs py-4">Belum ada invoice</div>
+          )}
+        </div>
+      </div>
+
       {/* Users Table */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl">
         <div className="px-5 py-4 border-b border-gray-800">
@@ -251,6 +400,23 @@ export default function TenantDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function InvoiceStatusBadge({ status }: { status: string }) {
+  const config: Record<string, { label: string; color: string }> = {
+    pending: { label: 'Pending', color: 'bg-yellow-500/10 text-yellow-400' },
+    paid: { label: 'Paid', color: 'bg-green-500/10 text-green-400' },
+    expired: { label: 'Expired', color: 'bg-red-500/10 text-red-400' },
+    grace: { label: 'Grace', color: 'bg-orange-500/10 text-orange-400' },
+    suspended: { label: 'Suspended', color: 'bg-red-500/10 text-red-400' },
+    cancelled: { label: 'Cancelled', color: 'bg-gray-500/10 text-gray-400' },
+  };
+  const c = config[status] || config.pending;
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${c.color}`}>
+      {c.label}
+    </span>
   );
 }
 

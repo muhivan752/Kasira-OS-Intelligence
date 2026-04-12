@@ -27,6 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [outletName, setOutletName] = useState('Memuat...');
   const [tier, setTier] = useState('starter');
+  const [subStatus, setSubStatus] = useState('active');
   const [stockMode, setStockMode] = useState('simple');
   const pathname = usePathname();
   const router = useRouter();
@@ -42,6 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           return;
         }
         setTier(user.subscription_tier || 'starter');
+        setSubStatus(user.subscription_status || 'active');
         const outlets = await getOutlets();
         if (outlets && outlets.length > 0) {
           setOutletName(outlets[0].name);
@@ -217,6 +219,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <MenuIcon className="w-6 h-6" />
           </button>
         </div>
+
+        {/* Billing Warning Banner */}
+        {['grace', 'suspended'].includes(subStatus) && (
+          <div className={`px-4 py-2.5 text-sm font-medium text-center ${
+            subStatus === 'suspended'
+              ? 'bg-red-600 text-white'
+              : 'bg-amber-500 text-white'
+          }`}>
+            {subStatus === 'suspended'
+              ? 'Akun bisnis Anda ditangguhkan karena pembayaran belum diterima.'
+              : 'Pembayaran langganan Anda sudah jatuh tempo. Segera bayar untuk menghindari penangguhan.'}
+            {' '}
+            <Link href="/dashboard/settings/billing" className="underline font-bold">
+              Lihat Billing
+            </Link>
+          </div>
+        )}
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">

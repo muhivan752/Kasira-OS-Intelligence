@@ -586,3 +586,26 @@ export async function updateTaxConfig(outletId: string, config: any) {
   if (!res.ok) throw new Error(data.detail || 'Gagal menyimpan pengaturan pajak');
   return data.data;
 }
+
+// ── Billing ──────────────────────────────────────────────
+
+export async function getBillingInfo() {
+  const res = await fetchWithAuth('/billing/current');
+  const data = await res.json();
+  return data.data;
+}
+
+export async function getBillingInvoices() {
+  const res = await fetchWithAuth('/billing/invoices');
+  const data = await res.json();
+  return data.data || [];
+}
+
+export async function retryInvoicePayment(invoiceId: string) {
+  const res = await fetchWithAuth(`/billing/invoices/${invoiceId}/retry`, {
+    method: 'POST',
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Gagal membuat invoice');
+  return data.data;
+}

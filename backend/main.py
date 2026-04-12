@@ -41,10 +41,15 @@ async def lifespan(app: FastAPI):
     """Startup & shutdown lifecycle."""
     # ── Startup ──────────────────────────────────────────────────────────────
     from backend.tasks.payment_reconciliation import payment_reconciliation_loop
+    from backend.tasks.subscription_billing import generate_invoices_loop, grace_period_loop
     reconciliation_task = asyncio.create_task(payment_reconciliation_loop())
+    billing_task = asyncio.create_task(generate_invoices_loop())
+    grace_task = asyncio.create_task(grace_period_loop())
     yield
     # ── Shutdown ─────────────────────────────────────────────────────────────
     reconciliation_task.cancel()
+    billing_task.cancel()
+    grace_task.cancel()
     await xendit_service.close()
 
 app = FastAPI(

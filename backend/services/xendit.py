@@ -102,6 +102,36 @@ class XenditService:
         response.raise_for_status()
         return response.json()
 
+    async def create_invoice(
+        self,
+        external_id: str,
+        amount: int,
+        payer_email: str,
+        description: str,
+        success_redirect_url: str = "https://kasira.online/dashboard/settings/billing",
+        invoice_duration_seconds: int = 86400,
+    ) -> Dict[str, Any]:
+        """
+        Buat Xendit Invoice untuk subscription billing.
+        Pakai platform API key (bukan merchant key).
+        """
+        payload = {
+            "external_id": external_id,
+            "amount": amount,
+            "payer_email": payer_email,
+            "description": description,
+            "success_redirect_url": success_redirect_url,
+            "invoice_duration": invoice_duration_seconds,
+            "currency": "IDR",
+        }
+        response = await self._client.post(
+            "/v2/invoices",
+            headers=self._get_headers(),
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def verify_webhook(self, received_token: str) -> bool:
         """Verifikasi Xendit webhook callback token."""
         return received_token == settings.XENDIT_WEBHOOK_TOKEN

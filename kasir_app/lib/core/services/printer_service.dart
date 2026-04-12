@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bluetooth_print_plus/bluetooth_print_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 const _prefKeyMac = 'printer_mac';
 const _prefKeyName = 'printer_name';
@@ -75,8 +77,30 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
     super.dispose();
   }
 
+  Future<bool> _requestPermissions() async {
+    if (!Platform.isAndroid) return true;
+    final statuses = await [
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.locationWhenInUse,
+    ].request();
+    final denied = statuses.entries
+        .where((e) => !e.value.isGranted)
+        .map((e) => e.key.toString())
+        .toList();
+    if (denied.isNotEmpty) {
+      state = state.copyWith(
+        isScanning: false,
+        error: 'Izin Bluetooth/Lokasi ditolak. Aktifkan di Pengaturan.',
+      );
+      return false;
+    }
+    return true;
+  }
+
   Future<void> startScan() async {
     state = state.copyWith(isScanning: true, scanResults: [], clearError: true);
+    if (!await _requestPermissions()) return;
     try {
       await BluetoothPrintPlus.startScan(timeout: const Duration(seconds: 6));
       _scanSub?.cancel();

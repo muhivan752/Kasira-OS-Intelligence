@@ -298,6 +298,72 @@ async def create_payment(
         message="Payment created successfully"
     )
 
+async def _handle_subscription_webhook(db: AsyncSession, data: dict, payload: dict) -> dict:
+    """Handle Xendit Invoice webhook for subscription billing."""
+    import logging
+    _sub_logger = logging.getLogger("subscription_webhook")
+
+    external_id = data.get("external_id", "") or ""
+    parts = external_id.split("::")
+    if len(parts) != 3 or parts[0] != "sub":
+        return {"status": "ok"}
+
+    try:
+        tenant_id = UUID(parts[1])
+        invoice_id = UUID(parts[2])
+    except ValueError:
+        return {"status": "ok"}
+
+    from backend.models.subscription_invoice import SubscriptionInvoice
+    from backend.models.tenant import Tenant, SubscriptionStatus
+
+    stmt = select(SubscriptionInvoice).where(
+        SubscriptionInvoice.id == invoice_id,
+        SubscriptionInvoice.tenant_id == tenant_id,
+    ).with_for_update()
+    result = await db.execute(stmt)
+    invoice = result.scalar_one_or_none()
+
+    if not invoice:
+        _sub_logger.warning(f"Subscription invoice not found: {invoice_id}")
+        return {"status": "ok"}
+
+    xendit_status = str(data.get("status", "")).upper()
+    invoice.xendit_raw = payload
+
+    if xendit_status in ("PAID", "SETTLED"):
+        if invoice.status != "paid":
+            invoice.status = "paid"
+            invoice.paid_at = datetime.now(timezone.utc)
+            invoice.row_version += 1
+
+            # Reactivate tenant
+            tenant = (await db.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one_or_none()
+            if tenant:
+                tenant.subscription_status = SubscriptionStatus.active
+                tenant.is_active = True
+                tenant.row_version += 1
+
+                await log_audit(
+                    db=db, action="SUBSCRIPTION_PAID", entity="subscription_invoices",
+                    entity_id=invoice.id,
+                    after_state={"amount": invoice.amount, "tier": invoice.tier},
+                    user_id=None, tenant_id=tenant.id,
+                )
+
+            await db.commit()
+            _sub_logger.info(f"Subscription invoice {invoice_id} paid for tenant {tenant_id}")
+
+    elif xendit_status == "EXPIRED":
+        if invoice.status not in ("paid", "cancelled"):
+            invoice.status = "expired"
+            invoice.row_version += 1
+            await db.commit()
+            _sub_logger.info(f"Subscription invoice {invoice_id} expired")
+
+    return {"status": "ok"}
+
+
 @router.post("/webhook/xendit")
 async def xendit_webhook(
     request: Request,
@@ -322,10 +388,15 @@ async def xendit_webhook(
     if not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Invalid data field in payload")
 
+    # Check for subscription invoice webhook (external_id starts with "sub::")
+    external_id = data.get("external_id", "") or data.get("reference_id", "")
+    if isinstance(external_id, str) and external_id.startswith("sub::"):
+        return await _handle_subscription_webhook(db, data, payload)
+
     reference_id_raw = data.get("reference_id", "")
     if "::" not in reference_id_raw:
         return {"status": "ok"}
-        
+
     tenant_id_str, order_id_str = reference_id_raw.split("::", 1)
     
     try:

@@ -282,8 +282,15 @@ async def read_user_me(
             raw_tier = getattr(tenant, "subscription_tier", "starter")
             tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier or "starter")
 
+    sub_status = "active"
+    if current_user.tenant_id:
+        if tenant:
+            raw_status = getattr(tenant, "subscription_status", "active")
+            sub_status = raw_status.value if hasattr(raw_status, 'value') else str(raw_status or "active")
+
     user_data = UserSchema.model_validate(current_user).model_dump()
     user_data["subscription_tier"] = tier
+    user_data["subscription_status"] = sub_status
     return StandardResponse(data=user_data)
 
 @router.get("/{user_id}", response_model=StandardResponse[UserSchema])

@@ -153,12 +153,14 @@ export default function ReservasiPage() {
 
   const isToday = formatDate(selectedDate) === formatDate(new Date());
 
-  // Stats
+  // Stats — only count active reservations (not completed/cancelled/no_show)
+  const activeStatuses = ['pending', 'confirmed', 'seated'];
+  const activeReservations = reservations.filter((r: any) => activeStatuses.includes(r.status));
   const stats = {
-    total: reservations.length,
-    pending: reservations.filter(r => r.status === 'pending').length,
-    confirmed: reservations.filter(r => r.status === 'confirmed').length,
-    seated: reservations.filter(r => r.status === 'seated').length,
+    total: activeReservations.length,
+    pending: reservations.filter((r: any) => r.status === 'pending').length,
+    confirmed: reservations.filter((r: any) => r.status === 'confirmed').length,
+    seated: reservations.filter((r: any) => r.status === 'seated').length,
   };
 
   // Timeline hours (8am-23pm)
@@ -289,7 +291,7 @@ export default function ReservasiPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Hari Ini', value: stats.total, color: 'text-gray-900' },
+          { label: isToday ? 'Total Hari Ini' : `Total ${selectedDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`, value: stats.total, color: 'text-gray-900' },
           { label: 'Menunggu', value: stats.pending, color: 'text-yellow-600' },
           { label: 'Dikonfirmasi', value: stats.confirmed, color: 'text-green-600' },
           { label: 'Duduk', value: stats.seated, color: 'text-blue-600' },
