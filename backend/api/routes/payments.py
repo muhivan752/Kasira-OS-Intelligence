@@ -351,6 +351,41 @@ async def _handle_subscription_webhook(db: AsyncSession, data: dict, payload: di
                     user_id=None, tenant_id=tenant.id,
                 )
 
+                # Create referral commission if this tenant was referred
+                try:
+                    from backend.models.referral import Referral, ReferralCommission
+                    ref_stmt = select(Referral).where(
+                        Referral.referred_tenant_id == tenant_id,
+                        Referral.status == "active",
+                        Referral.deleted_at == None,
+                    )
+                    referral = (await db.execute(ref_stmt)).scalar_one_or_none()
+                    if referral:
+                        # Check idempotency
+                        existing_comm = (await db.execute(
+                            select(ReferralCommission.id).where(
+                                ReferralCommission.invoice_id == invoice.id,
+                            )
+                        )).scalar_one_or_none()
+                        if not existing_comm:
+                            commission_amount = int(invoice.amount * referral.commission_pct / 100)
+                            comm = ReferralCommission(
+                                referral_id=referral.id,
+                                invoice_id=invoice.id,
+                                referrer_tenant_id=referral.referrer_tenant_id,
+                                invoice_amount=invoice.amount,
+                                commission_pct=referral.commission_pct,
+                                commission_amount=commission_amount,
+                                status="pending",
+                            )
+                            db.add(comm)
+                            _sub_logger.info(
+                                f"Referral commission created: Rp{commission_amount} "
+                                f"for referrer {referral.referrer_tenant_id}"
+                            )
+                except Exception as e:
+                    _sub_logger.error(f"Referral commission error: {e}")
+
             await db.commit()
             _sub_logger.info(f"Subscription invoice {invoice_id} paid for tenant {tenant_id}")
 

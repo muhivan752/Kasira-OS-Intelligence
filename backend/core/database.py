@@ -43,5 +43,9 @@ async def get_db() -> AsyncSession:
             await session.execute(text(f'SET search_path TO "{tenant_id}", public'))
         else:
             await session.execute(text('SET search_path TO public'))
+
+        # RLS default: empty = bypass (migrations, unauthenticated routes)
+        # Authenticated routes set tenant_id via get_current_user / get_current_tenant
+        await session.execute(text("SET LOCAL app.current_tenant_id = ''"))
         yield session
 

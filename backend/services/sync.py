@@ -132,36 +132,36 @@ async def process_stock_sync(db: AsyncSession, client_records: List[Dict[str, An
     from backend.models.product import OutletStock
     
     for record in client_records:
-        product_id = record.get("product_id")
-        if not product_id:
+        ingredient_id = record.get("ingredient_id")
+        if not ingredient_id:
             continue
-            
+
         client_hlc_str = record.get("hlc")
         if client_hlc_str:
             client_hlc = HLC.from_string(client_hlc_str)
             server_hlc.receive(client_hlc)
-            
+
         client_p = record.get("crdt_positive", {})
         client_n = record.get("crdt_negative", {})
-        
+
         # Use FOR UPDATE to prevent race conditions during PN-Counter merge
         stmt = select(OutletStock).filter(
-            OutletStock.product_id == product_id,
+            OutletStock.ingredient_id == ingredient_id,
             OutletStock.outlet_id == outlet_id
         ).with_for_update()
         result = await db.execute(stmt)
         db_record = result.scalar_one_or_none()
-        
+
         if db_record:
             # Merge PN-Counters
             merged_p = PNCounter.merge(db_record.crdt_positive or {}, client_p)
             merged_n = PNCounter.merge(db_record.crdt_negative or {}, client_n)
-            
+
             db_record.crdt_positive = merged_p
             db_record.crdt_negative = merged_n
             # Guard against negative computed_stock
             db_record.computed_stock = max(0, PNCounter.get_value(merged_p, merged_n))
-            
+
             db_record.updated_at = utc_now()
             if hasattr(db_record, "row_version"):
                 db_record.row_version += 1
@@ -170,7 +170,7 @@ async def process_stock_sync(db: AsyncSession, client_records: List[Dict[str, An
             new_record = OutletStock(
                 id=uuid.uuid4(),
                 outlet_id=outlet_id,
-                product_id=product_id,
+                ingredient_id=ingredient_id,
                 crdt_positive=client_p,
                 crdt_negative=client_n,
                 # Guard against negative computed_stock

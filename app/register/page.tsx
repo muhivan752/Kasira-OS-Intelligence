@@ -1,16 +1,25 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { sendOtp, registerTenant } from '@/app/actions/auth';
 import { Logo } from '@/components/ui/logo';
-import { Loader2, ArrowLeft, Coffee, Utensils, Store, ShoppingBag } from 'lucide-react';
+import { Loader2, ArrowLeft, Coffee, Utensils, Store, ShoppingBag, Gift } from 'lucide-react';
 
 type Step = 'phone' | 'otp' | 'details';
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+      <RegisterContent />
+    </Suspense>
+  );
+}
+
+function RegisterContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>('phone');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -22,6 +31,26 @@ export default function RegisterPage() {
   const [pin, setPin] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
   const [businessType, setBusinessType] = useState('cafe');
+
+  // Referral
+  const [referralCode, setReferralCode] = useState('');
+  const [referrerName, setReferrerName] = useState('');
+
+  useEffect(() => {
+    const ref = searchParams.get('ref');
+    if (ref) {
+      setReferralCode(ref.toUpperCase());
+      // Validate referral code
+      fetch(`/api/v1/referrals/validate/${ref}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            setReferrerName(data.data.referrer_name);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [searchParams]);
 
   async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
@@ -39,7 +68,6 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
     if (otp.length !== 6) { setError('OTP harus 6 digit'); return; }
-    // Lanjut ke detail — OTP akan diverifikasi saat submit register
     setStep('details');
   }
 
@@ -49,7 +77,7 @@ export default function RegisterPage() {
     if (pin !== pinConfirm) { setError('PIN tidak cocok'); return; }
     if (pin.length !== 6) { setError('PIN harus 6 digit'); return; }
     setLoading(true);
-    const res = await registerTenant(phone, businessName, ownerName, pin, otp, businessType);
+    const res = await registerTenant(phone, businessName, ownerName, pin, otp, businessType, referralCode || undefined);
     setLoading(false);
     if (!res.success) { setError(res.message || 'Registrasi gagal'); return; }
     router.push('/onboarding');
@@ -61,6 +89,16 @@ export default function RegisterPage() {
         <div className="flex justify-center mb-8">
           <Logo size="lg" variant="light" />
         </div>
+
+        {referrerName && (
+          <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+            <Gift className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-emerald-800">Diundang oleh {referrerName}</p>
+              <p className="text-xs text-emerald-600 mt-0.5">Kode referral: {referralCode}</p>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           {/* STEP 1: Phone */}
@@ -80,6 +118,18 @@ export default function RegisterPage() {
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-lg"
                   />
                 </div>
+                {!referrerName && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Kode Referral <span className="text-gray-400">(opsional)</span></label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: KAS-XXXXX"
+                      value={referralCode}
+                      onChange={e => setReferralCode(e.target.value.toUpperCase())}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none uppercase"
+                    />
+                  </div>
+                )}
                 {error && <p className="text-red-500 text-sm">{error}</p>}
                 <button
                   type="submit"
@@ -183,7 +233,7 @@ export default function RegisterPage() {
                     inputMode="numeric"
                     maxLength={6}
                     required
-                    placeholder="••••••"
+                    placeholder="------"
                     value={pin}
                     onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-center tracking-widest text-xl font-mono"
@@ -196,7 +246,7 @@ export default function RegisterPage() {
                     inputMode="numeric"
                     maxLength={6}
                     required
-                    placeholder="••••••"
+                    placeholder="------"
                     value={pinConfirm}
                     onChange={e => setPinConfirm(e.target.value.replace(/\D/g, ''))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-center tracking-widest text-xl font-mono"

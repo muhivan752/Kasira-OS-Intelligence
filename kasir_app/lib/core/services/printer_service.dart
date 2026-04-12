@@ -65,9 +65,13 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
       state = state.copyWith(savedDevice: PrinterDevice(name: name, address: mac));
     }
 
-    _connectSub = BluetoothPrintPlus.connectState.listen((s) {
-      state = state.copyWith(isConnected: s == ConnectState.connected);
-    });
+    try {
+      _connectSub = BluetoothPrintPlus.connectState.listen((s) {
+        state = state.copyWith(isConnected: s == ConnectState.connected);
+      });
+    } catch (_) {
+      // BT not available on this device — ignore
+    }
   }
 
   @override
@@ -91,7 +95,7 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
     if (denied.isNotEmpty) {
       state = state.copyWith(
         isScanning: false,
-        error: 'Izin Bluetooth/Lokasi ditolak. Aktifkan di Pengaturan.',
+        error: 'Izin Bluetooth/Lokasi ditolak. Aktifkan di Pengaturan HP.',
       );
       return false;
     }
@@ -100,24 +104,58 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
 
   Future<void> startScan() async {
     state = state.copyWith(isScanning: true, scanResults: [], clearError: true);
+
     if (!await _requestPermissions()) return;
+
+    // Check if Bluetooth is enabled
     try {
-      await BluetoothPrintPlus.startScan(timeout: const Duration(seconds: 6));
+      final btEnabled = await BluetoothPrintPlus.isBluetoothEnabled;
+      if (btEnabled != true) {
+        state = state.copyWith(
+          isScanning: false,
+          error: 'Bluetooth belum aktif. Nyalakan Bluetooth di Pengaturan HP.',
+        );
+        return;
+      }
+    } catch (_) {
+      // Some devices don't support this check — continue anyway
+    }
+
+    try {
+      // Subscribe to results BEFORE starting scan to avoid missing early results
       _scanSub?.cancel();
-      _scanSub = BluetoothPrintPlus.scanResults.listen((devices) {
-        state = state.copyWith(scanResults: devices);
-      });
+      _scanSub = BluetoothPrintPlus.scanResults.listen(
+        (devices) {
+          if (mounted) {
+            state = state.copyWith(scanResults: devices);
+          }
+        },
+        onError: (e) {
+          if (mounted) {
+            state = state.copyWith(isScanning: false, error: 'Scan error: $e');
+          }
+        },
+      );
+
+      await BluetoothPrintPlus.startScan(timeout: const Duration(seconds: 6));
     } catch (e) {
-      state = state.copyWith(isScanning: false, error: 'Gagal scan: $e');
+      state = state.copyWith(isScanning: false, error: 'Gagal scan Bluetooth: $e');
       return;
     }
-    await Future.delayed(const Duration(seconds: 6));
-    state = state.copyWith(isScanning: false);
+
+    await Future.delayed(const Duration(seconds: 7));
+    if (mounted) {
+      state = state.copyWith(isScanning: false);
+    }
   }
 
   Future<void> stopScan() async {
-    await BluetoothPrintPlus.stopScan();
-    state = state.copyWith(isScanning: false);
+    try {
+      await BluetoothPrintPlus.stopScan();
+    } catch (_) {}
+    if (mounted) {
+      state = state.copyWith(isScanning: false);
+    }
   }
 
   Future<bool> connect(BluetoothDevice device) async {
@@ -139,7 +177,9 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
   }
 
   Future<void> disconnect() async {
-    await BluetoothPrintPlus.disconnect();
+    try {
+      await BluetoothPrintPlus.disconnect();
+    } catch (_) {}
     state = state.copyWith(isConnected: false);
   }
 

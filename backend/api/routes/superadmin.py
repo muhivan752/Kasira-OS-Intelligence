@@ -678,3 +678,68 @@ async def activate_tenant_billing(
         data={"id": str(tenant.id), "is_active": True, "next_billing_date": str(tenant.next_billing_date)},
         message="Tenant diaktifkan",
     )
+
+
+# ---------------------------------------------------------------------------
+# WhatsApp Broadcast
+# ---------------------------------------------------------------------------
+class BroadcastRequest(BaseModel):
+    message: str
+    tenant_ids: Optional[list[str]] = None  # None = all active tenants
+
+@router.post("/broadcast", response_model=StandardResponse[dict])
+async def broadcast_whatsapp(
+    body: BroadcastRequest,
+    admin: User = Depends(deps.get_platform_admin),
+    db: AsyncSession = Depends(deps.get_db),
+) -> Any:
+    """Send WhatsApp broadcast to tenant owners."""
+    from backend.services.fonnte import send_whatsapp_message
+
+    if body.tenant_ids:
+        from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+        stmt = (
+            select(User.phone, User.full_name, Tenant.name)
+            .join(Tenant, Tenant.id == User.tenant_id)
+            .where(
+                User.is_superuser == True,
+                User.is_active == True,
+                Tenant.is_active == True,
+                Tenant.id.in_([uuid.UUID(t) for t in body.tenant_ids]),
+                User.deleted_at == None,
+            )
+        )
+    else:
+        stmt = (
+            select(User.phone, User.full_name, Tenant.name)
+            .join(Tenant, Tenant.id == User.tenant_id)
+            .where(
+                User.is_superuser == True,
+                User.is_active == True,
+                Tenant.is_active == True,
+                User.deleted_at == None,
+            )
+        )
+
+    results = (await db.execute(stmt)).all()
+    sent = 0
+    failed = 0
+    for phone, owner_name, tenant_name in results:
+        msg = body.message.replace("{owner}", owner_name or "").replace("{tenant}", tenant_name or "")
+        ok = await send_whatsapp_message(phone, msg)
+        if ok:
+            sent += 1
+        else:
+            failed += 1
+
+    await log_audit(
+        db=db, action="WA_BROADCAST", entity="system", entity_id=str(admin.id),
+        after_state={"sent": sent, "failed": failed, "total": len(results)},
+        user_id=admin.id, tenant_id=admin.tenant_id,
+    )
+    await db.commit()
+
+    return StandardResponse(
+        data={"sent": sent, "failed": failed, "total": len(results)},
+        message=f"Broadcast selesai: {sent} terkirim, {failed} gagal",
+    )

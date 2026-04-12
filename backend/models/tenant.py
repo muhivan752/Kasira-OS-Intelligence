@@ -40,4 +40,7 @@ class Tenant(BaseModel):
     next_billing_date = Column(Date, nullable=True)
     owner_email = Column(String, nullable=True)
 
+    # Referral
+    referral_code = Column(String(20), unique=True, nullable=True, index=True)
+
     brands = relationship("Brand", back_populates="tenant")

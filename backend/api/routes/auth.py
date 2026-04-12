@@ -182,6 +182,7 @@ class RegisterRequest(BaseModel):
     pin: str = Field(..., min_length=6, max_length=6)
     otp: str = Field(..., min_length=6, max_length=6)
     business_type: str = Field("cafe", description="warung/cafe/resto/other")
+    referral_code: Optional[str] = Field(None, description="Kode referral dari tenant lain")
 
 
 # Default categories per business type
@@ -246,9 +247,38 @@ async def register(
     db.add_all([tenant, brand, outlet, user] + categories)
     await db.commit()
 
+    # Process referral code if provided
+    referral_msg = ""
+    if request.referral_code:
+        ref_code = request.referral_code.upper().strip()
+        referrer = (await db.execute(
+            select(Tenant).where(
+                Tenant.referral_code == ref_code,
+                Tenant.is_active == True,
+                Tenant.deleted_at == None,
+            )
+        )).scalar_one_or_none()
+        if referrer and referrer.id != tenant_id:
+            from backend.models.referral import Referral
+            referral = Referral(
+                referrer_tenant_id=referrer.id,
+                referred_tenant_id=tenant_id,
+                referral_code=ref_code,
+                commission_pct=20,
+                status="active",
+            )
+            db.add(referral)
+            await db.commit()
+            referral_msg = f" (direferral oleh {referrer.name})"
+
     await log_audit(db, action="register", entity="tenant", entity_id=str(tenant_id),
-                    after_state={"tenant": request.business_name, "phone": request.phone},
+                    after_state={"tenant": request.business_name, "phone": request.phone,
+                                 "referral_code": request.referral_code},
                     user_id=str(user_id), tenant_id=str(tenant_id))
+
+    # Send welcome WhatsApp message (fire & forget)
+    import asyncio
+    asyncio.create_task(_send_welcome_wa(request.phone, request.owner_name, request.business_name))
 
     token = Token(
         access_token=security.create_access_token(user_id),
@@ -256,7 +286,7 @@ async def register(
         tenant_id=str(tenant_id),
         outlet_id=str(outlet_id),
     )
-    return StandardResponse(data=token, message="Registrasi berhasil")
+    return StandardResponse(data=token, message=f"Registrasi berhasil{referral_msg}")
 
 
 # ---------------------------------------------------------------------------
@@ -421,3 +451,26 @@ async def get_app_version(platform: str = "android", app: str = "pos") -> Any:
         "release_notes": info.get("release_notes", ""),
         "platform": platform,
     }, message="OK")
+
+
+# ---------------------------------------------------------------------------
+# Welcome WA message after registration
+# ---------------------------------------------------------------------------
+async def _send_welcome_wa(phone: str, owner_name: str, business_name: str):
+    """Send onboarding welcome message via WhatsApp (fire & forget)."""
+    try:
+        msg = (
+            f"Halo {owner_name}! 👋\n\n"
+            f"Selamat datang di *Kasira POS*! Bisnis *{business_name}* kamu sudah terdaftar.\n\n"
+            f"🚀 *Langkah selanjutnya:*\n"
+            f"1. Tambah menu pertama di halaman Onboarding\n"
+            f"2. Download APK Kasir di kasira.online/download\n"
+            f"3. Login pakai PIN yang kamu buat tadi\n"
+            f"4. Mulai terima pesanan!\n\n"
+            f"💡 *Tips:* Bagikan kode referral kamu ke teman pebisnis untuk dapat bonus Pro gratis!\n\n"
+            f"Butuh bantuan? Balas pesan ini kapan saja.\n"
+            f"— Tim Kasira"
+        )
+        await send_whatsapp_message(phone, msg)
+    except Exception:
+        pass  # jangan gagalkan registrasi

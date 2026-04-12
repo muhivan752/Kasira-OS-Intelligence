@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { getOutlets, updateOutlet, updateStockMode, getCurrentUser, getTaxConfig, updateTaxConfig } from '@/app/actions/api';
-import { Loader2, Store, Clock, Link as LinkIcon, CreditCard, Upload, ImageOff, Image, Package, Receipt } from 'lucide-react';
+import { getOutlets, updateOutlet, updateStockMode, getCurrentUser, getTaxConfig, updateTaxConfig, getReferralCode, getReferralStats } from '@/app/actions/api';
+import { Loader2, Store, Clock, Link as LinkIcon, CreditCard, Upload, ImageOff, Image, Package, Receipt, Gift, Copy, Share2, Check } from 'lucide-react';
 import Link from 'next/link';
 
 export default function SettingsPage() {
@@ -26,6 +26,13 @@ export default function SettingsPage() {
   });
   const [savingTax, setSavingTax] = useState(false);
   const [taxSaved, setTaxSaved] = useState(false);
+
+  // Referral
+  const [referralCode, setReferralCode] = useState('');
+  const [referralShareUrl, setReferralShareUrl] = useState('');
+  const [referralShareText, setReferralShareText] = useState('');
+  const [referralStats, setReferralStats] = useState<any>(null);
+  const [copied, setCopied] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -68,6 +75,18 @@ export default function SettingsPage() {
         const tier = user.subscription_tier || 'starter';
         setIsPro(['pro', 'business', 'enterprise'].includes(tier));
       }
+
+      // Load referral
+      try {
+        const refData = await getReferralCode();
+        if (refData) {
+          setReferralCode(refData.referral_code);
+          setReferralShareUrl(refData.share_url);
+          setReferralShareText(refData.share_text);
+        }
+        const stats = await getReferralStats();
+        if (stats) setReferralStats(stats);
+      } catch {}
     } catch (error) {
       console.error('Failed to load outlet data', error);
     } finally {
@@ -528,6 +547,93 @@ export default function SettingsPage() {
               </Link>
             </div>
           </div>
+
+          {/* Referral */}
+          {referralCode && (
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-emerald-200 flex items-center gap-2">
+                <Gift className="w-5 h-5 text-emerald-600" />
+                <h2 className="text-lg font-bold text-gray-900">Referral Program</h2>
+                <span className="ml-auto text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">20% komisi</span>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-600">
+                  Ajak pebisnis lain pakai Kasira. Kamu dapat <span className="font-bold text-emerald-700">20% komisi</span> dari langganan mereka setiap bulan!
+                </p>
+
+                {/* Code + Copy */}
+                <div className="bg-white rounded-lg border border-emerald-200 p-4">
+                  <p className="text-xs text-gray-500 mb-1">Kode referral kamu</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold text-gray-900 tracking-wider font-mono">{referralCode}</span>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(referralShareUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                      className="ml-auto p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                      title="Salin link"
+                    >
+                      {copied ? <Check className="w-5 h-5 text-emerald-600" /> : <Copy className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Share buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(referralShareText); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-emerald-700 bg-emerald-100 rounded-lg hover:bg-emerald-200 transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
+                    {copied ? 'Tersalin!' : 'Salin Teks'}
+                  </button>
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(referralShareText)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share via WA
+                  </a>
+                </div>
+
+                {/* Stats */}
+                {referralStats && (
+                  <div className="grid grid-cols-3 gap-3 pt-2">
+                    <div className="bg-white rounded-lg border border-gray-200 p-3 text-center">
+                      <p className="text-2xl font-bold text-gray-900">{referralStats.total_referrals}</p>
+                      <p className="text-xs text-gray-500">Referral</p>
+                    </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-3 text-center">
+                      <p className="text-2xl font-bold text-emerald-600">Rp{((referralStats.pending_balance || 0) / 1000).toFixed(0)}rb</p>
+                      <p className="text-xs text-gray-500">Pending</p>
+                    </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-3 text-center">
+                      <p className="text-2xl font-bold text-gray-900">Rp{((referralStats.total_earned || 0) / 1000).toFixed(0)}rb</p>
+                      <p className="text-xs text-gray-500">Dicairkan</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Referral list */}
+                {referralStats?.referrals?.length > 0 && (
+                  <div className="pt-2">
+                    <p className="text-xs font-medium text-gray-500 mb-2">Merchant yang kamu referral:</p>
+                    <div className="space-y-2">
+                      {referralStats.referrals.map((r: any) => (
+                        <div key={r.id} className="flex items-center justify-between bg-white rounded-lg border border-gray-200 px-3 py-2">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{r.referred_name}</p>
+                            <p className="text-xs text-gray-500">{r.referred_tier}</p>
+                          </div>
+                          <p className="text-sm font-semibold text-emerald-600">Rp{((r.total_commission || 0) / 1000).toFixed(0)}rb</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Payment Settings */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

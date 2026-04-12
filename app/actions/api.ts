@@ -609,3 +609,18 @@ export async function retryInvoicePayment(invoiceId: string) {
   if (!res.ok) throw new Error(data.detail || 'Gagal membuat invoice');
   return data.data;
 }
+
+// ── Referral ──────────────────────────────────────────────────
+export async function getReferralCode() {
+  const res = await fetchWithAuth('/referrals/my-code');
+  const data = await res.json();
+  if (!res.ok) return null;
+  return data.data;
+}
+
+export async function getReferralStats() {
+  const res = await fetchWithAuth('/referrals/stats');
+  const data = await res.json();
+  if (!res.ok) return null;
+  return data.data;
+}

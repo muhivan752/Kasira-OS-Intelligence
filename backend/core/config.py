@@ -14,10 +14,15 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "kasira"
     POSTGRES_PORT: str = "5432"
-    
+    # Non-superuser role for runtime (RLS enforced). Falls back to POSTGRES_USER if not set.
+    POSTGRES_APP_USER: str = ""
+    POSTGRES_APP_PASSWORD: str = ""
+
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        user = self.POSTGRES_APP_USER or self.POSTGRES_USER
+        password = self.POSTGRES_APP_PASSWORD or self.POSTGRES_PASSWORD
+        return f"postgresql+asyncpg://{user}:{password}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

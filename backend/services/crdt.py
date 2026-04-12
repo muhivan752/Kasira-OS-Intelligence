@@ -23,8 +23,8 @@ class HLC:
         """Parse HLC from string."""
         if not hlc_str:
             return cls(0, 0, "")
-        parts = hlc_str.split(':')
-        if len(parts) != 3:
+        parts = hlc_str.split(':', 2)
+        if len(parts) < 3:
             raise ValueError(f"Invalid HLC string format: {hlc_str}")
         return cls(int(parts[0]), int(parts[1]), parts[2])
 

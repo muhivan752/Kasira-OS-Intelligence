@@ -13,6 +13,7 @@ from backend.models.user import User
 from backend.models.tenant import Tenant
 from backend.schemas.token import TokenPayload
 from backend.services.redis import get_redis_client
+from sqlalchemy import text
 
 security_bearer = HTTPBearer()
 
@@ -47,6 +48,9 @@ async def get_current_user(
         raise HTTPException(status_code=404, detail="Pengguna tidak ditemukan")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Akun tidak aktif")
+
+    # Activate RLS for this session — scope all queries to user's tenant
+    await db.execute(text(f"SET LOCAL app.current_tenant_id = '{user.tenant_id}'"))
 
     # Cek apakah tenant masih aktif (skip untuk platform admin)
     allowed_phones = [p.strip() for p in settings.SUPERADMIN_PHONES.split(",") if p.strip()]
@@ -91,6 +95,9 @@ async def get_current_tenant(
         raise HTTPException(status_code=404, detail="Tenant tidak ditemukan")
     if not tenant.is_active:
         raise HTTPException(status_code=400, detail="Tenant tidak aktif")
+
+    # Activate RLS for this session
+    await db.execute(text(f"SET LOCAL app.current_tenant_id = '{tenant.id}'"))
     return tenant
 
 def get_current_active_superuser(
@@ -158,11 +165,14 @@ async def validate_category_ownership(db: AsyncSession, category_id, tenant_id):
 
 async def get_platform_admin(
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> User:
     """Platform-level superadmin check via SUPERADMIN_PHONES env var."""
     allowed = [p.strip() for p in settings.SUPERADMIN_PHONES.split(",") if p.strip()]
     if not allowed or current_user.phone not in allowed:
         raise HTTPException(status_code=403, detail="Akses platform admin ditolak")
+    # Superadmin bypasses RLS — can see all tenants
+    await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
     return current_user
 
 

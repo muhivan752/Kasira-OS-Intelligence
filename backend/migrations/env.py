@@ -18,7 +18,8 @@ target_metadata = Base.metadata
 
 def get_url():
     from backend.core.config import settings
-    return str(settings.SQLALCHEMY_DATABASE_URI)
+    # Migrations run as superuser (kasira) for DDL + RLS policy management
+    return f"postgresql+asyncpg://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_SERVER}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
 
 def run_migrations_offline() -> None:
     url = get_url()

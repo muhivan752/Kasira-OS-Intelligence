@@ -81,12 +81,14 @@ export async function verifyOtp(phone: string, otp: string) {
   }
 }
 
-export async function registerTenant(phone: string, businessName: string, ownerName: string, pin: string, otp: string, businessType: string = 'cafe') {
+export async function registerTenant(phone: string, businessName: string, ownerName: string, pin: string, otp: string, businessType: string = 'cafe', referralCode?: string) {
   try {
+    const body: Record<string, string> = { phone, business_name: businessName, owner_name: ownerName, pin, otp, business_type: businessType };
+    if (referralCode) body.referral_code = referralCode;
     const res = await fetch(`${API_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, business_name: businessName, owner_name: ownerName, pin, otp, business_type: businessType }),
+      body: JSON.stringify(body),
     });
 
     const data = await res.json();
