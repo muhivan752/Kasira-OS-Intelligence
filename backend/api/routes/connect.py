@@ -481,7 +481,8 @@ async def create_connect_order(
             "order_id": str(order.id),
             "outlet_id": str(outlet.id),
             "method": input_data.payment_method,
-            "amount": float(subtotal),
+            "amount_due": float(subtotal),
+            "amount_paid": float(subtotal) if payment.status == "paid" else 0,
             "source": "storefront",
         },
         event_metadata={

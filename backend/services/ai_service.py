@@ -39,6 +39,10 @@ READ_KEYWORDS = [
     "shift", "hari ini", "kemarin", "minggu ini", "bulan ini",
     "performa", "statistik", "analisa", "trend", "grafik", "summary",
     "total", "rata-rata", "average", "tertinggi", "terendah",
+    # HPP / cost queries
+    "hpp", "harga pokok", "cost", "margin", "untung", "laba", "profit",
+    "biaya bahan", "biaya produksi", "food cost", "naik harga",
+    "dampak harga", "impact", "bahan baku", "ingredient",
     # Reservation queries
     "reservasi", "booking", "book", "pesan meja", "meja kosong",
     "meja tersedia", "available", "jadwal", "jam buka", "jam tutup",
@@ -446,16 +450,17 @@ async def build_context(
         cancel_count = cancel_count_q.scalar() or 0
 
         # Payment method breakdown today (from events)
+        method_col = Event.event_data["method"].astext
         pay_methods_q = await db.execute(
             select(
-                Event.event_data["method"].astext.label("method"),
+                method_col.label("method"),
                 func.count(Event.id).label("cnt"),
                 func.coalesce(func.sum(Event.event_data["amount_paid"].astext.cast(sqlalchemy.Numeric)), 0).label("total"),
             ).where(
                 Event.outlet_id == outlet_id,
                 Event.event_type == "payment.completed",
                 Event.created_at >= start_today,
-            ).group_by(Event.event_data["method"].astext)
+            ).group_by(method_col)
         )
         pay_breakdown = []
         try:
@@ -465,15 +470,16 @@ async def build_context(
             pass
 
         # Storefront vs POS ratio today
+        source_col = Event.event_data["source"].astext
         source_q = await db.execute(
             select(
-                Event.event_data["source"].astext.label("source"),
+                source_col.label("source"),
                 func.count(Event.id).label("cnt"),
             ).where(
                 Event.outlet_id == outlet_id,
                 Event.event_type == "order.created",
                 Event.created_at >= start_today,
-            ).group_by(Event.event_data["source"].astext)
+            ).group_by(source_col)
         )
         source_breakdown = []
         try:
@@ -600,7 +606,10 @@ INSTRUKSI:
 - Gunakan bahasa Indonesia yang ramah dan profesional
 - Angka dalam format Rupiah (Rp x.xxx)
 - Jawaban singkat dan langsung to the point
-- Untuk reservasi: informasikan ketersediaan meja dan jam operasional"""
+- Untuk reservasi: informasikan ketersediaan meja dan jam operasional
+- Untuk HPP: jelaskan komponen biaya, margin, dan dampak perubahan harga bahan
+- Untuk restock: bisa langsung eksekusi via chat (contoh: "restock kopi arabica 5kg")
+- Jika ditanya dampak kenaikan harga bahan, hitung ulang HPP dan margin baru"""
 
     # Knowledge graph context (non-blocking)
     kg_context = ""
@@ -609,6 +618,7 @@ INSTRUKSI:
         kg_context = await build_ai_context_from_graph(
             tenant_id=UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id,
             db=db,
+            outlet_id=UUID(outlet_id) if isinstance(outlet_id, str) else outlet_id,
         )
     except Exception as e:
         logger.debug(f"KG context skipped: {e}")

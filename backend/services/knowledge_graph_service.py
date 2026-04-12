@@ -272,8 +272,119 @@ async def get_most_used_ingredients(
     ]
 
 
+async def compute_hpp_for_products(
+    tenant_id: UUID, brand_id: UUID, db: AsyncSession
+) -> List[Dict]:
+    """
+    Compute HPP (Harga Pokok Penjualan) for all products with recipes.
+    Uses KG edges (product→ingredient) + ingredient cost_per_base_unit.
+    Returns: [{product_name, price, hpp, margin_pct, ingredients: [{name, qty, unit, cost}]}]
+    """
+    # Get all contains edges
+    edges = (await db.execute(
+        select(KnowledgeGraphEdge).where(
+            KnowledgeGraphEdge.tenant_id == tenant_id,
+            KnowledgeGraphEdge.relation_type == "contains",
+            KnowledgeGraphEdge.deleted_at.is_(None),
+        )
+    )).scalars().all()
+
+    if not edges:
+        return []
+
+    # Collect all IDs
+    product_ids = set(e.source_node_id for e in edges)
+    ingredient_ids = set(e.target_node_id for e in edges)
+
+    # Fetch products + ingredients
+    products = {p.id: p for p in (await db.execute(
+        select(Product).where(Product.id.in_(list(product_ids)), Product.deleted_at.is_(None))
+    )).scalars().all()}
+
+    ingredients = {i.id: i for i in (await db.execute(
+        select(Ingredient).where(Ingredient.id.in_(list(ingredient_ids)), Ingredient.deleted_at.is_(None))
+    )).scalars().all()}
+
+    # Group edges by product
+    product_edges: Dict[UUID, list] = {}
+    for e in edges:
+        product_edges.setdefault(e.source_node_id, []).append(e)
+
+    result = []
+    for pid, pedges in product_edges.items():
+        prod = products.get(pid)
+        if not prod:
+            continue
+
+        hpp = Decimal("0")
+        ing_list = []
+        for e in pedges:
+            ing = ingredients.get(e.target_node_id)
+            if not ing:
+                continue
+            meta = e.metadata_payload or {}
+            qty = Decimal(str(meta.get("quantity", 0)))
+            cost = qty * (ing.cost_per_base_unit or Decimal("0"))
+            hpp += cost
+            ing_list.append({
+                "name": ing.name,
+                "qty": float(qty),
+                "unit": meta.get("unit", ing.base_unit),
+                "cost": float(cost),
+            })
+
+        price = float(prod.base_price or 0)
+        margin_pct = ((price - float(hpp)) / price * 100) if price > 0 else 0
+
+        result.append({
+            "product_name": prod.name,
+            "price": price,
+            "hpp": float(hpp),
+            "margin_pct": round(margin_pct, 1),
+            "ingredients": ing_list,
+        })
+
+    # Sort by margin ascending (worst margin first — most useful for alerts)
+    result.sort(key=lambda x: x["margin_pct"])
+    return result
+
+
+async def get_ingredient_stock_levels(
+    tenant_id: UUID, outlet_id: UUID, db: AsyncSession
+) -> List[Dict]:
+    """Get current stock levels for all ingredients, highlight critical ones."""
+    from backend.models.product import OutletStock
+    from backend.models.outlet import Outlet
+
+    outlet = await db.get(Outlet, outlet_id)
+    if not outlet:
+        return []
+
+    stocks = (await db.execute(
+        select(OutletStock, Ingredient).join(
+            Ingredient, OutletStock.ingredient_id == Ingredient.id
+        ).where(
+            OutletStock.outlet_id == outlet_id,
+            Ingredient.brand_id == outlet.brand_id,
+            Ingredient.deleted_at.is_(None),
+        )
+    )).all()
+
+    result = []
+    for stock, ing in stocks:
+        is_critical = stock.computed_stock <= stock.min_stock_base and stock.min_stock_base > 0
+        result.append({
+            "name": ing.name,
+            "stock": float(stock.computed_stock),
+            "unit": ing.base_unit,
+            "min_stock": float(stock.min_stock_base),
+            "is_critical": is_critical,
+        })
+    return result
+
+
 async def build_ai_context_from_graph(
-    tenant_id: UUID, db: AsyncSession
+    tenant_id: UUID, db: AsyncSession, outlet_id: Optional[UUID] = None
 ) -> str:
     """Build a compact AI context string from knowledge graph data."""
     # Most used ingredients
@@ -330,5 +441,46 @@ async def build_ai_context_from_graph(
             pairs.append(f"{a} & {b}")
         lines.append(f"- Bahan saling terkait (ada di produk yang sama): {', '.join(pairs)}")
         lines.append("- Jika salah satu bahan habis, produk yang menggunakan keduanya terdampak")
+
+    # HPP data from KG edges
+    try:
+        from backend.models.outlet import Outlet
+        # Get brand_id from tenant's outlet
+        outlet_row = None
+        if outlet_id:
+            outlet_row = await db.get(Outlet, outlet_id)
+        if not outlet_row:
+            outlet_res = await db.execute(
+                select(Outlet).where(Outlet.tenant_id == tenant_id, Outlet.deleted_at.is_(None)).limit(1)
+            )
+            outlet_row = outlet_res.scalar_one_or_none()
+
+        if outlet_row:
+            hpp_data = await compute_hpp_for_products(tenant_id, outlet_row.brand_id, db)
+            if hpp_data:
+                lines.append("\nHPP (HARGA POKOK PENJUALAN):")
+                for item in hpp_data[:8]:  # Max 8 products to keep context compact
+                    margin_label = "🔴" if item["margin_pct"] < 15 else ("🟡" if item["margin_pct"] < 30 else "🟢")
+                    lines.append(
+                        f"- {item['product_name']}: HPP Rp{item['hpp']:,.0f} | "
+                        f"Harga Rp{item['price']:,.0f} | "
+                        f"Margin {item['margin_pct']}% {margin_label}"
+                    )
+                # Alert low margin
+                low_margin = [x for x in hpp_data if x["margin_pct"] < 20]
+                if low_margin:
+                    names = ", ".join(x["product_name"] for x in low_margin[:3])
+                    lines.append(f"- ⚠️ MARGIN RENDAH (<20%): {names}")
+
+            # Ingredient stock levels
+            oid = outlet_id or outlet_row.id
+            ing_stocks = await get_ingredient_stock_levels(tenant_id, oid, db)
+            critical = [s for s in ing_stocks if s["is_critical"]]
+            if critical:
+                lines.append("\nBAHAN BAKU KRITIS:")
+                for s in critical[:5]:
+                    lines.append(f"- {s['name']}: sisa {s['stock']:.0f} {s['unit']} (min: {s['min_stock']:.0f})")
+    except Exception as e:
+        logger.debug(f"HPP/stock context skipped: {e}")
 
     return "\n".join(lines)
