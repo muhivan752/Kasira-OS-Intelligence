@@ -40,7 +40,7 @@ export default function BookingPage() {
   useEffect(() => {
     async function load() {
       const data = await getStorefront(slug);
-      setOutlet(data);
+      setOutlet(data?.outlet || data);
       setLoading(false);
     }
     load();
