@@ -2,7 +2,9 @@ import Link from 'next/link';
 import {
   Smartphone, Globe, LineChart, Package,
   Sparkles, CheckCircle2, ArrowRight, MessageCircle,
-  Zap, Shield, Clock
+  Shield, Wifi, WifiOff, Receipt,
+  ChefHat, BarChart3, Users, Star,
+  Clock, Flame, CreditCard, Store
 } from 'lucide-react';
 import Navbar from '@/components/landing/Navbar';
 import FAQ from '@/components/landing/FAQ';
@@ -23,7 +25,7 @@ const jsonLd = {
 };
 
 export default function LandingPage() {
-  const waLink = 'https://wa.me/6285270782220?text=Halo%20Kasira%2C%20saya%20mau%20coba%20Kasira';
+  const waLink = 'https://wa.me/6285270782220?text=Halo%20Kasira%2C%20saya%20tertarik%20untuk%20coba';
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -33,96 +35,358 @@ export default function LandingPage() {
       />
       <Navbar />
 
-      {/* HERO */}
-      <section className="relative pt-32 pb-24 lg:pt-48 lg:pb-36 overflow-hidden">
-        {/* Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-white to-white" />
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-emerald-400/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-emerald-300/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/3" />
+      {/* ═══════════════ HERO ═══════════════ */}
+      <section className="relative pt-28 pb-20 lg:pt-44 lg:pb-32 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(16,185,129,0.12),transparent)]" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="text-center max-w-4xl mx-auto">
-            <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 tracking-tight leading-[1.1] mb-6">
-              Kasir Digital yang{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-emerald-700">
-                Benar-Benar Simpel
+          <div className="text-center max-w-3xl mx-auto">
+            <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm font-semibold px-4 py-1.5 rounded-full mb-6">
+              <Flame className="w-4 h-4" />
+              Dibuat khusus untuk F&B Indonesia
+            </div>
+
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.1] mb-6">
+              Buka kasir,{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-600">
+                bukan spreadsheet
               </span>
             </h1>
 
-            <p className="text-xl md:text-2xl text-gray-500 mb-10 leading-relaxed max-w-2xl mx-auto">
-              POS modern + storefront gratis + QRIS tanpa ribet. Masuk lewat WhatsApp, langsung jalan.
+            <p className="text-lg md:text-xl text-gray-500 mb-10 leading-relaxed max-w-2xl mx-auto">
+              Capek itung manual di notes HP? Kasira bikin cafe lo punya sistem kasir + toko online + laporan otomatis. Setup 5 menit, langsung jalan.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
                 href="/register"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 bg-emerald-500 text-white text-lg font-bold rounded-2xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/25 hover:-translate-y-0.5"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-gray-900 text-white text-base font-bold rounded-xl hover:bg-gray-800 transition-all shadow-lg hover:-translate-y-0.5"
               >
-                Daftar Gratis
-                <ArrowRight className="w-5 h-5" />
+                Coba Gratis 30 Hari
+                <ArrowRight className="w-4 h-4" />
               </Link>
               <Link
                 href="/kasira-coffee"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-gray-700 text-lg font-semibold rounded-2xl border-2 border-gray-200 hover:border-gray-300 transition-all"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-gray-700 text-base font-semibold rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all"
               >
+                <Store className="w-4 h-4" />
                 Lihat Demo Storefront
-                <ArrowRight className="w-5 h-5" />
+              </Link>
+            </div>
+
+            <p className="mt-4 text-sm text-gray-400">Tanpa kartu kredit. Cancel kapan saja.</p>
+          </div>
+
+          {/* ── Live Dashboard Preview ── */}
+          <div className="mt-16 lg:mt-20 relative mx-auto max-w-5xl">
+            <div className="absolute -inset-4 bg-gradient-to-b from-emerald-100/50 to-transparent rounded-3xl blur-2xl" />
+            <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-gray-200/80 bg-white">
+              {/* Browser chrome */}
+              <div className="bg-gray-100 px-4 py-2.5 flex items-center gap-3 border-b border-gray-200">
+                <div className="flex gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-gray-300" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-gray-300" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-gray-300" />
+                </div>
+                <div className="flex-1 bg-white rounded-md px-3 py-1 text-xs text-gray-400 text-center border border-gray-200">
+                  kasira.online/dashboard
+                </div>
+              </div>
+
+              {/* Dashboard content */}
+              <div className="bg-gray-50 p-5 sm:p-8">
+                {/* Stats row */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                  {[
+                    { label: 'Revenue Hari Ini', value: 'Rp 2.847.000', icon: BarChart3, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                    { label: 'Total Pesanan', value: '63 order', icon: Receipt, color: 'text-blue-600', bg: 'bg-blue-50' },
+                    { label: 'Produk Terjual', value: '147 item', icon: Package, color: 'text-violet-600', bg: 'bg-violet-50' },
+                    { label: 'Rata-rata Order', value: 'Rp 45.190', icon: LineChart, color: 'text-amber-600', bg: 'bg-amber-50' },
+                  ].map((stat, i) => (
+                    <div key={i} className="bg-white rounded-xl p-4 border border-gray-100">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className={`w-7 h-7 ${stat.bg} rounded-lg flex items-center justify-center`}>
+                          <stat.icon className={`w-3.5 h-3.5 ${stat.color}`} />
+                        </div>
+                        <p className="text-xs text-gray-400 font-medium">{stat.label}</p>
+                      </div>
+                      <p className="text-lg font-bold text-gray-900">{stat.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                  {/* Chart area */}
+                  <div className="lg:col-span-3 bg-white rounded-xl border border-gray-100 p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm font-semibold text-gray-700">Pendapatan 7 Hari</span>
+                      <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">+23%</span>
+                    </div>
+                    <div className="flex items-end gap-2 h-28">
+                      {[40, 55, 35, 65, 50, 80, 70].map((h, i) => (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <div
+                            className={`w-full rounded-md ${i === 5 ? 'bg-emerald-500' : 'bg-emerald-100'}`}
+                            style={{ height: `${h}%` }}
+                          />
+                          <span className="text-[10px] text-gray-400">
+                            {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'][i]}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Best seller */}
+                  <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Star className="w-4 h-4 text-amber-500" />
+                      <span className="text-sm font-semibold text-gray-700">Best Seller</span>
+                    </div>
+                    <div className="space-y-3">
+                      {[
+                        { rank: 1, name: 'Kopi Gula Aren', sold: 25, badge: 'bg-amber-400' },
+                        { rank: 2, name: 'Bakwan Goreng', sold: 18, badge: 'bg-gray-400' },
+                        { rank: 3, name: 'Kopi Hitam', sold: 10, badge: 'bg-amber-600' },
+                      ].map((p) => (
+                        <div key={p.rank} className="flex items-center gap-3">
+                          <span className={`w-6 h-6 ${p.badge} text-white text-xs font-bold rounded-full flex items-center justify-center`}>
+                            {p.rank}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
+                          </div>
+                          <span className="text-xs text-gray-400 font-medium">{p.sold}x</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════ PAIN POINTS ═══════════════ */}
+      <section className="py-16 bg-gray-950">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <p className="text-center text-sm text-gray-500 mb-8 uppercase tracking-widest font-medium">Masalah yang Kasira selesaikan</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                before: 'Tutup kasir harus itung cash manual, selisih terus',
+                after: 'Shift auto-close — ringkasan cash, QRIS, selisih langsung keliatan',
+                icon: CreditCard,
+              },
+              {
+                before: 'Gak tau menu mana yang laku, stok tiba-tiba habis',
+                after: 'Best seller auto-ranking + alert stok rendah otomatis',
+                icon: Flame,
+              },
+              {
+                before: 'Customer nanya "ada menu apa?" — kirim foto satu-satu',
+                after: 'Storefront online gratis — customer tinggal buka link',
+                icon: Globe,
+              },
+            ].map(({ before, after, icon: Icon }, i) => (
+              <div key={i} className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+                <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center mb-4">
+                  <Icon className="w-5 h-5 text-emerald-400" />
+                </div>
+                <p className="text-gray-500 text-sm mb-3 line-through decoration-gray-700">{before}</p>
+                <p className="text-white text-sm font-medium">{after}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════ FEATURES ═══════════════ */}
+      <section id="features" className="py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-2xl mx-auto mb-20">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Satu app, semua kebutuhan cafe
+            </h2>
+            <p className="text-gray-500">
+              Dari kasir sampai laporan. Dari offline sampai online.
+            </p>
+          </div>
+
+          {/* Feature 1: POS */}
+          <div className="grid lg:grid-cols-2 gap-12 items-center mb-24">
+            <div>
+              <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-4 uppercase tracking-wide">
+                <Smartphone className="w-3.5 h-3.5" />
+                Kasir
+              </div>
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+                Ketuk. Bayar. Selesai.
+              </h3>
+              <p className="text-gray-500 mb-6 leading-relaxed">
+                Buka app, pilih menu, terima pembayaran. Cash atau QRIS. Struk otomatis. Bahkan bisa jalan <strong>tanpa internet</strong> — data sync otomatis saat online.
+              </p>
+              <ul className="space-y-3">
+                {[
+                  'Input order dalam hitungan detik',
+                  'Offline mode — tetap transaksi saat WiFi mati',
+                  'Multi-kasir dengan shift & tutup kasir otomatis',
+                  'Split bill & tab untuk customer reguler',
+                ].map((f, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-gray-600">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {/* POS Mockup */}
+            <div className="bg-gray-100 rounded-2xl p-6 border border-gray-200">
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-bold text-gray-800">Kasira POS</span>
+                  <span className="text-xs text-gray-400">Sab, 12 Apr 14:30</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {[
+                    { name: 'Kopi Gula Aren', price: 'Rp 21rb', hot: true },
+                    { name: 'Bakwan Goreng', price: 'Rp 15rb', hot: true },
+                    { name: 'Nasi Ayam', price: 'Rp 18rb', hot: false },
+                    { name: 'Kopi Hitam', price: 'Rp 20rb', hot: false },
+                    { name: 'Es Teh', price: 'Rp 8rb', hot: false },
+                    { name: 'Fried Banana', price: 'Rp 15rb', hot: false },
+                  ].map((item, i) => (
+                    <div key={i} className="relative bg-gray-50 rounded-lg p-3 text-center border border-gray-100 hover:border-emerald-200 transition-colors">
+                      {item.hot && (
+                        <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">Populer</span>
+                      )}
+                      <div className="w-full h-8 bg-gray-200 rounded mb-2" />
+                      <p className="text-xs font-medium text-gray-800 truncate">{item.name}</p>
+                      <p className="text-xs text-emerald-600 font-bold">{item.price}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-emerald-500 text-white text-center py-2.5 rounded-lg text-sm font-bold">
+                  Bayar Rp 54.000
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Feature 2: Storefront */}
+          <div className="grid lg:grid-cols-2 gap-12 items-center mb-24">
+            <div className="order-2 lg:order-1">
+              <div className="bg-gray-100 rounded-2xl p-6 border border-gray-200">
+                <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100">
+                  <div className="bg-emerald-600 p-4 text-white">
+                    <p className="text-xs opacity-75">kasira.online/kasira-coffee</p>
+                    <p className="text-lg font-bold mt-1">Kasira Coffee</p>
+                    <p className="text-xs opacity-75">Jl. Contoh No. 123 &middot; Buka</p>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {[
+                      { name: 'Kopi Gula Aren', price: 'Rp 21.000', tag: 'Best Seller' },
+                      { name: 'Bakwan Goreng', price: 'Rp 15.000', tag: null },
+                      { name: 'Nasi Ayam', price: 'Rp 18.000', tag: null },
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gray-100 rounded-lg" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-800">{item.name}</p>
+                            {item.tag && <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded">{item.tag}</span>}
+                          </div>
+                        </div>
+                        <p className="text-sm font-bold text-gray-900">{item.price}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="order-1 lg:order-2">
+              <div className="inline-flex items-center gap-2 bg-violet-50 text-violet-700 text-xs font-bold px-3 py-1 rounded-full mb-4 uppercase tracking-wide">
+                <Globe className="w-3.5 h-3.5" />
+                Storefront
+              </div>
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+                Toko online gratis, langsung jadi
+              </h3>
+              <p className="text-gray-500 mb-6 leading-relaxed">
+                Begitu lo daftar dan masukin menu, storefront lo langsung live di <strong>kasira.online/nama-cafe</strong>. Customer tinggal klik, lihat menu + harga. Zero komisi, selamanya.
+              </p>
+              <ul className="space-y-3">
+                {[
+                  'URL cantik: kasira.online/nama-cafe-kamu',
+                  'Menu, harga, foto update otomatis dari dashboard',
+                  'Customer lihat stok real-time',
+                  'Gak perlu coding, gak perlu hosting',
+                ].map((f, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-gray-600">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/kasira-coffee"
+                className="inline-flex items-center gap-2 mt-6 text-sm font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
+              >
+                Coba lihat storefront demo
+                <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
           </div>
 
-          {/* Dashboard Mockup */}
-          <div className="mt-20 relative mx-auto max-w-4xl">
-            <div className="rounded-2xl overflow-hidden shadow-2xl border border-gray-200 bg-gray-900">
-              {/* Browser chrome */}
-              <div className="bg-gray-800 px-4 py-3 flex items-center gap-2 border-b border-gray-700">
-                <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-500/70" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-500/70" />
-                  <div className="w-3 h-3 rounded-full bg-green-500/70" />
-                </div>
-                <div className="flex-1 bg-gray-700 rounded-md px-3 py-1 text-xs text-gray-400 text-center">
-                  kasira.id/dashboard
-                </div>
+          {/* Feature 3: Dashboard + Laporan */}
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 bg-amber-50 text-amber-700 text-xs font-bold px-3 py-1 rounded-full mb-4 uppercase tracking-wide">
+                <BarChart3 className="w-3.5 h-3.5" />
+                Dashboard
               </div>
-              {/* Dashboard preview */}
-              <div className="bg-gray-50 p-6">
-                <div className="grid grid-cols-3 gap-4 mb-6">
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+                Tau persis bisnis lo hari ini
+              </h3>
+              <p className="text-gray-500 mb-6 leading-relaxed">
+                Revenue, best seller, stok kritis, laporan shift — semua di satu layar. Buka dari HP, laptop, kapan aja. Gak perlu nunggu admin kirim rekap Excel.
+              </p>
+              <ul className="space-y-3">
+                {[
+                  'Revenue harian, mingguan, per-produk',
+                  'Best seller ranking otomatis',
+                  'Alert stok rendah real-time',
+                  'Tax & service charge (PB1 + SC)',
+                  'Pro: AI insight dikirim via WhatsApp',
+                ].map((f, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-gray-600">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="bg-gray-100 rounded-2xl p-6 border border-gray-200">
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <p className="text-sm font-bold text-gray-800 mb-3">Ringkasan Shift #4</p>
+                <div className="space-y-2 text-sm">
                   {[
-                    { label: 'Revenue Hari Ini', value: 'Rp 2.4jt', bg: 'bg-emerald-100', bar: 'bg-emerald-500' },
-                    { label: 'Total Order', value: '47 order', bg: 'bg-blue-100', bar: 'bg-blue-500' },
-                    { label: 'Produk Aktif', value: '32 menu', bg: 'bg-purple-100', bar: 'bg-purple-500' },
-                  ].map((stat, i) => (
-                    <div key={i} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-                      <p className="text-xs text-gray-500 mb-1">{stat.label}</p>
-                      <p className="text-xl font-bold text-gray-900">{stat.value}</p>
-                      <div className={`mt-2 h-1 rounded-full ${stat.bg}`}>
-                        <div className={`h-1 rounded-full ${stat.bar} w-2/3`} />
-                      </div>
+                    { label: 'Total Order', value: '23 order' },
+                    { label: 'Cash', value: 'Rp 1.245.000' },
+                    { label: 'QRIS', value: 'Rp 847.000' },
+                    { label: 'PB1 (10%)', value: 'Rp 209.200' },
+                    { label: 'Service (5%)', value: 'Rp 104.600' },
+                  ].map((row, i) => (
+                    <div key={i} className="flex justify-between py-1.5 border-b border-gray-50">
+                      <span className="text-gray-500">{row.label}</span>
+                      <span className="font-semibold text-gray-800">{row.value}</span>
                     </div>
                   ))}
-                </div>
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-gray-700">Transaksi Terbaru</span>
-                    <span className="text-xs text-emerald-600 font-medium">Live</span>
+                  <div className="flex justify-between pt-2">
+                    <span className="font-bold text-gray-900">Total Revenue</span>
+                    <span className="font-bold text-emerald-600 text-base">Rp 2.405.800</span>
                   </div>
-                  {[
-                    { name: 'Kopi Susu', time: '14:32', amount: 'Rp 25.000', status: 'Selesai' },
-                    { name: 'Croissant + Latte', time: '14:28', amount: 'Rp 55.000', status: 'Selesai' },
-                    { name: 'Matcha Latte', time: '14:21', amount: 'Rp 32.000', status: 'Selesai' },
-                  ].map((tx, i) => (
-                    <div key={i} className="px-4 py-3 flex items-center justify-between border-b border-gray-50 last:border-0">
-                      <div>
-                        <p className="text-sm font-medium text-gray-800">{tx.name}</p>
-                        <p className="text-xs text-gray-400">{tx.time}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-gray-900">{tx.amount}</p>
-                        <span className="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">{tx.status}</span>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
             </div>
@@ -130,195 +394,109 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* VALUE PROPS */}
-      <section className="py-12 bg-gray-900">
+      {/* ═══════════════ MORE FEATURES GRID ═══════════════ */}
+      <section className="py-16 bg-gray-50 border-y border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { icon: Zap, title: 'Setup 5 Menit', desc: 'Daftar WA, tambah menu, langsung kasir' },
-              { icon: Shield, title: 'Zero Komisi', desc: 'Storefront & QRIS tanpa potongan apapun' },
-              { icon: Clock, title: 'Offline Mode', desc: 'Tetap transaksi meski internet mati' },
-            ].map(({ icon: Icon, title, desc }, i) => (
-              <div key={i} className="flex flex-col items-center gap-3">
-                <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center">
-                  <Icon className="w-6 h-6 text-emerald-400" />
-                </div>
-                <p className="text-white font-bold">{title}</p>
-                <p className="text-gray-400 text-sm">{desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FITUR */}
-      <section id="features" className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Semua yang kamu butuhkan
-            </h2>
-            <p className="text-lg text-gray-500">
-              Dirancang khusus untuk cafe dan UMKM Indonesia
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                icon: Smartphone,
-                title: 'Kasir Digital',
-                desc: 'Input order, terima QRIS, cetak struk. Offline mode tetap jalan tanpa internet.',
-                pro: false,
-              },
-              {
-                icon: Globe,
-                title: 'Storefront Gratis',
-                desc: 'kasira.id/nama-kamu aktif otomatis. Customer bisa order online, zero komisi selamanya.',
-                pro: false,
-              },
-              {
-                icon: LineChart,
-                title: 'Dashboard Owner',
-                desc: 'Pantau revenue, stok, dan laporan harian dari HP manapun kapan saja.',
-                pro: false,
-              },
-              {
-                icon: Package,
-                title: 'Manajemen Stok',
-                desc: 'Stok auto-kurang setiap transaksi. Produk auto-hilang dari menu saat stok habis.',
-                pro: false,
-              },
-              {
-                icon: Sparkles,
-                title: 'AI Insight',
-                desc: 'Laporan dan insight bisnis harian dikirim otomatis via WA. Tanya jawab langsung.',
-                pro: true,
-              },
-              {
-                icon: MessageCircle,
-                title: 'Kitchen Display',
-                desc: 'Layar dapur real-time. Pesanan masuk otomatis, dapur langsung tahu.',
-                pro: true,
-              },
+              { icon: WifiOff, title: 'Offline Mode', desc: 'Tetap transaksi saat WiFi mati' },
+              { icon: Users, title: 'Multi Kasir', desc: 'Shift per kasir, tutup kasir otomatis' },
+              { icon: ChefHat, title: 'Kitchen Display', desc: 'Order masuk langsung ke layar dapur', pro: true },
+              { icon: Sparkles, title: 'AI Insight', desc: 'Laporan harian otomatis via WA', pro: true },
+              { icon: Shield, title: 'Data Aman', desc: 'Enkripsi AES-256, server Indonesia' },
+              { icon: Receipt, title: 'Struk Otomatis', desc: 'Print thermal atau struk digital' },
+              { icon: CreditCard, title: 'QRIS', desc: 'Terima pembayaran digital, zero komisi' },
+              { icon: Clock, title: 'Reservasi Meja', desc: 'Booking meja online dari storefront', pro: true },
             ].map(({ icon: Icon, title, desc, pro }, i) => (
-              <div key={i} className="relative bg-gray-50 rounded-2xl p-7 border border-gray-100 hover:border-emerald-200 hover:shadow-md transition-all group">
-                {pro && (
-                  <span className="absolute top-5 right-5 bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full">
-                    PRO
-                  </span>
-                )}
-                <div className="w-11 h-11 bg-white border border-gray-200 rounded-xl flex items-center justify-center mb-5 group-hover:bg-emerald-50 group-hover:border-emerald-200 transition-colors">
-                  <Icon className="w-5 h-5 text-gray-600 group-hover:text-emerald-600 transition-colors" />
+              <div key={i} className="bg-white rounded-xl p-5 border border-gray-100 hover:border-emerald-200 hover:shadow-sm transition-all">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm font-bold text-gray-900">{title}</span>
+                  {pro && <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded">PRO</span>}
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{desc}</p>
+                <p className="text-xs text-gray-500">{desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section className="py-24 bg-emerald-50">
+      {/* ═══════════════ HOW IT WORKS ═══════════════ */}
+      <section className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900">Mulai dalam 5 menit</h2>
+            <p className="text-gray-500 mt-3">Gak perlu training. Gak perlu teknisi.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8 relative">
-            <div className="hidden md:block absolute top-10 left-[20%] right-[20%] h-px bg-emerald-200" />
+            <div className="hidden md:block absolute top-10 left-[20%] right-[20%] h-px bg-gray-200 border-dashed" />
             {[
-              { step: '1', title: 'Daftar Online', desc: 'Masukkan nomor WA, verifikasi OTP, akun langsung aktif.' },
-              { step: '2', title: 'Input Menu', desc: 'Tambah produk beserta harga. Storefront aktif otomatis.' },
-              { step: '3', title: 'Download Kasir', desc: 'Unduh app kasir Android, login, langsung transaksi hari ini.' },
+              { step: '1', title: 'Daftar via WA', desc: 'Masukkan nomor WhatsApp, verifikasi OTP. 30 detik selesai.' },
+              { step: '2', title: 'Input menu lo', desc: 'Tambah produk, set harga, upload foto. Storefront langsung live.' },
+              { step: '3', title: 'Download app kasir', desc: 'Install di Android, login, mulai terima order hari ini juga.' },
             ].map(({ step, title, desc }, i) => (
               <div key={i} className="relative text-center">
-                <div className="w-20 h-20 mx-auto bg-white border-2 border-emerald-200 rounded-full flex items-center justify-center mb-5 relative z-10 shadow-sm">
-                  <span className="text-2xl font-black text-emerald-500">{step}</span>
+                <div className="w-16 h-16 mx-auto bg-gray-900 rounded-2xl flex items-center justify-center mb-4 relative z-10 shadow-lg">
+                  <span className="text-xl font-black text-white">{step}</span>
                 </div>
                 <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
-                <p className="text-gray-500 text-sm">{desc}</p>
+                <p className="text-gray-500 text-sm max-w-xs mx-auto">{desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* PRICING */}
-      <section id="pricing" className="py-24 bg-white">
+      {/* ═══════════════ PRICING ═══════════════ */}
+      <section id="pricing" className="py-24 bg-gray-50 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Harga transparan</h2>
-            <p className="text-lg text-gray-500">Mulai gratis, tidak perlu kartu kredit</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Harga jelas, gak ada biaya tersembunyi</h2>
+            <p className="text-gray-500">Semua plan termasuk storefront gratis + offline mode</p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
             {/* STARTER */}
-            <div className="bg-white rounded-2xl p-7 border-2 border-emerald-500 shadow-lg relative flex flex-col">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-4 py-1 rounded-full whitespace-nowrap">
+            <div className="bg-white rounded-2xl p-7 border-2 border-gray-900 shadow-lg relative flex flex-col">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-bold px-4 py-1 rounded-full whitespace-nowrap">
                 Paling Populer
               </div>
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-1">STARTER</h3>
-                <p className="text-sm text-gray-400 mb-4">Warung, kantin & toko kecil</p>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Starter</h3>
+                <p className="text-sm text-gray-400 mb-4">Warung, kantin, toko kecil</p>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black text-gray-900">Rp 99rb</span>
+                  <span className="text-4xl font-black text-gray-900">99rb</span>
                   <span className="text-gray-400 text-sm">/bulan</span>
                 </div>
               </div>
               <ul className="space-y-3 mb-7 flex-1 text-sm">
-                {['1 kasir', 'Max 500 produk', 'Cash + QRIS Xendit', 'Storefront gratis', 'Laporan harian', 'Manajemen stok', 'Email support'].map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 text-gray-600">
+                {['1 kasir + 1 outlet', 'Max 500 produk', 'Cash + QRIS', 'Storefront gratis', 'Laporan harian', 'Manajemen stok + alert', 'Offline mode', 'Email support'].map((f, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-gray-600">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                     {f}
                   </li>
                 ))}
               </ul>
               <Link href="/register"
-                className="w-full block text-center px-5 py-3 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 transition-colors text-sm">
-                Daftar Sekarang
+                className="w-full block text-center px-5 py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors text-sm">
+                Mulai Gratis 30 Hari
               </Link>
             </div>
 
             {/* PRO */}
             <div className="bg-white rounded-2xl p-7 border border-gray-200 flex flex-col">
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-1">PRO</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Pro</h3>
                 <p className="text-sm text-gray-400 mb-4">Coffee shop & cafe</p>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black text-gray-900">Rp 299rb</span>
+                  <span className="text-4xl font-black text-gray-900">299rb</span>
                   <span className="text-gray-400 text-sm">/bulan</span>
                 </div>
               </div>
               <ul className="space-y-3 mb-7 flex-1 text-sm">
-                <li className="text-xs font-bold text-gray-400 uppercase tracking-wide pb-2 border-b border-gray-100">Semua Starter +</li>
-                {['Max 5 kasir', 'Unlimited produk', 'Kitchen display', 'AI daily insight WA', 'Loyalty points', 'Reservasi meja', 'Split bill', 'Priority WA support'].map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 text-gray-600">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <a href={waLink} target="_blank" rel="noopener noreferrer"
-                className="w-full block text-center px-5 py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors text-sm">
-                Hubungi Kami
-              </a>
-            </div>
-
-            {/* BUSINESS */}
-            <div className="bg-white rounded-2xl p-7 border border-gray-200 flex flex-col">
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-1">BUSINESS</h3>
-                <p className="text-sm text-gray-400 mb-4">Resto & cafe chain</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black text-gray-900">Rp 499rb</span>
-                  <span className="text-gray-400 text-sm">/bulan</span>
-                </div>
-              </div>
-              <ul className="space-y-3 mb-7 flex-1 text-sm">
-                <li className="text-xs font-bold text-gray-400 uppercase tracking-wide pb-2 border-b border-gray-100">Semua Pro +</li>
-                {['Unlimited kasir', 'Multi outlet', 'HQ dashboard', 'Transfer stok antar outlet', 'Prediksi stok & revenue', 'WA support + onboarding'].map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 text-gray-600">
+                <li className="text-xs font-bold text-emerald-600 uppercase tracking-wide pb-2 border-b border-gray-100">Semua Starter +</li>
+                {['Max 5 kasir', 'Unlimited produk', 'Kitchen display', 'AI daily insight via WA', 'Loyalty points', 'Reservasi meja', 'Split bill & tab', 'Resep + HPP tracking', 'Priority WA support'].map((f, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-gray-600">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                     {f}
                   </li>
@@ -330,27 +508,27 @@ export default function LandingPage() {
               </a>
             </div>
 
-            {/* ENTERPRISE */}
-            <div className="bg-gray-900 rounded-2xl p-7 border border-gray-800 flex flex-col">
+            {/* BUSINESS */}
+            <div className="bg-white rounded-2xl p-7 border border-gray-200 flex flex-col">
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-white mb-1">ENTERPRISE</h3>
-                <p className="text-sm text-gray-400 mb-4">Grup multi-brand</p>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Business</h3>
+                <p className="text-sm text-gray-400 mb-4">Resto chain & multi outlet</p>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black text-white">Rp 1.499rb</span>
-                  <span className="text-gray-400 text-sm">/bln</span>
+                  <span className="text-4xl font-black text-gray-900">499rb</span>
+                  <span className="text-gray-400 text-sm">/bulan</span>
                 </div>
               </div>
               <ul className="space-y-3 mb-7 flex-1 text-sm">
-                <li className="text-xs font-bold text-gray-500 uppercase tracking-wide pb-2 border-b border-gray-800">Semua Business +</li>
-                {['5 brand + 10 outlet', 'AI autonomous', 'White label APK', 'Custom domain', 'SLA 99.9% uptime', 'Account manager'].map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 text-gray-300">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <li className="text-xs font-bold text-emerald-600 uppercase tracking-wide pb-2 border-b border-gray-100">Semua Pro +</li>
+                {['Unlimited kasir & outlet', 'HQ dashboard', 'Transfer stok antar outlet', 'Prediksi stok & revenue', 'Custom domain storefront', 'Dedicated account manager'].map((f, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-gray-600">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                     {f}
                   </li>
                 ))}
               </ul>
               <a href={waLink} target="_blank" rel="noopener noreferrer"
-                className="w-full block text-center px-5 py-3 bg-white text-gray-900 font-bold rounded-xl hover:bg-gray-100 transition-colors text-sm">
+                className="w-full block text-center px-5 py-3 bg-white text-gray-900 border-2 border-gray-200 font-bold rounded-xl hover:bg-gray-50 transition-colors text-sm">
                 Hubungi Kami
               </a>
             </div>
@@ -358,47 +536,44 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* FAQ */}
+      {/* ═══════════════ FAQ ═══════════════ */}
       <FAQ />
 
-      {/* CTA */}
-      <section className="py-24 bg-gradient-to-br from-emerald-500 to-emerald-700 relative overflow-hidden">
+      {/* ═══════════════ CTA ═══════════════ */}
+      <section className="py-24 bg-gray-900 relative overflow-hidden">
         <div className="absolute inset-0">
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-black/10 rounded-full blur-3xl" />
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />
         </div>
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl md:text-5xl font-extrabold text-white mb-4">
-            Siap coba Kasira?
+          <h2 className="text-3xl md:text-5xl font-extrabold text-white mb-4">
+            Cafe lo layak punya sistem yang proper
           </h2>
-          <p className="text-emerald-100 text-xl mb-10">
-            Kami bantu setup dari nol.
+          <p className="text-gray-400 text-lg mb-10 max-w-xl mx-auto">
+            Mulai dari Rp 99rb/bulan. Gratis 30 hari pertama. Kami bantu setup dari nol.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/register"
-              className="inline-flex items-center gap-3 px-10 py-5 bg-white text-emerald-600 text-lg font-bold rounded-2xl hover:bg-gray-50 transition-all shadow-xl hover:-translate-y-1"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-emerald-500 text-white text-base font-bold rounded-xl hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/25 hover:-translate-y-0.5"
             >
               Daftar Gratis Sekarang
-              <ArrowRight className="w-5 h-5" />
+              <ArrowRight className="w-4 h-4" />
             </Link>
             <a
               href={waLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-3 px-8 py-5 bg-white/10 text-white text-lg font-bold rounded-2xl hover:bg-white/20 transition-all border border-white/20"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-white/10 text-white text-base font-semibold rounded-xl hover:bg-white/20 transition-all border border-white/10"
             >
-              <MessageCircle className="w-5 h-5" />
-              Tanya via WA
+              <MessageCircle className="w-4 h-4" />
+              Tanya via WhatsApp
             </a>
           </div>
-          <p className="mt-5 text-emerald-200 text-sm">
-            Setup 5 menit · Tidak perlu kartu kredit · Cancel kapan saja
-          </p>
         </div>
       </section>
 
-      {/* FOOTER */}
+      {/* ═══════════════ FOOTER ═══════════════ */}
       <footer className="bg-gray-950 py-12 border-t border-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
@@ -416,8 +591,8 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-gray-500 text-sm">© 2026 Kasira. All rights reserved.</p>
-            <p className="text-gray-500 text-sm">POS Digital untuk UMKM Indonesia 🇮🇩</p>
+            <p className="text-gray-500 text-sm">&copy; 2026 Kasira. All rights reserved.</p>
+            <p className="text-gray-600 text-sm">POS digital untuk UMKM Indonesia</p>
           </div>
         </div>
       </footer>

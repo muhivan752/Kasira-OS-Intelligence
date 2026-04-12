@@ -22,7 +22,8 @@ export const metadata: Metadata = {
   },
 };
 
-const APK_URL = 'https://github.com/muhivan752/Kasira-OS-Intelligence/releases/latest';
+const APK_POS = '/api/download/pos';
+const APK_DAPUR = '/api/download/dapur';
 
 export default function DownloadPage() {
   return (
@@ -51,7 +52,7 @@ export default function DownloadPage() {
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <a
-                href={APK_URL}
+                href={APK_POS}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 bg-emerald-500 text-white text-lg font-bold rounded-2xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/25 hover:-translate-y-0.5"
@@ -132,8 +133,8 @@ export default function DownloadPage() {
       {/* Two Platforms */}
       <section className="py-16 bg-gray-50">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold text-gray-900 text-center mb-12">2 Platform, 1 Sistem</h2>
-          <div className="grid md:grid-cols-2 gap-6">
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-12">3 App, 1 Sistem</h2>
+          <div className="grid md:grid-cols-3 gap-6">
             <div className="bg-white rounded-2xl p-7 border-2 border-emerald-500 shadow-md">
               <div className="flex items-center gap-3 mb-4">
                 <Smartphone className="w-6 h-6 text-emerald-600" />
@@ -148,12 +149,34 @@ export default function DownloadPage() {
                 ))}
               </ul>
               <a
-                href={APK_URL}
+                href={APK_POS}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-6 w-full block text-center px-5 py-3 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 transition-colors text-sm"
               >
                 Download APK
+              </a>
+            </div>
+
+            <div className="bg-white rounded-2xl p-7 border border-gray-200">
+              <div className="flex items-center gap-3 mb-4">
+                <Smartphone className="w-6 h-6 text-amber-600" />
+                <h3 className="text-lg font-bold text-gray-900">App Dapur (Android)</h3>
+                <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full">PRO</span>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">Kitchen display — pesanan masuk langsung keliatan di layar dapur.</p>
+              <ul className="space-y-2 text-sm">
+                {['Order masuk real-time', 'Status: Proses / Selesai', 'Notifikasi suara', 'Tablet-friendly'].map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-gray-600">
+                    <CheckCircle2 className="w-4 h-4 text-amber-500 shrink-0" /> {f}
+                  </li>
+                ))}
+              </ul>
+              <a
+                href={APK_DAPUR}
+                className="mt-6 w-full block text-center px-5 py-3 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors text-sm"
+              >
+                Download APK Dapur
               </a>
             </div>
 
