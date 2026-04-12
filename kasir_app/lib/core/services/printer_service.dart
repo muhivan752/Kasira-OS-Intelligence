@@ -3,13 +3,12 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:bluetooth_print_plus/bluetooth_print_plus.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 const _prefKeyMac = 'printer_mac';
 const _prefKeyName = 'printer_name';
 
-/// Holds the currently saved/connected printer info
 class PrinterDevice {
   final String name;
   final String address;
@@ -20,7 +19,7 @@ class PrinterState {
   final PrinterDevice? savedDevice;
   final bool isConnected;
   final bool isScanning;
-  final List<BluetoothDevice> scanResults;
+  final List<BluetoothInfo> scanResults;
   final String? error;
 
   const PrinterState({
@@ -35,7 +34,7 @@ class PrinterState {
     PrinterDevice? savedDevice,
     bool? isConnected,
     bool? isScanning,
-    List<BluetoothDevice>? scanResults,
+    List<BluetoothInfo>? scanResults,
     String? error,
     bool clearError = false,
   }) {
@@ -50,9 +49,6 @@ class PrinterState {
 }
 
 class PrinterNotifier extends StateNotifier<PrinterState> {
-  StreamSubscription? _connectSub;
-  StreamSubscription? _scanSub;
-
   PrinterNotifier() : super(const PrinterState()) {
     _init();
   }
@@ -65,20 +61,13 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
       state = state.copyWith(savedDevice: PrinterDevice(name: name, address: mac));
     }
 
+    // Check current connection status
     try {
-      _connectSub = BluetoothPrintPlus.connectState.listen((s) {
-        state = state.copyWith(isConnected: s == ConnectState.connected);
-      });
-    } catch (_) {
-      // BT not available on this device — ignore
-    }
-  }
-
-  @override
-  void dispose() {
-    _connectSub?.cancel();
-    _scanSub?.cancel();
-    super.dispose();
+      final connected = await PrintBluetoothThermal.connectionStatus;
+      if (mounted) {
+        state = state.copyWith(isConnected: connected);
+      }
+    } catch (_) {}
   }
 
   Future<bool> _requestPermissions() async {
@@ -107,55 +96,58 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
 
     if (!await _requestPermissions()) return;
 
+    // Check Bluetooth enabled
     try {
-      // Subscribe to results BEFORE starting scan to avoid missing early results
-      _scanSub?.cancel();
-      _scanSub = BluetoothPrintPlus.scanResults.listen(
-        (devices) {
-          if (mounted) {
-            state = state.copyWith(scanResults: devices);
-          }
-        },
-        onError: (e) {
-          if (mounted) {
-            state = state.copyWith(isScanning: false, error: 'Scan error: $e');
-          }
-        },
-      );
+      final btEnabled = await PrintBluetoothThermal.bluetoothEnabled;
+      if (!btEnabled) {
+        if (mounted) {
+          state = state.copyWith(
+            isScanning: false,
+            error: 'Bluetooth belum aktif. Nyalakan Bluetooth di Pengaturan HP.',
+          );
+        }
+        return;
+      }
+    } catch (_) {}
 
-      await BluetoothPrintPlus.startScan(timeout: const Duration(seconds: 6));
+    try {
+      final devices = await PrintBluetoothThermal.pairedBluetooths;
+      if (mounted) {
+        state = state.copyWith(
+          scanResults: devices,
+          isScanning: false,
+        );
+      }
     } catch (e) {
-      state = state.copyWith(isScanning: false, error: 'Gagal scan Bluetooth: $e');
-      return;
-    }
-
-    await Future.delayed(const Duration(seconds: 7));
-    if (mounted) {
-      state = state.copyWith(isScanning: false);
+      if (mounted) {
+        state = state.copyWith(isScanning: false, error: 'Gagal scan Bluetooth: $e');
+      }
     }
   }
 
   Future<void> stopScan() async {
-    try {
-      await BluetoothPrintPlus.stopScan();
-    } catch (_) {}
     if (mounted) {
       state = state.copyWith(isScanning: false);
     }
   }
 
-  Future<bool> connect(BluetoothDevice device) async {
+  Future<bool> connect(BluetoothInfo device) async {
     state = state.copyWith(clearError: true);
     try {
-      await BluetoothPrintPlus.connect(device);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefKeyMac, device.address ?? '');
-      await prefs.setString(_prefKeyName, device.name ?? 'Printer');
-      state = state.copyWith(
-        savedDevice: PrinterDevice(name: device.name ?? 'Printer', address: device.address ?? ''),
-        isConnected: true,
-      );
-      return true;
+      final ok = await PrintBluetoothThermal.connect(macPrinterAddress: device.macAdpilesress);
+      if (ok) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_prefKeyMac, device.macAdpilesress);
+        await prefs.setString(_prefKeyName, device.name);
+        state = state.copyWith(
+          savedDevice: PrinterDevice(name: device.name, address: device.macAdpilesress),
+          isConnected: true,
+        );
+        return true;
+      } else {
+        state = state.copyWith(error: 'Gagal terhubung ke ${device.name}');
+        return false;
+      }
     } catch (e) {
       state = state.copyWith(error: 'Gagal terhubung: $e');
       return false;
@@ -164,19 +156,43 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
 
   Future<void> disconnect() async {
     try {
-      await BluetoothPrintPlus.disconnect();
+      await PrintBluetoothThermal.disconnect;
     } catch (_) {}
     state = state.copyWith(isConnected: false);
   }
 
+  /// Auto-connect to saved printer
+  Future<bool> autoConnect() async {
+    if (state.savedDevice == null) return false;
+    try {
+      final connected = await PrintBluetoothThermal.connectionStatus;
+      if (connected) {
+        state = state.copyWith(isConnected: true);
+        return true;
+      }
+      final ok = await PrintBluetoothThermal.connect(
+        macPrinterAddress: state.savedDevice!.address,
+      );
+      if (ok) {
+        state = state.copyWith(isConnected: true);
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   Future<bool> printBytes(Uint8List bytes) async {
     if (!state.isConnected) {
-      state = state.copyWith(error: 'Printer belum terhubung');
-      return false;
+      // Try auto-connect first
+      final reconnected = await autoConnect();
+      if (!reconnected) {
+        state = state.copyWith(error: 'Printer belum terhubung');
+        return false;
+      }
     }
     try {
-      await BluetoothPrintPlus.write(bytes);
-      return true;
+      final result = await PrintBluetoothThermal.writeBytes(bytes);
+      return result;
     } catch (e) {
       state = state.copyWith(error: 'Gagal cetak: $e');
       return false;
@@ -201,7 +217,7 @@ class EscPos {
   static const List<int> alignRight = [0x1B, 0x61, 0x02];
   static const List<int> boldOn = [0x1B, 0x45, 0x01];
   static const List<int> boldOff = [0x1B, 0x45, 0x00];
-  static const List<int> fontBig = [0x1D, 0x21, 0x11]; // double width + height
+  static const List<int> fontBig = [0x1D, 0x21, 0x11];
   static const List<int> fontNormal = [0x1D, 0x21, 0x00];
   static const List<int> cut = [0x1D, 0x56, 0x42, 0x03];
   static const List<int> feedLines3 = [_lf, _lf, _lf];
@@ -212,7 +228,6 @@ class EscPos {
   static List<int> divider({int width = 32}) =>
       List.filled(width, '-'.codeUnitAt(0))..add(_lf);
 
-  /// Right-justify value against label in `width` chars
   static List<int> rowLR(String label, String value, {int width = 32}) {
     final space = width - label.length - value.length;
     final row = space > 0
@@ -296,10 +311,8 @@ Uint8List buildReceipt(ReceiptData d) {
 
   // Items
   for (final item in d.items) {
-    // item name (truncate if too long)
     final name = item.name.length > w ? item.name.substring(0, w) : item.name;
     bytes.addAll(EscPos.line(name));
-    // qty x price = subtotal
     final detail = '  ${item.qty}x${_rp(item.price)}';
     final sub = _rp(item.subtotal);
     bytes.addAll(EscPos.rowLR(detail, sub, width: w));

@@ -2,7 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:bluetooth_print_plus/bluetooth_print_plus.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/services/printer_service.dart';
 
@@ -108,25 +108,33 @@ class PrinterSettingsPage extends ConsumerWidget {
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                     )
                   : const Icon(LucideIcons.bluetooth),
-              label: Text(state.isScanning ? 'Menghentikan...' : 'Scan Printer Bluetooth'),
+              label: Text(state.isScanning ? 'Mencari...' : 'Cari Printer Bluetooth'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ),
 
+          // Info
+          const SizedBox(height: 8),
+          const Text(
+            'Pastikan printer sudah di-pair via Pengaturan Bluetooth HP terlebih dahulu.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+
           // Scan Results
           if (state.scanResults.isNotEmpty) ...[
             const SizedBox(height: 24),
-            const Text(
-              'Perangkat Ditemukan',
-              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+            Text(
+              'Perangkat Ditemukan (${state.scanResults.length})',
+              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 12),
             ...state.scanResults.map((device) => _DeviceTile(
                   device: device,
                   isConnected: state.isConnected &&
-                      state.savedDevice?.address == device.address,
+                      state.savedDevice?.address == device.macAdpilesress,
                   onConnect: () async {
                     final ok = await notifier.connect(device);
                     if (ok && context.mounted) {
@@ -181,7 +189,7 @@ class PrinterSettingsPage extends ConsumerWidget {
 }
 
 class _DeviceTile extends StatelessWidget {
-  final BluetoothDevice device;
+  final BluetoothInfo device;
   final bool isConnected;
   final VoidCallback onConnect;
   final VoidCallback onTestPrint;
@@ -205,11 +213,11 @@ class _DeviceTile extends StatelessWidget {
           color: isConnected ? AppColors.primary : AppColors.textSecondary,
         ),
         title: Text(
-          device.name?.isNotEmpty == true ? device.name! : 'Unknown Device',
+          device.name.isNotEmpty ? device.name : 'Unknown Device',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
-          device.address ?? '',
+          device.macAdpilesress,
           style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
         trailing: isConnected
