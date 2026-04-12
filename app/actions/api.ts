@@ -5,6 +5,14 @@ import { cookies } from 'next/headers';
 // Gunakan internal Docker URL untuk server actions (lebih cepat, bypass Nginx)
 const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
+/** Extract error message from API response — handles string, object, and array detail */
+function extractError(data: any, fallback = 'Terjadi kesalahan'): string {
+  if (data?.message && typeof data.message === 'string') return data.message;
+  if (typeof data?.detail === 'string') return data.detail;
+  if (Array.isArray(data?.detail)) return data.detail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join(', ');
+  return fallback;
+}
+
 export async function getAuthToken() {
   const cookieStore = await cookies();
   return cookieStore.get('token')?.value;
@@ -435,12 +443,13 @@ export async function createTable(outletId: string, payload: {
   is_active?: boolean;
 }) {
   try {
-    const res = await fetchWithAuth(`/tables?outlet_id=${outletId}/`, {
+    const res = await fetchWithAuth(`/tables/?outlet_id=${outletId}`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    return { success: res.ok, data: data.data, message: data.message || data.detail };
+    const msg = typeof data.detail === 'string' ? data.detail : (data.message || 'Gagal membuat meja');
+    return { success: res.ok, data: data.data, message: msg };
   } catch { return { success: false, message: 'Gagal membuat meja' }; }
 }
 
