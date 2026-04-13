@@ -135,6 +135,17 @@ async def create_payment(
         if order.status == OrderStatus.completed:
             raise HTTPException(status_code=400, detail="Order sudah selesai (sudah dibayar)")
             
+    # Block partial payments for non-Pro tiers (Rule #43)
+    if payment_in.is_partial:
+        from backend.models.tenant import Tenant
+        tenant = (await db.execute(
+            select(Tenant).where(Tenant.id == current_user.tenant_id)
+        )).scalar_one_or_none()
+        raw_tier = getattr(tenant, "subscription_tier", "starter") or "starter" if tenant else "starter"
+        tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
+        if tier.lower() not in {"pro", "business", "enterprise"}:
+            raise HTTPException(status_code=403, detail="Partial payment hanya tersedia untuk paket Pro.")
+
     # Determine initial status based on method
     initial_status = PaymentStatus.pending
     paid_at = None

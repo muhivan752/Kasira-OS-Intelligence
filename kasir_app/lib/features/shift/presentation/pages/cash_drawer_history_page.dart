@@ -112,7 +112,7 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         title: const Text('Riwayat Laci Kasir', style: TextStyle(color: AppColors.textPrimary)),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         elevation: 0,
@@ -129,7 +129,7 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(24),
-                      color: Colors.white,
+                      color: AppColors.surface,
                       child: Row(
                         children: [
                           Expanded(child: _buildSummaryCard('Total Penerimaan', _currency.format(_totalIn), LucideIcons.arrowDownLeft, AppColors.success)),

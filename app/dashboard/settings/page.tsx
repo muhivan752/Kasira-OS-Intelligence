@@ -94,13 +94,34 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleStockModeChange(mode: string) {
+  const [showStockModeConfirm, setShowStockModeConfirm] = useState<string | null>(null);
+  const [stockModeSuccess, setStockModeSuccess] = useState('');
+
+  function handleStockModeClick(mode: string) {
     if (!outlet || mode === stockMode) return;
+    if (mode === 'recipe') {
+      setShowStockModeConfirm(mode);
+    } else {
+      setShowStockModeConfirm(mode);
+    }
+  }
+
+  async function confirmStockModeChange() {
+    const mode = showStockModeConfirm;
+    if (!mode || !outlet) return;
+    setShowStockModeConfirm(null);
     setSavingStockMode(true);
     setStockModeError('');
+    setStockModeSuccess('');
     try {
       await updateStockMode(outlet.id, mode);
       setStockMode(mode);
+      if (mode === 'recipe') {
+        setStockModeSuccess('Mode Resep & HPP aktif! Langkah selanjutnya: buka menu Bahan Baku untuk menambahkan bahan, lalu hubungkan resep di setiap produk.');
+      } else {
+        setStockModeSuccess('Mode Stok Sederhana aktif. Stok kembali dihitung per produk.');
+      }
+      setTimeout(() => setStockModeSuccess(''), 8000);
     } catch (e: any) {
       setStockModeError(e.message);
     }
@@ -356,10 +377,15 @@ export default function SettingsPage() {
                   Pilih cara mengelola stok produk Anda.
                 </p>
                 {stockModeError && <p className="text-sm text-red-600">{stockModeError}</p>}
+                {stockModeSuccess && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-sm text-green-800 font-medium">{stockModeSuccess}</p>
+                  </div>
+                )}
                 <div className="space-y-3">
                   <label className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${stockMode === 'simple' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
                     <input type="radio" name="stock_mode" value="simple" checked={stockMode === 'simple'}
-                      onChange={() => handleStockModeChange('simple')} className="mt-0.5" />
+                      onChange={() => handleStockModeClick('simple')} className="mt-0.5" />
                     <div>
                       <p className="font-medium text-gray-900">Stok Sederhana</p>
                       <p className="text-sm text-gray-500">Stok per produk, berkurang otomatis setiap transaksi. Menu Bahan Baku & HPP tidak aktif.</p>
@@ -367,7 +393,7 @@ export default function SettingsPage() {
                   </label>
                   <label className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${stockMode === 'recipe' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
                     <input type="radio" name="stock_mode" value="recipe" checked={stockMode === 'recipe'}
-                      onChange={() => handleStockModeChange('recipe')} className="mt-0.5" />
+                      onChange={() => handleStockModeClick('recipe')} className="mt-0.5" />
                     <div>
                       <p className="font-medium text-gray-900">Resep & HPP</p>
                       <p className="text-sm text-gray-500">Stok per bahan baku, berkurang otomatis berdasarkan resep. HPP dihitung otomatis. Stok produk tidak ditampilkan.</p>
@@ -375,6 +401,50 @@ export default function SettingsPage() {
                   </label>
                 </div>
                 {savingStockMode && <p className="text-sm text-blue-600">Menyimpan...</p>}
+
+                {/* Confirmation Dialog */}
+                {showStockModeConfirm && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6">
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">
+                        {showStockModeConfirm === 'recipe' ? 'Beralih ke Mode Resep & HPP?' : 'Kembali ke Stok Sederhana?'}
+                      </h3>
+                      {showStockModeConfirm === 'recipe' ? (
+                        <div className="text-sm text-gray-600 space-y-2 mb-5">
+                          <p>Dengan mode Resep & HPP:</p>
+                          <ul className="list-disc ml-5 space-y-1">
+                            <li>Stok dihitung dari <strong>bahan baku</strong>, bukan per produk</li>
+                            <li>Setiap produk perlu <strong>resep</strong> yang terhubung ke bahan</li>
+                            <li>HPP otomatis dihitung dari harga bahan</li>
+                            <li>Stok sederhana (per produk) <strong>tidak akan ditampilkan</strong></li>
+                          </ul>
+                          <p className="mt-3 text-amber-700 bg-amber-50 rounded-lg p-3">
+                            Setelah beralih, buka <strong>Bahan Baku</strong> untuk menambahkan bahan, lalu hubungkan resep di menu produk.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-600 space-y-2 mb-5">
+                          <p>Kembali ke stok sederhana:</p>
+                          <ul className="list-disc ml-5 space-y-1">
+                            <li>Stok kembali dihitung <strong>per produk</strong></li>
+                            <li>Menu Bahan Baku & HPP <strong>tidak aktif</strong></li>
+                            <li>Data resep & bahan baku tetap tersimpan</li>
+                          </ul>
+                        </div>
+                      )}
+                      <div className="flex gap-3">
+                        <button onClick={() => setShowStockModeConfirm(null)}
+                          className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition">
+                          Batal
+                        </button>
+                        <button onClick={confirmStockModeChange}
+                          className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition">
+                          Ya, Beralih
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

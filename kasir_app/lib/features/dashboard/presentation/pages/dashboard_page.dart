@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -15,6 +16,13 @@ import '../../../orders/providers/orders_provider.dart';
 
 final _currencyFmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
+const _proTiers = {'pro', 'business', 'enterprise'};
+
+final _subscriptionTierProvider = FutureProvider<String>((ref) async {
+  const storage = FlutterSecureStorage();
+  return await storage.read(key: 'subscription_tier') ?? 'starter';
+});
+
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -24,8 +32,21 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
+  bool _isPro = false;
 
-  final List<Widget> _pages = [
+  @override
+  void initState() {
+    super.initState();
+    _loadTier();
+  }
+
+  Future<void> _loadTier() async {
+    const storage = FlutterSecureStorage();
+    final tier = await storage.read(key: 'subscription_tier') ?? 'starter';
+    if (mounted) setState(() => _isPro = _proTiers.contains(tier));
+  }
+
+  List<Widget> get _pages => [
     const _DashboardContent(),
     const PosPage(),
     const OrderListPage(),
@@ -34,7 +55,7 @@ class _DashboardPageState extends State<DashboardPage> {
     const SettingsPage(),
   ];
 
-  static const _navItems = [
+  List<({IconData icon, String label})> get _navItems => [
     (icon: LucideIcons.layoutDashboard, label: 'Beranda'),
     (icon: LucideIcons.monitorPlay, label: 'POS'),
     (icon: LucideIcons.receipt, label: 'Pesanan'),
@@ -42,6 +63,76 @@ class _DashboardPageState extends State<DashboardPage> {
     (icon: LucideIcons.package, label: 'Produk'),
     (icon: LucideIcons.settings, label: 'Setting'),
   ];
+
+  /// Index nav items yang Pro-only (Reservasi = index 3)
+  static const _proNavIndexes = {3};
+
+  void _onNavTap(int index) {
+    if (!_isPro && _proNavIndexes.contains(index)) {
+      _showUpgradeSheet(context, 'Reservasi & Booking');
+      return;
+    }
+    setState(() => _selectedIndex = index);
+  }
+
+  static void _showUpgradeSheet(BuildContext context, String featureName) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: AppColors.borderLight, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(LucideIcons.lock, color: Colors.white, size: 32),
+            ),
+            const SizedBox(height: 16),
+            const Text('Fitur Pro', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            const SizedBox(height: 8),
+            Text(
+              '$featureName hanya tersedia di paket Pro.\nUpgrade untuk buka semua fitur.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(LucideIcons.messageCircle, size: 18),
+                label: const Text('Hubungi via WhatsApp'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.background,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Nanti saja', style: TextStyle(color: AppColors.textTertiary)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +152,7 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           Container(
             width: 100,
-            color: Colors.white,
+            color: AppColors.surface,
             child: Column(
               children: [
                 const SizedBox(height: 24),
@@ -93,7 +184,7 @@ class _DashboardPageState extends State<DashboardPage> {
       body: _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (i) => setState(() => _selectedIndex = i),
+        onTap: _onNavTap,
         type: BottomNavigationBarType.fixed,
         selectedItemColor: AppColors.primary,
         unselectedItemColor: AppColors.textTertiary,
@@ -112,8 +203,9 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildSideNavItem(int index) {
     final item = _navItems[index];
     final isSelected = _selectedIndex == index;
+    final isLocked = !_isPro && _proNavIndexes.contains(index);
     return InkWell(
-      onTap: () => setState(() => _selectedIndex = index),
+      onTap: () => _onNavTap(index),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 20),
@@ -127,14 +219,24 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         child: Column(
           children: [
-            Icon(item.icon,
-                color: isSelected ? AppColors.primary : AppColors.textTertiary,
-                size: 28),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(item.icon,
+                    color: isLocked ? Colors.grey[350] : (isSelected ? AppColors.primary : AppColors.textTertiary),
+                    size: 28),
+                if (isLocked)
+                  Positioned(
+                    right: -6, top: -4,
+                    child: Icon(LucideIcons.lock, size: 12, color: Colors.amber.shade700),
+                  ),
+              ],
+            ),
             const SizedBox(height: 8),
             Text(
               item.label,
               style: TextStyle(
-                color: isSelected ? AppColors.primary : AppColors.textTertiary,
+                color: isLocked ? Colors.grey[400] : (isSelected ? AppColors.primary : AppColors.textTertiary),
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
@@ -253,7 +355,14 @@ class _DashboardContent extends ConsumerWidget {
             ),
             const SizedBox(width: 8),
             ElevatedButton.icon(
-              onPressed: () => context.push('/tabs'),
+              onPressed: () {
+                final tier = ref.read(_subscriptionTierProvider).valueOrNull ?? 'starter';
+                if (_proTiers.contains(tier)) {
+                  context.push('/tabs');
+                } else {
+                  _DashboardPageState._showUpgradeSheet(context, 'Tab / Split Bill');
+                }
+              },
               icon: const Icon(LucideIcons.split, size: 16),
               label: Text(isWide ? 'Tab / Bon' : 'Tab'),
               style: ElevatedButton.styleFrom(
@@ -330,9 +439,9 @@ class _DashboardContent extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: AppColors.border, width: 0.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -387,9 +496,9 @@ class _DashboardContent extends ConsumerWidget {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: AppColors.border, width: 0.5),
         ),
         child: const Center(child: Text('Belum ada transaksi hari ini')),
       );

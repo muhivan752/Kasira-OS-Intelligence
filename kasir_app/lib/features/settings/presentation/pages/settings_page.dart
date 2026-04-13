@@ -21,7 +21,7 @@ class SettingsPage extends StatelessWidget {
           // Header
           Container(
             padding: const EdgeInsets.all(24),
-            color: Colors.white,
+            color: AppColors.surface,
             width: double.infinity,
             child: Text('Pengaturan', style: Theme.of(context).textTheme.headlineMedium),
           ),

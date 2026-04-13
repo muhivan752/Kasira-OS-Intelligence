@@ -59,11 +59,22 @@ class _PosPageState extends ConsumerState<PosPage> {
   void _updateConnectionStatus(List<ConnectivityResult> result) {
     final offline = result.contains(ConnectivityResult.none) || result.isEmpty;
     if (_isOffline && !offline) {
-      ref.read(syncServiceProvider).sync().then((_) {
+      final syncSvc = ref.read(syncServiceProvider);
+      syncSvc.sync().then((_) {
         // Setelah sync selesai, invalidate semua provider supaya data fresh
         ref.invalidate(dashboardProvider);
         ref.invalidate(ordersProvider);
         ref.invalidate(productsProvider);
+        // Notify user if stock mode changed via dashboard
+        if (syncSvc.stockModeChanged && mounted) {
+          final mode = syncSvc.newStockMode == 'recipe' ? 'Resep & HPP' : 'Stok Sederhana';
+          syncSvc.clearStockModeChanged();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Mode stok diubah ke $mode oleh owner. Data produk akan diperbarui.'),
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
       }).catchError((_) {});
     }
     if (mounted) setState(() => _isOffline = offline);
@@ -88,7 +99,7 @@ class _PosPageState extends ConsumerState<PosPage> {
         minChildSize: 0.4,
         builder: (_, controller) => Container(
           decoration: const BoxDecoration(
-            color: Colors.white,
+            color: AppColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
@@ -119,7 +130,7 @@ class _PosPageState extends ConsumerState<PosPage> {
     final itemCount = cart.items.fold<int>(0, (sum, item) => sum + item.qty);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.background,
       body: Column(
         children: [
           if (_isOffline)
@@ -187,13 +198,8 @@ class _PosPageState extends ConsumerState<PosPage> {
         Container(
           width: 380,
           decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 16,
-                  offset: const Offset(-2, 0)),
-            ],
+            color: AppColors.surface,
+            border: const Border(left: BorderSide(color: AppColors.border, width: 0.5)),
           ),
           child: const CartPanel(),
         ),
@@ -215,8 +221,8 @@ class _PosPageState extends ConsumerState<PosPage> {
   Widget _buildHeader({required bool isWide}) {
     return Container(
       decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
       ),
       padding: EdgeInsets.only(
         top: isWide ? 0 : MediaQuery.of(context).padding.top,
@@ -269,7 +275,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                 width: isWide ? 260 : 150,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF0F2F5),
+                  color: AppColors.surfaceVariant,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: TextField(
@@ -325,7 +331,7 @@ class _PosPageState extends ConsumerState<PosPage> {
 
     return Container(
       height: 50,
-      color: Colors.white,
+      color: AppColors.surface,
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: ListView(
         scrollDirection: Axis.horizontal,
@@ -342,7 +348,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primary : Colors.white,
+                  color: isSelected ? AppColors.primary : AppColors.surfaceVariant,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: isSelected ? AppColors.primary : AppColors.border,

@@ -23,3 +23,4 @@ class SyncResponse(BaseModel):
     last_sync_hlc: str
     changes: SyncPayload
     stock_mode: Optional[str] = None
+    subscription_tier: Optional[str] = None

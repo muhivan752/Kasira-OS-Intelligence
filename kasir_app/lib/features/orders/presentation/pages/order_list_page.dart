@@ -63,7 +63,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
         children: [
           Container(
             padding: EdgeInsets.all(isWide ? 24 : 16),
-            color: Colors.white,
+            color: AppColors.surface,
             child: SafeArea(
               bottom: false,
               child: Row(
@@ -107,7 +107,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
             ),
           ),
           Container(
-            color: Colors.white,
+            color: AppColors.surface,
             child: TabBar(
               controller: _tabController,
               labelColor: AppColors.primary,

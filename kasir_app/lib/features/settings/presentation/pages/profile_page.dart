@@ -87,7 +87,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         title: const Text('Profil', style: TextStyle(color: AppColors.textPrimary)),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         elevation: 0,
@@ -102,11 +102,11 @@ class _ProfilePageState extends State<ProfilePage> {
                   padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [AppColors.primary.withOpacity(0.05), Colors.white],
+                      colors: [AppColors.primary.withOpacity(0.05), AppColors.surface],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                     ),
-                    color: Colors.white,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: AppColors.border),
                   ),

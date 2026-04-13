@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
 
 export default function ReservationSettingsPage() {
-  const allowed = useProGuard();
+  const allowed = useProGuard('Reservasi & Booking');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [outletId, setOutletId] = useState('');

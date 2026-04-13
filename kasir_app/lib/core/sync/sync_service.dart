@@ -14,6 +14,14 @@ class SyncService {
   static const String _lastSyncKey = 'last_sync_hlc';
   static const String _nodeIdKey = 'device_node_id';
 
+  /// Set to true after sync if stock_mode changed on server
+  bool _stockModeChanged = false;
+  String _newStockMode = '';
+
+  bool get stockModeChanged => _stockModeChanged;
+  String get newStockMode => _newStockMode;
+  void clearStockModeChanged() { _stockModeChanged = false; _newStockMode = ''; }
+
   SyncService(this.db, this.dio, this.prefs);
 
   String get nodeId {
@@ -67,11 +75,20 @@ class SyncService {
         // 3. Apply server changes to local DB
         await _applyServerChanges(serverChanges);
 
-        // 3b. Persist stock_mode from server
+        // 3b. Persist stock_mode + subscription_tier from server
+        const storage = FlutterSecureStorage();
         final stockMode = data['stock_mode']?.toString();
         if (stockMode != null) {
-          const storage = FlutterSecureStorage();
+          final previousMode = await storage.read(key: 'stock_mode');
           await storage.write(key: 'stock_mode', value: stockMode);
+          if (previousMode != null && previousMode != stockMode) {
+            _stockModeChanged = true;
+            _newStockMode = stockMode;
+          }
+        }
+        final subscriptionTier = data['subscription_tier']?.toString();
+        if (subscriptionTier != null) {
+          await storage.write(key: 'subscription_tier', value: subscriptionTier);
         }
 
         // 4. Mark local changes as synced

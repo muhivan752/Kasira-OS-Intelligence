@@ -115,7 +115,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
               width: 420,
               padding: const EdgeInsets.all(40),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(

@@ -64,7 +64,7 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0FDF4),
+      backgroundColor: AppColors.surfaceVariant,
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnim,
@@ -72,7 +72,7 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
             width: 480,
             padding: const EdgeInsets.all(48),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(

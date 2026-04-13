@@ -174,6 +174,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final tenantId = data['tenant_id']?.toString();
       final outletId = data['outlet_id']?.toString();
       final stockMode = data['stock_mode']?.toString();
+      final subscriptionTier = data['subscription_tier']?.toString();
 
       if (token.isEmpty) {
         state = state.copyWith(isLoading: false, error: 'Token tidak ditemukan dalam response');
@@ -185,6 +186,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (tenantId != null) await _storage.write(key: 'tenant_id', value: tenantId);
       if (outletId != null) await _storage.write(key: 'outlet_id', value: outletId);
       if (stockMode != null) await _storage.write(key: 'stock_mode', value: stockMode);
+      if (subscriptionTier != null) await _storage.write(key: 'subscription_tier', value: subscriptionTier);
 
       _timer?.cancel();
 
@@ -388,7 +390,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
@@ -692,7 +694,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           height: 16,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: index < length ? AppColors.primary : Colors.grey.shade300,
+            color: index < length ? AppColors.primary : AppColors.border,
           ),
         );
       }),
@@ -722,9 +724,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: AppColors.surfaceVariant,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: AppColors.border),
         ),
         child: Center(
           child: icon != null

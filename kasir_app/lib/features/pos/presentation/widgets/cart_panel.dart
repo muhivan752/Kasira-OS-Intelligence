@@ -190,11 +190,9 @@ class CartPanel extends ConsumerWidget {
         if (cart.items.isNotEmpty)
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, -4)),
-              ],
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceVariant,
+              border: Border(top: BorderSide(color: AppColors.border, width: 0.5)),
             ),
             child: Column(
               children: [
@@ -451,7 +449,7 @@ class _OrderTypeBtn extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary.withOpacity(0.08) : Colors.white,
+            color: isSelected ? AppColors.primary.withOpacity(0.12) : AppColors.surface,
             border: Border.all(color: isSelected ? AppColors.primary : AppColors.border),
             borderRadius: BorderRadius.circular(10),
           ),

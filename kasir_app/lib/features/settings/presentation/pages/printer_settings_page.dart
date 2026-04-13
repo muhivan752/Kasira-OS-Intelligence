@@ -31,7 +31,7 @@ class PrinterSettingsPage extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Pengaturan Printer', style: TextStyle(color: AppColors.textPrimary)),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         elevation: 0,
         bottom: PreferredSize(
@@ -46,7 +46,7 @@ class PrinterSettingsPage extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppColors.border),
             ),

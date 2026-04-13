@@ -59,7 +59,7 @@ function formatDisplayDate(date: Date): string {
 }
 
 export default function ReservasiPage() {
-  const allowed = useProGuard();
+  const allowed = useProGuard('Reservasi & Booking');
   const [loading, setLoading] = useState(true);
   const [outletId, setOutletId] = useState('');
   const [reservations, setReservations] = useState<any[]>([]);

@@ -130,7 +130,7 @@ class KasiraApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'Kasira POS',
-      theme: AppTheme.lightTheme,
+      theme: AppTheme.darkTheme,
       debugShowCheckedModeBanner: false,
       routerConfig: _router,
     );

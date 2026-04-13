@@ -50,7 +50,7 @@ class _TabListPageState extends ConsumerState<TabListPage> with SingleTickerProv
           // Header
           Container(
             padding: const EdgeInsets.fromLTRB(24, 16, 16, 0),
-            color: Colors.white,
+            color: AppColors.surface,
             child: Column(
               children: [
                 Row(

@@ -107,7 +107,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         title: const Text('Peringatan Stok', style: TextStyle(color: AppColors.textPrimary)),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         elevation: 0,
@@ -147,7 +147,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
                     Container(
                       height: 60,
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      color: Colors.white,
+                      color: AppColors.surface,
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
@@ -225,7 +225,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: config.color.withOpacity(0.3)),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))],

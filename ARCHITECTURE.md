@@ -469,16 +469,25 @@ Flutter dan Dashboard pakai ini buat tier gating dan stock mode detection.
 | Feature | Starter | Pro | Business |
 |---------|---------|-----|----------|
 | POS, Orders, Payments | ✅ | ✅ | ✅ |
-| Storefront | ✅ | ✅ | ✅ |
-| Reservations | ✅ | ✅ | ✅ |
-| Recipe/Ingredient/HPP | ❌ | ✅ | ✅ |
-| Tab/Split Bill | ❌ | ✅ | ✅ |
-| AI Chat | ❌ | ✅ | ✅ |
+| Storefront (basic) | ✅ | ✅ | ✅ |
+| Products, Categories CRUD | ✅ | ✅ | ✅ |
+| Simple stock (deduct/restock) | ✅ | ✅ | ✅ |
+| Shifts (buka/tutup + rekap) | ✅ | ✅ | ✅ |
+| Basic reporting (revenue, daily) | ✅ | ✅ | ✅ |
+| Reservasi + Booking | ❌ | ✅ | ✅ |
+| Tab / Split Bill | ❌ | ✅ | ✅ |
+| Recipe / Ingredient / HPP | ❌ | ✅ | ✅ |
 | Recipe mode stock | ❌ | ✅ | ✅ |
+| AI Chat (owner) | ❌ | ✅ | ✅ |
+| Knowledge Graph | ❌ | ✅ | ✅ |
+| Loyalty Points | ❌ | ✅ | ✅ |
+| Multi-outlet | ❌ | ❌ | ✅ |
+
+**Source of truth: ROADMAP.md FASE 2 = Starter, FASE 6 = Pro, Multi-outlet = Business.**
 
 Backend enforces via `deps.require_pro_tier` dependency on route.
 Dashboard enforces via `useProGuard()` hook.
-Flutter should check `stock_mode` from SecureStorage.
+Flutter should check `subscription_tier` from SecureStorage (bukan hanya `stock_mode`).
 
 ---
 

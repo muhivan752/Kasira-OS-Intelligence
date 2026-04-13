@@ -7,6 +7,7 @@ class Token(BaseModel):
     tenant_id: Optional[str] = None
     outlet_id: Optional[str] = None
     stock_mode: Optional[str] = None
+    subscription_tier: Optional[str] = None
 
 class TokenPayload(BaseModel):
     sub: Optional[str] = None

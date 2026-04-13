@@ -32,3 +32,4 @@ class PointTransaction(BaseModel):
     type = Column(String(20), nullable=False)  # earn / redeem
     points = Column(Integer, nullable=False)
     description = Column(Text, nullable=True)
+    row_version = Column(Integer, server_default='0', nullable=False)

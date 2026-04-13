@@ -27,7 +27,7 @@ interface HPPProduct {
 }
 
 export default function HPPReportPage() {
-  const allowed = useProGuard();
+  const allowed = useProGuard('Laporan HPP');
   const [products, setProducts] = useState<HPPProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());

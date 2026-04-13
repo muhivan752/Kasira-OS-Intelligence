@@ -21,7 +21,7 @@ const SUGGESTIONS = [
 ];
 
 export default function AIChatPage() {
-  const allowed = useProGuard();
+  const allowed = useProGuard('AI Asisten');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);

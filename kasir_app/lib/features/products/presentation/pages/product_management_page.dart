@@ -55,7 +55,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
           // Header
           Container(
             padding: const EdgeInsets.all(20),
-            color: Colors.white,
+            color: AppColors.surface,
             child: Row(
               children: [
                 Text('Manajemen Produk',

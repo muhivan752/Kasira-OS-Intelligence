@@ -49,7 +49,7 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
           // Header
           Container(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-            color: Colors.white,
+            color: AppColors.surface,
             child: Row(
               children: [
                 const Icon(LucideIcons.layoutGrid, color: AppColors.primary),
@@ -70,7 +70,7 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
           // Legend
           Container(
             height: 52,
-            color: Colors.white,
+            color: AppColors.surface,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
@@ -292,7 +292,7 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
   void _showReservationDetail(ReservationModel reservation) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

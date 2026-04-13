@@ -1,273 +1,411 @@
 # KASIRA — Roadmap & Build Order
-# Claude Code: baca ini untuk tau harus ngapain selanjutnya
+# Source of truth untuk fitur, tier, dan status build.
+# Updated: 2026-04-13
+
+---
 
 ## Status Sekarang
-- [ ] FASE 0: Fondasi ← MULAI DARI SINI
-- [ ] FASE 1: Auth
-- [ ] FASE 2: Core POS Starter
-- [ ] FASE 3: Flutter Kasir App
-- [ ] FASE 4: Owner Dashboard Next.js
-- [ ] FASE 5: Pilot
-- [ ] FASE 6: Pro Features
+- [x] FASE 0: Fondasi ✅
+- [x] FASE 1: Auth ✅
+- [x] FASE 2: Core POS Starter ✅
+- [x] FASE 3: Flutter Kasir App ✅
+- [x] FASE 4: Owner Dashboard Next.js ✅
+- [x] FASE 5: Pilot ✅
+- [x] FASE 6: Pro Features ✅ (built, tier gate audit in progress)
+- [x] FASE 7: Infrastruktur Lanjutan ✅ (RLS, billing, referral, platform intelligence)
+- [ ] FASE 8: Polish & Publish ← SEKARANG DI SINI
 
 ---
 
-## FASE 0 — Fondasi (Wajib selesai sebelum 1 baris fitur)
+## Tier Definition (SOURCE OF TRUTH)
 
-### Step 0.1 — VPS Setup
-```bash
-# Jalankan kasira-setup.sh di VPS
-bash kasira-setup.sh
-```
-- [ ] PostgreSQL 16 running
-- [ ] Redis running
-- [ ] FastAPI project init
-- [ ] Folder structure: /var/www/kasira/
+Semua fitur Starter **ada di Pro**. Semua fitur Pro **ada di Business**.
 
-### Step 0.2 — CLAUDE.md + MEMORY.md di VPS
-- [ ] Copy semua file MD ke /var/www/kasira/
-- [ ] skills/ folder lengkap
-- [ ] context/ folder siap
-
-### Step 0.3 — Alembic Migration (FK-safe order)
-
-#### Batch 1 — Root Tables (tidak ada FK)
-```
-01. tenants
-02. brands          → tenants
-03. outlets         → brands, tenants ★ BANYAK YANG BERGANTUNG
-04. roles           → tenants
-05. users           → tenants, roles
-```
-
-#### Batch 2 — User & Device
-```
-06. sessions        → users, outlets
-07. devices         → users, outlets
-08. suppliers       → tenants
-09. customers       → tenants
-10. outlet_tax_config → outlets
-```
-
-#### Batch 3 — Products & Ingredients
-```
-11. tables          → outlets
-12. products        → brands ★ COMPLEX (18 fields + row_version + CHECK)
-13. product_variants → products
-14. modifiers       → brands
-15. outlet_product_overrides → outlets, products
-16. ingredients     → brands
-17. ingredient_units → ingredients
-18. ingredient_suppliers → ingredients, suppliers
-19. outlet_stock    → outlets, ingredients (CRDT JSONB + CHECK)
-20. recipes         → products
-21. recipe_ingredients → recipes, ingredients
-```
-
-#### Batch 4 — Orders & Transactions
-```
-22. pricing_rules   → tenants, brands, outlets
-23. orders          → outlets, users, customers(nullable), tables(nullable)
-24. reservations    → outlets, tables, customers(nullable) + row_version
-25. payments        → orders (COMPLEX - 20 fields)
-26. purchase_orders → outlets, suppliers
-27. purchase_order_items → purchase_orders, ingredients
-28. customer_points → customers, tenants + row_version
-29. point_transactions → customers, orders + UNIQUE(order_id, type)
-30. order_feedback  → orders, customers(nullable)
-```
-
-#### Batch 5 — Supporting & Analytics
-```
-31. notifications   → tenants, outlets
-32. knowledge_graph_edges → tenants, brands
-33. ai_setup_sessions → tenants, outlets
-34. stock_events    → outlets, ingredients
-35. stock_snapshots → outlets, ingredients
-36. audit_log       → users, outlets
-37. global_event_log → tenants, outlets
-```
-
-#### Batch 6 — Connect (Storefront)
-```
-38. connect_outlets → outlets
-39. connect_orders  → orders, outlets + idempotency_key
-40. connect_customer_profiles → customers
-41. connect_chats   → connect_orders
-42. connect_behavior_log → connect_orders
-```
-
-#### Batch 7 — Billing
-```
-43. outlet_location_detail → outlets
-44. supplier_price_history → suppliers
-45. products columns update → sold_today, sold_total
-46. subscriptions   → tenants + row_version
-47. invoices        → tenants, subscriptions + row_version
-48. subscription_payments → invoices
-49. payments update → expanded schema (20 fields)
-50. partial_payments → payments, orders (Pro+)
-51. payment_refunds → payments, orders
-52. pending_receipts → SQLite Flutter (bukan PostgreSQL!)
-```
-
-### Step 0.4 — Infrastruktur Wajib
-- [ ] Event store table (append-only)
-- [ ] Audit log middleware semua WRITE endpoint
-- [ ] Rate limiting: auth 5/min, payment 10/min
-- [ ] Field encryption AES-256-GCM helper
-- [ ] mask_phone() helper di semua response
-- [ ] Response format wrapper: {success, data, meta, request_id}
-
-### Definition of Done FASE 0
-```
-✓ alembic upgrade head — 0 error
-✓ alembic downgrade base — 0 error
-✓ Semua CHECK constraints verified
-✓ Semua ENUM types created
-✓ PostgreSQL SEQUENCE untuk display_number
-✓ pg_dump backup berjalan
-✓ Redis + Celery connected
-```
-
----
-
-## FASE 1 — Auth (Week 1 setelah FASE 0)
-
-### Fitur
-- OTP WA via Fonnte — kirim, verify, expire 5 menit
-- JWT access token + refresh token
-- Device binding — login per device
-- PIN offline — kasir bisa login tanpa internet
-- Role & permission check per endpoint
-- Tenant + outlet setup wizard
-
-### Files yang akan dibuat
-```
-backend/
-├── routers/auth.py
-├── services/auth_service.py
-├── services/otp_service.py
-├── services/fonnte_service.py
-├── middleware/auth_middleware.py
-├── middleware/tenant_middleware.py
-└── models/auth.py
-```
-
-### Definition of Done FASE 1
-```
-✓ POST /auth/register — buat tenant baru
-✓ POST /auth/otp/send — kirim OTP ke WA
-✓ POST /auth/otp/verify — verify + return JWT
-✓ POST /auth/pin/set — kasir set PIN
-✓ POST /auth/pin/login — login offline pakai PIN
-✓ POST /auth/refresh — refresh JWT
-✓ DELETE /auth/logout — revoke token
-✓ GET /auth/me — profile user
-✓ Middleware: verify JWT tiap request
-✓ Middleware: set search_path tenant
-```
-
----
-
-## FASE 2 — Core POS Starter (Week 2-3)
-
-### Fitur
+### Starter (Gratis / Default)
+- POS: order, payment (cash + QRIS Xendit)
 - Products + categories CRUD
-- Orders + order_items
-- Payment: cash + QRIS Midtrans
-- Struk WA via Fonnte
-- Simple stock — deduct otomatis
-- Shift buka/tutup + rekap kas
-- Basic reporting
+- Simple stock (deduct otomatis, restock manual)
+- Shifts (buka/tutup + rekap kas)
+- Basic reporting (revenue harian, summary)
+- Storefront basic (menu browsing, order online, booking)
+- Customer management
+- Download APK + auto-update
+- Landing page + SEO
 
-### Definition of Done FASE 2
-```
-✓ Kasir bisa input order sampai payment
-✓ QRIS generate + callback webhook
-✓ Struk terkirim ke WA customer
-✓ Stok auto-deduct per transaksi
-✓ Shift rekap bisa di-close
-✓ Revenue hari ini tampil di dashboard
-```
+### Pro (Berbayar — via Xendit subscription)
+Semua Starter + :
+- Reservasi + booking management
+- Tab / Split Bill (equal, per-item, custom, full)
+- Recipe / Ingredient / HPP analysis
+- Recipe mode stock (ingredient-level tracking)
+- AI Chat owner (Claude API — Haiku untuk Starter context, Sonnet untuk Pro)
+- Knowledge Graph (product-ingredient relationships)
+- Loyalty points (earn/redeem per order)
+- Dapur app (Kitchen Display System)
+- HPP report + margin analysis
+- Best seller analytics
+
+### Business (Enterprise — masa depan)
+Semua Pro + :
+- Multi-outlet management
+- Cross-outlet reporting
+- Platform benchmarks (bandingkan vs industri)
 
 ---
 
-## FASE 3 — Flutter Kasir App (Week 3-4)
+## FASE 0 — Fondasi ✅
 
-### 15 Layar Kasir
-1. Splash + update checker
+### Database: 72 Alembic Migrations
+
+#### Batch 1 — Root Tables (001-005)
+```
+01. tenants          — multi-tenant foundation + subscription tier
+02. brands           → tenants (warung/cafe/resto/other)
+03. outlets          → brands, tenants (slug, stock_mode, Xendit keys)
+04. roles            → tenants (permission flags, HPP visibility)
+05. users            → tenants, roles (phone login, PIN hash)
+```
+
+#### Batch 2 — User & Device (006-010)
+```
+06. sessions         → users, outlets (token, device binding)
+07. devices          → users, outlets (kasir/dapur/owner, FCM token)
+08. suppliers        → tenants
+09. customers        → tenants (phone HMAC, WhatsApp consent)
+10. outlet_tax_config → outlets (PB1, PPN, service charge)
+```
+
+#### Batch 3 — Products & Ingredients (011-022)
+```
+11. tables           → outlets (capacity, floor section, position)
+12. products         → brands (stock_qty, CHECK >= 0, pgvector embedding)
+13. product_variants → products (price adjustment)
+14. modifiers        → brands (add-ons, min/max select)
+15. outlet_product_overrides → outlets, products
+16. ingredients      → brands (tracking_mode, unit_type, buy_price)
+17. ingredient_units → ingredients (conversion factors)
+18. ingredient_suppliers → ingredients, suppliers (price trend)
+19. outlet_stock     → outlets, ingredients (CRDT JSONB + CHECK >= 0)
+20. recipes          → products (version, AI-assisted flag)
+21. recipe_ingredients → recipes, ingredients (qty, optional flag)
+```
+
+#### Batch 4 — Orders & Transactions (023-031)
+```
+22. pricing_rules    → tenants, brands, outlets (discount/happy_hour)
+23. shifts           → outlets, users (cash reconciliation)
+24. orders           → outlets, users, customers, tables, tabs (display_number SEQUENCE)
+25. order_items      → orders, products, variants (modifiers JSONB)
+26. payments         → orders, outlets (Xendit QRIS, xendit_raw JSONB)
+27. reservations     → outlets, tables, customers (date/time split, deposit)
+28. purchase_orders  → outlets, suppliers (draft→received workflow)
+29. purchase_order_items → POs, ingredients
+30. customer_points  → customers, outlets (balance CHECK >= 0)
+31. point_transactions → customers, orders (UNIQUE order_id+type)
+```
+
+#### Batch 5 — Supporting & Analytics (032-037)
+```
+32. notifications    → tenants, outlets (info/warning/alert/system)
+33. knowledge_graph_edges → tenants, brands (weighted relationships)
+34. stock_events     → outlets, ingredients (immutable audit trail)
+35. stock_snapshots  → outlets, ingredients (daily valuation)
+36. audit_log        → users, outlets (append-only, before/after JSONB)
+37. events           → partitioned by outlet_id (event sourcing, 4 partitions)
+```
+
+#### Batch 6 — Connect / Storefront (038-042)
+```
+38. connect_outlets  → outlets (WhatsApp/GoFood/Grab/Shopee/TikTok/IG)
+39. connect_orders   → orders, outlets (idempotency_key UNIQUE)
+40. connect_customer_profiles → customers (external ID mapping)
+41. connect_chats    → connect_orders (AES-256 encrypted messages)
+42. connect_behavior_log → connect_orders (append-only customer actions)
+```
+
+#### Batch 7 — Billing & Payments Extended (043-051)
+```
+43. outlet_location_detail → outlets (precision coordinates)
+44. supplier_price_history → suppliers (immutable price changes)
+45. products update   — sold_today, sold_total, SKU, barcode
+46. subscriptions    → tenants (billing interval, trial/past_due)
+47. invoices         → tenants, subscriptions (draft→paid workflow)
+48. subscription_payments → invoices (multi-method)
+49. payments update  — order_id nullable, invoice_id FK, is_partial
+50. partial_payments → payments, orders (Pro+)
+51. payment_refunds  → payments, orders (approval chain)
+```
+
+#### Batch 8 — Optimistic Locking & Infrastructure (052-061)
+```
+52. row_version batch 1 — categories, product_variants, customers, shifts, order_items
+53. cash_activities  → shifts (income/expense audit)
+54. shift_session_id → payments (cash drawer tracking)
+55. row_version batch 2 — roles, sessions, devices, suppliers, modifiers, ingredients, recipes, dll
+56-57. Midtrans → Xendit migration (drop Midtrans, add Xendit columns)
+58. payments rename  — midtrans_raw → xendit_raw
+59. loyalty redesign — Integer balance, outlet_id added
+60. outlet cover_image_url
+61. outlet xendit_api_key (per-outlet Xendit)
+```
+
+#### Batch 9 — Pro Features (062-068)
+```
+62. tabs + tab_splits — split bill (full/equal/per_item/custom)
+63. unique_open_shift — 1 open shift per user per outlet
+64. reservation upgrade — date/time split, deposit, settings table
+65. outlet stock_mode — simple/recipe ENUM
+66. ingredient buy_price + buy_qty
+67. tax_config columns — tax_pct, service_charge_enabled
+68. subscription_invoices — tenant billing cycle (billing_day, next_billing_date)
+```
+
+#### Batch 10 — Security & Intelligence (069-072)
+```
+69. RLS policies + 18 composite indexes — tenant isolation on 40+ tables
+70. referral system — referral_code on tenants, referrals table
+71. referral_commissions — commission per invoice (20% default)
+72. platform benchmarks — daily_stats, hpp_benchmarks, ingredient_prices, insights cache
+```
+
+### Infrastruktur ✅
+- [x] Event store (append-only, partitioned by outlet_id)
+- [x] Audit log middleware semua WRITE endpoint
+- [x] Rate limiting: OTP 3x resend/15min, verify 5x/15min
+- [x] Response format wrapper: `{success, data, meta, request_id}`
+- [x] RLS (Row-Level Security) tenant isolation
+- [x] CRDT sync engine (HLC + PNCounter)
+- [ ] Field encryption AES-256-GCM helper (partial — customer phone HMAC ada)
+- [ ] mask_phone() helper di semua response
+
+---
+
+## FASE 1 — Auth ✅
+
+### Endpoints
+```
+✓ POST /auth/register        — buat tenant baru (auto Starter tier)
+✓ POST /auth/otp/send        — kirim OTP ke WA (Fonnte)
+✓ POST /auth/otp/verify      — verify + return JWT + stock_mode
+✓ POST /auth/pin/set         — kasir set PIN
+✓ POST /auth/pin/verify      — login offline pakai PIN (Pro: dapur app)
+✓ POST /auth/logout           — revoke token
+✓ GET  /auth/me              — profile + subscription_tier + stock_mode
+✓ GET  /auth/app/version     — Flutter update checker
+✗ POST /auth/refresh         — BELUM (JWT expire panjang, low priority)
+```
+
+### Middleware
+- JWT verify via HTTPBearer + `get_current_user()`
+- Tenant via X-Tenant-ID header + `TenantMiddleware`
+- Subscription status check (suspended → block access)
+- Superadmin bypass
+
+---
+
+## FASE 2 — Core POS Starter ✅
+
+### Fitur Built
+- Products + categories CRUD
+- Orders + order_items (dine_in/takeaway/delivery)
+- Payment: cash + QRIS (Xendit webhook)
+- Simple stock: auto-deduct on order, restore on cancel
+- Shifts: buka/tutup, cash reconciliation
+- Basic reporting: revenue harian, daily summary
+- Tax & service charge: PB1, PPN, configurable per outlet
+
+### Belum
+- ✗ Struk WA via Fonnte
+
+---
+
+## FASE 3 — Flutter Kasir App ✅
+
+### 15+ Layar
+1. Splash + update checker (force update support)
 2. Login OTP WA
 3. PIN login (offline)
-4. Dashboard meja (grid)
-5. Order screen (menu grid)
-6. Order detail + catatan
-7. Payment screen (cash/QRIS)
-8. QRIS waiting screen
-9. Payment success
-10. Receipt preview
-11. Riwayat transaksi
-12. Shift buka
-13. Shift tutup + rekap
-14. Low stock alert
-15. Settings
+4. Dashboard (revenue, quick actions)
+5. POS screen (menu grid + cart panel)
+6. Payment screen (cash/QRIS)
+7. Payment success + receipt
+8. Receipt preview (Bluetooth printer)
+9. Order list (riwayat transaksi)
+10. Shift buka/tutup + rekap
+11. Product management
+12. Settings (server, sync, printer)
+13. Reservasi list + table grid
+14. Tab list + detail + split bill
+15. Low stock alert
 
-### Definition of Done FASE 3
-```
-✓ Kasir bisa transaksi end-to-end
-✓ Offline mode: order bisa masuk tanpa internet
-✓ Sync otomatis saat online
-✓ Printer reconnect tidak block transaksi
-✓ QRIS fallback ke cash berfungsi
-```
+### Sync Engine
+- CRDT: HLC + PNCounter (conflict-free stock)
+- Offline-first: order masuk tanpa internet
+- Drift v4: ingredients, recipes, outlet_stock tables
+- Bidirectional: push orders/products, pull everything
 
 ---
 
-## FASE 4 — Owner Dashboard Next.js (Week 4-5)
+## FASE 4 — Owner Dashboard (Next.js 14) ✅
 
 ### Halaman
-1. Login owner
-2. Dashboard overview
-3. Revenue + laporan
-4. Menu management
-5. Stock management
-6. User + kasir management
-7. Connect setup (storefront)
-8. Download APK
+1. Dashboard overview (revenue, order count, best seller)
+2. Menu management (CRUD + recipe linking)
+3. Kasir management (CRUD + role assignment)
+4. Laporan revenue (cash/QRIS breakdown)
+5. Settings: outlet info, payment (Xendit), billing, stock mode
+6. Download APK page
+7. Landing page + SEO
+8. Pro upgrade page (feature showcase)
 
-### Definition of Done FASE 4
-```
-✓ Owner bisa lihat revenue real-time
-✓ Owner bisa tambah/edit menu
-✓ Owner bisa tambah kasir
-✓ Connect storefront aktif otomatis
-```
+### Pro-Only Pages (gated dengan `useProGuard`)
+- Bahan Baku (ingredient management)
+- HPP report (cost analysis)
+- AI Asisten (business insights)
+- Reservasi + meja + settings
 
 ---
 
-## FASE 5 — Pilot (Bulan 2)
+## FASE 5 — Pilot ✅
 
-### Checklist Pre-Pilot
-- [ ] pg_dump backup berjalan tiap 6 jam
-- [ ] UptimeRobot monitoring aktif
+- [x] pg_dump backup tiap 6 jam ke R2
+- [x] APK hosted di GitHub Releases + auto-update
+- [x] Landing page live
+- [x] Error monitoring (Sentry)
+- [x] GitHub Actions: APK build workflow
+- [ ] UptimeRobot monitoring
 - [ ] kasira-setup.sh tested di VPS bersih
-- [ ] APK upload ke R2
-- [ ] Landing page kasira.id live
-- [ ] Training kasir selesai
-- [ ] Error monitoring (Sentry/logtail)
+- [ ] Training kasir
 
 ---
 
-## FASE 6 — Pro Features (Bulan 3+)
+## FASE 6 — Pro Features ✅
 
-- Reservasi + booking
-- Kasira Connect storefront full
-- AI chatbot owner
-- Knowledge Graph
-- Loyalty points
-- Tab/Bon system
-- Invoice scan + HPP
-- Multi-outlet
+### Status per Feature
+
+| Feature | Backend | Dashboard | Flutter | Tier Gate |
+|---------|---------|-----------|---------|-----------|
+| Reservasi + booking | ✅ routes + model | ✅ 3 pages | ✅ list + grid | ✅ backend+dashboard, ⚠️ Flutter belum gate |
+| Tab / Split Bill | ✅ routes + model | N/A (Flutter only) | ✅ list + detail + modals | ✅ backend, ⚠️ Flutter belum gate |
+| Recipe/Ingredient/HPP | ✅ routes + model | ✅ bahan-baku + HPP page | ✅ sync + display | ✅ backend+dashboard, ⚠️ Flutter pakai stock_mode proxy |
+| AI Chat owner | ✅ routes (Claude API) | ✅ AI page | ❌ belum | ✅ backend+dashboard |
+| Knowledge Graph | ✅ routes + model | N/A | N/A | ✅ backend |
+| Loyalty points | ✅ routes + model | N/A | ❌ belum | ✅ backend |
+| Dapur app (KDS) | ✅ PIN verify gated | N/A | ✅ pages built | ✅ backend (PIN verify Pro-only) |
+| Multi-outlet | ⚠️ model ready, logic partial | ❌ | ❌ | ❌ belum gate (Business tier) |
+| Invoice scan | ❌ | ❌ | ❌ | — |
+| Struk WA (Fonnte) | ❌ | — | — | — |
+
+---
+
+## FASE 7 — Infrastruktur Lanjutan ✅
+
+Fitur yang sudah built tapi belum ada di ROADMAP sebelumnya:
+
+### Subscription Billing (Xendit)
+- Model: `subscription_invoices` + tenant billing fields
+- API: `billing.py` — GET /current, GET /invoices, POST retry
+- Tasks: `subscription_billing.py` — auto-generate invoice
+- Tasks: `payment_reconciliation.py` — Xendit webhook → mark paid
+- Flow: tenant baru = Starter → upgrade = manual konfirmasi Ivan (Rule #51)
+
+### Referral System
+- Model: `referrals` + `referral_commissions`
+- API: `referrals.py` — code generate, apply, dashboard
+- Commission: 20% default per invoice paid
+- RLS: tenant-scoped
+
+### Superadmin Dashboard
+- API: `superadmin.py` — tenant list, suspend/activate, stats
+- Suspend flow: H-7 WA → H-3 WA → H+7 suspend → H+60 deletion (Rule #52)
+
+### Platform Intelligence (Cross-Tenant)
+- Model: `platform_daily_stats`, `platform_hpp_benchmarks`, `platform_ingredient_prices`, `platform_insights`
+- Cron: aggregate daily stats per outlet
+- Purpose: benchmark HPP/harga vs industri (Business tier — masa depan)
+
+### Security
+- RLS policies on 40+ tables (migration 069)
+- 18 composite indexes for query optimization
+- `kasira_app` DB role with limited permissions
+
+### Tax & Service Charge
+- Model: `outlet_tax_config` (PB1, PPN, service charge)
+- Configurable per outlet
+- Applied to order calculation (subtotal → tax → service → total)
+
+---
+
+## FASE 8 — Polish & Publish ← CURRENT
+
+### Tier Gate Fixes (harus selesai sebelum publish)
+- [x] Flutter: simpan `subscription_tier` dari login/sync response ✅ 2026-04-13
+- [x] Flutter: gate Tab/Bon button di dashboard (Pro only) ✅ 2026-04-13
+- [x] Flutter: gate Reservasi navigation (Pro only) ✅ 2026-04-13
+- [x] OTP verify + sync response: tambah `subscription_tier` ✅ 2026-04-13
+- [x] Backend: gate partial payments Pro-only (Rule #43) ✅ 2026-04-13
+- [ ] Backend: gate multi-outlet logic (Business only) — low priority
+
+### Model row_version Fixes (Golden Rule #29)
+- [x] Recipe — fixed ✅ 2026-04-13
+- [x] RecipeIngredient — fixed ✅ 2026-04-13
+- [x] ReservationSettings — fixed ✅ 2026-04-13
+- [x] PointTransaction — fixed ✅ 2026-04-13
+- [x] Referral — fixed ✅ 2026-04-13
+- [x] ReferralCommission — fixed ✅ 2026-04-13
+
+### Belum Dibangun
+- [ ] Struk WA via Fonnte (FASE 2 sisa)
+- [ ] Invoice scan + OCR (FASE 6)
+- [ ] POST /auth/refresh (low priority)
+- [ ] UptimeRobot monitoring (FASE 5 sisa)
+- [ ] mask_phone() di semua response
+- [ ] Multi-outlet full implementation (Business tier)
+
+### Smooth & User-Friendly Improvements
+- [x] Flutter: upgrade bottom sheet saat Starter akses fitur Pro ✅ 2026-04-13
+- [x] Flutter: Reservasi nav visible tapi locked + lock icon ✅ 2026-04-13
+- [x] Dashboard: Pro page tampil context banner "X memerlukan paket Pro" ✅ 2026-04-13
+- [x] Dashboard: useProGuard pass feature name ke redirect ✅ 2026-04-13
+- [x] Stock mode: confirmation dialog + next steps guidance ✅ 2026-04-13
+- [x] Sync: SnackBar notify kasir saat stock_mode berubah via sync ✅ 2026-04-13
+
+---
+
+## Golden Rules Summary
+
+### Data Layer
+- UUID untuk semua PK — TIDAK BOLEH integer
+- Soft delete via `deleted_at` — TIDAK hard delete
+- Event store append-only — TIDAK update/delete event
+- `row_version` di semua tabel kritikal
+- `CHECK (stock_qty >= 0)` dan `CHECK (computed_stock >= 0)` di DB level
+
+### API Layer
+- Setiap WRITE endpoint WAJIB audit log
+- Response: `{success, data, meta, request_id}`
+- Idempotency key wajib untuk payment + storefront order
+- Timezone: simpan UTC, tampilkan Asia/Jakarta
+
+### Auth
+- OTP WA only — tidak ada email+password
+- JWT: httpOnly cookie (web), SecureStorage (mobile)
+- OTP expire 5 menit, max 3x resend per 15 menit
+
+### Stock
+- Deduct otomatis dari transaksi
+- Stok = 0 → `is_available: false`, TETAP MUNCUL
+- `order_display_number` dari PostgreSQL SEQUENCE
+
+### Payment
+- Payment endpoint WAJIB `SELECT FOR UPDATE`
+- `xendit_raw` (JSONB) WAJIB disimpan
+- `partial_payments` = Pro+ only
+
+### Deploy
+- Backend: `docker cp` + `docker restart` (BUKAN `docker compose up -d`)
+- Frontend: `docker compose build frontend && docker compose up -d frontend`
+- Flutter: git push → GitHub Actions → APK release
 
 ---
 
@@ -276,4 +414,5 @@ backend/
 2. FASE 1 (Auth) WAJIB selesai sebelum fitur apapun
 3. Backend endpoint WAJIB ada sebelum Flutter consume
 4. Migration WAJIB test upgrade + downgrade sebelum lanjut
-5. Jangan skip step — setiap step ada dependency
+5. ROADMAP.md = source of truth untuk fitur dan tier
+6. Jangan skip step — setiap step ada dependency

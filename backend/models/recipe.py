@@ -13,6 +13,7 @@ class Recipe(BaseModel):
     ai_assisted = Column(Boolean, server_default='false', nullable=False)
     created_by = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     notes = Column(Text, nullable=True)
+    row_version = Column(Integer, server_default='0', nullable=False)
 
     # Relationships
     product = relationship("Product", back_populates="recipes")
@@ -28,6 +29,7 @@ class RecipeIngredient(BaseModel):
     quantity_unit = Column(String, nullable=False)
     notes = Column(Text, nullable=True)
     is_optional = Column(Boolean, server_default='false', nullable=False)
+    row_version = Column(Integer, server_default='0', nullable=False)
 
     # Relationships
     recipe = relationship("Recipe", back_populates="ingredients")

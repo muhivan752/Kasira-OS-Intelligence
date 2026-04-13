@@ -128,10 +128,18 @@ async def verify_otp(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
         
-    # Get user's outlet (if any)
+    # Get user's outlet + tenant tier
     outlet_id = None
     stock_mode = None
+    subscription_tier = "starter"
     if user.tenant_id:
+        tenant = (await db.execute(
+            select(Tenant).where(Tenant.id == user.tenant_id)
+        )).scalar_one_or_none()
+        if tenant:
+            st = getattr(tenant, 'subscription_tier', 'starter')
+            subscription_tier = st.value if hasattr(st, 'value') else str(st or 'starter')
+
         stmt_outlet = select(Outlet).where(Outlet.tenant_id == user.tenant_id, Outlet.deleted_at == None).limit(1)
         result_outlet = await db.execute(stmt_outlet)
         outlet = result_outlet.scalar_one_or_none()
@@ -149,6 +157,7 @@ async def verify_otp(
         tenant_id=str(user.tenant_id) if user.tenant_id else None,
         outlet_id=outlet_id,
         stock_mode=stock_mode,
+        subscription_tier=subscription_tier,
     )
     return StandardResponse(data=token_data, message="Login successful")
 

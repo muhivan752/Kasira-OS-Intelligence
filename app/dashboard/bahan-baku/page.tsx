@@ -40,7 +40,7 @@ const UNIT_OPTIONS = [
 ];
 
 export default function BahanBakuPage() {
-  const allowed = useProGuard();
+  const allowed = useProGuard('Bahan Baku & HPP');
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
   const [brandId, setBrandId] = useState('');

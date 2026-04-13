@@ -33,7 +33,7 @@ class ProductCard extends StatelessWidget {
         NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
     return Material(
-      color: Colors.white,
+      color: AppColors.surface,
       borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
       elevation: 0,
@@ -45,7 +45,7 @@ class ProductCard extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.border, width: 1),
+            border: Border.all(color: AppColors.border, width: 0.5),
           ),
           child: Stack(
             children: [

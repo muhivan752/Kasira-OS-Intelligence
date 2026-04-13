@@ -122,7 +122,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
             width: 480,
             padding: const EdgeInsets.all(40),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(

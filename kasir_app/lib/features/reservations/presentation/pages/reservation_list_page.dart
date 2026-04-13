@@ -57,7 +57,7 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
           // Header
           Container(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-            color: Colors.white,
+            color: AppColors.surface,
             child: Column(
               children: [
                 Row(
@@ -323,7 +323,7 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -334,7 +334,7 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
   void _showDetailSheet(ReservationModel reservation) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

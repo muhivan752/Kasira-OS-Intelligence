@@ -1,5 +1,7 @@
 'use client';
 
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Lock,
@@ -9,7 +11,8 @@ import {
   Receipt,
   Building2,
   BarChart3,
-  MessageCircle
+  MessageCircle,
+  ArrowLeft
 } from 'lucide-react';
 
 const PRO_FEATURES = [
@@ -48,9 +51,27 @@ const PRO_FEATURES = [
 const WA_NUMBER = '6285270782220';
 const WA_MESSAGE = encodeURIComponent('Halo Kasira, saya tertarik upgrade ke Pro. Bisa info lebih lanjut?');
 
-export default function ProPage() {
+function ProContent() {
+  const searchParams = useSearchParams();
+  const feature = searchParams.get('feature');
+
   return (
     <div className="space-y-8">
+      {/* Feature context banner */}
+      {feature && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+          <Lock className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">
+              {feature} memerlukan paket Pro
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              Upgrade untuk mengakses fitur ini dan semua fitur Pro lainnya.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="text-center max-w-2xl mx-auto">
         <div className="inline-flex items-center gap-2 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-1.5 rounded-full text-sm font-semibold mb-4">
@@ -65,9 +86,9 @@ export default function ProPage() {
 
       {/* Feature Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {PRO_FEATURES.map((feature) => (
+        {PRO_FEATURES.map((feat) => (
           <div
-            key={feature.name}
+            key={feat.name}
             className="relative bg-white rounded-xl border border-gray-200 p-6 overflow-hidden group"
           >
             {/* Grayscale overlay */}
@@ -91,10 +112,10 @@ export default function ProPage() {
             {/* Content (behind overlay) */}
             <div className="relative z-0">
               <div className="w-11 h-11 rounded-lg bg-blue-50 flex items-center justify-center mb-4">
-                <feature.icon className="w-6 h-6 text-blue-600" />
+                <feat.icon className="w-6 h-6 text-blue-600" />
               </div>
-              <h3 className="text-base font-semibold text-gray-900 mb-1">{feature.name}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{feature.description}</p>
+              <h3 className="text-base font-semibold text-gray-900 mb-1">{feat.name}</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">{feat.description}</p>
             </div>
           </div>
         ))}
@@ -117,5 +138,13 @@ export default function ProPage() {
         </a>
       </div>
     </div>
+  );
+}
+
+export default function ProPage() {
+  return (
+    <Suspense>
+      <ProContent />
+    </Suspense>
   );
 }

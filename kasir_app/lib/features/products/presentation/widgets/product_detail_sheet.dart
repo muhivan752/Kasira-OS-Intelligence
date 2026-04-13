@@ -44,7 +44,7 @@ class ProductDetailSheet extends ConsumerWidget {
         maxHeight: MediaQuery.of(context).size.height * 0.7,
       ),
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(

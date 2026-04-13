@@ -93,8 +93,9 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 ### Tambah Pro feature baru:
 - [ ] Backend: `dependencies=[Depends(deps.require_pro_tier)]` di router
 - [ ] Dashboard: `useProGuard()` hook di page
-- [ ] Flutter: check `stock_mode` / tier dari SecureStorage
+- [ ] Flutter: check `subscription_tier` dari SecureStorage (bukan cuma `stock_mode`)
 - [ ] ARCHITECTURE.md: update tier gating table
+- [ ] ROADMAP.md FASE 6 table: update status
 
 ### Deploy backend change:
 ```bash

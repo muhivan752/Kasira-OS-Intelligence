@@ -188,7 +188,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
           width: 360,
           padding: const EdgeInsets.all(40),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(

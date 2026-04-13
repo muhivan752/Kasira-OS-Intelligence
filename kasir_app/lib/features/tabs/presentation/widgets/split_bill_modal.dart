@@ -269,7 +269,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white,
+            color: isSelected ? AppColors.primary.withOpacity(0.1) : AppColors.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: isSelected ? AppColors.primary : AppColors.border, width: 2),
           ),

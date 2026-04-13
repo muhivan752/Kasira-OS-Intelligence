@@ -86,7 +86,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         title: const Text('Preview Struk', style: TextStyle(color: AppColors.textPrimary)),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         elevation: 0,
@@ -116,7 +116,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
               Container(
                 width: 380,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: [
                     BoxShadow(

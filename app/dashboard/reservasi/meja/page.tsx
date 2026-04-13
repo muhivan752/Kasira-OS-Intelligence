@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
 
 export default function MejaPage() {
-  const allowed = useProGuard();
+  const allowed = useProGuard('Reservasi & Booking');
   const [loading, setLoading] = useState(true);
   const [tables, setTables] = useState<any[]>([]);
   const [outletId, setOutletId] = useState('');

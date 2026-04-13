@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/app/actions/api';
 
-export function useProGuard() {
+export function useProGuard(featureName?: string) {
   const [allowed, setAllowed] = useState(false);
   const router = useRouter();
 
@@ -19,11 +19,12 @@ export function useProGuard() {
       if (['pro', 'business', 'enterprise'].includes(tier)) {
         setAllowed(true);
       } else {
-        router.push('/dashboard/pro');
+        const param = featureName ? `?feature=${encodeURIComponent(featureName)}` : '';
+        router.push(`/dashboard/pro${param}`);
       }
     }
     check();
-  }, [router]);
+  }, [router, featureName]);
 
   return allowed;
 }

@@ -59,7 +59,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
           // Header
           Container(
             padding: const EdgeInsets.fromLTRB(8, 8, 16, 16),
-            color: Colors.white,
+            color: AppColors.surface,
             child: SafeArea(
               bottom: false,
               child: Column(
@@ -245,7 +245,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       child: Row(

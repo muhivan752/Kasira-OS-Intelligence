@@ -84,3 +84,4 @@ class ReservationSettings(BaseModel):
     closing_hour = Column(Time, nullable=False)
     max_reservations_per_slot = Column(Integer, server_default='10', nullable=False)
     reminder_hours_before = Column(Integer, server_default='2', nullable=False)
+    row_version = Column(Integer, server_default='0', nullable=False)

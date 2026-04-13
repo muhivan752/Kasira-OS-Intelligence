@@ -280,7 +280,7 @@ class _PaymentModalState extends State<PaymentModal> {
             child: Container(
               padding: const EdgeInsets.all(28),
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
               ),
               child: Column(
@@ -512,7 +512,7 @@ class _PaymentModalState extends State<PaymentModal> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: AppColors.surface,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(color: AppColors.border),
                             ),
@@ -584,7 +584,7 @@ class _PaymentModalState extends State<PaymentModal> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white,
+          color: isSelected ? AppColors.primary.withOpacity(0.1) : AppColors.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? AppColors.primary : AppColors.border,
@@ -627,7 +627,7 @@ class _PaymentModalState extends State<PaymentModal> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : Colors.white,
+            color: isSelected ? AppColors.primary : AppColors.surface,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: isSelected ? AppColors.primary : AppColors.border),
           ),

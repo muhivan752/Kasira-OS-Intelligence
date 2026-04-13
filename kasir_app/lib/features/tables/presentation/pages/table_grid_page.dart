@@ -105,7 +105,7 @@ class _TableGridPageState extends State<TableGridPage> {
           // Header
           Container(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-            color: Colors.white,
+            color: AppColors.surface,
             child: Row(
               children: [
                 const Icon(LucideIcons.layoutGrid, color: AppColors.primary),
@@ -123,7 +123,7 @@ class _TableGridPageState extends State<TableGridPage> {
           // Status filter chips
           Container(
             height: 60,
-            color: Colors.white,
+            color: AppColors.surface,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),

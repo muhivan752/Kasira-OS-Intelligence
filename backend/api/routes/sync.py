@@ -307,12 +307,21 @@ async def sync_data(
         
     pull_changes.cash_activities = ca_result
     
-    # Include stock_mode so Flutter stays in sync with outlet setting
+    # Include stock_mode + subscription_tier so Flutter stays in sync
     sm = getattr(outlet, 'stock_mode', 'simple')
     sm_str = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
+
+    sub_tier = "starter"
+    sync_tenant = (await db.execute(
+        select(Tenant).where(Tenant.id == current_user.tenant_id)
+    )).scalar_one_or_none()
+    if sync_tenant:
+        st = getattr(sync_tenant, 'subscription_tier', 'starter')
+        sub_tier = st.value if hasattr(st, 'value') else str(st or 'starter')
 
     return SyncResponse(
         last_sync_hlc=server_hlc.to_string(),
         changes=pull_changes,
         stock_mode=sm_str,
+        subscription_tier=sub_tier,
     )
