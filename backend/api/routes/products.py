@@ -1,6 +1,7 @@
 from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timezone
+import math
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -9,16 +10,75 @@ from sqlalchemy.orm import selectinload
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
 from backend.models.user import User
-from backend.models.product import Product
+from backend.models.product import Product, OutletStock
 from backend.models.tenant import Tenant
 from backend.models.brand import Brand
 from backend.models.outlet import Outlet
+from backend.models.recipe import Recipe, RecipeIngredient
 from backend.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from backend.schemas.stock import ProductRestock
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.services.stock_service import restock_product as svc_restock
 from backend.api.deps import validate_brand_ownership, validate_product_ownership
+
+
+async def compute_recipe_stock(db: AsyncSession, outlet_id: UUID, product_ids: List[UUID]) -> dict:
+    """Calculate available portions from ingredient stock for recipe mode products."""
+    if not product_ids:
+        return {}
+
+    recipes_result = await db.execute(
+        select(Recipe)
+        .options(selectinload(Recipe.ingredients))
+        .where(
+            Recipe.product_id.in_(product_ids),
+            Recipe.is_active == True,
+            Recipe.deleted_at.is_(None),
+        )
+    )
+    recipes = recipes_result.scalars().all()
+    recipe_map = {r.product_id: r for r in recipes}
+
+    # Collect all ingredient IDs needed
+    all_ingredient_ids = set()
+    for r in recipes:
+        for ri in r.ingredients:
+            if ri.deleted_at is None and not ri.is_optional and ri.quantity > 0:
+                all_ingredient_ids.add(ri.ingredient_id)
+
+    # Batch load outlet stocks
+    stock_map = {}
+    if all_ingredient_ids:
+        stocks_result = await db.execute(
+            select(OutletStock).where(
+                OutletStock.outlet_id == outlet_id,
+                OutletStock.ingredient_id.in_(list(all_ingredient_ids)),
+                OutletStock.deleted_at.is_(None),
+            )
+        )
+        stock_map = {s.ingredient_id: s.computed_stock for s in stocks_result.scalars().all()}
+
+    result = {}
+    for pid in product_ids:
+        recipe = recipe_map.get(pid)
+        if not recipe:
+            result[pid] = 0
+            continue
+        active_ingredients = [
+            ri for ri in recipe.ingredients
+            if ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
+        ]
+        if not active_ingredients:
+            result[pid] = 0
+            continue
+        min_portions = float('inf')
+        for ri in active_ingredients:
+            available = stock_map.get(ri.ingredient_id, 0.0)
+            min_portions = min(min_portions, available / ri.quantity)
+        result[pid] = max(0, int(math.floor(min_portions))) if min_portions != float('inf') else 0
+
+    return result
 
 router = APIRouter()
 
@@ -214,10 +274,29 @@ async def read_products(
 
     result = await db.execute(query)
     products = result.scalars().all()
-    
+
+    # Recipe mode: override stock_qty with calculated portions from ingredients
+    outlet_row = (await db.execute(
+        select(Outlet).where(Outlet.tenant_id == current_user.tenant_id, Outlet.deleted_at.is_(None))
+    )).scalars().first()
+    stock_mode = getattr(outlet_row, 'stock_mode', 'simple') if outlet_row else 'simple'
+    stock_mode = stock_mode.value if hasattr(stock_mode, 'value') else str(stock_mode or 'simple')
+
+    product_dicts = []
+    if stock_mode == 'recipe' and outlet_row:
+        stock_enabled_ids = [p.id for p in products if p.stock_enabled]
+        recipe_stocks = await compute_recipe_stock(db, outlet_row.id, stock_enabled_ids) if stock_enabled_ids else {}
+        for p in products:
+            resp = ProductResponse.model_validate(p)
+            if p.stock_enabled:
+                resp.stock_qty = recipe_stocks.get(p.id, 0)
+            product_dicts.append(resp)
+    else:
+        product_dicts = [ProductResponse.model_validate(p) for p in products]
+
     return StandardResponse(
         success=True,
-        data=[ProductResponse.model_validate(p) for p in products],
+        data=product_dicts,
         request_id=request.state.request_id
     )
 

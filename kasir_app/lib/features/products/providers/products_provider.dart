@@ -11,6 +11,7 @@ class ProductModel {
   final String name;
   final double price;
   final int stock;
+  final bool stockEnabled;
   final String? imageUrl;
   final String? categoryId;
   final String? categoryName;
@@ -24,6 +25,7 @@ class ProductModel {
     required this.name,
     required this.price,
     required this.stock,
+    this.stockEnabled = false,
     this.imageUrl,
     this.categoryId,
     this.categoryName,
@@ -39,6 +41,7 @@ class ProductModel {
       name: name,
       price: price,
       stock: stock,
+      stockEnabled: stockEnabled,
       imageUrl: imageUrl,
       categoryId: categoryId,
       categoryName: categoryName,
@@ -55,6 +58,7 @@ class ProductModel {
       name: json['name'] as String,
       price: _toDouble(json['price']),
       stock: (json['stock_qty'] as num?)?.toInt() ?? 0,
+      stockEnabled: (json['stock_enabled'] as bool?) ?? false,
       imageUrl: json['image_url'] as String?,
       categoryId: json['category_id'] as String?,
       categoryName: json['category_name'] as String?,
@@ -98,6 +102,7 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
               name: p.name,
               price: p.basePrice,
               stock: p.stockQty.toInt(),
+              stockEnabled: p.stockEnabled,
               imageUrl: p.imageUrl,
               categoryId: p.categoryId,
               isAvailable: p.isActive,

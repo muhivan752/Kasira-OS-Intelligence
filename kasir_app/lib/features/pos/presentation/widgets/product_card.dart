@@ -8,6 +8,7 @@ class ProductCard extends StatelessWidget {
   final String name;
   final double price;
   final int stock;
+  final bool stockEnabled;
   final String imageUrl;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
@@ -18,6 +19,7 @@ class ProductCard extends StatelessWidget {
     required this.name,
     required this.price,
     required this.stock,
+    this.stockEnabled = false,
     required this.imageUrl,
     required this.onTap,
     this.onLongPress,
@@ -26,7 +28,7 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOutOfStock = stock <= 0;
+    final isOutOfStock = stockEnabled && stock <= 0;
     final currencyFormatter =
         NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 

@@ -456,6 +456,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                 name: product.name,
                 price: product.price,
                 stock: product.stock,
+                stockEnabled: product.stockEnabled,
                 imageUrl: product.imageUrl ?? '',
                 isBestSeller: product.isBestSeller,
                 onLongPress: () => ProductDetailSheet.show(
@@ -469,7 +470,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                         productId: product.id,
                         name: product.name,
                         price: product.price,
-                        stockQty: product.isAvailable ? product.stock.toDouble() : null,
+                        stockQty: product.stockEnabled ? product.stock.toDouble() : null,
                       ));
                   if (MediaQuery.of(context).size.width < 700) {
                     ScaffoldMessenger.of(context).showSnackBar(
