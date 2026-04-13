@@ -172,6 +172,7 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
             active_ingredients = [
                 ri for ri in recipe.ingredients
                 if ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
+                and ri.ingredient is not None and ri.ingredient.deleted_at is None
             ]
             if not active_ingredients:
                 recipe_stock_map[p.id] = 0
@@ -197,21 +198,26 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
 
             recipe_stock_map[p.id] = max(0, int(math.floor(min_portions))) if min_portions != float('inf') else 0
 
-        # Filter out products with 0 available portions
-        products_with_stock = [(p, recipe_stock_map.get(p.id, 0)) for p in products]
-        products_with_stock = [(p, s) for p, s in products_with_stock if s > 0]
+        # Filter: show products without stock tracking, hide stock-tracked with 0 portions
+        products_with_stock = []
+        for p in products:
+            stock = recipe_stock_map.get(p.id, 0)
+            if not p.stock_enabled or stock > 0:
+                products_with_stock.append((p, stock))
     else:
-        # Simple mode: filter by stock_qty > 0
+        # Simple mode: show all active products, hide stock-tracked with stock=0
         products_result = await db.execute(
             select(Product).where(
                 Product.brand_id == outlet.brand_id,
                 Product.is_active == True,
-                Product.stock_qty > 0,
                 Product.deleted_at.is_(None)
             )
         )
         products = products_result.scalars().all()
-        products_with_stock = [(p, p.stock_qty) for p in products]
+        products_with_stock = [
+            (p, p.stock_qty) for p in products
+            if not p.stock_enabled or p.stock_qty > 0
+        ]
 
     # Get categories for this brand
     categories_result = await db.execute(

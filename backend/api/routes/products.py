@@ -30,7 +30,7 @@ async def compute_recipe_stock(db: AsyncSession, outlet_id: UUID, product_ids: L
 
     recipes_result = await db.execute(
         select(Recipe)
-        .options(selectinload(Recipe.ingredients))
+        .options(selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient))
         .where(
             Recipe.product_id.in_(product_ids),
             Recipe.is_active == True,
@@ -40,11 +40,12 @@ async def compute_recipe_stock(db: AsyncSession, outlet_id: UUID, product_ids: L
     recipes = recipes_result.scalars().all()
     recipe_map = {r.product_id: r for r in recipes}
 
-    # Collect all ingredient IDs needed
+    # Collect all ingredient IDs needed (skip deleted ingredients)
     all_ingredient_ids = set()
     for r in recipes:
         for ri in r.ingredients:
-            if ri.deleted_at is None and not ri.is_optional and ri.quantity > 0:
+            if (ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
+                    and ri.ingredient is not None and ri.ingredient.deleted_at is None):
                 all_ingredient_ids.add(ri.ingredient_id)
 
     # Batch load outlet stocks
@@ -68,6 +69,7 @@ async def compute_recipe_stock(db: AsyncSession, outlet_id: UUID, product_ids: L
         active_ingredients = [
             ri for ri in recipe.ingredients
             if ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
+            and ri.ingredient is not None and ri.ingredient.deleted_at is None
         ]
         if not active_ingredients:
             result[pid] = 0

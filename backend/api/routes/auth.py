@@ -417,6 +417,20 @@ async def get_me(
     if outlet:
         outlet_id = str(outlet.id)
 
+    # Get subscription tier
+    subscription_tier = "starter"
+    stock_mode = "simple"
+    if current_user.tenant_id:
+        tenant = (await db.execute(
+            select(Tenant).where(Tenant.id == current_user.tenant_id)
+        )).scalar_one_or_none()
+        if tenant:
+            st = getattr(tenant, 'subscription_tier', 'starter')
+            subscription_tier = st.value if hasattr(st, 'value') else str(st or 'starter')
+    if outlet:
+        sm = getattr(outlet, 'stock_mode', 'simple')
+        stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
+
     return StandardResponse(data={
         "id": str(current_user.id),
         "full_name": current_user.full_name,
@@ -424,6 +438,8 @@ async def get_me(
         "tenant_id": str(current_user.tenant_id),
         "outlet_id": outlet_id,
         "is_active": current_user.is_active,
+        "subscription_tier": subscription_tier,
+        "stock_mode": stock_mode,
     }, message="OK")
 
 
