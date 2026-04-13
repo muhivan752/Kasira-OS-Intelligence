@@ -135,9 +135,9 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
 
     // Load active recipes for these products
     final recipes = await (db.select(db.recipes)
-          ..where((r) => r.productId.isIn(stockEnabledIds) &
-              r.isActive.equals(true) &
-              r.isDeleted.equals(false)))
+          ..where((r) => r.productId.isIn(stockEnabledIds))
+          ..where((r) => r.isActive.equals(true))
+          ..where((r) => r.isDeleted.equals(false)))
         .get();
     final recipeMap = <String, RecipeLocal>{};
     for (final r in recipes) {
@@ -148,18 +148,18 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
     final recipeIds = recipes.map((r) => r.id).toList();
     if (recipeIds.isEmpty) return {};
     final riList = await (db.select(db.recipeIngredients)
-          ..where((ri) => ri.recipeId.isIn(recipeIds) &
-              ri.isDeleted.equals(false) &
-              ri.isOptional.equals(false)))
+          ..where((ri) => ri.recipeId.isIn(recipeIds))
+          ..where((ri) => ri.isDeleted.equals(false))
+          ..where((ri) => ri.isOptional.equals(false)))
         .get();
 
     // Collect ingredient IDs and load outlet stocks
     final ingredientIds = riList.map((ri) => ri.ingredientId).toSet().toList();
     if (ingredientIds.isEmpty) return {};
     final stocks = await (db.select(db.outletStocks)
-          ..where((os) => os.outletId.equals(outletId) &
-              os.ingredientId.isIn(ingredientIds) &
-              os.isDeleted.equals(false)))
+          ..where((os) => os.outletId.equals(outletId))
+          ..where((os) => os.ingredientId.isIn(ingredientIds))
+          ..where((os) => os.isDeleted.equals(false)))
         .get();
     final stockMap = <String, double>{};
     for (final s in stocks) {

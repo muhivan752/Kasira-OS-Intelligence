@@ -348,19 +348,17 @@ class CartNotifier extends StateNotifier<CartState> {
       String productId, int orderQty, String outletId) async {
     // Load active recipe for product
     final recipe = await (_db.select(_db.recipes)
-          ..where((r) =>
-              r.productId.equals(productId) &
-              r.isActive.equals(true) &
-              r.isDeleted.equals(false)))
+          ..where((r) => r.productId.equals(productId))
+          ..where((r) => r.isActive.equals(true))
+          ..where((r) => r.isDeleted.equals(false)))
         .getSingleOrNull();
     if (recipe == null) return;
 
     // Load non-optional recipe ingredients
     final riList = await (_db.select(_db.recipeIngredients)
-          ..where((ri) =>
-              ri.recipeId.equals(recipe.id) &
-              ri.isDeleted.equals(false) &
-              ri.isOptional.equals(false)))
+          ..where((ri) => ri.recipeId.equals(recipe.id))
+          ..where((ri) => ri.isDeleted.equals(false))
+          ..where((ri) => ri.isOptional.equals(false)))
         .get();
 
     // Deduct each ingredient from outlet_stock
@@ -369,10 +367,9 @@ class CartNotifier extends StateNotifier<CartState> {
       final deductQty = ri.quantity * orderQty;
 
       final stock = await (_db.select(_db.outletStocks)
-            ..where((os) =>
-                os.outletId.equals(outletId) &
-                os.ingredientId.equals(ri.ingredientId) &
-                os.isDeleted.equals(false)))
+            ..where((os) => os.outletId.equals(outletId))
+            ..where((os) => os.ingredientId.equals(ri.ingredientId))
+            ..where((os) => os.isDeleted.equals(false)))
           .getSingleOrNull();
 
       if (stock != null) {
