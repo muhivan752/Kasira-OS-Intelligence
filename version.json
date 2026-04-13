@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.8.0",
-    "is_mandatory": true,
-    "download_url": "/apk/kasira-pos.apk",
-    "release_notes": "Sync resep & bahan baku, HPP detail sheet, order actions"
+    "version": "1.9.0",
+    "is_mandatory": false,
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.9.0/kasira-pos-v1.9.0.apk",
+    "release_notes": "Fix stock sync: respect stock_enabled in recipe mode, Flutter stockEnabled awareness"
   },
   "dapur": {
-    "version": "1.8.0",
-    "is_mandatory": true,
-    "download_url": "/apk/kasira-dapur.apk",
-    "release_notes": "Sync resep & bahan baku, HPP detail sheet, order actions"
+    "version": "1.9.0",
+    "is_mandatory": false,
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.9.0/kasira-dapur-v1.9.0.apk",
+    "release_notes": "Fix stock sync: respect stock_enabled in recipe mode, Flutter stockEnabled awareness"
   }
 }
