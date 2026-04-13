@@ -283,6 +283,8 @@ class CartNotifier extends StateNotifier<CartState> {
         ));
 
         // 2. Simpan order items + deduct stok lokal
+        final stockMode = await _storage.read(key: 'stock_mode') ?? 'simple';
+
         for (final item in state.items) {
           await _db.into(_db.orderItems).insert(OrderItemsCompanion(
             id: drift.Value(_generateUuid()),
@@ -298,31 +300,35 @@ class CartNotifier extends StateNotifier<CartState> {
             isSynced: const drift.Value(false),
           ));
 
-            // Pure CRDT stock deduct — PNCounter, bukan LWW
-          // Increment crdtNegative[nodeId] += qty, lalu recompute stockQty cache
           if (item.stockQty != null) {
-            final prefs = await SharedPreferences.getInstance();
-            final nodeId = prefs.getString('device_node_id') ??
-                'device_${DateTime.now().millisecondsSinceEpoch}';
+            if (stockMode == 'recipe') {
+              // Recipe mode: deduct ingredient stocks
+              await _deductIngredientStockOffline(item.productId, item.qty, outletId);
+            } else {
+              // Simple mode: Pure CRDT stock deduct — PNCounter
+              final prefs = await SharedPreferences.getInstance();
+              final nodeId = prefs.getString('device_node_id') ??
+                  'device_${DateTime.now().millisecondsSinceEpoch}';
 
-            final product = await (_db.select(_db.products)
-                  ..where((p) => p.id.equals(item.productId)))
-                .getSingleOrNull();
-
-            if (product != null && product.stockEnabled) {
-              final negMap = PNCounter.fromJson(product.crdtNegative);
-              final posMap = PNCounter.fromJson(product.crdtPositive);
-              final newNeg = PNCounter.increment(negMap, nodeId, amount: item.qty);
-              final newStock = PNCounter.getValue(posMap, newNeg);
-
-              await (_db.update(_db.products)
+              final product = await (_db.select(_db.products)
                     ..where((p) => p.id.equals(item.productId)))
-                  .write(ProductsCompanion(
-                crdtNegative: drift.Value(PNCounter.toJson(newNeg)),
-                stockQty: drift.Value(newStock),
-                isActive: drift.Value(newStock > 0),
-                isSynced: const drift.Value(false),
-              ));
+                  .getSingleOrNull();
+
+              if (product != null && product.stockEnabled) {
+                final negMap = PNCounter.fromJson(product.crdtNegative);
+                final posMap = PNCounter.fromJson(product.crdtPositive);
+                final newNeg = PNCounter.increment(negMap, nodeId, amount: item.qty);
+                final newStock = PNCounter.getValue(posMap, newNeg);
+
+                await (_db.update(_db.products)
+                      ..where((p) => p.id.equals(item.productId)))
+                    .write(ProductsCompanion(
+                  crdtNegative: drift.Value(PNCounter.toJson(newNeg)),
+                  stockQty: drift.Value(newStock),
+                  isActive: drift.Value(newStock > 0),
+                  isSynced: const drift.Value(false),
+                ));
+              }
             }
           }
         }
@@ -334,6 +340,50 @@ class CartNotifier extends StateNotifier<CartState> {
     } catch (e) {
       state = state.copyWith(isSubmitting: false, error: 'Gagal menyimpan pesanan offline');
       return null;
+    }
+  }
+
+  /// Deduct ingredient stock offline based on active recipe
+  Future<void> _deductIngredientStockOffline(
+      String productId, int orderQty, String outletId) async {
+    // Load active recipe for product
+    final recipe = await (_db.select(_db.recipes)
+          ..where((r) =>
+              r.productId.equals(productId) &
+              r.isActive.equals(true) &
+              r.isDeleted.equals(false)))
+        .getSingleOrNull();
+    if (recipe == null) return;
+
+    // Load non-optional recipe ingredients
+    final riList = await (_db.select(_db.recipeIngredients)
+          ..where((ri) =>
+              ri.recipeId.equals(recipe.id) &
+              ri.isDeleted.equals(false) &
+              ri.isOptional.equals(false)))
+        .get();
+
+    // Deduct each ingredient from outlet_stock
+    for (final ri in riList) {
+      if (ri.quantity <= 0) continue;
+      final deductQty = ri.quantity * orderQty;
+
+      final stock = await (_db.select(_db.outletStocks)
+            ..where((os) =>
+                os.outletId.equals(outletId) &
+                os.ingredientId.equals(ri.ingredientId) &
+                os.isDeleted.equals(false)))
+          .getSingleOrNull();
+
+      if (stock != null) {
+        final newStock = (stock.computedStock - deductQty).clamp(0.0, double.infinity);
+        await (_db.update(_db.outletStocks)
+              ..where((os) => os.id.equals(stock.id)))
+            .write(OutletStocksCompanion(
+          computedStock: drift.Value(newStock),
+          isSynced: const drift.Value(false),
+        ));
+      }
     }
   }
 

@@ -22,3 +22,4 @@ class SyncRequest(BaseModel):
 class SyncResponse(BaseModel):
     last_sync_hlc: str
     changes: SyncPayload
+    stock_mode: Optional[str] = None

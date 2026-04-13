@@ -173,6 +173,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final token = data['access_token']?.toString() ?? '';
       final tenantId = data['tenant_id']?.toString();
       final outletId = data['outlet_id']?.toString();
+      final stockMode = data['stock_mode']?.toString();
 
       if (token.isEmpty) {
         state = state.copyWith(isLoading: false, error: 'Token tidak ditemukan dalam response');
@@ -183,6 +184,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _storage.write(key: 'phone', value: state.phone);
       if (tenantId != null) await _storage.write(key: 'tenant_id', value: tenantId);
       if (outletId != null) await _storage.write(key: 'outlet_id', value: outletId);
+      if (stockMode != null) await _storage.write(key: 'stock_mode', value: stockMode);
 
       _timer?.cancel();
 

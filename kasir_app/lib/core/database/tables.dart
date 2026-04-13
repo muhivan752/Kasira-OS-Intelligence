@@ -130,3 +130,11 @@ class RecipeIngredients extends Table with CrdtTable {
   TextColumn get notes => text().nullable()();
   BoolColumn get isOptional => boolean().withDefault(const Constant(false))();
 }
+
+@DataClassName('OutletStockLocal')
+class OutletStocks extends Table with CrdtTable {
+  TextColumn get outletId => text()();
+  TextColumn get ingredientId => text()();
+  RealColumn get computedStock => real().withDefault(const Constant(0.0))();
+  RealColumn get minStockBase => real().withDefault(const Constant(0.0))();
+}

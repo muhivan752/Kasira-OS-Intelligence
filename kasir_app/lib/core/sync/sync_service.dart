@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../database/app_database.dart';
 import '../utils/hlc.dart';
 import '../utils/pn_counter.dart';
@@ -65,6 +66,13 @@ class SyncService {
 
         // 3. Apply server changes to local DB
         await _applyServerChanges(serverChanges);
+
+        // 3b. Persist stock_mode from server
+        final stockMode = data['stock_mode']?.toString();
+        if (stockMode != null) {
+          const storage = FlutterSecureStorage();
+          await storage.write(key: 'stock_mode', value: stockMode);
+        }
 
         // 4. Mark local changes as synced
         await _markAsSynced(
@@ -326,6 +334,25 @@ class SyncService {
               rowVersion: 0,
               isDeleted: ri['is_deleted'] ?? false,
               lastModifiedHlc: ri['hlc'],
+              isSynced: true,
+            ),
+          );
+        }
+      }
+
+      // Apply Outlet Stock (ingredient stock per outlet, read-only from server)
+      if (changes['outlet_stock'] != null) {
+        for (var os in changes['outlet_stock']) {
+          await db.into(db.outletStocks).insertOnConflictUpdate(
+            OutletStockLocal(
+              id: os['id'],
+              outletId: os['outlet_id'],
+              ingredientId: os['ingredient_id'],
+              computedStock: _toDouble(os['computed_stock']),
+              minStockBase: _toDouble(os['min_stock_base']),
+              rowVersion: os['row_version'] ?? 0,
+              isDeleted: os['is_deleted'] ?? false,
+              lastModifiedHlc: os['hlc'],
               isSynced: true,
             ),
           );

@@ -8,12 +8,12 @@ import 'tables.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [Products, Orders, OrderItems, Payments, Shifts, CashActivities, Ingredients, Recipes, RecipeIngredients])
+@DriftDatabase(tables: [Products, Orders, OrderItems, Payments, Shifts, CashActivities, Ingredients, Recipes, RecipeIngredients, OutletStocks])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -26,6 +26,9 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(ingredients);
             await m.createTable(recipes);
             await m.createTable(recipeIngredients);
+          }
+          if (from < 4) {
+            await m.createTable(outletStocks);
           }
         },
       );

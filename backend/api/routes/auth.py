@@ -130,12 +130,15 @@ async def verify_otp(
         
     # Get user's outlet (if any)
     outlet_id = None
+    stock_mode = None
     if user.tenant_id:
         stmt_outlet = select(Outlet).where(Outlet.tenant_id == user.tenant_id, Outlet.deleted_at == None).limit(1)
         result_outlet = await db.execute(stmt_outlet)
         outlet = result_outlet.scalar_one_or_none()
         if outlet:
             outlet_id = str(outlet.id)
+            sm = getattr(outlet, 'stock_mode', 'simple')
+            stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token_data = Token(
@@ -144,7 +147,8 @@ async def verify_otp(
         ),
         token_type="bearer",
         tenant_id=str(user.tenant_id) if user.tenant_id else None,
-        outlet_id=outlet_id
+        outlet_id=outlet_id,
+        stock_mode=stock_mode,
     )
     return StandardResponse(data=token_data, message="Login successful")
 

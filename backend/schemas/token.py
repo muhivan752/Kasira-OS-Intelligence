@@ -6,6 +6,7 @@ class Token(BaseModel):
     token_type: str
     tenant_id: Optional[str] = None
     outlet_id: Optional[str] = None
+    stock_mode: Optional[str] = None
 
 class TokenPayload(BaseModel):
     sub: Optional[str] = None

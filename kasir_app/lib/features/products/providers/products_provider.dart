@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -96,19 +97,103 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
       query = query..where((p) => p.categoryId.equals(categoryId));
     }
     final rows = await query.get();
+
+    // Check stock_mode — if recipe, compute stock from ingredients
+    final stockMode = await _storage.read(key: 'stock_mode') ?? 'simple';
+    Map<String, int> recipeStocks = {};
+
+    if (stockMode == 'recipe') {
+      recipeStocks = await _computeRecipeStockLocal(db, rows);
+    }
+
     return rows
-        .map((p) => ProductModel(
+        .map((p) {
+          final stock = (stockMode == 'recipe' && p.stockEnabled)
+              ? recipeStocks[p.id] ?? 0
+              : p.stockQty.toInt();
+          return ProductModel(
               id: p.id,
               name: p.name,
               price: p.basePrice,
-              stock: p.stockQty.toInt(),
+              stock: stock,
               stockEnabled: p.stockEnabled,
               imageUrl: p.imageUrl,
               categoryId: p.categoryId,
               isAvailable: p.isActive,
               rowVersion: p.rowVersion,
-            ))
+            );
+        })
         .toList();
+  }
+
+  /// Compute available portions from local ingredient stock + recipes
+  Future<Map<String, int>> _computeRecipeStockLocal(
+      AppDatabase db, List<ProductLocal> products) async {
+    final outletId = await _storage.read(key: 'outlet_id') ?? '';
+    final stockEnabledIds = products.where((p) => p.stockEnabled).map((p) => p.id).toList();
+    if (stockEnabledIds.isEmpty) return {};
+
+    // Load active recipes for these products
+    final recipes = await (db.select(db.recipes)
+          ..where((r) => r.productId.isIn(stockEnabledIds) &
+              r.isActive.equals(true) &
+              r.isDeleted.equals(false)))
+        .get();
+    final recipeMap = <String, RecipeLocal>{};
+    for (final r in recipes) {
+      recipeMap[r.productId] = r;
+    }
+
+    // Load recipe ingredients
+    final recipeIds = recipes.map((r) => r.id).toList();
+    if (recipeIds.isEmpty) return {};
+    final riList = await (db.select(db.recipeIngredients)
+          ..where((ri) => ri.recipeId.isIn(recipeIds) &
+              ri.isDeleted.equals(false) &
+              ri.isOptional.equals(false)))
+        .get();
+
+    // Collect ingredient IDs and load outlet stocks
+    final ingredientIds = riList.map((ri) => ri.ingredientId).toSet().toList();
+    if (ingredientIds.isEmpty) return {};
+    final stocks = await (db.select(db.outletStocks)
+          ..where((os) => os.outletId.equals(outletId) &
+              os.ingredientId.isIn(ingredientIds) &
+              os.isDeleted.equals(false)))
+        .get();
+    final stockMap = <String, double>{};
+    for (final s in stocks) {
+      stockMap[s.ingredientId] = s.computedStock;
+    }
+
+    // Group recipe ingredients by recipe
+    final riByRecipe = <String, List<RecipeIngredientLocal>>{};
+    for (final ri in riList) {
+      riByRecipe.putIfAbsent(ri.recipeId, () => []).add(ri);
+    }
+
+    // Compute min portions per product
+    final result = <String, int>{};
+    for (final pid in stockEnabledIds) {
+      final recipe = recipeMap[pid];
+      if (recipe == null) {
+        result[pid] = 0;
+        continue;
+      }
+      final ingredients = riByRecipe[recipe.id];
+      if (ingredients == null || ingredients.isEmpty) {
+        result[pid] = 0;
+        continue;
+      }
+      double minPortions = double.infinity;
+      for (final ri in ingredients) {
+        if (ri.quantity <= 0) continue;
+        final available = stockMap[ri.ingredientId] ?? 0.0;
+        minPortions = math.min(minPortions, available / ri.quantity);
+      }
+      result[pid] = minPortions == double.infinity ? 0 : math.max(0, minPortions.floor());
+    }
+    return result;
   }
 
   Future<List<ProductModel>> _fetchProducts({String? categoryId}) async {

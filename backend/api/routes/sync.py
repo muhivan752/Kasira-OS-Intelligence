@@ -307,7 +307,12 @@ async def sync_data(
         
     pull_changes.cash_activities = ca_result
     
+    # Include stock_mode so Flutter stays in sync with outlet setting
+    sm = getattr(outlet, 'stock_mode', 'simple')
+    sm_str = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
+
     return SyncResponse(
         last_sync_hlc=server_hlc.to_string(),
-        changes=pull_changes
+        changes=pull_changes,
+        stock_mode=sm_str,
     )
