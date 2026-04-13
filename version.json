@@ -3,12 +3,12 @@
     "version": "1.9.0",
     "is_mandatory": false,
     "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.9.0/kasira-pos-v1.9.0.apk",
-    "release_notes": "Fix stock sync: respect stock_enabled in recipe mode, Flutter stockEnabled awareness"
+    "release_notes": "Sync recipe & ingredient stock dari dashboard ke Flutter. POS sekarang otomatis hitung stok dari bahan baku."
   },
   "dapur": {
     "version": "1.9.0",
     "is_mandatory": false,
     "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.9.0/kasira-dapur-v1.9.0.apk",
-    "release_notes": "Fix stock sync: respect stock_enabled in recipe mode, Flutter stockEnabled awareness"
+    "release_notes": "Sync recipe & ingredient stock dari dashboard ke Flutter. POS sekarang otomatis hitung stok dari bahan baku."
   }
 }
