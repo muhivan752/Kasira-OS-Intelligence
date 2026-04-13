@@ -96,19 +96,19 @@ Bug yang pernah terjadi: ingredient dihapus tapi recipe masih reference → ghos
 
 ### Direction
 
-| Data | Direction | Method |
-|------|-----------|--------|
-| Categories | Server → Flutter | Read-only pull |
-| Products | Bidirectional | CRDT merge (PNCounter for stock) |
-| Orders | Flutter → Server | Push unsynced, pull server orders |
-| Order Items | Flutter → Server | Push unsynced, pull server items |
-| Payments | Flutter → Server | Push, pull |
-| Shifts | Flutter → Server | Push, pull |
-| Cash Activities | Flutter → Server | Push, pull |
-| **Ingredients** | **Server → Flutter** | **Read-only pull** |
-| **Recipes** | **Server → Flutter** | **Read-only pull** |
-| **Recipe Ingredients** | **Server → Flutter** | **Read-only pull** |
-| **Outlet Stock** | **Server → Flutter** | **Read-only pull** |
+| Data | Direction | Method | Conflict Strategy |
+|------|-----------|--------|-------------------|
+| Categories | Server → Flutter | Read-only pull | N/A |
+| Products | Bidirectional | CRDT merge (PNCounter for stock) | `hlc_lww` + PNCounter merge |
+| Orders | Bidirectional | Push unsynced, pull server | `financial_strict` |
+| Order Items | Bidirectional | Push unsynced, pull server | `hlc_lww` |
+| Payments | Bidirectional | Push, pull | `financial_strict` |
+| Shifts | Bidirectional | Push, pull | `financial_strict` |
+| Cash Activities | Bidirectional | Push, pull | `financial_strict` |
+| **Ingredients** | **Server → Flutter** | **Read-only pull** | N/A |
+| **Recipes** | **Server → Flutter** | **Read-only pull** | N/A |
+| **Recipe Ingredients** | **Server → Flutter** | **Read-only pull** | N/A |
+| **Outlet Stock** | **Server → Flutter** | **Read-only pull** (PNCounter on server) | PNCounter merge |
 
 ### Sync Endpoint: `POST /api/v1/sync/`
 
@@ -125,14 +125,251 @@ Response: `{last_sync_hlc, changes: {...}, stock_mode}`
 | `tenant_id` | SecureStorage | Login |
 | `outlet_id` | SecureStorage | Login |
 | `stock_mode` | SecureStorage | Login + every sync |
-| `device_node_id` | SharedPreferences | First launch |
-| `last_sync_hlc` | SharedPreferences | Every sync |
+| `device_node_id` | SharedPreferences | First launch (format: `device_${timestamp}`) |
+| `last_sync_hlc` | SharedPreferences | Every successful sync |
 
 ### Drift DB Schema (v4)
 
 Tables: Products, Orders, OrderItems, Payments, Shifts, CashActivities, Ingredients, Recipes, RecipeIngredients, **OutletStocks**
 
 Migration path: v1 → v2 (CRDT columns) → v3 (ingredient/recipe tables) → v4 (outlet_stock table)
+
+---
+
+## CRDT Sync Engine — Deep Reference
+
+### Files yang Terlibat
+
+| File | Apa | Kapan Perlu Baca |
+|------|-----|------------------|
+| `backend/services/crdt.py` | HLC + PNCounter implementation | Kalau edit sync logic apapun |
+| `backend/services/sync.py` | `process_table_sync`, `process_stock_sync`, `get_table_changes` | Kalau edit cara data masuk/keluar |
+| `backend/api/routes/sync.py` | Sync endpoint (push+pull orchestration) | Kalau tambah table baru ke sync |
+| `kasir_app/lib/core/utils/hlc.dart` | HLC implementation (Flutter) | Kalau edit sync di Flutter |
+| `kasir_app/lib/core/utils/pn_counter.dart` | PNCounter implementation (Flutter) | Kalau edit stock logic offline |
+| `kasir_app/lib/core/sync/sync_service.dart` | Flutter sync client | Kalau edit apa yang di-push/pull |
+| `kasir_app/lib/core/sync/sync_provider.dart` | Riverpod provider for SyncService | Dependency injection |
+
+### HLC (Hybrid Logical Clock)
+
+**Format string:** `timestamp:counter:node_id`
+- `timestamp`: milliseconds since epoch (int)
+- `counter`: monotonic counter for same-millisecond events (int)
+- `node_id`: unique identifier — server: `server:{outlet_id}`, device: `device_{timestamp}`
+
+**Contoh:** `1775895258086:1:server:fbc68df5-5613-4197-929d-395ddb903a9e`
+
+**Operasi penting:**
+
+```
+generate(node_id)  → HLC(now_ms, 0, node_id)
+compare(a, b)      → bandingkan timestamp → counter → node_id (lexicographic)
+receive(remote)    → advance clock: max(local, remote) + increment counter
+```
+
+**Clock skew protection (backend only):** Kalau client kirim timestamp > 5 menit di masa depan, server cap ke `now + 5min`. Flutter TIDAK punya proteksi ini.
+
+**Kenapa HLC bukan wall clock:**
+- Wall clock bisa loncat mundur (NTP sync, timezone change)
+- HLC monotonic: timestamp selalu >= previous, counter breaks ties
+- Node ID sebagai tiebreaker terakhir (lexicographic)
+
+### PNCounter (Positive-Negative Counter)
+
+**Data structure:**
+```json
+crdt_positive: {"server:outlet123": 100, "device_abc": 20}   // restock
+crdt_negative: {"device_abc": 5, "device_xyz": 8}            // sales
+computed_stock = sum(positive) - sum(negative) = 120 - 13 = 107
+```
+
+**Merge rule: MAX per node_id**
+```
+local:  {"device_a": 5, "device_b": 3}
+remote: {"device_a": 4, "device_b": 7, "device_c": 2}
+merged: {"device_a": 5, "device_b": 7, "device_c": 2}  ← max per key
+```
+
+**Kenapa conflict-free:**
+- Setiap device HANYA increment counter miliknya sendiri
+- Device A: `negative[device_a] += qty`
+- Device B: `negative[device_b] += qty`
+- Merge ambil max → gak pernah kehilangan increment dari device manapun
+
+**Contoh multi-device:**
+```
+Server awal: positive={server:100}, negative={}  → stock=100
+
+Device A (offline): sell 5 → negative={device_a:5}  → local stock=95
+Device B (offline): sell 3 → negative={device_b:3}  → local stock=97
+Server: restock 20 → positive={server:120}          → stock=120
+
+Device A sync:
+  push: negative={device_a:5}
+  server merge: negative={device_a:5}
+  server stock: 120-5=115
+
+Device B sync:
+  push: negative={device_b:3}
+  server merge: negative={device_a:5, device_b:3}
+  server stock: 120-5-3=112  ← BENAR, gak ada yang hilang
+
+Device A pull:
+  receive: positive={server:120}, negative={device_a:5, device_b:3}
+  local merge: positive={server:120}, negative={device_a:5, device_b:3}
+  local stock: 120-5-3=112  ← sama dengan server
+```
+
+### Conflict Strategies
+
+**`hlc_lww` (Last-Write-Wins) — default untuk Categories, Products, Order Items:**
+```
+if client_hlc > server_hlc:
+    server record = client data   // client wins
+else:
+    keep server record            // server wins (silent discard)
+```
+
+**`financial_strict` — untuk Orders, Payments, Shifts, Cash Activities:**
+```
+if server.status in ["paid", "completed", "refunded", "cancelled"]:
+    REJECT client changes         // financial record immutable
+else:
+    apply hlc_lww                 // normal LWW
+```
+
+**Kenapa financial_strict:**
+- Order sudah dibayar → client offline gak boleh bisa ubah
+- Payment completed → gak boleh di-overwrite
+- Mencegah financial inconsistency dari stale offline data
+
+### Sync Flow Detail
+
+**PUSH (client → server) — `backend/services/sync.py:process_table_sync`:**
+
+```
+1. Parse client HLC dari record
+2. Advance server HLC via receive(client_hlc)
+3. SELECT existing record FOR UPDATE (row lock)
+4. Cek authorization: record.outlet_id == user's outlet_id?
+5. Cek financial_strict: server status final? → skip
+6. Compare HLC: client > server? → update, else skip
+7. Apply field-by-field update (skip created_at, updated_at, row_version, hlc)
+8. Map is_deleted → deleted_at
+9. Increment row_version
+10. Flush (bukan commit — commit di akhir setelah semua table)
+```
+
+**Kalau record baru (INSERT):**
+```
+1. Validate ID gak collision dengan tenant lain
+2. Inject filter_kwargs (outlet_id, brand_id)
+3. Map is_deleted → deleted_at
+4. Set row_version = 1
+5. Insert
+```
+
+**PUSH stock — `backend/services/sync.py:process_stock_sync`:**
+```
+1. Parse client PNCounter (crdt_positive, crdt_negative)
+2. SELECT existing outlet_stock FOR UPDATE
+3. Merge: merged_p = PNCounter.merge(server_p, client_p)
+4. Merge: merged_n = PNCounter.merge(server_n, client_n)
+5. Recompute: computed_stock = max(0, sum(merged_p) - sum(merged_n))
+6. Update row_version
+```
+
+**PULL (server → client) — `backend/services/sync.py:get_table_changes`:**
+```
+1. Filter by tenant (brand_id, outlet_id)
+2. If last_sync_hlc provided:
+   WHERE updated_at > hlc.timestamp
+      OR (updated_at == hlc.timestamp AND row_version > hlc.counter)
+3. Attach HLC to each record: HLC(updated_at_ms, row_version, server_node_id)
+4. Return records
+```
+
+**Flutter apply server changes — `sync_service.dart:_applyServerChanges`:**
+```
+1. Transaction start
+2. For each product:
+   - If exists locally AND stock_enabled → PNCounter merge (max per node)
+   - Else → insertOnConflictUpdate (replace)
+3. For orders, payments, shifts → insertOnConflictUpdate (server wins)
+4. For ingredients, recipes, recipe_ingredients → insertOnConflictUpdate (read-only)
+5. For outlet_stock → insertOnConflictUpdate (read-only from server)
+6. Transaction commit
+```
+
+### Idempotency — Mencegah Double-Deduction
+
+**Problem:** Device sync → network timeout → retry → server deduct stock 2x
+
+**Solution 1 — Event Store Check (backend):**
+```python
+# stock_service.py
+async def _is_sale_already_recorded(db, product_id, order_id):
+    return await db.execute(
+        select(Event).where(
+            Event.stream_id == f"product:{product_id}",
+            Event.event_type == "stock.sale",
+            Event.event_data["order_id"].astext == str(order_id),
+        )
+    ).scalar_one_or_none() is not None
+```
+Sebelum deduct, cek event store: kalau `stock.sale` event dengan `order_id` ini sudah ada → skip.
+
+**Solution 2 — isSynced Flag (Flutter):**
+```dart
+// Setelah sync berhasil:
+await _markAsSynced(products: unsyncedProducts, ...);
+// Next sync: hanya kirim record dengan isSynced=false
+```
+
+**Solution 3 — Idempotency Key (Storefront orders):**
+```json
+POST /connect/{slug}/order
+{"idempotency_key": "unique-key-123", ...}
+```
+Server cek: kalau order dengan key ini sudah ada → return existing order.
+
+### Edge Cases yang Harus Dipahami
+
+**1. Device offline 3 hari, sync:**
+- Push: semua unsynced changes (bisa ratusan records)
+- Pull: semua server changes since last_sync_hlc (bisa ribuan records)
+- PNCounter merge tetap benar karena conflict-free
+- HLC incremental query efisien — gak full table scan
+
+**2. Dua device edit product yang sama offline:**
+- Device A: edit name "Kopi" → "Kopi Premium" at HLC 100
+- Device B: edit price 20000 → 25000 at HLC 200
+- Device A sync: server updates name (HLC 100)
+- Device B sync: server compares HLC 200 > 100 → overwrites SEMUA fields
+- **Result: name kembali ke "Kopi" (dari device B yang gak edit name)**
+- **Ini LWW limitation — gak ada field-level merge**
+
+**3. Order dibuat offline, sync, tapi stock sudah habis di server:**
+- sync.py wraps stock deduction in try-except (line 88-89)
+- Kalau stock insufficient → exception caught → sync TETAP berhasil
+- Order masuk tapi stock jadi negatif? TIDAK — CHECK constraint di DB level
+- **Result: order masuk ke server tapi stock gak di-deduct. Perlu manual reconciliation.**
+
+**4. `financial_strict` reject scenario:**
+- Device A offline, edit order status pending→preparing
+- Meanwhile server: order sudah dibayar (status=paid)
+- Device A sync: server checks status=paid → REJECT client change
+- Device A pull: receive order with status=paid (overwrites local)
+- **Result: correct — financial state preserved**
+
+### ⚠️ Known Sync Issues
+
+| Issue | Detail | Impact |
+|-------|--------|--------|
+| **sync.py stock deduction hanya simple mode** | Line 76-89: saat order items sync dari offline, hanya call `svc_deduct_stock` (simple). Recipe mode ingredient deduction gak di-trigger. | Offline order di recipe mode: stock gak di-deduct server-side saat sync. Bergantung pada Flutter local deduction + CRDT merge. |
+| **LWW overwrites semua field** | Kalau 2 device edit field berbeda di record yang sama, yang HLC lebih baru menang untuk SEMUA field | Bisa kehilangan edit dari device lain. Gak ada field-level CRDT. |
+| **No clock skew protection di Flutter** | Backend punya max 5min cap, Flutter tidak | Kalau device clock salah jauh, bisa bikin HLC yang "dari masa depan" → selalu menang di LWW |
+| **outlet_stock hanya read-only pull ke Flutter** | Flutter gak push outlet_stock changes ke server | Offline ingredient deduction di Flutter gak sync balik. Bergantung pada order sync → server re-deduct. |
 
 ---
 
