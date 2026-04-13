@@ -20,7 +20,7 @@ from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.models.reservation import Table
 from backend.services.stock_service import deduct_stock, restore_stock_on_cancel
-from backend.services.ingredient_stock_service import deduct_ingredients_for_product
+from backend.services.ingredient_stock_service import deduct_ingredients_for_product, restore_ingredients_on_cancel
 from backend.models.event import Event
 
 router = APIRouter()
@@ -431,24 +431,40 @@ async def update_order_status(
 
     # Restore stock when order cancelled
     if status_in.status == OrderStatus.cancelled:
-        # Get tenant tier
+        # Get tenant tier and outlet stock_mode
         outlet = await db.get(Outlet, order.outlet_id)
         tier = "starter"
-        if outlet and outlet.tenant_id:
-            tenant = await db.get(Tenant, outlet.tenant_id)
-            if tenant:
-                tier = tenant.subscription_tier or "starter"
+        stock_mode = "simple"
+        if outlet:
+            sm = getattr(outlet, 'stock_mode', 'simple')
+            stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
+            if outlet.tenant_id:
+                tenant = await db.get(Tenant, outlet.tenant_id)
+                if tenant:
+                    tier = getattr(tenant, 'subscription_tier', None) or "starter"
+                    if hasattr(tier, 'value'):
+                        tier = tier.value
         for item in order.items:
             product = await db.get(Product, item.product_id)
             if product and product.stock_enabled:
-                await restore_stock_on_cancel(
-                    db,
-                    product=product,
-                    quantity=item.quantity,
-                    outlet_id=order.outlet_id,
-                    order_id=order.id,
-                    tier=tier,
-                )
+                if stock_mode == 'recipe':
+                    await restore_ingredients_on_cancel(
+                        db,
+                        product_id=product.id,
+                        quantity=item.quantity,
+                        outlet_id=order.outlet_id,
+                        order_id=order.id,
+                        tier=tier,
+                    )
+                else:
+                    await restore_stock_on_cancel(
+                        db,
+                        product=product,
+                        quantity=item.quantity,
+                        outlet_id=order.outlet_id,
+                        order_id=order.id,
+                        tier=tier,
+                    )
 
     # Release table when order completed/cancelled (if no other active orders on same table)
     if status_in.status in (OrderStatus.completed, OrderStatus.cancelled) and order.table_id:

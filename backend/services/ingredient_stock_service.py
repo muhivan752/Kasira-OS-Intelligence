@@ -165,3 +165,89 @@ async def deduct_ingredients_for_product(
         "Ingredient stock deducted for order %s, product %s, %d ingredients",
         order_id, product_id, len(active_ingredients),
     )
+
+
+async def restore_ingredients_on_cancel(
+    db: AsyncSession,
+    *,
+    product_id: UUID,
+    quantity: int,
+    outlet_id: UUID,
+    order_id: UUID,
+    tier: str,
+) -> None:
+    """
+    Restore ingredient stock when order is cancelled in recipe mode.
+    Mirrors deduct_ingredients_for_product but adds stock back.
+    """
+    # Load active recipe
+    recipe = (await db.execute(
+        select(Recipe)
+        .options(selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient))
+        .where(
+            Recipe.product_id == product_id,
+            Recipe.is_active == True,
+            Recipe.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+
+    if not recipe:
+        return  # No recipe — nothing to restore
+
+    active_ingredients = [
+        ri for ri in recipe.ingredients
+        if ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
+    ]
+
+    now = datetime.now(timezone.utc)
+    for ri in active_ingredients:
+        restore_qty = ri.quantity * quantity
+
+        stock = (await db.execute(
+            select(OutletStock).where(
+                OutletStock.outlet_id == outlet_id,
+                OutletStock.ingredient_id == ri.ingredient_id,
+                OutletStock.deleted_at.is_(None),
+            ).with_for_update()
+        )).scalar_one_or_none()
+
+        if not stock:
+            continue  # No stock record — skip
+
+        stock_before = stock.computed_stock
+        stock_after = stock_before + restore_qty
+
+        # Append event
+        event = Event(
+            outlet_id=outlet_id,
+            stream_id=f"ingredient:{ri.ingredient_id}",
+            event_type="stock.ingredient_cancel_return",
+            event_data={
+                "ingredient_id": str(ri.ingredient_id),
+                "outlet_id": str(outlet_id),
+                "product_id": str(product_id),
+                "order_id": str(order_id),
+                "recipe_id": str(recipe.id),
+                "quantity_restored": restore_qty,
+                "stock_before": stock_before,
+                "stock_after": stock_after,
+                "tier": tier,
+            },
+        )
+        db.add(event)
+
+        # Update outlet_stock
+        await db.execute(
+            update(OutletStock).where(
+                OutletStock.id == stock.id,
+            ).values(
+                computed_stock=stock_after,
+                row_version=OutletStock.row_version + 1,
+                updated_at=now,
+            )
+        )
+
+    logger.info(
+        "Ingredient stock restored for cancelled order %s, product %s",
+        order_id, product_id,
+    )
