@@ -223,6 +223,7 @@ async def add_order_to_tab(
         raise HTTPException(status_code=400, detail="Order sudah terhubung ke tab lain")
 
     order.tab_id = tab.id
+    await db.flush()
     await _recalculate_tab(db, tab)
     tab.row_version += 1
 
