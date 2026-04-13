@@ -133,16 +133,85 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
     )).scalar_one_or_none()
     reservation_enabled = resv_settings.is_enabled if resv_settings else False
 
-    # Get active products with stock > 0
-    products_result = await db.execute(
-        select(Product).where(
-            Product.brand_id == outlet.brand_id,
-            Product.is_active == True,
-            Product.stock_qty > 0,
-            Product.deleted_at.is_(None)
+    # Get active products — recipe mode doesn't use stock_qty
+    stock_mode = getattr(outlet, 'stock_mode', 'simple')
+    stock_mode = stock_mode.value if hasattr(stock_mode, 'value') else str(stock_mode or 'simple')
+
+    if stock_mode == 'recipe':
+        # Recipe mode: include all active products, calculate stock from ingredients
+        products_result = await db.execute(
+            select(Product).where(
+                Product.brand_id == outlet.brand_id,
+                Product.is_active == True,
+                Product.deleted_at.is_(None)
+            )
         )
-    )
-    products = products_result.scalars().all()
+        products = products_result.scalars().all()
+
+        # Calculate available stock from recipe ingredients
+        from backend.models.recipe import Recipe, RecipeIngredient
+        from backend.models.product import OutletStock
+        import math
+
+        recipe_stock_map = {}  # product_id -> available portions
+        for p in products:
+            recipe_result = await db.execute(
+                select(Recipe)
+                .options(selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient))
+                .where(
+                    Recipe.product_id == p.id,
+                    Recipe.is_active == True,
+                    Recipe.deleted_at.is_(None),
+                )
+            )
+            recipe = recipe_result.scalar_one_or_none()
+            if not recipe:
+                recipe_stock_map[p.id] = 0
+                continue
+
+            active_ingredients = [
+                ri for ri in recipe.ingredients
+                if ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
+            ]
+            if not active_ingredients:
+                recipe_stock_map[p.id] = 0
+                continue
+
+            # Get outlet stock for all ingredients
+            ingredient_ids = [ri.ingredient_id for ri in active_ingredients]
+            stocks_result = await db.execute(
+                select(OutletStock).where(
+                    OutletStock.outlet_id == outlet.id,
+                    OutletStock.ingredient_id.in_(ingredient_ids),
+                    OutletStock.deleted_at.is_(None),
+                )
+            )
+            stock_map = {s.ingredient_id: s.computed_stock for s in stocks_result.scalars().all()}
+
+            # Available portions = min(ingredient_stock / qty_per_portion) for all ingredients
+            min_portions = float('inf')
+            for ri in active_ingredients:
+                available = stock_map.get(ri.ingredient_id, 0.0)
+                portions = available / ri.quantity
+                min_portions = min(min_portions, portions)
+
+            recipe_stock_map[p.id] = max(0, int(math.floor(min_portions))) if min_portions != float('inf') else 0
+
+        # Filter out products with 0 available portions
+        products_with_stock = [(p, recipe_stock_map.get(p.id, 0)) for p in products]
+        products_with_stock = [(p, s) for p, s in products_with_stock if s > 0]
+    else:
+        # Simple mode: filter by stock_qty > 0
+        products_result = await db.execute(
+            select(Product).where(
+                Product.brand_id == outlet.brand_id,
+                Product.is_active == True,
+                Product.stock_qty > 0,
+                Product.deleted_at.is_(None)
+            )
+        )
+        products = products_result.scalars().all()
+        products_with_stock = [(p, p.stock_qty) for p in products]
 
     # Get categories for this brand
     categories_result = await db.execute(
@@ -176,19 +245,19 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
                 "name": p.name,
                 "description": p.description,
                 "price": float(p.base_price),
-                "stock": p.stock_qty,
+                "stock": stock,
                 "category_id": str(p.category_id) if p.category_id else None,
                 "image_url": p.image_url
-            } for p in products
+            } for p, stock in products_with_stock
         ],
         "menu": [
             {
                 "id": str(p.id),
                 "name": p.name,
                 "price": float(p.base_price),
-                "stock": p.stock_qty,
+                "stock": stock,
                 "image_url": p.image_url
-            } for p in products
+            } for p, stock in products_with_stock
         ]
     }
 
