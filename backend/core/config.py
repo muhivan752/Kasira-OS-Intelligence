@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     # Claude AI
     ANTHROPIC_API_KEY: str = ""
 
+    # Voyage AI (embeddings for Layer 4)
+    VOYAGE_API_KEY: str = ""
+
     # Sentry Error Tracking
     SENTRY_DSN: str = ""
 

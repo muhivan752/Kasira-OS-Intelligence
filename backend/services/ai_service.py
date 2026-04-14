@@ -639,6 +639,9 @@ INSTRUKSI:
 
     context += platform_context
 
+    # Layer 4: Embedding-based RAG context is NOT cached here.
+    # It's injected per-query in stream_ai_response() for relevance.
+
     # Cache sampai 00.00 WIB
     ttl = seconds_until_midnight_wib()
     try:
@@ -743,6 +746,21 @@ async def stream_ai_response(
         db=db,
         redis_client=redis_client,
     )
+
+    # 3b. Layer 4 RAG: embed user query, find relevant products (per-query, not cached)
+    try:
+        from backend.services.embedding_service import enrich_ai_context
+        from backend.models.outlet import Outlet
+        outlet_row = await db.execute(
+            select(Outlet.brand_id).where(Outlet.id == outlet_id)
+        )
+        brand_id = outlet_row.scalar()
+        if brand_id:
+            rag_context = await enrich_ai_context(message, brand_id, db)
+            if rag_context:
+                system_prompt += rag_context
+    except Exception as e:
+        logger.debug(f"RAG enrichment skipped: {e}")
 
     # 4. Pilih model (Rule #25/#26)
     task_complexity = classify_task_complexity(message)

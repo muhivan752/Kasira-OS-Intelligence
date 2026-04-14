@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from backend.api import deps
 from backend.models.outlet import Outlet
-from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentSetupOwn, OutletPaymentStatus, OutletStockModeUpdate, TaxConfigResponse, TaxConfigUpdate
+from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentSetupOwn, OutletPaymentStatus, OutletStockModeUpdate, OutletLocationUpdate, TaxConfigResponse, TaxConfigUpdate
 from backend.models.outlet_tax_config import OutletTaxConfig
 from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
@@ -494,4 +494,53 @@ async def update_tax_config(
         data=TaxConfigResponse.model_validate(config),
         request_id=request.state.request_id,
         message="Pengaturan pajak berhasil disimpan",
+    )
+
+
+# ── Location ───────────────────────────────────────────────
+
+@router.post("/{outlet_id}/location", response_model=StandardResponse[dict])
+async def update_outlet_location(
+    request: Request,
+    outlet_id: uuid.UUID,
+    loc_in: OutletLocationUpdate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_user),
+) -> Any:
+    """Receive lat/lng from app. Save immediately, reverse geocode in background."""
+    import asyncio
+
+    stmt = select(Outlet).where(
+        Outlet.id == outlet_id, Outlet.deleted_at == None,
+        Outlet.tenant_id == current_user.tenant_id,
+    )
+    outlet = (await db.execute(stmt)).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    await db.execute(
+        update(Outlet).where(Outlet.id == outlet_id)
+        .values(
+            latitude=loc_in.latitude,
+            longitude=loc_in.longitude,
+            row_version=Outlet.row_version + 1,
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+    await log_audit(
+        db=db, action="UPDATE", entity="outlets", entity_id=outlet_id,
+        after_state={"latitude": loc_in.latitude, "longitude": loc_in.longitude},
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+
+    # Background: reverse geocode → fill city/district/province
+    from backend.services.geocode_service import enrich_outlet_location_silent
+    asyncio.create_task(enrich_outlet_location_silent(outlet_id, loc_in.latitude, loc_in.longitude))
+
+    return StandardResponse(
+        success=True,
+        data={"ok": True, "latitude": loc_in.latitude, "longitude": loc_in.longitude},
+        request_id=request.state.request_id,
+        message="Lokasi outlet berhasil disimpan",
     )

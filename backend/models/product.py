@@ -33,7 +33,7 @@ class Product(BaseModel):
     is_subscription = Column(Boolean, server_default='false', nullable=False)
 
     # Vector column
-    embedding = Column(Vector(1536), nullable=True)
+    embedding = Column(Vector(512), nullable=True)  # voyage-3-lite
 
     __table_args__ = (
         CheckConstraint('stock_qty >= 0', name='chk_products_stock_qty'),

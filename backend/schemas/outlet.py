@@ -36,6 +36,10 @@ class OutletPaymentStatus(BaseModel):
 class OutletStockModeUpdate(BaseModel):
     stock_mode: str  # 'simple' | 'recipe'
 
+class OutletLocationUpdate(BaseModel):
+    latitude: float
+    longitude: float
+
 
 class OutletInDBBase(OutletBase):
     id: UUID4
@@ -50,6 +54,11 @@ class OutletInDBBase(OutletBase):
     deleted_at: Optional[datetime] = None
     xendit_business_id: Optional[str] = None
     xendit_connected_at: Optional[datetime] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    city: Optional[str] = None
+    district: Optional[str] = None
+    province: Optional[str] = None
 
     class Config:
         from_attributes = True

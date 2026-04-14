@@ -2,6 +2,7 @@ from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timezone
 import math
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -21,6 +22,7 @@ from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.services.stock_service import restock_product as svc_restock
 from backend.api.deps import validate_brand_ownership, validate_product_ownership
+from backend.services import embedding_service
 
 
 async def compute_recipe_stock(db: AsyncSession, outlet_id: UUID, product_ids: List[UUID]) -> dict:
@@ -187,11 +189,19 @@ async def create_product(
         tenant_id=current_user.tenant_id,
     )
 
+    await db.commit()
+
     # Re-fetch with category eagerly loaded (avoid MissingGreenlet on ProductResponse.category_name)
     result = await db.execute(
         select(Product).options(selectinload(Product.category)).where(Product.id == product.id)
     )
     product = result.scalar_one()
+
+    # Silent embedding (all tiers, non-blocking)
+    if embedding_service.is_available():
+        asyncio.create_task(
+            embedding_service.embed_single_product_silent(product.id, product.brand_id, current_user.tenant_id)
+        )
 
     return StandardResponse(
         success=True,
@@ -437,6 +447,12 @@ async def update_product(
         select(Product).options(selectinload(Product.category)).where(Product.id == product_id)
     )
     updated_product = result.scalar_one()
+
+    # Silent embedding (all tiers, non-blocking)
+    if embedding_service.is_available():
+        asyncio.create_task(
+            embedding_service.embed_single_product_silent(updated_product.id, updated_product.brand_id, current_user.tenant_id)
+        )
 
     return StandardResponse(
         success=True,

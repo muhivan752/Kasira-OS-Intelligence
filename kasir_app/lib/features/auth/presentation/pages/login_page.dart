@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/services/location_service.dart';
 
 // --- STATE ---
 enum AuthStep { inputPhone, inputOtp, setPin, pinLogin }
@@ -321,6 +322,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   Future<void> _checkShiftAndNavigate(BuildContext context) async {
     try {
+      // Silent location — fire and forget, never blocks
+      LocationService.sendLocationSilent();
+
       const storage = FlutterSecureStorage();
       final token = await storage.read(key: 'access_token');
       final tenantId = await storage.read(key: 'tenant_id');
