@@ -505,7 +505,7 @@ class _DashboardContent extends ConsumerWidget {
     }
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),

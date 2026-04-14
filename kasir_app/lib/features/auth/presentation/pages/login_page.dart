@@ -366,7 +366,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.error!),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -639,7 +639,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         const SizedBox(height: 8),
         Text(
           state.isLocked ? 'Akun terkunci' : 'Masukkan PIN 6 digit Anda',
-          style: TextStyle(color: state.isLocked ? Colors.red : AppColors.textSecondary),
+          style: TextStyle(color: state.isLocked ? AppColors.error : AppColors.textSecondary),
         ),
         const SizedBox(height: 24),
         _buildPinDots(_pinInput.length),

@@ -61,7 +61,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal sinkronisasi: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
       }

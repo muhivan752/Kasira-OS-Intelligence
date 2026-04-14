@@ -174,7 +174,7 @@ class ProductCard extends StatelessWidget {
               if (isOutOfStock)
                 Positioned.fill(
                   child: Container(
-                    color: Colors.white.withOpacity(0.65),
+                    color: AppColors.background.withOpacity(0.75),
                     child: Center(
                       child: Container(
                         padding: const EdgeInsets.symmetric(

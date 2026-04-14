@@ -167,25 +167,25 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
 
     if (table.status == 'occupied' || hasSeated) {
       return _TableDisplayConfig(
-        bgColor: const Color(0xFFFFF1F2),
+        bgColor: AppColors.error.withOpacity(0.10),
         borderColor: AppColors.error,
         iconColor: AppColors.error,
-        textColor: const Color(0xFF9F1239),
+        textColor: AppColors.error,
         statusLabel: 'Terisi',
         icon: LucideIcons.users,
       );
     } else if (hasReservation) {
       return _TableDisplayConfig(
-        bgColor: const Color(0xFFEFF6FF),
+        bgColor: AppColors.info.withOpacity(0.10),
         borderColor: AppColors.info,
         iconColor: AppColors.info,
-        textColor: const Color(0xFF1E40AF),
+        textColor: AppColors.info,
         statusLabel: 'Reservasi',
         icon: LucideIcons.calendarCheck2,
       );
     } else if (table.status == 'closed' || !table.isActive) {
       return _TableDisplayConfig(
-        bgColor: const Color(0xFFF9FAFB),
+        bgColor: AppColors.surfaceVariant,
         borderColor: AppColors.border,
         iconColor: AppColors.textTertiary,
         textColor: AppColors.textTertiary,
@@ -194,10 +194,10 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
       );
     } else {
       return _TableDisplayConfig(
-        bgColor: const Color(0xFFF0FDF4),
+        bgColor: AppColors.success.withOpacity(0.10),
         borderColor: AppColors.success,
         iconColor: AppColors.success,
-        textColor: const Color(0xFF166534),
+        textColor: AppColors.success,
         statusLabel: 'Tersedia',
         icon: LucideIcons.checkCircle2,
       );

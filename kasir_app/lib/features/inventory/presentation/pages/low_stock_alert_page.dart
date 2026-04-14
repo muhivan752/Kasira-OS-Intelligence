@@ -152,7 +152,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            _buildChip(null, 'Semua (${_items.length})', Colors.grey),
+                            _buildChip(null, 'Semua (${_items.length})', AppColors.textSecondary),
                             const SizedBox(width: 8),
                             _buildChip(StockLevel.out, 'Habis ($outCount)', AppColors.error),
                             const SizedBox(width: 8),

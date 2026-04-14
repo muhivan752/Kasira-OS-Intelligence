@@ -147,7 +147,7 @@ class SettingsPage extends StatelessWidget {
                 context.go('/login');
               }
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Keluar'),
           ),
         ],
