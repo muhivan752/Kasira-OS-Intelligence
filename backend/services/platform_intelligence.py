@@ -59,16 +59,17 @@ async def aggregate_daily_stats(db: AsyncSession, target_date: Optional[date] = 
 
     logger.info(f"Aggregating daily stats for {target_date}")
 
-    # Get all active outlets with their tenant info
+    # Get all active outlets with their tenant info + location
     outlets = (await db.execute(
-        select(Outlet.id, Outlet.tenant_id, Tenant.subscription_tier)
+        select(Outlet.id, Outlet.tenant_id, Tenant.subscription_tier,
+               Outlet.city, Outlet.district, Outlet.province)
         .join(Tenant, Outlet.tenant_id == Tenant.id)
         .where(Outlet.deleted_at.is_(None), Tenant.is_active == True)
     )).all()
 
     stats_created = 0
 
-    for outlet_id, tenant_id, tier in outlets:
+    for outlet_id, tenant_id, tier, outlet_city, outlet_district, outlet_province in outlets:
         # Revenue + order count from completed orders
         revenue_q = await db.execute(
             select(
@@ -140,7 +141,7 @@ async def aggregate_daily_stats(db: AsyncSession, target_date: Optional[date] = 
             elif r.method == "qris":
                 payments_qris = r.cnt
 
-        # Peak hour
+        # Peak hour + hourly distribution
         hour_q = await db.execute(
             select(
                 func.extract("hour", Event.created_at).label("h"),
@@ -152,17 +153,22 @@ async def aggregate_daily_stats(db: AsyncSession, target_date: Optional[date] = 
                 Event.created_at < end,
             ).group_by(func.extract("hour", Event.created_at))
             .order_by(func.count(Event.id).desc())
-            .limit(1)
         )
-        peak_row = hour_q.first()
+        hour_rows = hour_q.all()
         peak_hour = None
         peak_hour_orders = 0
-        if peak_row and peak_row.cnt > 0:
-            h = int(peak_row.h) + 7  # UTC → WIB
+        hourly_dist = {}
+        for hr in hour_rows:
+            h_wib = int(hr.h) + 7  # UTC → WIB
+            if h_wib >= 24:
+                h_wib -= 24
+            hourly_dist[str(h_wib)] = hr.cnt
+        if hour_rows and hour_rows[0].cnt > 0:
+            h = int(hour_rows[0].h) + 7
             if h >= 24:
                 h -= 24
             peak_hour = h
-            peak_hour_orders = peak_row.cnt
+            peak_hour_orders = hour_rows[0].cnt
 
         # Unique products sold
         from backend.models.order import OrderItem
@@ -196,6 +202,10 @@ async def aggregate_daily_stats(db: AsyncSession, target_date: Optional[date] = 
             peak_hour_orders=peak_hour_orders,
             unique_products_sold=unique_products,
             tier=tier_val,
+            city=outlet_city,
+            district=outlet_district,
+            province=outlet_province,
+            hourly_distribution=hourly_dist or None,
         ).on_conflict_do_update(
             constraint="uq_platform_daily_outlet_date",
             set_={
@@ -211,6 +221,10 @@ async def aggregate_daily_stats(db: AsyncSession, target_date: Optional[date] = 
                 "peak_hour_orders": peak_hour_orders,
                 "unique_products_sold": unique_products,
                 "tier": tier_val,
+                "city": outlet_city,
+                "district": outlet_district,
+                "province": outlet_province,
+                "hourly_distribution": hourly_dist or None,
             },
         )
         await db.execute(stmt)

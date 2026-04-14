@@ -35,6 +35,12 @@ class PlatformDailyStats(Base):
     peak_hour_orders = Column(Integer, server_default="0", nullable=False)
     unique_products_sold = Column(Integer, server_default="0", nullable=False)
     tier = Column(String, nullable=True)
+    # Geo columns (migration 074)
+    city = Column(String, nullable=True)
+    district = Column(String, nullable=True)
+    province = Column(String, nullable=True)
+    business_type = Column(String, nullable=True)
+    hourly_distribution = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
 
 

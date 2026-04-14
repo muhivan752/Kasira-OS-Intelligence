@@ -42,14 +42,26 @@ async def lifespan(app: FastAPI):
     # ── Startup ──────────────────────────────────────────────────────────────
     from backend.tasks.payment_reconciliation import payment_reconciliation_loop
     from backend.tasks.subscription_billing import generate_invoices_loop, grace_period_loop
+    from backend.tasks.platform_aggregation import (
+        daily_stats_loop, hpp_benchmark_loop, ingredient_price_loop, insights_loop,
+    )
     reconciliation_task = asyncio.create_task(payment_reconciliation_loop())
     billing_task = asyncio.create_task(generate_invoices_loop())
     grace_task = asyncio.create_task(grace_period_loop())
+    # Platform intelligence (silent aggregation)
+    daily_stats_task = asyncio.create_task(daily_stats_loop())
+    hpp_task = asyncio.create_task(hpp_benchmark_loop())
+    ingredient_task = asyncio.create_task(ingredient_price_loop())
+    insights_task = asyncio.create_task(insights_loop())
     yield
     # ── Shutdown ─────────────────────────────────────────────────────────────
     reconciliation_task.cancel()
     billing_task.cancel()
     grace_task.cancel()
+    daily_stats_task.cancel()
+    hpp_task.cancel()
+    ingredient_task.cancel()
+    insights_task.cancel()
     await xendit_service.close()
 
 app = FastAPI(
