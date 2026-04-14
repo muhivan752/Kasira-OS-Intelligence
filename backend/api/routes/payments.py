@@ -278,7 +278,7 @@ async def create_payment(
                         cashier = await db.get(UserModel, order.user_id)
                         if cashier:
                             cashier_name = cashier.full_name
-                    struk = _build_receipt_text(order, outlet_name, cashier_name, payment_in.payment_method)
+                    struk = _build_receipt_text(order, outlet_name, cashier_name, payment_in.payment_method, payment)
                     try:
                         asyncio.create_task(
                             send_whatsapp_message(customer.phone, struk)
@@ -564,7 +564,7 @@ async def xendit_webhook(
                                 cashier = await db.get(UserModel, order.user_id)
                                 if cashier:
                                     cashier_name = cashier.full_name
-                            struk = _build_receipt_text(order, outlet_name, cashier_name, payment.payment_method)
+                            struk = _build_receipt_text(order, outlet_name, cashier_name, payment.payment_method, payment)
                             asyncio.create_task(
                                 send_whatsapp_message(customer.phone, struk)
                             )
@@ -697,13 +697,18 @@ def _normalize_phone(phone: str) -> str:
     return p
 
 
-def _build_receipt_text(order: Order, outlet_name: str, cashier_name: str, payment_method: str) -> str:
+def _build_receipt_text(order: Order, outlet_name: str, cashier_name: str, payment_method: str, payment_obj=None) -> str:
     method_label = {"cash": "Tunai", "qris": "QRIS", "card": "Kartu", "transfer": "Transfer"}.get(payment_method, payment_method.upper())
+    # WIB timezone
+    from datetime import timezone as tz, timedelta
+    wib = tz(timedelta(hours=7))
+    order_time = order.created_at.astimezone(wib).strftime('%d/%m/%Y %H:%M') if order.created_at else '-'
+
     lines = [
         f"*Struk Pembayaran*",
         f"📍 {outlet_name}",
         f"No. Order: #{order.display_number}",
-        f"Tanggal: {order.created_at.strftime('%d/%m/%Y %H:%M') if order.created_at else '-'}",
+        f"Tanggal: {order_time} WIB",
         f"Kasir: {cashier_name}",
         f"{'─' * 28}",
     ]
@@ -711,14 +716,42 @@ def _build_receipt_text(order: Order, outlet_name: str, cashier_name: str, payme
         name = item.product_name or 'Item'
         qty = item.quantity
         price = float(item.unit_price)
+        item_disc = float(item.discount_amount or 0)
         subtotal = float(item.total_price)
         lines.append(f"{name}")
-        lines.append(f"  {qty}x Rp{price:,.0f}  =  Rp{subtotal:,.0f}")
+        if item_disc > 0:
+            lines.append(f"  {qty}x Rp{price:,.0f} - disc Rp{item_disc:,.0f}")
+            lines.append(f"  = Rp{subtotal:,.0f}")
+        else:
+            lines.append(f"  {qty}x Rp{price:,.0f}  =  Rp{subtotal:,.0f}")
     lines.append(f"{'─' * 28}")
-    if order.tax_amount and float(order.tax_amount) > 0:
-        lines.append(f"Pajak       : Rp{float(order.tax_amount):,.0f}")
-    lines.append(f"*Total       : Rp{float(order.total_amount):,.0f}*")
-    lines.append(f"Pembayaran  : {method_label}")
+
+    subtotal_val = float(order.subtotal or 0)
+    discount_val = float(order.discount_amount or 0)
+    service_val = float(order.service_charge_amount or 0)
+    tax_val = float(order.tax_amount or 0)
+    total_val = float(order.total_amount or 0)
+
+    lines.append(f"Subtotal    : Rp{subtotal_val:,.0f}")
+    if discount_val > 0:
+        lines.append(f"Diskon      : -Rp{discount_val:,.0f}")
+    if service_val > 0:
+        lines.append(f"Service     : Rp{service_val:,.0f}")
+    if tax_val > 0:
+        lines.append(f"Pajak       : Rp{tax_val:,.0f}")
+    lines.append(f"{'─' * 28}")
+    lines.append(f"*TOTAL       : Rp{total_val:,.0f}*")
+    lines.append(f"Bayar ({method_label}) : Rp{total_val:,.0f}")
+
+    # Show amount paid + change for cash
+    if payment_obj:
+        paid = float(payment_obj.amount_paid or 0)
+        change = float(payment_obj.change_amount or 0)
+        if paid > 0 and paid != total_val:
+            lines.append(f"Dibayar     : Rp{paid:,.0f}")
+        if change > 0:
+            lines.append(f"Kembalian   : Rp{change:,.0f}")
+
     lines.append(f"{'─' * 28}")
     lines.append(f"Terima kasih! 🙏")
     lines.append(f"_Powered by Kasira_")
@@ -770,7 +803,7 @@ async def send_receipt_whatsapp(
     if len(phone) < 9:
         raise HTTPException(status_code=400, detail="Nomor HP tidak valid")
 
-    receipt_text = _build_receipt_text(order, outlet_name, cashier_name, payment_method)
+    receipt_text = _build_receipt_text(order, outlet_name, cashier_name, payment_method, latest_payment)
     sent = await send_whatsapp_message(phone, receipt_text)
 
     return StandardResponse(

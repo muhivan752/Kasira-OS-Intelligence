@@ -38,6 +38,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
   final String outletAddress;
   final double? tax;
   final double? serviceCharge;
+  final double? discount;
 
   const ReceiptPreviewPage({
     super.key,
@@ -52,6 +53,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
     this.outletAddress = 'Jl. Sudirman No.1, Jakarta',
     this.tax,
     this.serviceCharge,
+    this.discount,
   });
 
   // Demo constructor for preview
@@ -233,6 +235,10 @@ class ReceiptPreviewPage extends ConsumerWidget {
 
                           // Subtotal
                           _buildReceiptRow('Subtotal', currency.format(subtotal)),
+                          if (discount != null && discount! > 0) ...[
+                            const SizedBox(height: 4),
+                            _buildReceiptRow('Diskon', '-${currency.format(discount)}', valueColor: AppColors.error),
+                          ],
                           if (serviceCharge != null && serviceCharge! > 0) ...[
                             const SizedBox(height: 4),
                             _buildReceiptRow('Service Charge', currency.format(serviceCharge)),

@@ -85,6 +85,7 @@ final _router = GoRouter(
           outletAddress: extra['outletAddress'] as String? ?? '',
           tax: (extra['tax'] as num?)?.toDouble(),
           serviceCharge: (extra['serviceCharge'] as num?)?.toDouble(),
+          discount: (extra['discount'] as num?)?.toDouble(),
         );
       },
     ),
