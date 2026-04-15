@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../pos/presentation/pages/pos_page.dart';
 import '../../../orders/presentation/pages/order_list_page.dart';
@@ -87,6 +88,7 @@ class _DashboardPageState extends State<DashboardPage> {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -109,20 +111,74 @@ class _DashboardPageState extends State<DashboardPage> {
               child: const Icon(LucideIcons.lock, color: Colors.white, size: 32),
             ),
             const SizedBox(height: 16),
-            const Text('Fitur Pro', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            const Text('Upgrade ke Pro', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
             const SizedBox(height: 8),
             Text(
-              '$featureName hanya tersedia di paket Pro.\nUpgrade untuk buka semua fitur.',
+              '$featureName hanya tersedia di paket Pro.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 4),
+            const Text(
+              'Rp 299.000/bulan',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary),
+            ),
+            const SizedBox(height: 16),
+            // Bank transfer info
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Transfer ke:', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Bank', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      Text('Mandiri', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('No. Rek', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      Text('1060021987147', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'monospace')),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('a.n.', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      Text('MIRFAN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Konfirmasi via WhatsApp setelah transfer',
+              style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+            ),
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _openWhatsApp();
+                },
                 icon: const Icon(LucideIcons.messageCircle, size: 18),
-                label: const Text('Hubungi via WhatsApp'),
+                label: const Text('Konfirmasi via WhatsApp'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.background,
@@ -140,6 +196,11 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       ),
     );
+  }
+
+  static void _openWhatsApp() {
+    final uri = Uri.parse('https://wa.me/6285270782220?text=${Uri.encodeComponent("Halo Kasira, saya sudah transfer untuk upgrade Pro. Mohon diaktivasi.")}');
+    launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   @override

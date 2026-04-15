@@ -109,17 +109,21 @@ export default function BillingPage() {
             <p className="text-sm text-amber-700 mt-1">
               {formatCurrency(unpaidInvoice.amount)} — jatuh tempo {formatDate(unpaidInvoice.due_date)}
             </p>
-            {unpaidInvoice.xendit_invoice_url && (
-              <a
-                href={unpaidInvoice.xendit_invoice_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 mt-2 px-4 py-2 bg-amber-600 text-white text-sm font-semibold rounded-lg hover:bg-amber-700 transition"
-              >
-                Bayar Sekarang
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            )}
+            <div className="mt-3 bg-white rounded-lg p-3 border border-amber-200 text-sm">
+              <p className="font-semibold text-amber-800 mb-1.5">Transfer ke:</p>
+              <p className="text-amber-700">Bank <strong>Mandiri</strong> — <span className="font-mono font-bold">1060021987147</span></p>
+              <p className="text-amber-700">a.n. <strong>MIRFAN</strong></p>
+              <p className="text-xs text-amber-500 mt-1.5">Konfirmasi pembayaran via WhatsApp setelah transfer.</p>
+            </div>
+            <a
+              href="https://wa.me/6285270782220?text=Halo%20Kasira%2C%20saya%20sudah%20transfer%20untuk%20pembayaran%20invoice."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 mt-2 px-4 py-2 bg-amber-600 text-white text-sm font-semibold rounded-lg hover:bg-amber-700 transition"
+            >
+              Konfirmasi via WhatsApp
+              <ExternalLink className="w-4 h-4" />
+            </a>
           </div>
         </div>
       )}

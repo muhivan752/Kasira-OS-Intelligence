@@ -121,11 +121,37 @@ function ProContent() {
         ))}
       </div>
 
+      {/* Pricing */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Rp 299.000<span className="text-base font-normal text-gray-500">/bulan</span></h2>
+        <p className="text-gray-500 text-sm mb-6">Semua fitur Pro. Bisa dibatalkan kapan saja.</p>
+
+        {/* Bank Transfer Info */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 text-left mb-6">
+          <p className="text-sm font-semibold text-blue-800 mb-3">Transfer ke rekening berikut:</p>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-blue-600">Bank</span>
+              <span className="font-bold text-blue-900">Mandiri</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-blue-600">No. Rekening</span>
+              <span className="font-bold text-blue-900 font-mono">1060021987147</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-blue-600">Atas Nama</span>
+              <span className="font-bold text-blue-900">MIRFAN</span>
+            </div>
+          </div>
+          <p className="text-xs text-blue-500 mt-3">Setelah transfer, konfirmasi via WhatsApp untuk aktivasi.</p>
+        </div>
+      </div>
+
       {/* CTA */}
       <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-8 text-center text-white">
         <h2 className="text-2xl font-bold mb-2">Siap Upgrade ke Pro?</h2>
         <p className="text-blue-100 mb-6 text-sm">
-          Hubungi kami via WhatsApp. Aktivasi manual oleh tim Kasira, efektif hari yang sama.
+          Transfer ke rekening di atas, lalu konfirmasi via WhatsApp. Aktivasi hari yang sama.
         </p>
         <a
           href={`https://wa.me/${WA_NUMBER}?text=${WA_MESSAGE}`}
@@ -134,7 +160,7 @@ function ProContent() {
           className="inline-flex items-center gap-2 bg-white text-blue-700 font-semibold px-6 py-3 rounded-xl hover:bg-blue-50 transition-colors"
         >
           <MessageCircle className="w-5 h-5" />
-          Chat WhatsApp Sekarang
+          Konfirmasi via WhatsApp
         </a>
       </div>
     </div>
