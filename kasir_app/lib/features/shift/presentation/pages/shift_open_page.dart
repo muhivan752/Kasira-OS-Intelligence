@@ -118,8 +118,9 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: Container(
-            width: 480,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Container(
             padding: const EdgeInsets.all(40),
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -326,6 +327,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),

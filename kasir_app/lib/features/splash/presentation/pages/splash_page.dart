@@ -184,38 +184,40 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: Center(
-        child: Container(
-          width: 360,
-          padding: const EdgeInsets.all(40),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.system_update_alt_rounded, size: 64, color: AppColors.primary),
-              const SizedBox(height: 24),
-              Text(
-                'Update Wajib',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Versi baru Kasira tersedia. Silakan update untuk melanjutkan.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () => _openUpdate(_updateUrl),
-                  child: const Text('Download Update'),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Container(
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.system_update_alt_rounded, size: 64, color: AppColors.primary),
+                const SizedBox(height: 24),
+                Text(
+                  'Update Wajib',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                const Text(
+                  'Versi baru Kasira tersedia. Silakan update untuk melanjutkan.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () => _openUpdate(_updateUrl),
+                    child: const Text('Download Update'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

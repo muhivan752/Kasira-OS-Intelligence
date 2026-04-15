@@ -169,8 +169,9 @@ class _ShiftPageState extends State<ShiftPage> {
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Container(
-          width: 500,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: Container(
           padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -227,6 +228,7 @@ class _ShiftPageState extends State<ShiftPage> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
