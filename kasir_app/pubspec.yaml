@@ -30,6 +30,7 @@ dependencies:
   package_info_plus: ^8.0.0
   path: ^1.9.0
   uuid: ^4.3.3
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:

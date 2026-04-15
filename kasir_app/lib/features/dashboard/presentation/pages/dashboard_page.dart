@@ -10,6 +10,7 @@ import '../../../shift/presentation/pages/shift_page.dart';
 import '../../../products/presentation/pages/product_management_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
 import '../../../reservations/presentation/pages/reservation_list_page.dart';
+import '../../../ai/presentation/pages/ai_chat_page.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
@@ -51,6 +52,7 @@ class _DashboardPageState extends State<DashboardPage> {
     const PosPage(),
     const OrderListPage(),
     const ReservationListPage(),
+    const AiChatPage(),
     const ProductManagementPage(),
     const SettingsPage(),
   ];
@@ -60,16 +62,22 @@ class _DashboardPageState extends State<DashboardPage> {
     (icon: LucideIcons.monitorPlay, label: 'POS'),
     (icon: LucideIcons.receipt, label: 'Pesanan'),
     (icon: LucideIcons.calendarCheck, label: 'Reservasi'),
+    (icon: LucideIcons.bot, label: 'AI'),
     (icon: LucideIcons.package, label: 'Produk'),
     (icon: LucideIcons.settings, label: 'Setting'),
   ];
 
-  /// Index nav items yang Pro-only (Reservasi = index 3)
-  static const _proNavIndexes = {3};
+  /// Index nav items yang Pro-only (Reservasi = index 3, AI = index 4)
+  static const _proNavIndexes = {3, 4};
+
+  static const _proFeatureNames = {
+    3: 'Reservasi & Booking',
+    4: 'AI Asisten',
+  };
 
   void _onNavTap(int index) {
     if (!_isPro && _proNavIndexes.contains(index)) {
-      _showUpgradeSheet(context, 'Reservasi & Booking');
+      _showUpgradeSheet(context, _proFeatureNames[index] ?? 'Fitur Pro');
       return;
     }
     setState(() => _selectedIndex = index);
