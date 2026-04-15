@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/reservation_provider.dart';
 import '../widgets/create_reservation_modal.dart';
+
+const _proTiers = {'pro', 'business', 'enterprise'};
 
 class ReservationListPage extends ConsumerStatefulWidget {
   const ReservationListPage({super.key});
@@ -17,7 +20,22 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
   @override
   void initState() {
     super.initState();
+    _checkTier();
     Future.microtask(() => ref.read(reservationProvider.notifier).fetchReservations());
+  }
+
+  Future<void> _checkTier() async {
+    const storage = FlutterSecureStorage();
+    final tier = await storage.read(key: 'subscription_tier') ?? 'starter';
+    if (!_proTiers.contains(tier) && mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Reservasi hanya tersedia di paket Pro'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   static String _displayDate(DateTime d) {

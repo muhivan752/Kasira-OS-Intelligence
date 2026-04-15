@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/tab_provider.dart';
 import '../widgets/open_tab_modal.dart';
 import 'tab_detail_page.dart';
+
+const _proTiers = {'pro', 'business', 'enterprise'};
 
 class TabListPage extends ConsumerStatefulWidget {
   const TabListPage({super.key});
@@ -17,6 +20,7 @@ class TabListPage extends ConsumerStatefulWidget {
 class _TabListPageState extends ConsumerState<TabListPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+  bool _isPro = true; // assume pro until loaded
 
   @override
   void initState() {
@@ -25,7 +29,22 @@ class _TabListPageState extends ConsumerState<TabListPage> with SingleTickerProv
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) _refresh();
     });
+    _checkTier();
     Future.microtask(() => _refresh());
+  }
+
+  Future<void> _checkTier() async {
+    const storage = FlutterSecureStorage();
+    final tier = await storage.read(key: 'subscription_tier') ?? 'starter';
+    if (!_proTiers.contains(tier) && mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tab / Split Bill hanya tersedia di paket Pro'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   void _refresh() {
