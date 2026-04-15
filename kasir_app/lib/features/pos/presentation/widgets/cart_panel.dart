@@ -197,13 +197,29 @@ class CartPanel extends ConsumerWidget {
             child: Column(
               children: [
                 _SummaryRow(label: 'Subtotal', value: currency.format(cart.subtotal)),
+                if (cart.discountAmount > 0)
+                  _SummaryRow(
+                    label: 'Diskon',
+                    value: '- ${currency.format(cart.discountAmount)}',
+                    isDiscount: true,
+                  ),
+                if (cart.serviceChargeAmount > 0)
+                  _SummaryRow(
+                    label: 'Service Charge',
+                    value: currency.format(cart.serviceChargeAmount),
+                  ),
+                if (cart.taxAmount > 0)
+                  _SummaryRow(
+                    label: cart.taxInclusive ? 'Pajak (inklusif)' : 'Pajak',
+                    value: currency.format(cart.taxAmount),
+                  ),
                 const Divider(height: 20, color: AppColors.border),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('Total', style: Theme.of(context).textTheme.titleLarge),
                     Text(
-                      currency.format(cart.subtotal),
+                      currency.format(cart.total),
                       style: Theme.of(context)
                           .textTheme
                           .titleLarge
@@ -254,7 +270,7 @@ class CartPanel extends ConsumerWidget {
         context: context,
         barrierDismissible: false,
         builder: (_) => PaymentModal(
-          totalAmount: cart.subtotal,
+          totalAmount: cart.total,
           orderId: orderId,
           onPaymentSuccess: (String paymentMethod, double amountPaid) {
             final receiptItems = cart.items.map((i) => ReceiptItem(
@@ -269,9 +285,9 @@ class CartPanel extends ConsumerWidget {
             ref.invalidate(productsProvider);
             if (context.mounted) {
               context.push('/payment/success', extra: {
-                'totalAmount': cart.subtotal,
+                'totalAmount': cart.total,
                 'amountPaid': amountPaid,
-                'changeAmount': amountPaid - cart.subtotal,
+                'changeAmount': amountPaid - cart.total,
                 'paymentMethod': paymentMethod,
                 'orderId': orderId,
                 'displayNumber': orderId.substring(0, 8).toUpperCase(),
@@ -477,17 +493,28 @@ class _OrderTypeBtn extends StatelessWidget {
 class _SummaryRow extends StatelessWidget {
   final String label;
   final String value;
+  final bool isDiscount;
 
-  const _SummaryRow({required this.label, required this.value});
+  const _SummaryRow({required this.label, required this.value, this.isDiscount = false});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: isDiscount ? AppColors.error : null,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

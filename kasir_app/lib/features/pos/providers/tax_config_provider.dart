@@ -1,0 +1,76 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../../core/config/app_config.dart';
+
+class TaxConfig {
+  final bool pb1Enabled;
+  final double taxPct;
+  final bool serviceChargeEnabled;
+  final double serviceChargePct;
+  final bool taxInclusive;
+
+  const TaxConfig({
+    this.pb1Enabled = false,
+    this.taxPct = 10.0,
+    this.serviceChargeEnabled = false,
+    this.serviceChargePct = 0.0,
+    this.taxInclusive = false,
+  });
+
+  factory TaxConfig.fromJson(Map<String, dynamic> json) => TaxConfig(
+        pb1Enabled: json['pb1_enabled'] as bool? ?? false,
+        taxPct: (json['tax_pct'] as num? ?? 10.0).toDouble(),
+        serviceChargeEnabled: json['service_charge_enabled'] as bool? ?? false,
+        serviceChargePct: (json['service_charge_pct'] as num? ?? 0.0).toDouble(),
+        taxInclusive: json['tax_inclusive'] as bool? ?? false,
+      );
+
+  /// Calculate tax amount from subtotal (after discount)
+  double calcTax(double taxableAmount) {
+    if (!pb1Enabled || taxPct <= 0) return 0;
+    if (taxInclusive) {
+      // Extract tax from price (price already includes tax)
+      return taxableAmount - (taxableAmount / (1 + taxPct / 100));
+    }
+    return taxableAmount * taxPct / 100;
+  }
+
+  /// Calculate service charge from subtotal (after discount)
+  double calcServiceCharge(double taxableAmount) {
+    if (!serviceChargeEnabled || serviceChargePct <= 0) return 0;
+    return taxableAmount * serviceChargePct / 100;
+  }
+}
+
+final taxConfigProvider = FutureProvider<TaxConfig>((ref) async {
+  const storage = FlutterSecureStorage();
+  final token = await storage.read(key: 'access_token');
+  final outletId = await storage.read(key: 'outlet_id');
+  final tenantId = await storage.read(key: 'tenant_id');
+
+  if (outletId == null || outletId.isEmpty) return const TaxConfig();
+
+  try {
+    final dio = Dio(BaseOptions(
+      baseUrl: AppConfig.apiV1,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+    ));
+
+    final response = await dio.get(
+      '/outlets/$outletId/tax-config',
+      options: Options(headers: {
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (tenantId != null) 'X-Tenant-ID': tenantId,
+      }),
+    );
+
+    final data = response.data['data'] as Map<String, dynamic>?;
+    if (data == null) return const TaxConfig();
+    return TaxConfig.fromJson(data);
+  } catch (_) {
+    // Graceful degrade — no tax config = no charges
+    return const TaxConfig();
+  }
+});

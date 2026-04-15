@@ -9,6 +9,7 @@ import '../../../core/config/app_config.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/sync/sync_provider.dart';
 import '../../../core/utils/pn_counter.dart';
+import 'tax_config_provider.dart';
 
 // ─── Model ───────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,10 @@ class CartState {
   final String? error;
   final String? submittedOrderId;
   final bool wasOffline;
+  final double discountAmount;
+  final double taxAmount;
+  final double serviceChargeAmount;
+  final bool taxInclusive;
 
   const CartState({
     this.items = const [],
@@ -64,9 +69,21 @@ class CartState {
     this.error,
     this.submittedOrderId,
     this.wasOffline = false,
+    this.discountAmount = 0,
+    this.taxAmount = 0,
+    this.serviceChargeAmount = 0,
+    this.taxInclusive = false,
   });
 
   double get subtotal => items.fold(0, (s, i) => s + i.subtotal);
+
+  double get total {
+    if (taxInclusive) {
+      // Price already includes tax — add service charge, subtract discount
+      return subtotal + serviceChargeAmount - discountAmount;
+    }
+    return subtotal + taxAmount + serviceChargeAmount - discountAmount;
+  }
 
   CartState copyWith({
     List<CartItem>? items,
@@ -82,6 +99,10 @@ class CartState {
     bool clearError = false,
     String? submittedOrderId,
     bool? wasOffline,
+    double? discountAmount,
+    double? taxAmount,
+    double? serviceChargeAmount,
+    bool? taxInclusive,
   }) =>
       CartState(
         items: items ?? this.items,
@@ -94,6 +115,10 @@ class CartState {
         error: clearError ? null : (error ?? this.error),
         submittedOrderId: submittedOrderId ?? this.submittedOrderId,
         wasOffline: wasOffline ?? this.wasOffline,
+        discountAmount: discountAmount ?? this.discountAmount,
+        taxAmount: taxAmount ?? this.taxAmount,
+        serviceChargeAmount: serviceChargeAmount ?? this.serviceChargeAmount,
+        taxInclusive: taxInclusive ?? this.taxInclusive,
       );
 }
 
@@ -101,7 +126,24 @@ class CartState {
 
 class CartNotifier extends StateNotifier<CartState> {
   final AppDatabase _db;
+  TaxConfig? _taxConfig;
   CartNotifier(this._db) : super(const CartState());
+
+  void setTaxConfig(TaxConfig config) {
+    _taxConfig = config;
+    _recalcCharges();
+  }
+
+  void _recalcCharges() {
+    final cfg = _taxConfig;
+    if (cfg == null) return;
+    final taxable = state.subtotal - state.discountAmount;
+    state = state.copyWith(
+      taxAmount: cfg.calcTax(taxable),
+      serviceChargeAmount: cfg.calcServiceCharge(taxable),
+      taxInclusive: cfg.taxInclusive,
+    );
+  }
 
   final _storage = const FlutterSecureStorage();
   static const _uuid = Uuid();
@@ -117,6 +159,7 @@ class CartNotifier extends StateNotifier<CartState> {
     } else {
       state = state.copyWith(items: [...state.items, item], clearError: true);
     }
+    _recalcCharges();
   }
 
   void incrementItem(String productId) {
@@ -125,6 +168,7 @@ class CartNotifier extends StateNotifier<CartState> {
       return i;
     }).toList();
     state = state.copyWith(items: updated);
+    _recalcCharges();
   }
 
   void decrementItem(String productId) {
@@ -136,11 +180,13 @@ class CartNotifier extends StateNotifier<CartState> {
         .where((i) => i.qty > 0)
         .toList();
     state = state.copyWith(items: updated);
+    _recalcCharges();
   }
 
   void removeItem(String productId) {
     state = state.copyWith(
         items: state.items.where((i) => i.productId != productId).toList());
+    _recalcCharges();
   }
 
   void setOrderType(String type) {
@@ -218,10 +264,10 @@ class CartNotifier extends StateNotifier<CartState> {
           if (state.customerId != null) 'customer_id': state.customerId,
           if (state.tableId != null) 'table_id': state.tableId,
           'subtotal': subtotal,
-          'service_charge_amount': 0,
-          'tax_amount': 0,
-          'discount_amount': 0,
-          'total_amount': subtotal,
+          'service_charge_amount': state.serviceChargeAmount,
+          'tax_amount': state.taxAmount,
+          'discount_amount': state.discountAmount,
+          'total_amount': state.total,
           'items': state.items
               .map((i) => {
                     'product_id': i.productId,
@@ -271,10 +317,10 @@ class CartNotifier extends StateNotifier<CartState> {
           status: const drift.Value('pending'),
           orderType: drift.Value(state.orderType.toLowerCase().replaceAll(' ', '_')),
           subtotal: drift.Value(subtotal),
-          serviceChargeAmount: const drift.Value(0),
-          taxAmount: const drift.Value(0),
-          discountAmount: const drift.Value(0),
-          totalAmount: drift.Value(subtotal),
+          serviceChargeAmount: drift.Value(state.serviceChargeAmount),
+          taxAmount: drift.Value(state.taxAmount),
+          discountAmount: drift.Value(state.discountAmount),
+          totalAmount: drift.Value(state.total),
           createdAt: drift.Value(now),
           updatedAt: drift.Value(now),
           rowVersion: const drift.Value(0),
@@ -394,5 +440,16 @@ class CartNotifier extends StateNotifier<CartState> {
 
 final cartProvider = StateNotifierProvider<CartNotifier, CartState>((ref) {
   final db = ref.watch(databaseProvider);
-  return CartNotifier(db);
+  final notifier = CartNotifier(db);
+
+  // Inject tax config when available
+  ref.listen(taxConfigProvider, (_, next) {
+    next.whenData((config) => notifier.setTaxConfig(config));
+  });
+
+  // Also set immediately if already loaded
+  final taxAsync = ref.read(taxConfigProvider);
+  taxAsync.whenData((config) => notifier.setTaxConfig(config));
+
+  return notifier;
 });

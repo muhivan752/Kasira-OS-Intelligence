@@ -9,6 +9,7 @@ import '../../../products/providers/products_provider.dart';
 import '../../../dashboard/providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/tax_config_provider.dart';
 import '../widgets/product_card.dart';
 import '../widgets/cart_panel.dart';
 import '../../../products/presentation/widgets/product_detail_sheet.dart';
@@ -127,6 +128,8 @@ class _PosPageState extends ConsumerState<PosPage> {
     final isWide = MediaQuery.of(context).size.shortestSide >= 600;
     final productsAsync = ref.watch(productsProvider);
     final cart = ref.watch(cartProvider);
+    // Trigger tax config fetch (feeds into cart calculations)
+    ref.watch(taxConfigProvider);
     final itemCount = cart.items.fold<int>(0, (sum, item) => sum + item.qty);
 
     return Scaffold(
