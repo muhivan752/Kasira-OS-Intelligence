@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 
 from backend.core.database import get_db
+from backend.utils.phone import mask_phone
 from backend.api.deps import get_current_user
 from backend.models.user import User
 from backend.models.payment import Payment
@@ -808,7 +809,7 @@ async def send_receipt_whatsapp(
 
     return StandardResponse(
         success=sent,
-        data={"phone": phone, "sent": sent},
+        data={"phone": mask_phone(phone), "sent": sent},
         request_id=request.state.request_id,
         message="Struk berhasil dikirim via WhatsApp" if sent else "Gagal mengirim struk"
     )

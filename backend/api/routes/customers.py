@@ -2,7 +2,7 @@ from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -30,6 +30,12 @@ class CustomerResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @model_validator(mode="after")
+    def _mask(self):
+        from backend.utils.phone import mask_phone
+        self.phone = mask_phone(self.phone)
+        return self
 
 
 @router.get("/", response_model=StandardResponse[List[CustomerResponse]])

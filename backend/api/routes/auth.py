@@ -440,10 +440,11 @@ async def get_me(
         sm = getattr(outlet, 'stock_mode', 'simple')
         stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
 
+    from backend.utils.phone import mask_phone
     return StandardResponse(data={
         "id": str(current_user.id),
         "full_name": current_user.full_name,
-        "phone": current_user.phone,
+        "phone": mask_phone(current_user.phone),
         "tenant_id": str(current_user.tenant_id),
         "outlet_id": outlet_id,
         "is_active": current_user.is_active,

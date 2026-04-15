@@ -8,6 +8,7 @@ import uuid
 from pydantic import BaseModel, Field
 
 from backend.core.database import get_db
+from backend.utils.phone import mask_phone
 from backend.core.config import settings
 from backend.models.outlet import Outlet
 from backend.models.product import Product
@@ -229,7 +230,7 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
             "name": outlet.name,
             "slug": outlet.slug,
             "address": outlet.address,
-            "phone": outlet.phone,
+            "phone": mask_phone(outlet.phone),
             "cover_image_url": outlet.cover_image_url,
             "is_open": outlet.is_open,
             "opening_hours": outlet.opening_hours if isinstance(outlet.opening_hours, str) else "",
@@ -533,7 +534,7 @@ async def create_connect_order(
                 for i in order_items
             ],
             "customer_id": str(customer.id),
-            "customer_phone": input_data.customer_phone,
+            "customer_phone": mask_phone(input_data.customer_phone),
             "payment_method": input_data.payment_method,
             "source": "storefront",
         },
@@ -809,7 +810,7 @@ async def get_booking_status(booking_id: uuid.UUID, db: AsyncSession = Depends(g
         data={
             "booking_id": str(reservation.id),
             "customer_name": customer.name if customer else "Guest",
-            "customer_phone": customer.phone if customer else None,
+            "customer_phone": mask_phone(customer.phone) if customer else None,
             "reservation_time": reservation.reservation_time.isoformat(),
             "guest_count": reservation.guest_count,
             "table_name": table_name,
@@ -817,7 +818,7 @@ async def get_booking_status(booking_id: uuid.UUID, db: AsyncSession = Depends(g
             "notes": reservation.notes,
             "outlet": {
                 "name": outlet.name if outlet else "",
-                "phone": outlet.phone if outlet else "",
+                "phone": mask_phone(outlet.phone) if outlet else "",
             },
         },
     )
@@ -881,7 +882,7 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
     outlet = outlet_result.scalar_one_or_none()
     outlet_data = {
         "name": outlet.name if outlet else "",
-        "phone": outlet.phone if outlet else "",
+        "phone": mask_phone(outlet.phone) if outlet else "",
     } if outlet else {}
 
     return StandardResponse(

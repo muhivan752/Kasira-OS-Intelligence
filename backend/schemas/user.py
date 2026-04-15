@@ -1,6 +1,7 @@
 from typing import Optional
-from pydantic import BaseModel, UUID4
+from pydantic import BaseModel, UUID4, model_validator
 from datetime import datetime
+from backend.utils.phone import mask_phone
 
 # Shared properties
 class UserBase(BaseModel):
@@ -36,7 +37,10 @@ class UserInDBBase(UserBase):
 
 # Additional properties to return via API
 class User(UserInDBBase):
-    pass
+    @model_validator(mode="after")
+    def _mask(self):
+        self.phone = mask_phone(self.phone)
+        return self
 
 # Additional properties stored in DB
 class UserInDB(UserInDBBase):

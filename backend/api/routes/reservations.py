@@ -36,6 +36,7 @@ from backend.schemas.reservation import (
     ReservationSettingsResponse,
 )
 from backend.schemas.response import StandardResponse
+from backend.utils.phone import mask_phone
 from backend.services.audit import log_audit
 
 router = APIRouter(dependencies=[Depends(deps.require_pro_tier)])
@@ -77,7 +78,7 @@ def _build_response(r: Reservation, table: Optional[Table] = None) -> dict:
         "end_time": r.end_time.isoformat() if r.end_time else None,
         "guest_count": r.guest_count,
         "customer_name": r.customer_name,
-        "customer_phone": r.customer_phone,
+        "customer_phone": mask_phone(r.customer_phone),
         "status": r.status,
         "deposit_amount": float(r.deposit_amount) if r.deposit_amount else None,
         "source": r.source,
