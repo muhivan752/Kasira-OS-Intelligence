@@ -80,9 +80,13 @@ def get_model_for_tier(tier: str, task: str = "routine") -> str:
     Pilih Claude model berdasarkan tier outlet dan kompleksitas task.
     Rule #25: Tidak pernah hardcoded.
     Rule #26: Starter/rutin = Haiku. Sonnet hanya Pro+ task kompleks.
+
+    BUDGET MODE: Force Haiku for all requests to conserve API credit.
+    Re-enable Sonnet when budget allows by uncommenting below.
     """
-    if tier in ("pro", "enterprise", "business") and task == "complex":
-        return "claude-sonnet-4-6"
+    # BUDGET MODE — Haiku only ($0.80/M input vs Sonnet $3/M)
+    # if tier in ("pro", "enterprise", "business") and task == "complex":
+    #     return "claude-sonnet-4-6"
     return "claude-haiku-4-5-20251001"
 
 

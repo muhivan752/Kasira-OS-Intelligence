@@ -83,16 +83,34 @@ async def ai_chat(
 
     redis = await get_redis_client()
 
-    # Rate limit: max 30 requests per 15 minutes per user
-    rate_key = f"ai_rate:{current_user.id}"
+    # ── Budget Control ──────────────────────────────────────────────────
+    # Daily platform-wide budget cap (in cents) — prevents overspend
+    # $8 budget → ~$0.50/day for 16 days runway
+    DAILY_BUDGET_CENTS = 50  # $0.50/day
+    MAX_REQUESTS_PER_USER_PER_DAY = 20
+
     try:
-        current_count = await redis.incr(rate_key)
-        if current_count == 1:
-            await redis.expire(rate_key, 900)  # 15 minutes
-        if current_count > 30:
+        from datetime import date as dt_date
+        today = dt_date.today().isoformat()
+
+        # Platform-wide daily spend tracking (estimated cents)
+        spend_key = f"ai_spend:{today}"
+        current_spend = int(await redis.get(spend_key) or 0)
+        if current_spend >= DAILY_BUDGET_CENTS:
             raise HTTPException(
                 status_code=429,
-                detail="Terlalu banyak permintaan. Coba lagi dalam beberapa menit."
+                detail="Budget AI harian sudah tercapai. Coba lagi besok.",
+            )
+
+        # Per-user daily limit
+        user_day_key = f"ai_user:{current_user.id}:{today}"
+        user_count = await redis.incr(user_day_key)
+        if user_count == 1:
+            await redis.expire(user_day_key, 86400)
+        if user_count > MAX_REQUESTS_PER_USER_PER_DAY:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Maksimal {MAX_REQUESTS_PER_USER_PER_DAY} pertanyaan per hari. Coba lagi besok.",
             )
     except HTTPException:
         raise
@@ -113,6 +131,17 @@ async def ai_chat(
         await db.commit()
     except Exception as e:
         logger.warning(f"Audit log failed (non-blocking): {e}")
+
+    # Estimate cost and track spend (~1500 input tokens + 512 output = ~2000 tokens)
+    # Haiku: ~$0.002 per request. Track in cents (0.2 cents per req).
+    # We round up to 1 cent per request for safety margin.
+    try:
+        from datetime import date as dt_date
+        spend_key = f"ai_spend:{dt_date.today().isoformat()}"
+        await redis.incrby(spend_key, 1)  # +1 cent per request (conservative)
+        await redis.expire(spend_key, 86400)
+    except Exception:
+        pass
 
     async def event_generator() -> AsyncGenerator[str, None]:
         try:

@@ -58,6 +58,23 @@ async def scan_invoice(
 
     brand_id = await _get_brand_id(current_user.tenant_id, db)
 
+    # Budget check — OCR costs ~3 cents per scan (image + extraction)
+    try:
+        from backend.services.redis import get_redis_client
+        from datetime import date as dt_date
+        redis = await get_redis_client()
+        today = dt_date.today().isoformat()
+        spend_key = f"ai_spend:{today}"
+        current_spend = int(await redis.get(spend_key) or 0)
+        if current_spend >= 50:  # $0.50/day cap
+            raise HTTPException(429, detail="Budget AI harian sudah tercapai. Coba lagi besok.")
+        await redis.incrby(spend_key, 3)  # OCR ~3 cents
+        await redis.expire(spend_key, 86400)
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
     # Step 1: Extract data via Claude Vision
     try:
         extracted = await invoice_ocr_service.extract_invoice_data(content, file.content_type)
