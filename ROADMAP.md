@@ -299,7 +299,7 @@ Semua Pro + :
 | Reservasi + booking | ✅ | ✅ | ✅ | ✅ all layers |
 | Tab / Split Bill | ✅ | N/A | ✅ | ✅ all layers |
 | Recipe/Ingredient/HPP | ✅ | ✅ | ✅ sync+display | ✅ all layers |
-| AI Chat owner | ✅ Claude API | ✅ | ❌ | ✅ backend+dashboard |
+| AI Chat owner | ✅ Claude API | ✅ | ✅ SSE streaming | ✅ all layers |
 | Knowledge Graph | ✅ | N/A | N/A | ✅ |
 | Loyalty points | ✅ | N/A | ❌ | ✅ |
 | Dapur app (KDS) | ✅ | N/A | ✅ | ✅ |
@@ -407,7 +407,7 @@ Empat piece all done, berjalan otomatis:
 - [ ] Multi-outlet full implementation (Business tier)
 - [ ] POST /auth/refresh (low priority)
 - [ ] Flutter: loyalty points UI
-- [ ] Flutter: AI chat
+- [x] Flutter: AI chat (SSE streaming, Pro gate) ✅ 2026-04-15
 - [ ] Hourly distribution aggregation (schema ready, logic pending)
 - [ ] Top up Anthropic API credit ⚠️
 
