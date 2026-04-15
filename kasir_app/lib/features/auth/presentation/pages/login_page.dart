@@ -330,6 +330,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       final tenantId = await storage.read(key: 'tenant_id');
       final outletId = await storage.read(key: 'outlet_id');
 
+      debugPrint('[NAV] checkShift: token=${token != null ? "yes" : "null"} tenant=$tenantId outlet=$outletId');
+
+      if (outletId == null || outletId.isEmpty) {
+        debugPrint('[NAV] No outlet_id — going to shift/open');
+        if (context.mounted) context.go('/shift/open');
+        return;
+      }
+
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
         connectTimeout: const Duration(seconds: 10),
@@ -346,6 +354,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       );
 
       final data = response.data['data'];
+      debugPrint('[NAV] shift response: status=${data?['status']}');
       if (!context.mounted) return;
       if (data != null && data['status'] == 'open') {
         await storage.write(key: 'shift_session_id', value: data['id']);
@@ -353,7 +362,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       } else {
         context.go('/shift/open');
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[NAV] checkShift error: $e');
       if (context.mounted) context.go('/shift/open');
     }
   }
@@ -364,7 +374,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     ref.listen<AuthState>(authProvider, (previous, next) {
       if (next.isSuccess && (previous?.isSuccess != true)) {
+        debugPrint('[AUTH] isSuccess → navigating...');
         _checkShiftAndNavigate(context);
+      }
+      if (next.step == AuthStep.setPin && previous?.step != AuthStep.setPin) {
+        setState(() {
+          _pinInput = '';
+          _isConfirmingPin = false;
+        });
       }
       if (next.error != null && next.error != previous?.error) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -376,6 +393,26 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         );
       }
     });
+
+    if (authState.isSuccess) {
+      return Scaffold(
+        backgroundColor: AppColors.primary,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.check_circle_outline, color: Colors.white, size: 64),
+              const SizedBox(height: 16),
+              const Text('Login berhasil!', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('Menyiapkan...', style: TextStyle(color: Colors.white70, fontSize: 14)),
+              const SizedBox(height: 24),
+              const CircularProgressIndicator(color: Colors.white),
+            ],
+          ),
+        ),
+      );
+    }
 
     if (authState.isLoading && authState.step == AuthStep.pinLogin && _pinInput.isEmpty) {
       return const Scaffold(
@@ -584,13 +621,29 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Widget _buildSetPin(AuthState state) {
     return Column(
       children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_circle, color: AppColors.primary, size: 18),
+              SizedBox(width: 8),
+              Text('OTP terverifikasi', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
         Text(
           _isConfirmingPin ? 'Konfirmasi PIN' : 'Buat PIN Baru',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Text(
-          _isConfirmingPin ? 'Masukkan ulang PIN 6 digit Anda' : 'Masukkan PIN 6 digit untuk login selanjutnya',
+          _isConfirmingPin ? 'Masukkan ulang PIN 6 digit Anda' : 'PIN digunakan untuk login cepat berikutnya',
           style: const TextStyle(color: AppColors.textSecondary),
           textAlign: TextAlign.center,
         ),
