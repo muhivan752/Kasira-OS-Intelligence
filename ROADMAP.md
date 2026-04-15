@@ -408,8 +408,8 @@ Empat piece all done, berjalan otomatis:
 - [ ] POST /auth/refresh (low priority)
 - [ ] Flutter: loyalty points UI
 - [x] Flutter: AI chat (SSE streaming, Pro gate) ✅ 2026-04-15
-- [ ] Hourly distribution aggregation (schema ready, logic pending)
-- [ ] Top up Anthropic API credit ⚠️
+- [x] Hourly distribution API + aggregation ✅ 2026-04-15
+- [x] Anthropic API key + budget controls ✅ 2026-04-15 ($7.16 balance)
 
 ---
 
