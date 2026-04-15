@@ -24,6 +24,7 @@ from backend.models.brand import Brand
 from backend.models.product import Product
 from backend.schemas.response import StandardResponse
 from backend.services import embedding_service
+from sqlalchemy.orm import selectinload
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -188,9 +189,11 @@ async def find_similar(
     if not embedding_service.is_available():
         raise HTTPException(status_code=503, detail="Embedding service not configured")
 
-    # Get the source product
+    # Get the source product (eager load category to avoid MissingGreenlet)
     product = (await db.execute(
-        select(Product).where(Product.id == product_id, Product.deleted_at.is_(None))
+        select(Product)
+        .options(selectinload(Product.category))
+        .where(Product.id == product_id, Product.deleted_at.is_(None))
     )).scalar_one_or_none()
 
     if not product:
@@ -232,4 +235,27 @@ async def find_similar(
             "similar": results,
         },
         message=f"Found {len(results)} similar products",
+    )
+
+
+# ─── Admin: Bulk Generate All Tenants ──────────────────────────────────────
+
+@router.post("/generate-all")
+async def generate_all_embeddings(
+    current_user: User = Depends(deps.get_platform_admin),
+):
+    """
+    Generate embeddings for ALL tenants' products. Superadmin only.
+    """
+    if not embedding_service.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="Embedding service not configured. Set VOYAGE_API_KEY.",
+        )
+
+    result = await embedding_service.generate_all_tenants_embeddings()
+
+    return StandardResponse(
+        data=result,
+        message=f"Embedded {result['total_embedded']}/{result['total_products']} products across {result['total_tenants']} tenants",
     )

@@ -131,9 +131,11 @@ async def generate_product_embeddings(
     tenant_id: UUID,
     brand_id: UUID,
     db: AsyncSession,
+    force: bool = False,
 ) -> Dict:
     """
     Generate embeddings for all active products of a tenant.
+    force=False: skip products that already have embeddings.
     Returns: {total, embedded, skipped, errors}
     """
     from backend.models.product import Product
@@ -146,7 +148,7 @@ async def generate_product_embeddings(
 
     # Load all active products with category (eager load to avoid MissingGreenlet)
     from sqlalchemy.orm import selectinload
-    products = (await db.execute(
+    query = (
         select(Product)
         .options(selectinload(Product.category))
         .where(
@@ -154,7 +156,11 @@ async def generate_product_embeddings(
             Product.deleted_at.is_(None),
             Product.is_active == True,
         )
-    )).scalars().all()
+    )
+    if not force:
+        query = query.where(Product.embedding.is_(None))
+
+    products = (await db.execute(query)).scalars().all()
 
     if not products:
         return {"total": 0, "embedded": 0, "skipped": 0, "errors": []}
@@ -221,6 +227,59 @@ async def generate_product_embeddings(
         "embedded": embedded,
         "skipped": len(products) - embedded,
         "errors": errors,
+    }
+
+
+# ─── Bulk Generate All Tenants ──────────────────────────────────────────────
+
+async def generate_all_tenants_embeddings() -> Dict:
+    """
+    Generate embeddings for ALL tenants' products.
+    Used by admin endpoint — bypasses RLS via own session.
+    Returns per-tenant results.
+    """
+    if not is_available():
+        return {"error": "VOYAGE_API_KEY not configured", "tenants": []}
+
+    from backend.core.database import AsyncSessionLocal
+    from backend.models.brand import Brand
+    from sqlalchemy import text
+
+    results = []
+
+    async with AsyncSessionLocal() as db:
+        await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
+        brands = (await db.execute(
+            select(Brand).where(Brand.deleted_at.is_(None))
+        )).scalars().all()
+
+    for brand in brands:
+        try:
+            async with AsyncSessionLocal() as db:
+                await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
+                result = await generate_product_embeddings(
+                    tenant_id=brand.tenant_id,
+                    brand_id=brand.id,
+                    db=db,
+                )
+                result["brand_id"] = str(brand.id)
+                result["brand_name"] = brand.name
+                result["tenant_id"] = str(brand.tenant_id)
+                results.append(result)
+        except Exception as e:
+            results.append({
+                "brand_name": brand.name,
+                "error": str(e),
+            })
+
+    total_embedded = sum(r.get("embedded", 0) for r in results)
+    total_products = sum(r.get("total", 0) for r in results)
+
+    return {
+        "total_tenants": len(brands),
+        "total_products": total_products,
+        "total_embedded": total_embedded,
+        "tenants": results,
     }
 
 
@@ -367,14 +426,20 @@ async def search_similar_products_cross_tenant(
     """
     Cross-tenant semantic search — find similar products across ALL merchants.
     Used for platform intelligence: "produk serupa di cafe lain".
+    Bypasses RLS to query across all tenants.
     """
     from backend.models.product import Product
     from backend.models.category import Category
+    from backend.models.brand import Brand
+    from sqlalchemy import text
 
     if not is_available():
         return []
 
     query_embedding = await embed_query(query)
+
+    # Bypass RLS — cross-tenant query needs access to all products
+    await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
 
     query_stmt = (
         select(
@@ -383,9 +448,11 @@ async def search_similar_products_cross_tenant(
             Product.description,
             Product.base_price,
             Product.brand_id,
+            Brand.name.label("brand_name"),
             Category.name.label("category_name"),
             Product.embedding.cosine_distance(query_embedding).label("distance"),
         )
+        .join(Brand, Product.brand_id == Brand.id)
         .outerjoin(Category, Product.category_id == Category.id)
         .where(
             Product.deleted_at.is_(None),
@@ -410,6 +477,7 @@ async def search_similar_products_cross_tenant(
             "price": float(r.base_price),
             "category": r.category_name,
             "brand_id": str(r.brand_id),
+            "brand_name": r.brand_name,
             "similarity": round(1 - r.distance, 4),
         }
         for r in results
