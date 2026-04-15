@@ -639,6 +639,20 @@ INSTRUKSI:
 
     context += platform_context
 
+    # Menu Engineering context (BCG matrix + combos)
+    menu_eng_context = ""
+    try:
+        from backend.services.menu_engineering_service import build_menu_engineering_context
+        menu_eng_context = await build_menu_engineering_context(
+            db=db,
+            brand_id=UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id,
+            outlet_id=UUID(outlet_id) if isinstance(outlet_id, str) else outlet_id,
+        )
+    except Exception as e:
+        logger.debug(f"Menu engineering context skipped: {e}")
+
+    context += menu_eng_context
+
     # Layer 4: Embedding-based RAG context is NOT cached here.
     # It's injected per-query in stream_ai_response() for relevance.
 
