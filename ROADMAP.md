@@ -307,7 +307,7 @@ Semua Pro + :
 | Combo Detection | ✅ co-occurrence | N/A | N/A | ✅ |
 | Struk WA Fonnte | ✅ | ✅ | N/A | All tiers |
 | Multi-outlet | ⚠️ partial | ❌ | ❌ | ❌ (Business) |
-| Invoice scan OCR | ❌ | ❌ | ❌ | — |
+| Invoice scan OCR | ✅ Claude Vision | ❌ | ❌ | All tiers |
 
 ---
 
@@ -402,7 +402,7 @@ Empat piece all done, berjalan otomatis:
 - **BLOCKER: Anthropic API credit habis — perlu top up**
 
 ### Belum Dibangun
-- [ ] Invoice scan + OCR
+- [x] Invoice scan + OCR (Claude Vision) ✅ 2026-04-15
 - [ ] UptimeRobot monitoring
 - [ ] Multi-outlet full implementation (Business tier)
 - [ ] POST /auth/refresh (low priority)
