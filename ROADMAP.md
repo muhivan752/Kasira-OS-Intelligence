@@ -1,6 +1,6 @@
 # KASIRA — Roadmap & Build Order
 # Source of truth untuk fitur, tier, dan status build.
-# Updated: 2026-04-13
+# Updated: 2026-04-15
 
 ---
 
@@ -11,9 +11,10 @@
 - [x] FASE 3: Flutter Kasir App ✅
 - [x] FASE 4: Owner Dashboard Next.js ✅
 - [x] FASE 5: Pilot ✅
-- [x] FASE 6: Pro Features ✅ (built, tier gate audit in progress)
-- [x] FASE 7: Infrastruktur Lanjutan ✅ (RLS, billing, referral, platform intelligence)
-- [ ] FASE 8: Polish & Publish ← SEKARANG DI SINI
+- [x] FASE 6: Pro Features ✅
+- [x] FASE 7: Infrastruktur Lanjutan ✅
+- [x] FASE 8: Polish & Publish ✅ (hampir semua selesai)
+- [ ] FASE 9: Scale & Intelligence ← SEKARANG DI SINI
 
 ---
 
@@ -31,6 +32,7 @@ Semua fitur Starter **ada di Pro**. Semua fitur Pro **ada di Business**.
 - Customer management
 - Download APK + auto-update
 - Landing page + SEO
+- Struk WA via Fonnte
 
 ### Pro (Berbayar — via Xendit subscription)
 Semua Starter + :
@@ -44,18 +46,23 @@ Semua Starter + :
 - Dapur app (Kitchen Display System)
 - HPP report + margin analysis
 - Best seller analytics
+- Menu Engineering (BCG Matrix: Star/Plowhorse/Puzzle/Dog)
+- Combo Detection (co-occurrence analysis)
+- Semantic Product Search (Voyage AI embeddings)
+- Dark mode (Pro theme)
 
 ### Business (Enterprise — masa depan)
 Semua Pro + :
 - Multi-outlet management
 - Cross-outlet reporting
 - Platform benchmarks (bandingkan vs industri)
+- Cross-tenant product similarity search
 
 ---
 
 ## FASE 0 — Fondasi ✅
 
-### Database: 72 Alembic Migrations
+### Database: 74 Alembic Migrations
 
 #### Batch 1 — Root Tables (001-005)
 ```
@@ -160,12 +167,14 @@ Semua Pro + :
 68. subscription_invoices — tenant billing cycle (billing_day, next_billing_date)
 ```
 
-#### Batch 10 — Security & Intelligence (069-072)
+#### Batch 10 — Security & Intelligence (069-074)
 ```
 69. RLS policies + 18 composite indexes — tenant isolation on 40+ tables
 70. referral system — referral_code on tenants, referrals table
 71. referral_commissions — commission per invoice (20% default)
 72. platform benchmarks — daily_stats, hpp_benchmarks, ingredient_prices, insights cache
+73. embedding layer4 — products.embedding vector(512) + HNSW index
+74. platform_geo_columns — city, district, province, hourly_distribution
 ```
 
 ### Infrastruktur ✅
@@ -175,8 +184,8 @@ Semua Pro + :
 - [x] Response format wrapper: `{success, data, meta, request_id}`
 - [x] RLS (Row-Level Security) tenant isolation
 - [x] CRDT sync engine (HLC + PNCounter)
+- [x] mask_phone() di semua API response ✅ 2026-04-15
 - [ ] Field encryption AES-256-GCM helper (partial — customer phone HMAC ada)
-- [ ] mask_phone() helper di semua response
 
 ---
 
@@ -213,9 +222,7 @@ Semua Pro + :
 - Shifts: buka/tutup, cash reconciliation
 - Basic reporting: revenue harian, daily summary
 - Tax & service charge: PB1, PPN, configurable per outlet
-
-### Belum
-- ✗ Struk WA via Fonnte
+- Struk WA via Fonnte ✅ 2026-04-14
 
 ---
 
@@ -223,10 +230,10 @@ Semua Pro + :
 
 ### 15+ Layar
 1. Splash + update checker (force update support)
-2. Login OTP WA
+2. Login OTP WA (+ success screen, PIN setup UX)
 3. PIN login (offline)
 4. Dashboard (revenue, quick actions)
-5. POS screen (menu grid + cart panel)
+5. POS screen (menu grid + cart panel + tax/service breakdown)
 6. Payment screen (cash/QRIS)
 7. Payment success + receipt
 8. Receipt preview (Bluetooth printer)
@@ -244,6 +251,11 @@ Semua Pro + :
 - Drift v4: ingredients, recipes, outlet_stock tables
 - Bidirectional: push orders/products, pull everything
 
+### Dark Mode Pro Theme ✅ 2026-04-13
+- Background: #0B0E14, Surface: #141820
+- Primary: Emerald Green #00D68F
+- Accent: Cool Blue #3B82F6
+
 ---
 
 ## FASE 4 — Owner Dashboard (Next.js 14) ✅
@@ -255,7 +267,7 @@ Semua Pro + :
 4. Laporan revenue (cash/QRIS breakdown)
 5. Settings: outlet info, payment (Xendit), billing, stock mode
 6. Download APK page
-7. Landing page + SEO
+7. Landing page + SEO + GA4
 8. Pro upgrade page (feature showcase)
 
 ### Pro-Only Pages (gated dengan `useProGuard`)
@@ -272,10 +284,9 @@ Semua Pro + :
 - [x] APK hosted di GitHub Releases + auto-update
 - [x] Landing page live
 - [x] Error monitoring (Sentry)
-- [x] GitHub Actions: APK build workflow
+- [x] GitHub Actions: APK build workflow (workflow_dispatch)
 - [ ] UptimeRobot monitoring
 - [ ] kasira-setup.sh tested di VPS bersih
-- [ ] Training kasir
 
 ---
 
@@ -285,90 +296,120 @@ Semua Pro + :
 
 | Feature | Backend | Dashboard | Flutter | Tier Gate |
 |---------|---------|-----------|---------|-----------|
-| Reservasi + booking | ✅ routes + model | ✅ 3 pages | ✅ list + grid | ✅ backend+dashboard, ⚠️ Flutter belum gate |
-| Tab / Split Bill | ✅ routes + model | N/A (Flutter only) | ✅ list + detail + modals | ✅ backend, ⚠️ Flutter belum gate |
-| Recipe/Ingredient/HPP | ✅ routes + model | ✅ bahan-baku + HPP page | ✅ sync + display | ✅ backend+dashboard, ⚠️ Flutter pakai stock_mode proxy |
-| AI Chat owner | ✅ routes (Claude API) | ✅ AI page | ❌ belum | ✅ backend+dashboard |
-| Knowledge Graph | ✅ routes + model | N/A | N/A | ✅ backend |
-| Loyalty points | ✅ routes + model | N/A | ❌ belum | ✅ backend |
-| Dapur app (KDS) | ✅ PIN verify gated | N/A | ✅ pages built | ✅ backend (PIN verify Pro-only) |
-| Multi-outlet | ⚠️ model ready, logic partial | ❌ | ❌ | ❌ belum gate (Business tier) |
-| Invoice scan | ❌ | ❌ | ❌ | — |
-| Struk WA (Fonnte) | ❌ | — | — | — |
+| Reservasi + booking | ✅ | ✅ | ✅ | ✅ all layers |
+| Tab / Split Bill | ✅ | N/A | ✅ | ✅ all layers |
+| Recipe/Ingredient/HPP | ✅ | ✅ | ✅ sync+display | ✅ all layers |
+| AI Chat owner | ✅ Claude API | ✅ | ❌ | ✅ backend+dashboard |
+| Knowledge Graph | ✅ | N/A | N/A | ✅ |
+| Loyalty points | ✅ | N/A | ❌ | ✅ |
+| Dapur app (KDS) | ✅ | N/A | ✅ | ✅ |
+| Menu Engineering | ✅ BCG Matrix | N/A | N/A | ✅ |
+| Combo Detection | ✅ co-occurrence | N/A | N/A | ✅ |
+| Struk WA Fonnte | ✅ | ✅ | N/A | All tiers |
+| Multi-outlet | ⚠️ partial | ❌ | ❌ | ❌ (Business) |
+| Invoice scan OCR | ❌ | ❌ | ❌ | — |
 
 ---
 
 ## FASE 7 — Infrastruktur Lanjutan ✅
-
-Fitur yang sudah built tapi belum ada di ROADMAP sebelumnya:
 
 ### Subscription Billing (Xendit)
 - Model: `subscription_invoices` + tenant billing fields
 - API: `billing.py` — GET /current, GET /invoices, POST retry
 - Tasks: `subscription_billing.py` — auto-generate invoice
 - Tasks: `payment_reconciliation.py` — Xendit webhook → mark paid
-- Flow: tenant baru = Starter → upgrade = manual konfirmasi Ivan (Rule #51)
 
 ### Referral System
 - Model: `referrals` + `referral_commissions`
 - API: `referrals.py` — code generate, apply, dashboard
 - Commission: 20% default per invoice paid
-- RLS: tenant-scoped
 
 ### Superadmin Dashboard
-- API: `superadmin.py` — tenant list, suspend/activate, stats
-- Suspend flow: H-7 WA → H-3 WA → H+7 suspend → H+60 deletion (Rule #52)
+- API: `superadmin.py` — tenant list, suspend/activate, stats, broadcast
+- Suspend flow: H-7 WA → H-3 WA → H+7 suspend → H+60 deletion
 
-### Platform Intelligence (Cross-Tenant)
-- Model: `platform_daily_stats`, `platform_hpp_benchmarks`, `platform_ingredient_prices`, `platform_insights`
-- Cron: aggregate daily stats per outlet
-- Purpose: benchmark HPP/harga vs industri (Business tier — masa depan)
+### Tax & Service Charge
+- Model: `outlet_tax_config` (PB1, PPN, service charge)
+- Configurable per outlet
+- Client-side calculation di Flutter cart ✅ 2026-04-15
+- Backend recalculates on order create (server authoritative)
 
 ### Security
 - RLS policies on 40+ tables (migration 069)
 - 18 composite indexes for query optimization
 - `kasira_app` DB role with limited permissions
-
-### Tax & Service Charge
-- Model: `outlet_tax_config` (PB1, PPN, service charge)
-- Configurable per outlet
-- Applied to order calculation (subtotal → tax → service → total)
+- mask_phone() on all API responses ✅ 2026-04-15
 
 ---
 
-## FASE 8 — Polish & Publish ← CURRENT
+## FASE 8 — Polish & Publish ✅
 
-### Tier Gate Fixes (harus selesai sebelum publish)
-- [x] Flutter: simpan `subscription_tier` dari login/sync response ✅ 2026-04-13
-- [x] Flutter: gate Tab/Bon button di dashboard (Pro only) ✅ 2026-04-13
-- [x] Flutter: gate Reservasi navigation (Pro only) ✅ 2026-04-13
-- [x] OTP verify + sync response: tambah `subscription_tier` ✅ 2026-04-13
-- [x] Backend: gate partial payments Pro-only (Rule #43) ✅ 2026-04-13
+### Tier Gate Fixes ✅
+- [x] Flutter: simpan `subscription_tier` dari login/sync response
+- [x] Flutter: gate Tab/Bon button di dashboard (Pro only)
+- [x] Flutter: gate Reservasi navigation (Pro only)
+- [x] OTP verify + sync response: tambah `subscription_tier`
+- [x] Backend: gate partial payments Pro-only
 - [ ] Backend: gate multi-outlet logic (Business only) — low priority
 
-### Model row_version Fixes (Golden Rule #29)
-- [x] Recipe — fixed ✅ 2026-04-13
-- [x] RecipeIngredient — fixed ✅ 2026-04-13
-- [x] ReservationSettings — fixed ✅ 2026-04-13
-- [x] PointTransaction — fixed ✅ 2026-04-13
-- [x] Referral — fixed ✅ 2026-04-13
-- [x] ReferralCommission — fixed ✅ 2026-04-13
+### Model row_version Fixes ✅
+- [x] Recipe, RecipeIngredient, ReservationSettings
+- [x] PointTransaction, Referral, ReferralCommission
+
+### Smooth & User-Friendly ✅
+- [x] Upgrade bottom sheet saat Starter akses fitur Pro
+- [x] Reservasi nav visible tapi locked + lock icon
+- [x] Dashboard: Pro page context banner
+- [x] Stock mode: confirmation dialog + next steps guidance
+- [x] Sync: SnackBar notify kasir saat stock_mode berubah
+- [x] Login flow fix: success screen + PIN setup UX ✅ 2026-04-15
+- [x] Dark mode Pro theme ✅ 2026-04-13
+
+### APK Releases
+- v2.0.0 — dark mode, tier gate, Pro upgrade flow (2026-04-13)
+- v2.2.0 — login fix, success screen (2026-04-15)
+- v2.3.0 — cart tax/service breakdown (2026-04-15)
+
+---
+
+## FASE 9 — Scale & Intelligence ← CURRENT
+
+### Platform Intelligence (Silent Learning) ✅ 2026-04-14
+Empat piece all done, berjalan otomatis:
+
+1. **Location Tracking** — Nominatim reverse geocode on outlet location submit
+2. **Product Embeddings** — Voyage AI (voyage-3-lite, 512 dims), auto-embed on product CRUD
+3. **Transaction Aggregation** — Cron: daily stats (6h), HPP benchmark (weekly), ingredient prices (12h), insights (24h)
+4. **Geo Intelligence** — Platform models: daily_stats, hpp_benchmarks, ingredient_prices, insights (all with geo columns)
+
+### Cross-Tenant Intelligence ✅ 2026-04-15
+- 14/14 products embedded across 4 tenants
+- `POST /embeddings/generate-all` — bulk embed all tenants (platform admin)
+- `GET /embeddings/similar/{id}?cross_tenant=true` — RLS bypass, find similar across merchants
+- Similarity: Kopi Hitam → Kopi Ku (Dita Coffee) 80.7%
+
+### Menu Engineering ✅ 2026-04-15
+- BCG Matrix classification (Star/Plowhorse/Puzzle/Dog)
+- Combo detection (co-occurrence analysis)
+- Auto-injected into AI context
+
+### AI RAG Context ✅ 2026-04-15
+- Knowledge Graph context
+- HPP benchmarks
+- Menu engineering + combo data
+- Cross-tenant benchmarks
+- Semantic search (product embedding)
+- **BLOCKER: Anthropic API credit habis — perlu top up**
 
 ### Belum Dibangun
-- [ ] Struk WA via Fonnte (FASE 2 sisa)
-- [ ] Invoice scan + OCR (FASE 6)
-- [ ] POST /auth/refresh (low priority)
-- [ ] UptimeRobot monitoring (FASE 5 sisa)
-- [ ] mask_phone() di semua response
+- [ ] Invoice scan + OCR
+- [ ] UptimeRobot monitoring
 - [ ] Multi-outlet full implementation (Business tier)
-
-### Smooth & User-Friendly Improvements
-- [x] Flutter: upgrade bottom sheet saat Starter akses fitur Pro ✅ 2026-04-13
-- [x] Flutter: Reservasi nav visible tapi locked + lock icon ✅ 2026-04-13
-- [x] Dashboard: Pro page tampil context banner "X memerlukan paket Pro" ✅ 2026-04-13
-- [x] Dashboard: useProGuard pass feature name ke redirect ✅ 2026-04-13
-- [x] Stock mode: confirmation dialog + next steps guidance ✅ 2026-04-13
-- [x] Sync: SnackBar notify kasir saat stock_mode berubah via sync ✅ 2026-04-13
+- [ ] POST /auth/refresh (low priority)
+- [ ] Flutter: loyalty points UI
+- [ ] Flutter: AI chat
+- [ ] Hourly distribution aggregation (schema ready, logic pending)
+- [ ] Top up Anthropic API credit ⚠️
 
 ---
 
@@ -386,6 +427,7 @@ Fitur yang sudah built tapi belum ada di ROADMAP sebelumnya:
 - Response: `{success, data, meta, request_id}`
 - Idempotency key wajib untuk payment + storefront order
 - Timezone: simpan UTC, tampilkan Asia/Jakarta
+- Phone numbers WAJIB masked di response (mask_phone())
 
 ### Auth
 - OTP WA only — tidak ada email+password
@@ -405,7 +447,7 @@ Fitur yang sudah built tapi belum ada di ROADMAP sebelumnya:
 ### Deploy
 - Backend: `docker cp` + `docker restart` (BUKAN `docker compose up -d`)
 - Frontend: `docker compose build frontend && docker compose up -d frontend`
-- Flutter: git push → GitHub Actions → APK release
+- Flutter: git push → GitHub Actions → APK release (workflow_dispatch)
 
 ---
 
@@ -416,3 +458,14 @@ Fitur yang sudah built tapi belum ada di ROADMAP sebelumnya:
 4. Migration WAJIB test upgrade + downgrade sebelum lanjut
 5. ROADMAP.md = source of truth untuk fitur dan tier
 6. Jangan skip step — setiap step ada dependency
+
+---
+
+## System State (2026-04-15)
+- **Migration:** 074
+- **APK:** v2.3.0
+- **Containers:** 4 (backend, frontend, db, redis) — all healthy
+- **Tenants:** 4 (Kasira Coffee pro, Dita Coffee starter, B coffee starter, Warung Demo)
+- **Embeddings:** 14/14 products across 4 tenants
+- **Anthropic API:** credit habis — needs top up
+- **Voyage AI:** working
