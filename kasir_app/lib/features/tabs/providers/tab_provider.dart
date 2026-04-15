@@ -31,7 +31,7 @@ class TabSplitModel {
         tabId: json['tab_id'] as String,
         paymentId: json['payment_id'] as String?,
         label: json['label'] as String,
-        amount: (json['amount'] as num).toDouble(),
+        amount: json['amount'] is num ? (json['amount'] as num).toDouble() : double.tryParse(json['amount']?.toString() ?? '') ?? 0,
         status: json['status'] as String? ?? 'unpaid',
         itemIds: (json['item_ids'] as List?)?.map((e) => e.toString()).toList() ?? [],
         rowVersion: (json['row_version'] as num?)?.toInt() ?? 0,
@@ -86,6 +86,9 @@ class TabModel {
     required this.createdAt,
   });
 
+  static double _toDouble(dynamic v) =>
+      v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0;
+
   factory TabModel.fromJson(Map<String, dynamic> json) => TabModel(
         id: json['id'] as String,
         outletId: json['outlet_id'] as String,
@@ -93,13 +96,13 @@ class TabModel {
         tabNumber: json['tab_number'] as String,
         customerName: json['customer_name'] as String?,
         guestCount: (json['guest_count'] as num?)?.toInt() ?? 1,
-        subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0,
-        taxAmount: (json['tax_amount'] as num?)?.toDouble() ?? 0,
-        serviceChargeAmount: (json['service_charge_amount'] as num?)?.toDouble() ?? 0,
-        discountAmount: (json['discount_amount'] as num?)?.toDouble() ?? 0,
-        totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0,
-        paidAmount: (json['paid_amount'] as num?)?.toDouble() ?? 0,
-        remainingAmount: (json['remaining_amount'] as num?)?.toDouble() ?? 0,
+        subtotal: _toDouble(json['subtotal']),
+        taxAmount: _toDouble(json['tax_amount']),
+        serviceChargeAmount: _toDouble(json['service_charge_amount']),
+        discountAmount: _toDouble(json['discount_amount']),
+        totalAmount: _toDouble(json['total_amount']),
+        paidAmount: _toDouble(json['paid_amount']),
+        remainingAmount: _toDouble(json['remaining_amount']),
         splitMethod: json['split_method'] as String?,
         status: json['status'] as String? ?? 'open',
         notes: json['notes'] as String?,

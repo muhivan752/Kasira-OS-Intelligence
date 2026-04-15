@@ -20,7 +20,8 @@ class TabListPage extends ConsumerStatefulWidget {
 class _TabListPageState extends ConsumerState<TabListPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-  bool _isPro = true; // assume pro until loaded
+  bool _tierChecked = false;
+  bool _isPro = false;
 
   @override
   void initState() {
@@ -29,14 +30,16 @@ class _TabListPageState extends ConsumerState<TabListPage> with SingleTickerProv
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) _refresh();
     });
-    _checkTier();
-    Future.microtask(() => _refresh());
+    _initPage();
   }
 
-  Future<void> _checkTier() async {
+  Future<void> _initPage() async {
+    // Check tier first, then fetch
     const storage = FlutterSecureStorage();
     final tier = await storage.read(key: 'subscription_tier') ?? 'starter';
-    if (!_proTiers.contains(tier) && mounted) {
+    if (!mounted) return;
+
+    if (!_proTiers.contains(tier)) {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -44,7 +47,14 @@ class _TabListPageState extends ConsumerState<TabListPage> with SingleTickerProv
           backgroundColor: AppColors.error,
         ),
       );
+      return;
     }
+
+    setState(() {
+      _isPro = true;
+      _tierChecked = true;
+    });
+    _refresh();
   }
 
   void _refresh() {
