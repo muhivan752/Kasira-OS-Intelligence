@@ -75,18 +75,31 @@ BUSINESS_CONTEXT_KEYWORDS = [
 
 # ─── Model Selector (Rule #25, #26) ───────────────────────────────────────────
 
-def get_model_for_tier(tier: str, task: str = "routine") -> str:
+async def get_model_for_tier(tier: str, task: str = "routine", tenant_id: str = None) -> str:
     """
     Pilih Claude model berdasarkan tier outlet dan kompleksitas task.
     Rule #25: Tidak pernah hardcoded.
     Rule #26: Starter/rutin = Haiku. Sonnet hanya Pro+ task kompleks.
 
-    BUDGET MODE: Force Haiku for all requests to conserve API credit.
-    Re-enable Sonnet when budget allows by uncommenting below.
+    Budget control: Sonnet capped at 5/tenant/day to prevent overspend.
+    Haiku ~$0.003/req, Sonnet ~$0.012/req (4x more expensive).
     """
-    # BUDGET MODE — Haiku only ($0.80/M input vs Sonnet $3/M)
-    # if tier in ("pro", "enterprise", "business") and task == "complex":
-    #     return "claude-sonnet-4-6"
+    SONNET_DAILY_LIMIT = 5  # max 5 Sonnet requests per tenant per day
+
+    if tier in ("pro", "enterprise", "business") and task == "complex" and tenant_id:
+        try:
+            from backend.services.redis import get_redis_client
+            from datetime import date as dt_date
+            redis = await get_redis_client()
+            today = dt_date.today().isoformat()
+            sonnet_key = f"ai_sonnet:{tenant_id}:{today}"
+            count = int(await redis.get(sonnet_key) or 0)
+            if count < SONNET_DAILY_LIMIT:
+                await redis.incr(sonnet_key)
+                await redis.expire(sonnet_key, 86400)
+                return "claude-sonnet-4-6"
+        except Exception:
+            pass  # Redis down → fallback to Haiku
     return "claude-haiku-4-5-20251001"
 
 
@@ -782,7 +795,7 @@ async def stream_ai_response(
 
     # 4. Pilih model (Rule #25/#26)
     task_complexity = classify_task_complexity(message)
-    model = get_model_for_tier(tier, task_complexity)
+    model = await get_model_for_tier(tier, task_complexity, tenant_id=tenant_id)
 
     # 5. Stream dari Claude API
     try:

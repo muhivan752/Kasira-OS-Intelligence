@@ -84,34 +84,37 @@ async def ai_chat(
     redis = await get_redis_client()
 
     # ── Budget Control ──────────────────────────────────────────────────
-    # Daily platform-wide budget cap (in cents) — prevents overspend
-    # $8 budget → ~$0.50/day for 16 days runway
-    DAILY_BUDGET_CENTS = 50  # $0.50/day
-    MAX_REQUESTS_PER_USER_PER_DAY = 20
+    # Tiered limits: per-tenant, per-user, platform safety net
+    TENANT_DAILY_LIMIT = 50       # max 50 AI requests per tenant per day
+    USER_DAILY_LIMIT = 30         # max 30 per user per day (within tenant quota)
+    PLATFORM_DAILY_CENTS = 100    # $1.00/day emergency brake (all tenants combined)
 
     try:
         from datetime import date as dt_date
         today = dt_date.today().isoformat()
+        tid = str(current_user.tenant_id)
 
-        # Platform-wide daily spend tracking (estimated cents)
+        # 1. Platform safety cap — emergency brake
         spend_key = f"ai_spend:{today}"
         current_spend = int(await redis.get(spend_key) or 0)
-        if current_spend >= DAILY_BUDGET_CENTS:
-            raise HTTPException(
-                status_code=429,
-                detail="Budget AI harian sudah tercapai. Coba lagi besok.",
-            )
+        if current_spend >= PLATFORM_DAILY_CENTS:
+            raise HTTPException(429, detail="Layanan AI sedang sibuk. Coba lagi besok.")
 
-        # Per-user daily limit
-        user_day_key = f"ai_user:{current_user.id}:{today}"
-        user_count = await redis.incr(user_day_key)
+        # 2. Per-tenant daily limit
+        tenant_key = f"ai_tenant:{tid}:{today}"
+        tenant_count = await redis.incr(tenant_key)
+        if tenant_count == 1:
+            await redis.expire(tenant_key, 86400)
+        if tenant_count > TENANT_DAILY_LIMIT:
+            raise HTTPException(429, detail=f"Kuota AI harian habis ({TENANT_DAILY_LIMIT} pertanyaan). Coba lagi besok.")
+
+        # 3. Per-user daily limit
+        user_key = f"ai_user:{current_user.id}:{today}"
+        user_count = await redis.incr(user_key)
         if user_count == 1:
-            await redis.expire(user_day_key, 86400)
-        if user_count > MAX_REQUESTS_PER_USER_PER_DAY:
-            raise HTTPException(
-                status_code=429,
-                detail=f"Maksimal {MAX_REQUESTS_PER_USER_PER_DAY} pertanyaan per hari. Coba lagi besok.",
-            )
+            await redis.expire(user_key, 86400)
+        if user_count > USER_DAILY_LIMIT:
+            raise HTTPException(429, detail=f"Kamu sudah bertanya {USER_DAILY_LIMIT}x hari ini. Coba lagi besok.")
     except HTTPException:
         raise
     except Exception:
@@ -132,13 +135,11 @@ async def ai_chat(
     except Exception as e:
         logger.warning(f"Audit log failed (non-blocking): {e}")
 
-    # Estimate cost and track spend (~1500 input tokens + 512 output = ~2000 tokens)
-    # Haiku: ~$0.002 per request. Track in cents (0.2 cents per req).
-    # We round up to 1 cent per request for safety margin.
+    # Track estimated spend — 1 cent per Haiku, 2 cents per Sonnet
     try:
         from datetime import date as dt_date
         spend_key = f"ai_spend:{dt_date.today().isoformat()}"
-        await redis.incrby(spend_key, 1)  # +1 cent per request (conservative)
+        await redis.incrby(spend_key, 1)  # conservative estimate
         await redis.expire(spend_key, 86400)
     except Exception:
         pass
@@ -184,3 +185,51 @@ async def clear_ai_context_cache(
     cache_key = f"ai:context:{outlet_id}"
     await redis.delete(cache_key)
     return {"success": True, "message": "Context cache dibersihkan"}
+
+
+@router.get("/budget")
+async def ai_budget_status(
+    current_user: User = Depends(deps.get_platform_admin),
+) -> Any:
+    """
+    Check current AI budget usage. Superadmin only.
+    """
+    from datetime import date as dt_date
+    redis = await get_redis_client()
+    today = dt_date.today().isoformat()
+
+    spend = int(await redis.get(f"ai_spend:{today}") or 0)
+
+    # Get per-tenant usage
+    keys = await redis.keys(f"ai_tenant:*:{today}")
+    tenant_usage = {}
+    for key in keys:
+        tid = key.split(":")[1]
+        count = int(await redis.get(key) or 0)
+        tenant_usage[tid] = count
+
+    # Sonnet usage
+    sonnet_keys = await redis.keys(f"ai_sonnet:*:{today}")
+    sonnet_usage = {}
+    for key in sonnet_keys:
+        tid = key.split(":")[1]
+        count = int(await redis.get(key) or 0)
+        sonnet_usage[tid] = count
+
+    return {
+        "success": True,
+        "data": {
+            "date": today,
+            "estimated_spend_cents": spend,
+            "estimated_spend_usd": f"${spend / 100:.2f}",
+            "platform_daily_cap_cents": 100,
+            "tenant_requests_today": tenant_usage,
+            "sonnet_requests_today": sonnet_usage,
+            "limits": {
+                "tenant_daily": 50,
+                "user_daily": 30,
+                "sonnet_per_tenant": 5,
+                "platform_cap_cents": 100,
+            },
+        },
+    }
