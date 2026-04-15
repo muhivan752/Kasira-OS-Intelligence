@@ -41,6 +41,9 @@ class Tenant(BaseModel):
     billing_interval = Column(String, server_default='monthly', nullable=False)  # monthly or annual
     owner_email = Column(String, nullable=True)
 
+    # Demo/test flag — excluded from cross-tenant intelligence
+    is_demo = Column(Boolean(), server_default='false', nullable=False)
+
     # Referral
     referral_code = Column(String(20), unique=True, nullable=True, index=True)
 

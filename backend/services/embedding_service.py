@@ -247,10 +247,15 @@ async def generate_all_tenants_embeddings() -> Dict:
 
     results = []
 
+    from backend.models.tenant import Tenant
+
     async with AsyncSessionLocal() as db:
         await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
+        # Exclude demo tenants from bulk embedding
         brands = (await db.execute(
-            select(Brand).where(Brand.deleted_at.is_(None))
+            select(Brand)
+            .join(Tenant, Brand.tenant_id == Tenant.id)
+            .where(Brand.deleted_at.is_(None), Tenant.is_demo == False)
         )).scalars().all()
 
     for brand in brands:
@@ -441,6 +446,13 @@ async def search_similar_products_cross_tenant(
     # Bypass RLS — cross-tenant query needs access to all products
     await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
 
+    from backend.models.tenant import Tenant
+
+    # Get demo tenant IDs to exclude
+    demo_ids = [t.id for t in (await db.execute(
+        select(Tenant.id).where(Tenant.is_demo == True)
+    )).scalars().all()]
+
     query_stmt = (
         select(
             Product.id,
@@ -460,6 +472,10 @@ async def search_similar_products_cross_tenant(
             Product.embedding.isnot(None),
         )
     )
+
+    # Exclude demo tenants from cross-tenant results
+    if demo_ids:
+        query_stmt = query_stmt.where(Brand.tenant_id.notin_(demo_ids))
 
     if exclude_brand_id:
         query_stmt = query_stmt.where(Product.brand_id != exclude_brand_id)

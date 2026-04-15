@@ -64,7 +64,7 @@ async def aggregate_daily_stats(db: AsyncSession, target_date: Optional[date] = 
         select(Outlet.id, Outlet.tenant_id, Tenant.subscription_tier,
                Outlet.city, Outlet.district, Outlet.province)
         .join(Tenant, Outlet.tenant_id == Tenant.id)
-        .where(Outlet.deleted_at.is_(None), Tenant.is_active == True)
+        .where(Outlet.deleted_at.is_(None), Tenant.is_active == True, Tenant.is_demo == False)
     )).all()
 
     stats_created = 0
@@ -270,8 +270,20 @@ async def aggregate_hpp_benchmarks(db: AsyncSession, target_week: Optional[date]
     product_ids = set(e.product_id for e in edges)
     ingredient_ids = set(e.ingredient_id for e in edges)
 
+    from backend.models.brand import Brand
+    # Exclude demo tenant products
+    demo_tenant_ids = [t.id for t in (await db.execute(
+        select(Tenant.id).where(Tenant.is_demo == True)
+    )).scalars().all()]
+
     products = {p.id: p for p in (await db.execute(
-        select(Product).where(Product.id.in_(list(product_ids)), Product.deleted_at.is_(None))
+        select(Product)
+        .join(Brand, Product.brand_id == Brand.id)
+        .where(
+            Product.id.in_(list(product_ids)),
+            Product.deleted_at.is_(None),
+            Brand.tenant_id.notin_(demo_tenant_ids) if demo_tenant_ids else True,
+        )
     )).scalars().all()}
 
     ingredients = {i.id: i for i in (await db.execute(
