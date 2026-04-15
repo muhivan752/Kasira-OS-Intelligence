@@ -279,7 +279,7 @@ async def create_payment(
                         cashier = await db.get(UserModel, order.user_id)
                         if cashier:
                             cashier_name = cashier.full_name
-                    struk = _build_receipt_text(order, outlet_name, cashier_name, payment_in.payment_method, payment)
+                    struk = _build_receipt_text(order, outlet_name, cashier_name, payment_in.payment_method, payment, outlet_slug=getattr(outlet, 'slug', None))
                     try:
                         asyncio.create_task(
                             send_whatsapp_message(customer.phone, struk)
@@ -565,7 +565,7 @@ async def xendit_webhook(
                                 cashier = await db.get(UserModel, order.user_id)
                                 if cashier:
                                     cashier_name = cashier.full_name
-                            struk = _build_receipt_text(order, outlet_name, cashier_name, payment.payment_method, payment)
+                            struk = _build_receipt_text(order, outlet_name, cashier_name, payment.payment_method, payment, outlet_slug=getattr(outlet, 'slug', None))
                             asyncio.create_task(
                                 send_whatsapp_message(customer.phone, struk)
                             )
@@ -698,7 +698,7 @@ def _normalize_phone(phone: str) -> str:
     return p
 
 
-def _build_receipt_text(order: Order, outlet_name: str, cashier_name: str, payment_method: str, payment_obj=None) -> str:
+def _build_receipt_text(order: Order, outlet_name: str, cashier_name: str, payment_method: str, payment_obj=None, outlet_slug: str = None) -> str:
     method_label = {"cash": "Tunai", "qris": "QRIS", "card": "Kartu", "transfer": "Transfer"}.get(payment_method, payment_method.upper())
     # WIB timezone
     from datetime import timezone as tz, timedelta
@@ -755,6 +755,10 @@ def _build_receipt_text(order: Order, outlet_name: str, cashier_name: str, payme
 
     lines.append(f"{'─' * 28}")
     lines.append(f"Terima kasih! 🙏")
+    if outlet_slug:
+        lines.append(f"")
+        lines.append(f"📱 Pesan lagi via online:")
+        lines.append(f"https://kasira.online/{outlet_slug}")
     lines.append(f"_Powered by Kasira_")
     return "\n".join(lines)
 
@@ -804,7 +808,7 @@ async def send_receipt_whatsapp(
     if len(phone) < 9:
         raise HTTPException(status_code=400, detail="Nomor HP tidak valid")
 
-    receipt_text = _build_receipt_text(order, outlet_name, cashier_name, payment_method, latest_payment)
+    receipt_text = _build_receipt_text(order, outlet_name, cashier_name, payment_method, latest_payment, outlet_slug=getattr(outlet, 'slug', None))
     sent = await send_whatsapp_message(phone, receipt_text)
 
     return StandardResponse(
