@@ -30,6 +30,14 @@ TIER_PRICES = {
     "enterprise": 0,
 }
 
+# Annual = bayar 10 bulan, dapat 12
+TIER_PRICES_ANNUAL = {
+    "starter": 990_000,     # 99K × 10
+    "pro": 2_990_000,       # 299K × 10
+    "business": 4_990_000,  # 499K × 10
+    "enterprise": 0,
+}
+
 TIER_LABELS = {
     "starter": "Starter",
     "pro": "Pro",
@@ -46,10 +54,17 @@ class BillingInfo(BaseModel):
     tier: str
     tier_label: str
     price: int
+    price_annual: int = 0
+    billing_interval: str = "monthly"  # monthly or annual
     subscription_status: Optional[str] = None
     billing_day: int = 1
     next_billing_date: Optional[date] = None
     latest_invoice: Optional[dict] = None
+    bank_transfer: dict = {
+        "bank": "Mandiri",
+        "account_number": "1060021987147",
+        "account_name": "MIRFAN",
+    }
 
     class Config:
         from_attributes = True
@@ -107,6 +122,10 @@ async def get_billing_current(
             "paid_at": latest.paid_at.isoformat() if latest.paid_at else None,
         }
 
+    billing_interval = getattr(tenant, "billing_interval", None) or "monthly"
+    if hasattr(billing_interval, "value"):
+        billing_interval = billing_interval.value
+
     return StandardResponse(
         data=BillingInfo(
             tenant_id=tenant.id,
@@ -114,6 +133,8 @@ async def get_billing_current(
             tier=tier,
             tier_label=TIER_LABELS.get(tier, tier),
             price=TIER_PRICES.get(tier, 0),
+            price_annual=TIER_PRICES_ANNUAL.get(tier, 0),
+            billing_interval=str(billing_interval),
             subscription_status=_status_value(tenant),
             billing_day=tenant.billing_day or 1,
             next_billing_date=tenant.next_billing_date,

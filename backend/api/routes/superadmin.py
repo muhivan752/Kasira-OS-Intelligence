@@ -443,6 +443,13 @@ TIER_PRICES = {
     "enterprise": 0,
 }
 
+TIER_PRICES_ANNUAL = {
+    "starter": 990_000,
+    "pro": 2_990_000,
+    "business": 4_990_000,
+    "enterprise": 0,
+}
+
 TIER_LABELS = {
     "starter": "Starter",
     "pro": "Pro",

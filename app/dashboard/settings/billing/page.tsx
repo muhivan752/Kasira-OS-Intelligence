@@ -148,11 +148,15 @@ export default function BillingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
               <span className="text-gray-500">Status</span>
-              <p className="font-semibold text-gray-900 capitalize">{billing.subscription_status || 'active'}</p>
+              <p className="font-semibold text-gray-900 capitalize">
+                {billing.subscription_status === 'trial' ? 'Trial Gratis' : billing.subscription_status || 'active'}
+              </p>
             </div>
             <div>
-              <span className="text-gray-500">Tanggal Billing</span>
-              <p className="font-semibold text-gray-900">Tanggal {billing.billing_day} setiap bulan</p>
+              <span className="text-gray-500">Interval</span>
+              <p className="font-semibold text-gray-900">
+                {billing.billing_interval === 'annual' ? 'Tahunan (hemat 2 bulan)' : 'Bulanan'}
+              </p>
             </div>
             <div>
               <span className="text-gray-500">Billing Berikutnya</span>
@@ -161,6 +165,29 @@ export default function BillingPage() {
               </p>
             </div>
           </div>
+
+          {/* Annual pricing promo */}
+          {billing.billing_interval !== 'annual' && billing.price_annual > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100 bg-green-50 rounded-lg p-4 -mx-2">
+              <p className="text-sm font-semibold text-green-800">Hemat dengan bayar tahunan!</p>
+              <p className="text-sm text-green-700 mt-1">
+                {formatCurrency(billing.price)}/bulan &rarr; <strong>{formatCurrency(billing.price_annual)}/tahun</strong>{' '}
+                <span className="text-green-600">(bayar 10 bulan, gratis 2 bulan)</span>
+              </p>
+              <p className="text-xs text-green-600 mt-2">Hubungi via WhatsApp untuk beralih ke tahunan.</p>
+            </div>
+          )}
+
+          {/* Bank transfer info */}
+          {billing.bank_transfer && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-xs text-gray-500 mb-2">Pembayaran via transfer bank:</p>
+              <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+                <p>Bank <strong>{billing.bank_transfer.bank}</strong> — <span className="font-mono font-bold">{billing.bank_transfer.account_number}</span></p>
+                <p>a.n. <strong>{billing.bank_transfer.account_name}</strong></p>
+              </div>
+            </div>
+          )}
 
           {billing.tier === 'starter' && (
             <div className="mt-4 pt-4 border-t border-gray-100">

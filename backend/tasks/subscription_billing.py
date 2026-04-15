@@ -32,6 +32,13 @@ TIER_PRICES = {
     "enterprise": 0,
 }
 
+TIER_PRICES_ANNUAL = {
+    "starter": 990_000,
+    "pro": 2_990_000,
+    "business": 4_990_000,
+    "enterprise": 0,
+}
+
 def _add_month(d: date) -> date:
     """Add 1 month to a date, clamping day to month max."""
     if d.month == 12:
@@ -100,7 +107,14 @@ async def generate_invoices():
             generated = 0
             for tenant in tenants:
                 tier = _tier_str(tenant)
-                price = TIER_PRICES.get(tier, 0)
+                interval = getattr(tenant, "billing_interval", "monthly") or "monthly"
+                if hasattr(interval, "value"):
+                    interval = interval.value
+
+                if str(interval) == "annual":
+                    price = TIER_PRICES_ANNUAL.get(tier, 0)
+                else:
+                    price = TIER_PRICES.get(tier, 0)
 
                 # Skip enterprise (custom billing)
                 if price == 0:
@@ -108,7 +122,10 @@ async def generate_invoices():
 
                 billing_day = min(tenant.billing_day or 1, 28)
                 period_start = today.replace(day=1)
-                period_end = _add_month(period_start) - timedelta(days=1)
+                if str(interval) == "annual":
+                    period_end = period_start.replace(year=period_start.year + 1) - timedelta(days=1)
+                else:
+                    period_end = _add_month(period_start) - timedelta(days=1)
 
                 # Idempotency: skip if invoice exists
                 existing = (await db.execute(
@@ -155,7 +172,10 @@ async def generate_invoices():
                     invoice.notes = f"Xendit failed: {str(e)[:200]}"
 
                 # Update next billing date
-                tenant.next_billing_date = _next_billing(billing_day, today)
+                if str(interval) == "annual":
+                    tenant.next_billing_date = today.replace(year=today.year + 1)
+                else:
+                    tenant.next_billing_date = _next_billing(billing_day, today)
                 tenant.row_version += 1
 
                 await log_audit(

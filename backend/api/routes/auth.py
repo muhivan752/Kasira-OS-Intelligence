@@ -237,10 +237,14 @@ async def register(
     slug = request.business_name.lower().replace(" ", "-")[:50]
 
     from backend.models.tenant import SubscriptionTier, SubscriptionStatus
+    from datetime import date as dt_date, timedelta
+    trial_end = dt_date.today() + timedelta(days=30)
     tenant = Tenant(id=tenant_id, name=request.business_name,
                     schema_name=schema_name, is_active=True,
                     subscription_tier=SubscriptionTier.starter,
-                    subscription_status=SubscriptionStatus.active)
+                    subscription_status=SubscriptionStatus.trial,
+                    billing_day=dt_date.today().day,
+                    next_billing_date=trial_end)
     btype = request.business_type if request.business_type in ("warung", "cafe", "resto", "other") else "cafe"
     brand = Brand(id=brand_id, tenant_id=tenant_id,
                   name=request.business_name, type=btype, is_active=True)

@@ -38,6 +38,7 @@ class Tenant(BaseModel):
     # Billing
     billing_day = Column(Integer, server_default='1', nullable=False)
     next_billing_date = Column(Date, nullable=True)
+    billing_interval = Column(String, server_default='monthly', nullable=False)  # monthly or annual
     owner_email = Column(String, nullable=True)
 
     # Referral

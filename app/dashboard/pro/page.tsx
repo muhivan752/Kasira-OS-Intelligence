@@ -123,8 +123,18 @@ function ProContent() {
 
       {/* Pricing */}
       <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Rp 299.000<span className="text-base font-normal text-gray-500">/bulan</span></h2>
-        <p className="text-gray-500 text-sm mb-6">Semua fitur Pro. Bisa dibatalkan kapan saja.</p>
+        <div className="flex justify-center gap-6 mb-4">
+          <div>
+            <p className="text-sm text-gray-500">Bulanan</p>
+            <p className="text-2xl font-bold text-gray-900">Rp 299.000<span className="text-sm font-normal text-gray-500">/bln</span></p>
+          </div>
+          <div className="border-l border-gray-200" />
+          <div>
+            <p className="text-sm text-green-600 font-semibold">Tahunan (hemat 2 bulan)</p>
+            <p className="text-2xl font-bold text-green-700">Rp 2.990.000<span className="text-sm font-normal text-green-500">/thn</span></p>
+          </div>
+        </div>
+        <p className="text-gray-500 text-sm mb-6">Semua fitur Pro. Trial gratis 1 bulan untuk Starter.</p>
 
         {/* Bank Transfer Info */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 text-left mb-6">
