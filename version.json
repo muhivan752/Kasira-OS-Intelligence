@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "2.3.0",
+    "version": "2.4.0",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.3.0/kasira-pos-v2.3.0.apk",
-    "release_notes": "Tax & service charge live di cart, cross-tenant embedding search, bulk generate all tenants"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.4.0/kasira-pos-v2.4.0.apk",
+    "release_notes": "AI Chat assistant di Flutter, Invoice OCR scan, mask_phone security"
   },
   "dapur": {
-    "version": "2.3.0",
+    "version": "2.4.0",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.3.0/kasira-dapur-v2.3.0.apk",
-    "release_notes": "Tax & service charge live di cart, cross-tenant embedding search, bulk generate all tenants"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.4.0/kasira-dapur-v2.4.0.apk",
+    "release_notes": "AI Chat assistant di Flutter, Invoice OCR scan, mask_phone security"
   }
 }
