@@ -151,7 +151,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textSecondary),
                             )
-                          : const Icon(LucideIcons.sendHorizontal, size: 18, color: Colors.white),
+                          : const Icon(LucideIcons.send, size: 18, color: Colors.white),
                     ),
                   ),
                 ],
