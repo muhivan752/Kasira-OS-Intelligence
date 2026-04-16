@@ -70,6 +70,17 @@ BUSINESS_CONTEXT_KEYWORDS = [
     "bahan", "ingredient", "supplier", "dapur", "kitchen",
     "promo", "diskon", "loyalty", "poin", "voucher",
     "reservasi", "booking", "jam buka", "jam operasional",
+    # F&B knowledge umum — AI boleh jawab dari knowledge Claude
+    "resep", "recipe", "cara buat", "cara bikin", "brewing", "espresso",
+    "latte", "cappuccino", "americano", "kopi", "teh", "jus", "smoothie",
+    "food cost", "pricing", "harga jual", "markup", "margin ideal",
+    "tips", "saran", "rekomendasi", "ide menu", "menu baru",
+    "trend", "viral", "populer", "musim", "seasonal",
+    "operasional", "manajemen", "kelola", "efisiensi", "waste",
+    "barista", "teknik", "grind", "roast", "beans", "arabica", "robusta",
+    "frozen", "dessert", "pastry", "snack", "nasi", "mie", "roti",
+    "packaging", "take away", "grab", "gojek", "ojol",
+    "dekorasi", "interior", "suasana", "ambiance", "musik",
 ]
 
 
@@ -872,7 +883,7 @@ INSIGHT OPERASIONAL:
 - Jam tersibuk (7 hari): {", ".join(peak_hours) if peak_hours else "belum cukup data"}
 {reservation_info}
 INSTRUKSI:
-- Jawab hanya pertanyaan seputar bisnis cafe ini
+- PRIORITAS UTAMA: data bisnis outlet ini (omzet, stok, HPP, tab, meja, dll)
 - Gunakan bahasa Indonesia yang ramah dan profesional
 - Angka dalam format Rupiah (Rp x.xxx)
 - Jawaban singkat dan langsung to the point
@@ -881,7 +892,9 @@ INSTRUKSI:
 - Untuk restock: bisa langsung eksekusi via chat (contoh: "restock kopi arabica 5kg")
 - Jika ditanya dampak kenaikan harga bahan, hitung ulang HPP dan margin baru
 - Untuk tab/bon: laporkan tab aktif, tab yang minta bill, durasi, dan meja yang terisi
-- Untuk meja: jelaskan meja mana yang kosong/terisi dan tab yang sedang berjalan"""
+- Untuk meja: jelaskan meja mana yang kosong/terisi dan tab yang sedang berjalan
+- BOLEH jawab pertanyaan F&B umum: resep minuman/makanan, teknik brewing, tips operasional cafe/resto, food cost ideal, saran menu, pricing strategy, trend F&B
+- TOLAK topik di luar F&B dan bisnis (politik, coding, medis, hukum, curhat, dll)"""
 
     # Knowledge graph context (non-blocking)
     kg_context = ""
@@ -964,8 +977,8 @@ async def stream_ai_response(
     if intent == INTENT_UNKNOWN:
         yield sse({
             "type": "chunk",
-            "content": "Maaf, saya hanya bisa membantu pertanyaan seputar bisnis cafe Anda. "
-                       "Contoh: omzet hari ini, produk terlaris, atau stok yang perlu diisi.",
+            "content": "Maaf, saya hanya bisa membantu seputar bisnis dan dunia F&B. "
+                       "Contoh: omzet hari ini, resep kopi, tips operasional cafe, atau stok yang perlu diisi.",
         })
         yield sse({"type": "done", "intent": intent, "tokens_used": 0})
         return
