@@ -98,6 +98,7 @@ async def _get_tab_or_404(
             selectinload(Tab.table),
         )
         .where(Tab.id == tab_id, Tab.deleted_at.is_(None))
+        .execution_options(populate_existing=True)
     )
     if lock:
         query = query.with_for_update()
@@ -205,6 +206,7 @@ async def list_tabs(
         select(Tab)
         .options(selectinload(Tab.splits), selectinload(Tab.orders), selectinload(Tab.table))
         .where(Tab.outlet_id == outlet_id, Tab.deleted_at.is_(None))
+        .execution_options(populate_existing=True)
     )
     if status:
         query = query.where(Tab.status == status)
