@@ -35,7 +35,7 @@ class SyncService {
 
   Future<void> sync() async {
     try {
-      debugPrint('Starting sync process...');
+      // debugPrint('Starting sync process...');
       
       // 1. Gather unsynced local changes
       final unsyncedProducts = await db.getUnsyncedProducts();
@@ -103,12 +103,12 @@ class SyncService {
 
         // 5. Update last sync HLC
         await prefs.setString(_lastSyncKey, serverHlc);
-        debugPrint('Sync completed successfully. New HLC: $serverHlc');
+        // debugPrint('Sync completed successfully. New HLC: $serverHlc');
       } else {
-        debugPrint('Sync failed with status: ${response.statusCode}');
+        // debugPrint('Sync failed with status: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('Sync error: $e');
+      // debugPrint('Sync error: $e');
       rethrow;
     }
   }

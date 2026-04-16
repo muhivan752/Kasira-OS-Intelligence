@@ -203,8 +203,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         error: e.response?.data['detail'] ?? 'Kode OTP salah atau kedaluwarsa',
       );
     } catch (e, stack) {
-      debugPrint('[AUTH] verifyOtp error: $e');
-      debugPrint('[AUTH] stack: $stack');
+      // debugPrint('[AUTH] verifyOtp error: $e');
+      // debugPrint('[AUTH] stack: $stack');
       state = state.copyWith(isLoading: false, error: 'Terjadi kesalahan sistem: $e');
     }
   }
@@ -330,10 +330,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       final tenantId = await storage.read(key: 'tenant_id');
       final outletId = await storage.read(key: 'outlet_id');
 
-      debugPrint('[NAV] checkShift: token=${token != null ? "yes" : "null"} tenant=$tenantId outlet=$outletId');
+      // debugPrint('[NAV] checkShift: token=${token != null ? "yes" : "null"} tenant=$tenantId outlet=$outletId');
 
       if (outletId == null || outletId.isEmpty) {
-        debugPrint('[NAV] No outlet_id — going to shift/open');
+        // debugPrint('[NAV] No outlet_id — going to shift/open');
         if (context.mounted) context.go('/shift/open');
         return;
       }
@@ -354,7 +354,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       );
 
       final data = response.data['data'];
-      debugPrint('[NAV] shift response: status=${data?['status']}');
+      // debugPrint('[NAV] shift response: status=${data?['status']}');
       if (!context.mounted) return;
       if (data != null && data['status'] == 'open') {
         await storage.write(key: 'shift_session_id', value: data['id']);
@@ -363,7 +363,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         context.go('/shift/open');
       }
     } catch (e) {
-      debugPrint('[NAV] checkShift error: $e');
+      // debugPrint('[NAV] checkShift error: $e');
       if (context.mounted) context.go('/shift/open');
     }
   }
@@ -374,7 +374,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     ref.listen<AuthState>(authProvider, (previous, next) {
       if (next.isSuccess && (previous?.isSuccess != true)) {
-        debugPrint('[AUTH] isSuccess → navigating...');
+        // debugPrint('[AUTH] isSuccess → navigating...');
         _checkShiftAndNavigate(context);
       }
       if (next.step == AuthStep.setPin && previous?.step != AuthStep.setPin) {

@@ -105,7 +105,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
 
   void _openUpdate(String? url) {
     // In production: use url_launcher to open URL
-    debugPrint('Open update URL: $url');
+    // debugPrint('Open update URL: $url');
   }
 
   Future<void> _navigate() async {

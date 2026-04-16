@@ -1,6 +1,6 @@
 # KASIRA — Roadmap & Build Order
 # Source of truth untuk fitur, tier, dan status build.
-# Updated: 2026-04-15
+# Updated: 2026-04-16
 
 ---
 
@@ -175,6 +175,13 @@ Semua Pro + :
 72. platform benchmarks — daily_stats, hpp_benchmarks, ingredient_prices, insights cache
 73. embedding layer4 — products.embedding vector(512) + HNSW index
 74. platform_geo_columns — city, district, province, hourly_distribution
+```
+
+#### Batch 11 — Dine-In Tab System (075-077)
+```
+75. reservation_settings — auto_confirm, slot_duration
+76. storefront_dine_in — connect order dine_in_tab_mode
+77. payment_tab_id — payments.tab_id FK → tabs for proper tab-payment linking
 ```
 
 ### Infrastruktur ✅
@@ -461,11 +468,15 @@ Empat piece all done, berjalan otomatis:
 
 ---
 
-## System State (2026-04-15)
-- **Migration:** 074
-- **APK:** v2.3.0
+## System State (2026-04-16)
+- **Migration:** 077
+- **APK:** v2.6.0
 - **Containers:** 4 (backend, frontend, db, redis) — all healthy
-- **Tenants:** 4 (Kasira Coffee pro, Dita Coffee starter, B coffee starter, Warung Demo)
+- **Tenants:** 3 (Kasira Coffee pro, Dita Coffee starter, B coffee starter)
 - **Embeddings:** 14/14 products across 4 tenants
-- **Anthropic API:** credit habis — needs top up
+- **Anthropic API:** $7.16 balance, budget controlled
 - **Voyage AI:** working
+- **Cloudflare:** DNS proxied, SSL Full Strict
+- **R2 backup:** every 6 hours
+- **Sentry:** configured
+- **gh CLI:** authenticated
