@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "2.7.0",
-    "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.7.0/kasira-pos-v2.7.0.apk",
-    "release_notes": "Production readiness: dine-in tab, table management, error boundaries, cleanup"
+    "version": "2.7.1",
+    "is_mandatory": true,
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.7.1/kasira-pos-v2.7.1.apk",
+    "release_notes": "Fix: tab tambah pesanan crash, session expired loop, route fix"
   },
   "dapur": {
-    "version": "2.7.0",
-    "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.7.0/kasira-dapur-v2.7.0.apk",
-    "release_notes": "Production readiness: dine-in tab, table management, error boundaries, cleanup"
+    "version": "2.7.1",
+    "is_mandatory": true,
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.7.1/kasira-dapur-v2.7.1.apk",
+    "release_notes": "Fix: tab tambah pesanan crash, session expired loop, route fix"
   }
 }
