@@ -11,6 +11,10 @@ Endpoints:
   POST   /tabs/{tab_id}/pay-full    → bayar semua (1 orang)
   POST   /tabs/{tab_id}/splits/{split_id}/pay → bayar 1 split
   POST   /tabs/{tab_id}/cancel      → cancel tab
+  POST   /tabs/{tab_id}/move-table  → pindah meja
+  POST   /tabs/{tab_id}/merge       → gabung tab lain ke tab ini
+  POST   /tabs/{tab_id}/request-bill → minta bill (ubah status ke asking_bill)
+  GET    /tabs/by-table/{table_id}  → get open tab for a table (for storefront)
 """
 from typing import Any, List, Optional
 from uuid import UUID
@@ -30,10 +34,12 @@ from backend.models.tab import Tab, TabSplit
 from backend.models.order import Order, OrderItem
 from backend.models.payment import Payment
 from backend.models.shift import Shift, ShiftStatus
+from backend.models.reservation import Table
 from backend.schemas.tab import (
     TabCreate, TabAddOrder, TabResponse, TabSplitResponse,
     SplitEqualRequest, SplitPerItemRequest, SplitCustomRequest,
-    PaySplitRequest, TabStatus, SplitMethod, TabSplitStatus,
+    PaySplitRequest, MoveTableRequest, MergeTabRequest,
+    TabStatus, SplitMethod, TabSplitStatus,
 )
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
@@ -52,6 +58,7 @@ def _tab_response(tab: Tab) -> TabResponse:
     resp = TabResponse.model_validate(tab)
     resp.remaining_amount = remaining
     resp.order_ids = order_ids
+    resp.table_name = tab.table.name if tab.table else None
     return resp
 
 
@@ -63,6 +70,7 @@ async def _get_tab_or_404(
         .options(
             selectinload(Tab.splits),
             selectinload(Tab.orders),
+            selectinload(Tab.table),
         )
         .where(Tab.id == tab_id, Tab.deleted_at.is_(None))
     )
@@ -169,7 +177,7 @@ async def list_tabs(
 ) -> Any:
     query = (
         select(Tab)
-        .options(selectinload(Tab.splits), selectinload(Tab.orders))
+        .options(selectinload(Tab.splits), selectinload(Tab.orders), selectinload(Tab.table))
         .where(Tab.outlet_id == outlet_id, Tab.deleted_at.is_(None))
     )
     if status:
@@ -681,4 +689,226 @@ async def cancel_tab(
     return StandardResponse(
         success=True, data=_tab_response(tab),
         request_id=request.state.request_id, message="Tab dibatalkan"
+    )
+
+
+# ── MOVE TABLE (pindah meja) ──
+
+@router.post("/{tab_id}/move-table", response_model=StandardResponse[TabResponse])
+async def move_table(
+    request: Request,
+    tab_id: UUID,
+    body: MoveTableRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    tab = await _get_tab_or_404(db, tab_id, lock=True)
+    if tab.status in ('paid', 'cancelled'):
+        raise HTTPException(status_code=400, detail="Tab sudah ditutup")
+    if tab.row_version != body.row_version:
+        raise HTTPException(status_code=409, detail="Data berubah, refresh dulu")
+
+    # Validate new table
+    new_table = (await db.execute(
+        select(Table).where(
+            Table.id == body.new_table_id,
+            Table.is_active == True,
+            Table.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    if not new_table:
+        raise HTTPException(status_code=404, detail="Meja tujuan tidak ditemukan")
+    if new_table.outlet_id != tab.outlet_id:
+        raise HTTPException(status_code=400, detail="Meja bukan milik outlet ini")
+
+    # Check target table doesn't have another open tab
+    existing_tab = (await db.execute(
+        select(Tab).where(
+            Tab.table_id == body.new_table_id,
+            Tab.status.in_(['open', 'asking_bill', 'splitting']),
+            Tab.id != tab.id,
+            Tab.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    if existing_tab:
+        raise HTTPException(status_code=400, detail=f"Meja {new_table.name} sudah ada tab aktif ({existing_tab.tab_number})")
+
+    old_table_id = tab.table_id
+    old_table_name = tab.table.name if tab.table else None
+
+    # Release old table
+    if tab.table_id:
+        old_table = await db.get(Table, tab.table_id)
+        if old_table and old_table.status == 'occupied':
+            old_table.status = 'available'
+            old_table.row_version += 1
+
+    # Assign new table
+    tab.table_id = body.new_table_id
+    tab.row_version += 1
+
+    # Mark new table as occupied
+    if new_table.status == 'available':
+        new_table.status = 'occupied'
+        new_table.row_version += 1
+
+    # Update table_id on linked orders too
+    for order in tab.orders:
+        if order.status not in ('completed', 'cancelled'):
+            order.table_id = body.new_table_id
+
+    await log_audit(
+        db=db, action="UPDATE", entity="tab", entity_id=tab.id,
+        after_state={"action": "move_table", "from": old_table_name, "to": new_table.name},
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+
+    tab = await _get_tab_or_404(db, tab.id)
+    return StandardResponse(
+        success=True, data=_tab_response(tab),
+        request_id=request.state.request_id,
+        message=f"Pindah ke Meja {new_table.name}"
+    )
+
+
+# ── MERGE TAB (gabung tab) ──
+
+@router.post("/{tab_id}/merge", response_model=StandardResponse[TabResponse])
+async def merge_tab(
+    request: Request,
+    tab_id: UUID,
+    body: MergeTabRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Gabung source_tab ke tab ini. Semua order dari source pindah ke target."""
+    if tab_id == body.source_tab_id:
+        raise HTTPException(status_code=400, detail="Tidak bisa gabung tab ke dirinya sendiri")
+
+    target = await _get_tab_or_404(db, tab_id, lock=True)
+    if target.status in ('paid', 'cancelled'):
+        raise HTTPException(status_code=400, detail="Tab tujuan sudah ditutup")
+    if target.row_version != body.row_version:
+        raise HTTPException(status_code=409, detail="Data berubah, refresh dulu")
+
+    source = await _get_tab_or_404(db, body.source_tab_id, lock=True)
+    if source.status in ('paid', 'cancelled'):
+        raise HTTPException(status_code=400, detail="Tab sumber sudah ditutup")
+    if source.paid_amount and Decimal(str(source.paid_amount)) > 0:
+        raise HTTPException(status_code=400, detail="Tab sumber sudah ada pembayaran, tidak bisa digabung")
+
+    # Move all orders from source to target
+    for order in source.orders:
+        order.tab_id = target.id
+        # Update table_id to target's table
+        if target.table_id and order.status not in ('completed', 'cancelled'):
+            order.table_id = target.table_id
+
+    # Update guest count
+    target.guest_count += source.guest_count
+
+    # Cancel source tab
+    source.status = 'cancelled'
+    source.closed_by = current_user.id
+    source.closed_at = _utc_now()
+    source.notes = (source.notes or '') + f' [Digabung ke {target.tab_number}]'
+    source.row_version += 1
+
+    # Release source table if it had one
+    if source.table_id and source.table_id != target.table_id:
+        src_table = await db.get(Table, source.table_id)
+        if src_table and src_table.status == 'occupied':
+            src_table.status = 'available'
+            src_table.row_version += 1
+
+    # Delete any existing splits on target (need to re-split after merge)
+    for s in list(target.splits):
+        await db.delete(s)
+    target.split_method = None
+
+    # Recalculate target totals
+    await db.flush()
+    await _recalculate_tab(db, target)
+    target.row_version += 1
+
+    await log_audit(
+        db=db, action="UPDATE", entity="tab", entity_id=target.id,
+        after_state={
+            "action": "merge_tab",
+            "source_tab": source.tab_number,
+            "new_total": float(target.total_amount),
+            "new_guest_count": target.guest_count,
+        },
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+
+    target = await _get_tab_or_404(db, target.id)
+    return StandardResponse(
+        success=True, data=_tab_response(target),
+        request_id=request.state.request_id,
+        message=f"Tab {source.tab_number} digabung ke {target.tab_number}"
+    )
+
+
+# ── REQUEST BILL (minta bill) ──
+
+@router.post("/{tab_id}/request-bill", response_model=StandardResponse[TabResponse])
+async def request_bill(
+    request: Request,
+    tab_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Ubah status tab ke asking_bill — customer minta bill."""
+    tab = await _get_tab_or_404(db, tab_id, lock=True)
+    if tab.status != 'open':
+        raise HTTPException(status_code=400, detail=f"Tab status '{tab.status}', hanya tab open yang bisa minta bill")
+
+    tab.status = 'asking_bill'
+    tab.row_version += 1
+
+    await log_audit(
+        db=db, action="UPDATE", entity="tab", entity_id=tab.id,
+        after_state={"action": "request_bill"},
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+
+    tab = await _get_tab_or_404(db, tab.id)
+    return StandardResponse(
+        success=True, data=_tab_response(tab),
+        request_id=request.state.request_id, message="Bill diminta"
+    )
+
+
+# ── GET TAB BY TABLE (for storefront/connect integration) ──
+
+@router.get("/by-table/{table_id}", response_model=StandardResponse[Optional[TabResponse]])
+async def get_tab_by_table(
+    request: Request,
+    table_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Get open tab for a specific table. Returns null if no open tab."""
+    query = (
+        select(Tab)
+        .options(selectinload(Tab.splits), selectinload(Tab.orders), selectinload(Tab.table))
+        .where(
+            Tab.table_id == table_id,
+            Tab.status.in_(['open', 'asking_bill', 'splitting']),
+            Tab.deleted_at.is_(None),
+        )
+        .order_by(Tab.created_at.desc())
+        .limit(1)
+    )
+    result = await db.execute(query)
+    tab = result.scalar_one_or_none()
+
+    return StandardResponse(
+        success=True,
+        data=_tab_response(tab) if tab else None,
+        request_id=request.state.request_id,
     )

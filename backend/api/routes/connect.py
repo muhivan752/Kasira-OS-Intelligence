@@ -66,6 +66,7 @@ class ConnectOrderInput(BaseModel):
     customer_phone: str
     order_type: str
     delivery_address: Optional[str] = None
+    table_id: Optional[uuid.UUID] = None  # for dine_in — auto-link to open tab
     idempotency_key: str
     payment_method: str = 'qris'  # 'qris' atau 'cash'
 
@@ -423,6 +424,22 @@ async def create_connect_order(
     today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
     order_number = f"ORD-{today}-{display_number}"
 
+    # Resolve table_id for dine_in orders
+    resolved_table_id = None
+    if db_order_type == 'dine_in' and input_data.table_id:
+        from backend.models.reservation import Table as TableModel
+        table_result = await db.execute(
+            select(TableModel).where(
+                TableModel.id == input_data.table_id,
+                TableModel.outlet_id == outlet.id,
+                TableModel.is_active == True,
+                TableModel.deleted_at.is_(None),
+            )
+        )
+        table_obj = table_result.scalar_one_or_none()
+        if table_obj:
+            resolved_table_id = table_obj.id
+
     order = Order(
         outlet_id=outlet.id,
         customer_id=customer.id,
@@ -430,6 +447,7 @@ async def create_connect_order(
         display_number=display_number,
         status="pending",
         order_type=db_order_type,
+        table_id=resolved_table_id,
         subtotal=subtotal,
         total_amount=subtotal,
         notes=f"Delivery Address: {input_data.delivery_address}" if input_data.order_type == "delivery" else None
@@ -453,6 +471,35 @@ async def create_connect_order(
             user_id=None,
             tier="starter",
         )
+
+    # Auto-link dine_in order to open tab — PRO ONLY (tabs are Pro feature)
+    linked_tab_number = None
+    from backend.models.tenant import Tenant
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == outlet.tenant_id))
+    tenant_obj = tenant_result.scalar_one_or_none()
+    raw_tier = getattr(tenant_obj, 'subscription_tier', 'starter') or 'starter'
+    outlet_tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
+    is_pro = outlet_tier.lower() in {'pro', 'business', 'enterprise'}
+
+    if resolved_table_id and is_pro:
+        from backend.models.tab import Tab
+        tab_result = await db.execute(
+            select(Tab).where(
+                Tab.table_id == resolved_table_id,
+                Tab.outlet_id == outlet.id,
+                Tab.status.in_(['open', 'asking_bill']),
+                Tab.deleted_at.is_(None),
+            ).order_by(Tab.created_at.desc()).limit(1)
+        )
+        open_tab = tab_result.scalar_one_or_none()
+        if open_tab:
+            order.tab_id = open_tab.id
+            # Recalculate tab totals
+            open_tab.subtotal = (open_tab.subtotal or 0) + subtotal
+            open_tab.total_amount = (open_tab.total_amount or 0) + subtotal
+            open_tab.row_version += 1
+            linked_tab_number = open_tab.tab_number
+            await db.flush()
 
     # Create Payment
     from backend.models.payment import Payment
@@ -598,6 +645,8 @@ async def create_connect_order(
             "display_number": order.display_number,
             "status": order.status,
             "estimated_minutes": 15 if order.order_type == "pickup" else 30,
+            "table_id": str(resolved_table_id) if resolved_table_id else None,
+            "tab_number": linked_tab_number,
             "payment": {
                 "method": payment.payment_method,
                 "status": payment.status,
@@ -619,7 +668,7 @@ class BookingInput(BaseModel):
 
 @router.get("/{slug}/tables", response_model=StandardResponse)
 async def get_available_tables(slug: str, db: AsyncSession = Depends(get_db)):
-    """Meja tersedia untuk booking form di storefront."""
+    """Semua meja aktif di outlet, termasuk status dan info tab aktif."""
     result = await db.execute(
         select(Outlet).where(Outlet.slug == slug, Outlet.deleted_at.is_(None))
     )
@@ -627,29 +676,111 @@ async def get_available_tables(slug: str, db: AsyncSession = Depends(get_db)):
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
 
-    from backend.models.reservation import Table
+    from backend.models.reservation import Table as TableModel
+
+    # Check tier for tab info
+    from backend.models.tenant import Tenant as TenantModel
+    t_result = await db.execute(select(TenantModel).where(TenantModel.id == outlet.tenant_id))
+    t_obj = t_result.scalar_one_or_none()
+    raw_t = getattr(t_obj, 'subscription_tier', 'starter') or 'starter'
+    tier_str = raw_t.value if hasattr(raw_t, 'value') else str(raw_t)
+    is_pro_outlet = tier_str.lower() in {'pro', 'business', 'enterprise'}
+
     tables_result = await db.execute(
-        select(Table).where(
-            Table.outlet_id == outlet.id,
-            Table.is_active == True,
-            Table.status == 'available',
-            Table.deleted_at.is_(None),
-        ).order_by(Table.name)
+        select(TableModel).where(
+            TableModel.outlet_id == outlet.id,
+            TableModel.is_active == True,
+            TableModel.deleted_at.is_(None),
+        ).order_by(TableModel.name)
     )
     tables = tables_result.scalars().all()
 
+    # Get open tabs for these tables (Pro only)
+    open_tabs = {}
+    if is_pro_outlet:
+        from backend.models.tab import Tab
+        table_ids = [t.id for t in tables]
+        if table_ids:
+            tabs_result = await db.execute(
+                select(Tab).where(
+                    Tab.table_id.in_(table_ids),
+                    Tab.status.in_(['open', 'asking_bill', 'splitting']),
+                    Tab.deleted_at.is_(None),
+                )
+            )
+            for tab in tabs_result.scalars().all():
+                open_tabs[tab.table_id] = {
+                    "tab_id": str(tab.id),
+                    "tab_number": tab.tab_number,
+                    "status": tab.status,
+                    "total_amount": float(tab.total_amount),
+                    "guest_count": tab.guest_count,
+                }
+
     return StandardResponse(
         success=True,
-        data=[
-            {
-                "id": str(t.id),
-                "name": t.name,
-                "capacity": t.capacity,
-                "status": t.status,
-            }
-            for t in tables
-        ],
-        message="Daftar meja tersedia",
+        data={
+            "tables": [
+                {
+                    "id": str(t.id),
+                    "name": t.name,
+                    "capacity": t.capacity,
+                    "floor_section": t.floor_section,
+                    "status": t.status,
+                    "has_open_tab": t.id in open_tabs,
+                    "tab": open_tabs.get(t.id),
+                }
+                for t in tables
+            ],
+            "is_pro": is_pro_outlet,
+        },
+        message="Daftar meja",
+    )
+
+
+@router.post("/{slug}/request-bill", response_model=StandardResponse)
+async def storefront_request_bill(
+    slug: str,
+    table_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Customer minta bill dari storefront (public, no auth). Pro only — tabs are Pro feature."""
+    result = await db.execute(
+        select(Outlet).where(Outlet.slug == slug, Outlet.deleted_at.is_(None))
+    )
+    outlet = result.scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    # Tier check — tabs/bill request is Pro only
+    from backend.models.tenant import Tenant as TenantCheck
+    tc = (await db.execute(select(TenantCheck).where(TenantCheck.id == outlet.tenant_id))).scalar_one_or_none()
+    raw = getattr(tc, 'subscription_tier', 'starter') or 'starter'
+    tier = raw.value if hasattr(raw, 'value') else str(raw)
+    if tier.lower() not in {'pro', 'business', 'enterprise'}:
+        raise HTTPException(status_code=403, detail="Fitur ini hanya tersedia untuk paket Pro")
+
+    from backend.models.tab import Tab
+    tab_result = await db.execute(
+        select(Tab).where(
+            Tab.table_id == table_id,
+            Tab.outlet_id == outlet.id,
+            Tab.status == 'open',
+            Tab.deleted_at.is_(None),
+        ).order_by(Tab.created_at.desc()).limit(1)
+    )
+    tab = tab_result.scalar_one_or_none()
+    if not tab:
+        raise HTTPException(status_code=404, detail="Tidak ada tab aktif untuk meja ini")
+
+    tab.status = 'asking_bill'
+    tab.row_version += 1
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data={"tab_id": str(tab.id), "tab_number": tab.tab_number, "status": "asking_bill"},
+        message="Bill diminta — kasir akan segera menghampiri",
     )
 
 

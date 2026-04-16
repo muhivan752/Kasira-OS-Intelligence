@@ -164,13 +164,18 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
           child: Divider(height: 1, color: AppColors.border),
         ),
         _buildSummaryRow('Subtotal', _currencyFmt.format(order.subtotal)),
+        if (order.discountAmount > 0) ...[
+          const SizedBox(height: 6),
+          _buildSummaryRow('Diskon', '- ${_currencyFmt.format(order.discountAmount)}',
+              valueColor: AppColors.error),
+        ],
+        if (order.serviceChargeAmount > 0) ...[
+          const SizedBox(height: 6),
+          _buildSummaryRow('Service Charge', _currencyFmt.format(order.serviceChargeAmount)),
+        ],
         if (order.taxAmount > 0) ...[
           const SizedBox(height: 6),
           _buildSummaryRow('Pajak', _currencyFmt.format(order.taxAmount)),
-        ],
-        if (order.discountAmount > 0) ...[
-          const SizedBox(height: 6),
-          _buildSummaryRow('Diskon', '- ${_currencyFmt.format(order.discountAmount)}'),
         ],
         const SizedBox(height: 12),
         Row(
@@ -301,12 +306,12 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
     );
   }
 
-  Widget _buildSummaryRow(String label, String value) {
+  Widget _buildSummaryRow(String label, String value, {Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(color: AppColors.textSecondary)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(value, style: TextStyle(fontWeight: FontWeight.w600, color: valueColor)),
       ],
     );
   }

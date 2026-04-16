@@ -371,12 +371,14 @@ async def build_context(
         # Set tenant schema
         await db.execute(text(f'SET search_path TO "{tenant_id}", public'))
 
-        # Get brand_id from outlet
+        # Get brand_id + stock_mode from outlet
         from backend.models.outlet import Outlet
         outlet_row = await db.execute(
-            select(Outlet.brand_id).where(Outlet.id == outlet_id)
+            select(Outlet.brand_id, Outlet.stock_mode).where(Outlet.id == outlet_id)
         )
-        brand_id = outlet_row.scalar()
+        outlet_info = outlet_row.first()
+        brand_id = outlet_info.brand_id if outlet_info else None
+        stock_mode = (outlet_info.stock_mode if outlet_info else "simple") or "simple"
 
         # 1. Omzet hari ini
         today_stats = await db.execute(
@@ -437,21 +439,87 @@ async def build_context(
         revenue_week = float(week_row.revenue) if week_row else 0.0
         order_count_week = int(week_row.count) if week_row else 0
 
-        # 4. Stok kritis (stock_qty < 5, hanya produk dengan stock_enabled)
-        low_stock = await db.execute(
-            select(Product.name, Product.stock_qty)
+        # 4. Stok kritis — recipe mode pakai compute_recipe_stock, simple pakai stock_qty
+        low_list = []
+        if stock_mode == "recipe":
+            # Recipe mode: hitung porsi dari stok bahan baku
+            from backend.api.routes.products import compute_recipe_stock
+            import math
+            stock_products = await db.execute(
+                select(Product.id, Product.name)
+                .where(
+                    Product.brand_id == brand_id,
+                    Product.stock_enabled == True,
+                    Product.deleted_at.is_(None),
+                )
+            )
+            stock_prods = stock_products.all()
+            if stock_prods:
+                prod_ids = [p.id for p in stock_prods]
+                recipe_stocks = await compute_recipe_stock(db, UUID(outlet_id) if isinstance(outlet_id, str) else outlet_id, prod_ids)
+                prod_name_map = {p.id: p.name for p in stock_prods}
+                for pid, portions in recipe_stocks.items():
+                    if portions < 5:
+                        low_list.append(f"{prod_name_map.get(pid, '?')} (sisa {portions} porsi)")
+                low_list = low_list[:5]
+        else:
+            # Simple mode: langsung dari product.stock_qty
+            low_stock = await db.execute(
+                select(Product.name, Product.stock_qty)
+                .where(
+                    Product.brand_id == brand_id,
+                    Product.stock_enabled == True,
+                    Product.stock_qty < 5,
+                    Product.stock_qty >= 0,
+                    Product.deleted_at.is_(None),
+                )
+                .limit(5)
+            )
+            low_list = [
+                f"{r.name} (sisa {int(r.stock_qty)})" for r in low_stock.all()
+            ]
+
+        # 4b. Stok bahan baku (ingredient stock) — untuk jawab "berapa stok X?"
+        ingredient_stock_list = []
+        if stock_mode == "recipe":
+            from backend.models.ingredient import Ingredient
+            ing_stocks = await db.execute(
+                select(Ingredient.name, Ingredient.base_unit, OutletStock.computed_stock)
+                .select_from(OutletStock)
+                .join(Ingredient, OutletStock.ingredient_id == Ingredient.id)
+                .where(
+                    OutletStock.outlet_id == outlet_id,
+                    OutletStock.deleted_at.is_(None),
+                    Ingredient.deleted_at.is_(None),
+                )
+                .order_by(Ingredient.name)
+                .limit(20)
+            )
+            for r in ing_stocks.all():
+                stock_val = float(r.computed_stock) if r.computed_stock else 0
+                # Format: integer untuk gram/ml, 1 decimal untuk kg/liter
+                unit = r.base_unit or ''
+                if unit in ('kg', 'liter', 'l'):
+                    stock_str = f"{stock_val:.1f}"
+                else:
+                    stock_str = f"{int(stock_val)}"
+                ingredient_stock_list.append(f"{r.name}: {stock_str} {unit}")
+
+        # 4c. Daftar semua produk/menu — supaya AI tau apa aja yang dijual
+        all_products_q = await db.execute(
+            select(Product.name, Product.base_price, Product.stock_enabled, Product.stock_qty, Product.is_active)
             .where(
                 Product.brand_id == brand_id,
-                Product.stock_enabled == True,
-                Product.stock_qty < 5,
-                Product.stock_qty >= 0,
                 Product.deleted_at.is_(None),
             )
-            .limit(5)
+            .order_by(Product.name)
+            .limit(30)
         )
-        low_list = [
-            f"{r.name} (sisa {int(r.stock_qty)})" for r in low_stock.all()
-        ]
+        all_products = all_products_q.all()
+        product_menu_list = []
+        for p in all_products:
+            status = "aktif" if p.is_active else "nonaktif"
+            product_menu_list.append(f"{p.name} — Rp{float(p.base_price):,.0f} ({status})")
 
         # 5. Event-sourced insights (order patterns, cancel rate, payment methods)
         from backend.models.event import Event
@@ -568,6 +636,40 @@ async def build_context(
         )
         available_tables = available_tables_q.scalar() or 0
 
+        # Tab/Bon info (Pro feature)
+        tab_info = ""
+        try:
+            from backend.models.tab import Tab as TabModel
+            open_tabs_q = await db.execute(
+                select(
+                    TabModel.tab_number,
+                    TabModel.status,
+                    TabModel.total_amount,
+                    TabModel.guest_count,
+                    TabModel.table_id,
+                ).where(
+                    TabModel.outlet_id == outlet_id,
+                    TabModel.status.in_(['open', 'asking_bill', 'splitting']),
+                    TabModel.deleted_at.is_(None),
+                )
+            )
+            open_tabs = open_tabs_q.all()
+            if open_tabs:
+                tab_lines = []
+                asking_bill_count = 0
+                for t in open_tabs:
+                    status_label = {"open": "aktif", "asking_bill": "MINTA BILL", "splitting": "split bill"}.get(t.status, t.status)
+                    tab_lines.append(f"{t.tab_number} ({status_label}, {t.guest_count} tamu, Rp{float(t.total_amount):,.0f})")
+                    if t.status == 'asking_bill':
+                        asking_bill_count += 1
+                tab_info = f"""
+TAB/BON AKTIF ({len(open_tabs)} tab):
+{chr(10).join("- " + l for l in tab_lines)}"""
+                if asking_bill_count > 0:
+                    tab_info += f"\n⚠️ {asking_bill_count} tab MINTA BILL — perlu segera diproses!"
+        except Exception:
+            pass
+
         reservation_info = ""
         if res_settings and res_settings.is_enabled:
             open_h = res_settings.opening_hour.strftime("%H:%M") if res_settings.opening_hour else "08:00"
@@ -585,12 +687,16 @@ MEJA:
 - Total: {total_tables} meja, {available_tables} tersedia sekarang
 - Reservasi: belum diaktifkan"""
 
+        reservation_info += tab_info
+
     except Exception as e:
         logger.warning(f"Context build error: {e}")
         revenue_today = revenue_week = 0.0
         order_count_today = order_count_week = 0
         top_list = []
         low_list = []
+        ingredient_stock_list = []
+        product_menu_list = []
         reservation_info = ""
         cancel_count = 0
         pay_breakdown = []
@@ -600,6 +706,9 @@ MEJA:
     today_str = today.strftime("%d %B %Y")
     context = f"""Kamu adalah asisten AI untuk {outlet_name}, sebuah cafe di Indonesia.
 Tanggal: {today_str}
+
+MENU/PRODUK YANG DIJUAL:
+{chr(10).join("- " + p for p in product_menu_list) if product_menu_list else "- Belum ada produk"}
 
 DATA BISNIS HARI INI:
 - Omzet: Rp{revenue_today:,.0f} dari {order_count_today} transaksi
@@ -611,6 +720,7 @@ DATA 7 HARI TERAKHIR:
 
 STOK KRITIS (perlu restock):
 {chr(10).join("- " + s for s in low_list) if low_list else "- Semua stok aman"}
+{"" if not ingredient_stock_list else chr(10) + "STOK BAHAN BAKU (angka sudah dalam satuan yang tertulis, JANGAN ubah format):" + chr(10) + chr(10).join("- " + s for s in ingredient_stock_list)}
 
 INSIGHT OPERASIONAL:
 - Order dibatalkan hari ini: {cancel_count}

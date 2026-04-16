@@ -39,6 +39,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
   final double? tax;
   final double? serviceCharge;
   final double? discount;
+  final bool taxInclusive;
 
   const ReceiptPreviewPage({
     super.key,
@@ -54,6 +55,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
     this.tax,
     this.serviceCharge,
     this.discount,
+    this.taxInclusive = false,
   });
 
   // Demo constructor for preview
@@ -245,7 +247,10 @@ class ReceiptPreviewPage extends ConsumerWidget {
                           ],
                           if (tax != null && tax! > 0) ...[
                             const SizedBox(height: 4),
-                            _buildReceiptRow('Pajak', currency.format(tax)),
+                            _buildReceiptRow(
+                              taxInclusive ? 'Pajak (inklusif)' : 'Pajak',
+                              currency.format(tax),
+                            ),
                           ],
 
                           const Divider(height: 24, color: AppColors.border),

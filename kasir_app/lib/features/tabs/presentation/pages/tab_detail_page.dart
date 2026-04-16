@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/tab_provider.dart';
+import '../../../tables/presentation/pages/table_grid_page.dart';
 import '../widgets/split_bill_modal.dart';
 import '../widgets/pay_split_modal.dart';
 
@@ -157,6 +159,8 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
           children: [
             _buildSectionHeader('Info Tab', LucideIcons.info),
             const SizedBox(height: 12),
+            if (tab.tableName != null)
+              _buildInfoRow(LucideIcons.armchair, 'Meja', tab.tableName!),
             _buildInfoRow(LucideIcons.users, 'Jumlah Tamu', '${tab.guestCount} orang'),
             _buildInfoRow(LucideIcons.shoppingCart, 'Jumlah Order', '${tab.orderIds.length}'),
             if (tab.splitMethod != null)
@@ -248,39 +252,66 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (tab.isOpen && tab.paidAmount == 0) ...[
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _confirmCancel(tab),
-                icon: const Icon(LucideIcons.x, size: 18),
-                label: const Text('Batalkan'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.error,
-                  side: const BorderSide(color: AppColors.error),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
+          // Action row: Tambah Pesanan, Pindah Meja, Gabung Meja, Batalkan
+          if (tab.isOpen)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  _buildActionChip(LucideIcons.plus, 'Tambah\nPesanan', const Color(0xFF059669), () {
+                    // Navigate to POS with table pre-selected
+                    context.go('/pos');
+                  }),
+                  const SizedBox(width: 8),
+                  _buildActionChip(LucideIcons.arrowRightLeft, 'Pindah\nMeja', AppColors.info, () {
+                    _showMoveTableModal(tab);
+                  }),
+                  const SizedBox(width: 8),
+                  _buildActionChip(LucideIcons.merge, 'Gabung\nMeja', AppColors.warning, () {
+                    _showMergeTabModal(tab);
+                  }),
+                  if (tab.paidAmount == 0) ...[
+                    const SizedBox(width: 8),
+                    _buildActionChip(LucideIcons.x, 'Batalkan', AppColors.error, () {
+                      _confirmCancel(tab);
+                    }),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            flex: 2,
-            child: tab.isOpen
-                ? FilledButton.icon(
-                    onPressed: tab.totalAmount > 0 ? () => _showSplitBillModal(tab) : null,
+          // Primary action: bayar / split
+          Row(
+            children: [
+              if (tab.isOpen && tab.totalAmount > 0) ...[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showPayFullModal(tab),
+                    icon: const Icon(LucideIcons.banknote, size: 18),
+                    label: const Text('Bayar Lunas'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _showSplitBillModal(tab),
                     icon: const Icon(LucideIcons.split, size: 18),
                     label: const Text('Split Bill'),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                  )
-                : FilledButton.icon(
-                    onPressed: tab.remainingAmount > 0
-                        ? () => _showPayFullModal(tab)
-                        : null,
+                  ),
+                ),
+              ] else if (tab.isSplitting && tab.remainingAmount > 0)
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _showPayFullModal(tab),
                     icon: const Icon(LucideIcons.banknote, size: 18),
                     label: Text('Bayar Sisa ${_currency.format(tab.remainingAmount)}'),
                     style: FilledButton.styleFrom(
@@ -288,8 +319,38 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
+                ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActionChip(IconData icon, String label, Color color, VoidCallback onTap) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            border: Border.all(color: color.withOpacity(0.3)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color, height: 1.2),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -369,6 +430,174 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
         onPaid: (updatedTab) {
           setState(() => _tab = updatedTab);
         },
+      ),
+    );
+  }
+
+  void _showMoveTableModal(TabModel tab) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.arrowRightLeft, size: 20),
+                    const SizedBox(width: 8),
+                    const Text('Pilih Meja Tujuan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const Spacer(),
+                    IconButton(icon: const Icon(LucideIcons.x), onPressed: () => Navigator.pop(ctx)),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                  child: TableGridPage(
+                    onTableSelected: (table) async {
+                      if (table.id == tab.tableId) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Sudah di meja ini'), backgroundColor: AppColors.warning),
+                        );
+                        return;
+                      }
+                      if (table.status != TableStatus.available) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Meja ${table.name} sedang ${table.status.name}'),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                        return;
+                      }
+                      Navigator.pop(ctx);
+                      final result = await ref.read(tabProvider.notifier).moveTable(
+                        tab.id, table.id, tab.rowVersion,
+                      );
+                      if (result != null && mounted) {
+                        setState(() => _tab = result);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Pindah ke Meja ${table.name}'),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showMergeTabModal(TabModel tab) async {
+    // Fetch all open tabs to pick source
+    await ref.read(tabProvider.notifier).fetchTabs(status: 'open');
+    final allTabs = ref.read(tabProvider).tabs;
+    final otherTabs = allTabs.where((t) => t.id != tab.id && t.isOpen).toList();
+
+    if (!mounted) return;
+    if (otherTabs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak ada tab aktif lain untuk digabung'), backgroundColor: AppColors.warning),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(LucideIcons.merge, color: AppColors.warning),
+                  const SizedBox(width: 8),
+                  const Text('Gabung Tab', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const Spacer(),
+                  IconButton(icon: const Icon(LucideIcons.x), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Pilih tab yang mau digabung ke ${tab.tabNumber}:',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: otherTabs.length,
+                  itemBuilder: (_, i) {
+                    final src = otherTabs[i];
+                    return Card(
+                      elevation: 0,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: AppColors.border),
+                      ),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.primary.withOpacity(0.1),
+                          child: const Icon(LucideIcons.receipt, color: AppColors.primary, size: 20),
+                        ),
+                        title: Text(src.tabNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(
+                          '${src.tableName ?? "Tanpa meja"} — ${_currency.format(src.totalAmount)} — ${src.guestCount} tamu',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        trailing: FilledButton(
+                          onPressed: () async {
+                            Navigator.pop(ctx);
+                            final result = await ref.read(tabProvider.notifier).mergeTab(
+                              tab.id, src.id, tab.rowVersion,
+                            );
+                            if (result != null && mounted) {
+                              setState(() => _tab = result);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('${src.tabNumber} digabung'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.warning,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                          ),
+                          child: const Text('Gabung', style: TextStyle(fontSize: 13)),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

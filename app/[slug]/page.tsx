@@ -4,14 +4,14 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getStorefront } from '@/app/actions/storefront';
 import { useCart } from './CartContext';
-import { ShoppingBag, MessageCircle, Store, Clock, MapPin, CheckCircle2, Plus, Minus, CalendarDays, Star, Crown, Flame, Sparkles } from 'lucide-react';
+import { ShoppingBag, MessageCircle, Store, Clock, MapPin, CheckCircle2, Plus, Minus, CalendarDays, Star, Crown, Flame, Sparkles, Utensils } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
 
 export default function StorefrontPage() {
   const params = useParams();
   const slug = params.slug as string;
   const router = useRouter();
-  const { items, addItem, updateQuantity, totalItems, totalPrice } = useCart();
+  const { items, addItem, updateQuantity, totalItems, totalPrice, tableId } = useCart();
 
   const [loading, setLoading] = useState(true);
   const [storeData, setStoreData] = useState<any>(null);
@@ -110,7 +110,19 @@ export default function StorefrontPage() {
           </div>
         </div>
 
+        {/* Dine-in table banner */}
+        {tableId && (
+          <div className="bg-emerald-50 border-b border-emerald-100">
+            <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-2">
+              <Utensils className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="text-sm font-bold text-emerald-800">Dine In</span>
+              <span className="text-sm text-emerald-700">— Pesanan akan dikirim ke meja Anda</span>
+            </div>
+          </div>
+        )}
+
         {/* Trust badge */}
+        {!tableId && (
         <div className="bg-blue-50 border-b border-blue-100">
           <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
@@ -122,6 +134,7 @@ export default function StorefrontPage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Category filter */}
         <div className="sticky top-0 bg-white z-20 border-b border-gray-100 shadow-sm">
@@ -223,6 +236,17 @@ export default function StorefrontPage() {
             </div>
           </div>
         </div>
+
+        {/* Dine-in table banner */}
+        {tableId && (
+          <div className="bg-emerald-50 border-b border-emerald-100">
+            <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-2">
+              <Utensils className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="text-sm font-bold text-emerald-800">Dine In</span>
+              <span className="text-sm text-emerald-700">— Pesanan akan dikirim ke meja Anda</span>
+            </div>
+          </div>
+        )}
 
         {/* Trust badge — premium */}
         <div className="bg-gradient-to-r from-emerald-50 to-stone-50 border-b border-emerald-100">
@@ -354,7 +378,7 @@ export default function StorefrontPage() {
                         <span className="text-sm text-gray-400">Total</span>
                         <span className="text-lg font-bold text-white">{formatCurrency(totalPrice)}</span>
                       </div>
-                      <button onClick={() => router.push(`/${slug}/cart`)} disabled={!outlet.is_open}
+                      <button onClick={() => router.push(`/${slug}/cart${tableId ? `?table=${tableId}` : ''}`)} disabled={!outlet.is_open}
                         className="w-full py-3 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20">
                         <ShoppingBag className="w-4 h-4" /> Lanjut Pesan
                       </button>
@@ -389,7 +413,7 @@ export default function StorefrontPage() {
               </button>
             </div>
             {totalItems > 0 && (
-              <button onClick={() => router.push(`/${slug}/cart`)}
+              <button onClick={() => router.push(`/${slug}/cart${tableId ? `?table=${tableId}` : ''}`)}
                 className="flex-1 ml-4 bg-emerald-500 text-white rounded-full shadow-lg shadow-emerald-500/30 p-1 flex items-center hover:bg-emerald-600 transition-all">
                 <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center font-bold">{totalItems}</div>
                 <div className="flex-1 px-3 text-left">
@@ -447,7 +471,7 @@ export default function StorefrontPage() {
                   <span className="text-sm text-gray-500">Total</span>
                   <span className="text-lg font-bold text-gray-900">{formatCurrency(totalPrice)}</span>
                 </div>
-                <button onClick={() => router.push(`/${slug}/cart`)} disabled={!outlet.is_open}
+                <button onClick={() => router.push(`/${slug}/cart${tableId ? `?table=${tableId}` : ''}`)} disabled={!outlet.is_open}
                   className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
                   <ShoppingBag className="w-4 h-4" /> Lanjut Pesan
                 </button>
@@ -481,7 +505,7 @@ export default function StorefrontPage() {
             </button>
           </div>
           {totalItems > 0 && (
-            <button onClick={() => router.push(`/${slug}/cart`)}
+            <button onClick={() => router.push(`/${slug}/cart${tableId ? `?table=${tableId}` : ''}`)}
               className="flex-1 ml-4 bg-blue-600 text-white rounded-full shadow-lg p-1 flex items-center hover:bg-blue-700 transition-colors">
               <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center font-bold">{totalItems}</div>
               <div className="flex-1 px-3 text-left">

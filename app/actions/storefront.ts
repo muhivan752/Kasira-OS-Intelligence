@@ -131,3 +131,31 @@ export async function getBookingStatus(bookingId: string) {
   }
 }
 
+export async function getTablesWithStatus(slug: string) {
+  if (!slug) return { tables: [], is_pro: false };
+  try {
+    const res = await fetch(`${BACKEND_URL}/connect/${slug}/tables`, { cache: 'no-store' });
+    if (!res.ok) return { tables: [], is_pro: false };
+    const data = await res.json();
+    return data.data; // { tables: [...], is_pro: boolean }
+  } catch {
+    return { tables: [], is_pro: false };
+  }
+}
+
+export async function requestBillFromStorefront(slug: string, tableId: string) {
+  try {
+    const res = await fetch(`${BACKEND_URL}/connect/${slug}/request-bill?table_id=${tableId}`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      return { success: false, message: errBody.detail || 'Gagal minta bill' };
+    }
+    const data = await res.json();
+    return { success: true, data: data.data, message: data.message };
+  } catch {
+    return { success: false, message: 'Gagal menghubungi server' };
+  }
+}
+

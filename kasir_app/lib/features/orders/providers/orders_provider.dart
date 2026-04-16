@@ -49,6 +49,7 @@ class OrderModel {
   final double totalAmount;
   final double subtotal;
   final double taxAmount;
+  final double serviceChargeAmount;
   final double discountAmount;
   final String? tableId;
   final List<OrderItemModel> items;
@@ -63,6 +64,7 @@ class OrderModel {
     required this.totalAmount,
     required this.subtotal,
     required this.taxAmount,
+    required this.serviceChargeAmount,
     required this.discountAmount,
     this.tableId,
     required this.items,
@@ -79,6 +81,7 @@ class OrderModel {
       totalAmount: _toDouble(json['total_amount']),
       subtotal: _toDouble(json['subtotal']),
       taxAmount: _toDouble(json['tax_amount'] ?? 0),
+      serviceChargeAmount: _toDouble(json['service_charge_amount'] ?? 0),
       discountAmount: _toDouble(json['discount_amount'] ?? 0),
       tableId: json['table_id'] as String?,
       items: (json['items'] as List? ?? [])

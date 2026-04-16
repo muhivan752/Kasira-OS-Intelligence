@@ -62,6 +62,7 @@ class TabResponse(BaseModel):
     id: UUID
     outlet_id: UUID
     table_id: Optional[UUID] = None
+    table_name: Optional[str] = None
     tab_number: str
     customer_name: Optional[str] = None
     guest_count: int
@@ -127,4 +128,16 @@ class PaySplitRequest(BaseModel):
     payment_method: str = Field(..., pattern='^(cash|qris|card|transfer)$')
     amount_paid: Decimal = Field(..., gt=0)
     idempotency_key: Optional[str] = None
+    row_version: int
+
+
+class MoveTableRequest(BaseModel):
+    """Pindah meja."""
+    new_table_id: UUID
+    row_version: int
+
+
+class MergeTabRequest(BaseModel):
+    """Gabung tab lain ke tab ini."""
+    source_tab_id: UUID
     row_version: int

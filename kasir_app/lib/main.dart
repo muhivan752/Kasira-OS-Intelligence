@@ -66,6 +66,10 @@ final _router = GoRouter(
           orderId: extra['orderId'] as String? ?? '',
           displayNumber: extra['displayNumber'] as String? ?? '-',
           items: (extra['items'] as List<ReceiptItem>?) ?? [],
+          tax: (extra['tax'] as num?)?.toDouble(),
+          serviceCharge: (extra['serviceCharge'] as num?)?.toDouble(),
+          discount: (extra['discount'] as num?)?.toDouble(),
+          taxInclusive: extra['taxInclusive'] as bool? ?? false,
         );
       },
     ),
@@ -86,6 +90,7 @@ final _router = GoRouter(
           tax: (extra['tax'] as num?)?.toDouble(),
           serviceCharge: (extra['serviceCharge'] as num?)?.toDouble(),
           discount: (extra['discount'] as num?)?.toDouble(),
+          taxInclusive: extra['taxInclusive'] as bool? ?? false,
         );
       },
     ),

@@ -16,6 +16,10 @@ class PaymentSuccessPage extends ConsumerStatefulWidget {
   final String orderId;
   final String displayNumber;
   final List<ReceiptItem> items;
+  final double? tax;
+  final double? serviceCharge;
+  final double? discount;
+  final bool taxInclusive;
 
   const PaymentSuccessPage({
     super.key,
@@ -25,6 +29,10 @@ class PaymentSuccessPage extends ConsumerStatefulWidget {
     required this.orderId,
     required this.displayNumber,
     this.items = const [],
+    this.tax,
+    this.serviceCharge,
+    this.discount,
+    this.taxInclusive = false,
   });
 
   @override
@@ -161,6 +169,10 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
                             'changeAmount': widget.amountPaid - widget.totalAmount,
                             'paymentMethod': widget.paymentMethod,
                             'items': widget.items,
+                            'tax': widget.tax,
+                            'serviceCharge': widget.serviceCharge,
+                            'discount': widget.discount,
+                            'taxInclusive': widget.taxInclusive,
                           });
                         },
                         icon: const Icon(LucideIcons.receipt, size: 18),

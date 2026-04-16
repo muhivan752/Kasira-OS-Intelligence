@@ -212,6 +212,148 @@ class CartNotifier extends StateNotifier<CartState> {
   }
   void clearCart() => state = const CartState();
 
+  /// For dine-in Pro: open or reuse tab, create order, link to tab — NO payment yet.
+  /// ONLINE ONLY — Tab is a server-side feature, cannot work offline.
+  Future<Map<String, dynamic>?> submitDineInOrder() async {
+    if (state.items.isEmpty) return null;
+    if (state.tableId == null) {
+      state = state.copyWith(error: 'Pilih meja terlebih dahulu untuk Dine In');
+      return null;
+    }
+
+    // Tab flow requires network — check connectivity first
+    final isOnline = await _checkOnline();
+    if (!isOnline) {
+      state = state.copyWith(error: 'Tab/Bon membutuhkan koneksi internet. Gunakan mode Takeaway untuk offline.');
+      return null;
+    }
+
+    state = state.copyWith(isSubmitting: true, clearError: true);
+
+    try {
+      final token = await _storage.read(key: 'access_token');
+      final tenantId = await _storage.read(key: 'tenant_id');
+      final outletId = await _storage.read(key: 'outlet_id');
+      final shiftId = await _storage.read(key: 'shift_session_id');
+
+      if (outletId == null || outletId.isEmpty) {
+        state = state.copyWith(isSubmitting: false, error: 'Outlet tidak ditemukan. Login ulang.');
+        return null;
+      }
+
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+      ));
+      final headers = {
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (tenantId != null) 'X-Tenant-ID': tenantId,
+      };
+
+      // 1. Check if table already has an open tab
+      String? tabId;
+      String? tabNumber;
+      try {
+        final tabRes = await dio.get(
+          '/tabs/by-table/${state.tableId}',
+          options: Options(headers: headers),
+        );
+        final tabData = tabRes.data['data'];
+        if (tabData != null) {
+          tabId = tabData['id'] as String;
+          tabNumber = tabData['tab_number'] as String?;
+        }
+      } catch (_) {
+        // No open tab or endpoint error — will create new tab
+      }
+
+      // 2. If no open tab, create one
+      if (tabId == null) {
+        try {
+          final createRes = await dio.post(
+            '/tabs/',
+            options: Options(headers: headers),
+            data: {
+              'outlet_id': outletId,
+              'table_id': state.tableId,
+              'customer_name': state.customerName,
+              'guest_count': 1,
+            },
+          );
+          tabId = createRes.data['data']['id'] as String;
+          tabNumber = createRes.data['data']['tab_number'] as String?;
+        } on DioException catch (e) {
+          final msg = e.response?.data['detail'] ?? 'Gagal membuka tab';
+          state = state.copyWith(isSubmitting: false, error: msg.toString());
+          return null;
+        }
+      }
+
+      // 3. Create the order (status pending, no payment yet)
+      final subtotal = state.subtotal;
+      String orderId;
+      try {
+        final orderRes = await dio.post(
+          '/orders/',
+          options: Options(headers: headers),
+          data: {
+            'outlet_id': outletId,
+            if (shiftId != null) 'shift_session_id': shiftId,
+            'order_type': 'dine_in',
+            if (state.customerId != null) 'customer_id': state.customerId,
+            if (state.tableId != null) 'table_id': state.tableId,
+            'subtotal': subtotal,
+            'service_charge_amount': state.serviceChargeAmount,
+            'tax_amount': state.taxAmount,
+            'discount_amount': state.discountAmount,
+            'total_amount': state.total,
+            'items': state.items
+                .map((i) => {
+                      'product_id': i.productId,
+                      'quantity': i.qty,
+                      'unit_price': i.price,
+                      'total_price': i.price * i.qty,
+                      'discount_amount': 0,
+                      if (i.notes != null && i.notes!.isNotEmpty) 'notes': i.notes,
+                    })
+                .toList(),
+          },
+        );
+        orderId = orderRes.data['data']['id'] as String;
+      } on DioException catch (e) {
+        final msg = e.response?.data['detail'] ?? 'Gagal membuat pesanan';
+        state = state.copyWith(isSubmitting: false, error: msg.toString());
+        return null;
+      }
+
+      // 4. Link order to tab
+      try {
+        await dio.post(
+          '/tabs/$tabId/orders',
+          options: Options(headers: headers),
+          data: {'order_id': orderId},
+        );
+      } catch (_) {
+        // Non-critical — order is created, tab link failed but not blocking
+      }
+
+      state = state.copyWith(
+        isSubmitting: false,
+        submittedOrderId: orderId,
+        wasOffline: false,
+      );
+      return {
+        'orderId': orderId,
+        'tabId': tabId,
+        'tabNumber': tabNumber,
+      };
+    } catch (_) {
+      state = state.copyWith(isSubmitting: false, error: 'Terjadi kesalahan sistem');
+      return null;
+    }
+  }
+
   Future<String?> submitOrder() async {
     if (state.items.isEmpty) return null;
     // Dine-in wajib pilih meja

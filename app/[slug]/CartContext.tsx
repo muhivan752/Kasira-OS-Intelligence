@@ -18,6 +18,9 @@ type CartContextType = {
   clearCart: () => void;
   totalItems: number;
   totalPrice: number;
+  tableId: string | null;
+  tableName: string | null;
+  setTable: (id: string | null, name: string | null) => void;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -25,6 +28,13 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children, slug }: { children: React.ReactNode; slug: string }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [tableId, setTableId] = useState<string | null>(null);
+  const [tableName, setTableName] = useState<string | null>(null);
+
+  const setTable = (id: string | null, name: string | null) => {
+    setTableId(id);
+    setTableName(name);
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem(`kasira_cart_${slug}`);
@@ -35,6 +45,14 @@ export function CartProvider({ children, slug }: { children: React.ReactNode; sl
       } catch (e) {
         console.error('Failed to parse cart', e);
       }
+    }
+    // Check URL for table param
+    const params = new URLSearchParams(window.location.search);
+    const tId = params.get('table');
+    const tName = params.get('table_name');
+    if (tId) {
+      setTableId(tId);
+      setTableName(tName || `Meja`);
     }
     setIsLoaded(true);
   }, [slug]);
@@ -88,6 +106,9 @@ export function CartProvider({ children, slug }: { children: React.ReactNode; sl
         clearCart,
         totalItems,
         totalPrice,
+        tableId,
+        tableName,
+        setTable,
       }}
     >
       {children}

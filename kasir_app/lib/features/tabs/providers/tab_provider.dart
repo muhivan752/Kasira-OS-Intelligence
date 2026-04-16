@@ -45,6 +45,7 @@ class TabModel {
   final String id;
   final String outletId;
   final String? tableId;
+  final String? tableName;
   final String tabNumber;
   final String? customerName;
   final int guestCount;
@@ -67,6 +68,7 @@ class TabModel {
     required this.id,
     required this.outletId,
     this.tableId,
+    this.tableName,
     required this.tabNumber,
     this.customerName,
     required this.guestCount,
@@ -93,6 +95,7 @@ class TabModel {
         id: json['id'] as String,
         outletId: json['outlet_id'] as String,
         tableId: json['table_id'] as String?,
+        tableName: json['table_name'] as String?,
         tabNumber: json['tab_number'] as String,
         customerName: json['customer_name'] as String?,
         guestCount: (json['guest_count'] as num?)?.toInt() ?? 1,
@@ -323,6 +326,53 @@ class TabNotifier extends StateNotifier<TabListState> {
       return TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
     } on DioException catch (e) {
       state = state.copyWith(error: e.response?.data?['detail']?.toString() ?? 'Gagal bayar split');
+      return null;
+    }
+  }
+
+  Future<TabModel?> moveTable(String tabId, String newTableId, int rowVersion) async {
+    try {
+      final res = await _dio.post(
+        '/tabs/$tabId/move-table',
+        options: Options(headers: await _headers()),
+        data: {'new_table_id': newTableId, 'row_version': rowVersion},
+      );
+      final tab = TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
+      await fetchTabs();
+      return tab;
+    } on DioException catch (e) {
+      state = state.copyWith(error: e.response?.data?['detail']?.toString() ?? 'Gagal pindah meja');
+      return null;
+    }
+  }
+
+  Future<TabModel?> mergeTab(String targetTabId, String sourceTabId, int rowVersion) async {
+    try {
+      final res = await _dio.post(
+        '/tabs/$targetTabId/merge',
+        options: Options(headers: await _headers()),
+        data: {'source_tab_id': sourceTabId, 'row_version': rowVersion},
+      );
+      final tab = TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
+      await fetchTabs();
+      return tab;
+    } on DioException catch (e) {
+      state = state.copyWith(error: e.response?.data?['detail']?.toString() ?? 'Gagal gabung tab');
+      return null;
+    }
+  }
+
+  Future<TabModel?> requestBill(String tabId) async {
+    try {
+      final res = await _dio.post(
+        '/tabs/$tabId/request-bill',
+        options: Options(headers: await _headers()),
+      );
+      final tab = TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
+      await fetchTabs();
+      return tab;
+    } on DioException catch (e) {
+      state = state.copyWith(error: e.response?.data?['detail']?.toString() ?? 'Gagal minta bill');
       return null;
     }
   }

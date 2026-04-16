@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/cart_provider.dart';
 import '../../presentation/pages/receipt_preview_page.dart';
@@ -236,27 +237,71 @@ class CartPanel extends ConsumerWidget {
                         style: const TextStyle(color: AppColors.error, fontSize: 13),
                         textAlign: TextAlign.center),
                   ),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: cart.isSubmitting
-                        ? null
-                        : () => _handlePayment(context, ref, cart),
-                    child: cart.isSubmitting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Text('BAYAR SEKARANG', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
+                _DineInAwareButton(
+                  cart: cart,
+                  onDineInPro: () => _handleDineIn(context, ref, cart),
+                  onPayNow: () => _handlePayment(context, ref, cart),
                 ),
               ],
             ),
           ),
       ],
     );
+  }
+
+  /// Dine-in: kirim order ke dapur, link ke tab — bayar nanti
+  Future<void> _handleDineIn(BuildContext context, WidgetRef ref, CartState cart) async {
+    final result = await ref.read(cartProvider.notifier).submitDineInOrder();
+    if (result == null) return; // error shown in state
+
+    final tabNumber = result['tabNumber'] as String? ?? '';
+    final tabId = result['tabId'] as String? ?? '';
+    final tableName = cart.tableName ?? 'Meja';
+
+    ref.read(cartProvider.notifier).clearCart();
+    ref.invalidate(dashboardProvider);
+    ref.invalidate(ordersProvider);
+    ref.invalidate(productsProvider);
+
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          icon: const Icon(LucideIcons.chefHat, color: Color(0xFF059669), size: 40),
+          title: const Text('Pesanan Dikirim!'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$tableName — $tabNumber',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Pesanan sudah masuk ke dapur.\nBisa tambah pesanan lagi atau bayar nanti di Tab/Bon.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.push('/tabs/$tabId');
+              },
+              child: const Text('Lihat Tab'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Future<void> _handlePayment(BuildContext context, WidgetRef ref, CartState cart) async {
@@ -278,6 +323,11 @@ class CartPanel extends ConsumerWidget {
               qty: i.qty,
               price: i.price,
             )).toList();
+            final taxAmount = cart.taxAmount;
+            final serviceChargeAmount = cart.serviceChargeAmount;
+            final discountAmount = cart.discountAmount;
+            final taxInclusive = cart.taxInclusive;
+            final totalAmount = cart.total;
             ref.read(cartProvider.notifier).clearCart();
             // Invalidate providers supaya dashboard & order list langsung update
             ref.invalidate(dashboardProvider);
@@ -285,13 +335,17 @@ class CartPanel extends ConsumerWidget {
             ref.invalidate(productsProvider);
             if (context.mounted) {
               context.push('/payment/success', extra: {
-                'totalAmount': cart.total,
+                'totalAmount': totalAmount,
                 'amountPaid': amountPaid,
-                'changeAmount': amountPaid - cart.total,
+                'changeAmount': amountPaid - totalAmount,
                 'paymentMethod': paymentMethod,
                 'orderId': orderId,
                 'displayNumber': orderId.substring(0, 8).toUpperCase(),
                 'items': receiptItems,
+                'tax': taxAmount,
+                'serviceCharge': serviceChargeAmount,
+                'discount': discountAmount,
+                'taxInclusive': taxInclusive,
               });
             }
           },
@@ -485,6 +539,68 @@ class _OrderTypeBtn extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DineInAwareButton extends ConsumerWidget {
+  final CartState cart;
+  final VoidCallback onDineInPro;
+  final VoidCallback onPayNow;
+
+  const _DineInAwareButton({
+    required this.cart,
+    required this.onDineInPro,
+    required this.onPayNow,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Starter dine-in = bayar sekarang (no tab). Pro dine-in = kirim ke dapur (tab).
+    if (cart.orderType != 'Dine In') {
+      return _payNowButton();
+    }
+
+    // Check tier async
+    return FutureBuilder<String?>(
+      future: const FlutterSecureStorage().read(key: 'subscription_tier'),
+      builder: (context, snapshot) {
+        final tier = (snapshot.data ?? 'starter').toLowerCase();
+        final isPro = {'pro', 'business', 'enterprise'}.contains(tier);
+
+        if (isPro) {
+          return SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: cart.isSubmitting ? null : onDineInPro,
+              icon: cart.isSubmitting
+                  ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(LucideIcons.chefHat, size: 18),
+              label: const Text('KIRIM KE DAPUR', style: TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669)),
+            ),
+          );
+        }
+
+        // Starter: dine-in uses regular pay flow
+        return _payNowButton();
+      },
+    );
+  }
+
+  Widget _payNowButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: cart.isSubmitting ? null : onPayNow,
+        child: cart.isSubmitting
+            ? const SizedBox(width: 20, height: 20,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : const Text('BAYAR SEKARANG', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
     );
   }

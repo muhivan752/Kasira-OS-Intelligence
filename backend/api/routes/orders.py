@@ -297,6 +297,7 @@ async def read_orders(
     request: Request,
     outlet_id: UUID,
     status: Optional[OrderStatus] = None,
+    table_id: Optional[UUID] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     skip: int = 0,
@@ -316,6 +317,8 @@ async def read_orders(
 
     if status:
         query = query.where(Order.status == status)
+    if table_id:
+        query = query.where(Order.table_id == table_id)
     if start_date:
         start_dt = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
         query = query.where(Order.created_at >= start_dt)
@@ -465,6 +468,28 @@ async def update_order_status(
                         order_id=order.id,
                         tier=tier,
                     )
+
+    # Recalculate tab totals when order cancelled (tab excludes cancelled orders)
+    if status_in.status == OrderStatus.cancelled and order.tab_id:
+        from backend.models.tab import Tab
+        tab_q = select(Tab).where(Tab.id == order.tab_id, Tab.deleted_at.is_(None))
+        tab_result = await db.execute(tab_q)
+        linked_tab = tab_result.scalar_one_or_none()
+        if linked_tab and linked_tab.status not in ('paid', 'cancelled'):
+            # Recalculate from remaining non-cancelled orders
+            remaining_q = select(Order).where(
+                Order.tab_id == linked_tab.id,
+                Order.deleted_at.is_(None),
+                Order.status != 'cancelled',
+            )
+            remaining_result = await db.execute(remaining_q)
+            remaining_orders = remaining_result.scalars().all()
+            linked_tab.subtotal = sum(o.subtotal for o in remaining_orders)
+            linked_tab.tax_amount = sum(o.tax_amount for o in remaining_orders)
+            linked_tab.service_charge_amount = sum(o.service_charge_amount for o in remaining_orders)
+            linked_tab.discount_amount = sum(o.discount_amount for o in remaining_orders)
+            linked_tab.total_amount = sum(o.total_amount for o in remaining_orders)
+            linked_tab.row_version += 1
 
     # Release table when order completed/cancelled (if no other active orders on same table)
     if status_in.status in (OrderStatus.completed, OrderStatus.cancelled) and order.table_id:
