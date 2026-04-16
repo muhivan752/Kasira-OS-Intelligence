@@ -519,6 +519,7 @@ async def pay_tab_full(
     change = max(Decimal('0'), body.amount_paid - total)
     payment = Payment(
         order_id=first_order_id,
+        tab_id=tab.id,
         outlet_id=tab.outlet_id,
         shift_session_id=tab.shift_session_id,
         payment_method=body.payment_method,
@@ -631,6 +632,7 @@ async def pay_split(
 
     payment = Payment(
         order_id=first_order_id,
+        tab_id=tab.id,
         outlet_id=tab.outlet_id,
         shift_session_id=tab.shift_session_id,
         payment_method=body.payment_method,
