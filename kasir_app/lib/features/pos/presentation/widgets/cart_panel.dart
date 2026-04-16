@@ -14,6 +14,12 @@ import '../../../orders/providers/orders_provider.dart';
 import '../../../products/providers/products_provider.dart';
 import '../../../tables/presentation/pages/table_grid_page.dart';
 
+/// Cached tier provider — read once, reuse across rebuilds
+final _tierProvider = FutureProvider<String>((ref) async {
+  const storage = FlutterSecureStorage();
+  return await storage.read(key: 'subscription_tier') ?? 'starter';
+});
+
 class CartPanel extends ConsumerWidget {
   const CartPanel({super.key});
 
@@ -562,33 +568,29 @@ class _DineInAwareButton extends ConsumerWidget {
       return _payNowButton();
     }
 
-    // Check tier async
-    return FutureBuilder<String?>(
-      future: const FlutterSecureStorage().read(key: 'subscription_tier'),
-      builder: (context, snapshot) {
-        final tier = (snapshot.data ?? 'starter').toLowerCase();
-        final isPro = {'pro', 'business', 'enterprise'}.contains(tier);
+    // Check tier via cached provider — no more reading storage every frame
+    final tierAsync = ref.watch(_tierProvider);
+    final tier = (tierAsync.valueOrNull ?? 'starter').toLowerCase();
+    final isPro = {'pro', 'business', 'enterprise'}.contains(tier);
 
-        if (isPro) {
-          return SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton.icon(
-              onPressed: cart.isSubmitting ? null : onDineInPro,
-              icon: cart.isSubmitting
-                  ? const SizedBox(width: 20, height: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Icon(LucideIcons.chefHat, size: 18),
-              label: const Text('KIRIM KE DAPUR', style: TextStyle(fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669)),
-            ),
-          );
-        }
+    if (isPro) {
+      return SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton.icon(
+          onPressed: cart.isSubmitting ? null : onDineInPro,
+          icon: cart.isSubmitting
+              ? const SizedBox(width: 20, height: 20,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : const Icon(LucideIcons.chefHat, size: 18),
+          label: const Text('KIRIM KE DAPUR', style: TextStyle(fontWeight: FontWeight.bold)),
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669)),
+        ),
+      );
+    }
 
-        // Starter: dine-in uses regular pay flow
-        return _payNowButton();
-      },
-    );
+    // Starter: dine-in uses regular pay flow
+    return _payNowButton();
   }
 
   Widget _payNowButton() {

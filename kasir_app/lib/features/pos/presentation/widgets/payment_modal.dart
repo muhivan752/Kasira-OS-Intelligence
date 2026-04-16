@@ -56,10 +56,16 @@ class _PaymentModalState extends State<PaymentModal> {
       _cashError = null;
     });
     try {
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
-      final outletId = await _storage.read(key: 'outlet_id') ?? '';
-      final shiftId = await _storage.read(key: 'shift_session_id');
+      final results = await Future.wait([
+        _storage.read(key: 'access_token'),
+        _storage.read(key: 'tenant_id'),
+        _storage.read(key: 'outlet_id'),
+        _storage.read(key: 'shift_session_id'),
+      ]);
+      final token = results[0];
+      final tenantId = results[1];
+      final outletId = results[2] ?? '';
+      final shiftId = results[3];
       final change = amountPaid - widget.totalAmount;
 
       await _dio.post(
@@ -131,31 +137,37 @@ class _PaymentModalState extends State<PaymentModal> {
 
   void _startQrisPolling() {
     _qrisPollingTimer?.cancel();
-    _qrisPollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
-      if (_qrisPaymentId == null) return;
-      try {
-        final token = await _storage.read(key: 'access_token');
-        final tenantId = await _storage.read(key: 'tenant_id');
-        final response = await _dio.get(
-          '/payments/$_qrisPaymentId/status',
-          options: Options(headers: {
-            if (token != null) 'Authorization': 'Bearer $token',
-            if (tenantId != null) 'X-Tenant-ID': tenantId,
-          }),
-        );
-        final data = response.data['data'];
-        if (data['status'] == 'paid') {
-          timer.cancel();
-          _qrisTimer?.cancel();
-          setState(() => _isQrisPaid = true);
-          Future.delayed(const Duration(seconds: 2), () {
-            if (mounted) {
-              widget.onPaymentSuccess('QRIS', widget.totalAmount);
-              Navigator.pop(context);
-            }
-          });
-        }
-      } catch (_) {}
+    // Pre-read credentials once for polling
+    Future.wait([
+      _storage.read(key: 'access_token'),
+      _storage.read(key: 'tenant_id'),
+    ]).then((creds) {
+      final pollToken = creds[0];
+      final pollTenantId = creds[1];
+      _qrisPollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+        if (_qrisPaymentId == null) return;
+        try {
+          final response = await _dio.get(
+            '/payments/$_qrisPaymentId/status',
+            options: Options(headers: {
+              if (pollToken != null) 'Authorization': 'Bearer $pollToken',
+              if (pollTenantId != null) 'X-Tenant-ID': pollTenantId,
+            }),
+          );
+          final data = response.data['data'];
+          if (data != null && data['status'] == 'paid') {
+            timer.cancel();
+            _qrisTimer?.cancel();
+            if (mounted) setState(() => _isQrisPaid = true);
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) {
+                widget.onPaymentSuccess('QRIS', widget.totalAmount);
+                Navigator.pop(context);
+              }
+            });
+          }
+        } catch (_) {}
+      });
     });
   }
 
@@ -165,10 +177,16 @@ class _PaymentModalState extends State<PaymentModal> {
       _qrisError = null;
     });
     try {
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
-      final outletId = await _storage.read(key: 'outlet_id') ?? '';
-      final shiftId = await _storage.read(key: 'shift_session_id');
+      final results = await Future.wait([
+        _storage.read(key: 'access_token'),
+        _storage.read(key: 'tenant_id'),
+        _storage.read(key: 'outlet_id'),
+        _storage.read(key: 'shift_session_id'),
+      ]);
+      final token = results[0];
+      final tenantId = results[1];
+      final outletId = results[2] ?? '';
+      final shiftId = results[3];
 
       final response = await _dio.post(
         '/payments/',

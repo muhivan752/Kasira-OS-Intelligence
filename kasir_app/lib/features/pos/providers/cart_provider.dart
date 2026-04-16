@@ -231,10 +231,16 @@ class CartNotifier extends StateNotifier<CartState> {
     state = state.copyWith(isSubmitting: true, clearError: true);
 
     try {
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
-      final outletId = await _storage.read(key: 'outlet_id');
-      final shiftId = await _storage.read(key: 'shift_session_id');
+      final creds = await Future.wait([
+        _storage.read(key: 'access_token'),
+        _storage.read(key: 'tenant_id'),
+        _storage.read(key: 'outlet_id'),
+        _storage.read(key: 'shift_session_id'),
+      ]);
+      final token = creds[0];
+      final tenantId = creds[1];
+      final outletId = creds[2];
+      final shiftId = creds[3];
 
       if (outletId == null || outletId.isEmpty) {
         state = state.copyWith(isSubmitting: false, error: 'Outlet tidak ditemukan. Login ulang.');
@@ -399,10 +405,16 @@ class CartNotifier extends StateNotifier<CartState> {
   // ── Online: langsung ke backend ─────────────────────────────────────────
   Future<String?> _submitOnline() async {
     try {
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
-      final outletId = await _storage.read(key: 'outlet_id');
-      final shiftId = await _storage.read(key: 'shift_session_id');
+      final creds = await Future.wait([
+        _storage.read(key: 'access_token'),
+        _storage.read(key: 'tenant_id'),
+        _storage.read(key: 'outlet_id'),
+        _storage.read(key: 'shift_session_id'),
+      ]);
+      final token = creds[0];
+      final tenantId = creds[1];
+      final outletId = creds[2];
+      final shiftId = creds[3];
 
       if (outletId == null || outletId.isEmpty) {
         state = state.copyWith(
@@ -447,7 +459,11 @@ class CartNotifier extends StateNotifier<CartState> {
         },
       );
 
-      final orderId = response.data['data']['id'] as String;
+      final orderId = response.data?['data']?['id']?.toString();
+      if (orderId == null) {
+        state = state.copyWith(isSubmitting: false, error: 'Response pesanan tidak valid');
+        return null;
+      }
       state = state.copyWith(
           isSubmitting: false, submittedOrderId: orderId, wasOffline: false);
       return orderId;
@@ -461,9 +477,14 @@ class CartNotifier extends StateNotifier<CartState> {
   // ── Offline: simpan ke Drift SQLite, deduct stok lokal ──────────────────
   Future<String?> _submitOffline() async {
     try {
-      final outletId = await _storage.read(key: 'outlet_id') ?? '';
-      final userId = await _storage.read(key: 'user_id') ?? '';
-      final shiftId = await _storage.read(key: 'shift_session_id');
+      final offCreds = await Future.wait([
+        _storage.read(key: 'outlet_id'),
+        _storage.read(key: 'user_id'),
+        _storage.read(key: 'shift_session_id'),
+      ]);
+      final outletId = offCreds[0] ?? '';
+      final userId = offCreds[1] ?? '';
+      final shiftId = offCreds[2];
       final orderId = _generateUuid();
       final now = DateTime.now();
       final subtotal = state.subtotal;

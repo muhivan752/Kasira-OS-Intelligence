@@ -37,13 +37,21 @@ class SyncService {
     try {
       // debugPrint('Starting sync process...');
       
-      // 1. Gather unsynced local changes
-      final unsyncedProducts = await db.getUnsyncedProducts();
-      final unsyncedOrders = await db.getUnsyncedOrders();
-      final unsyncedOrderItems = await db.getUnsyncedOrderItems();
-      final unsyncedPayments = await db.getUnsyncedPayments();
-      final unsyncedShifts = await db.getUnsyncedShifts();
-      final unsyncedCashActivities = await db.getUnsyncedCashActivities();
+      // 1. Gather unsynced local changes — parallel
+      final futures = await Future.wait([
+        db.getUnsyncedProducts(),
+        db.getUnsyncedOrders(),
+        db.getUnsyncedOrderItems(),
+        db.getUnsyncedPayments(),
+        db.getUnsyncedShifts(),
+        db.getUnsyncedCashActivities(),
+      ]);
+      final unsyncedProducts = futures[0] as List<ProductLocal>;
+      final unsyncedOrders = futures[1] as List<OrderLocal>;
+      final unsyncedOrderItems = futures[2] as List<OrderItemLocal>;
+      final unsyncedPayments = futures[3] as List<PaymentLocal>;
+      final unsyncedShifts = futures[4] as List<ShiftLocal>;
+      final unsyncedCashActivities = futures[5] as List<CashActivityLocal>;
 
       final changes = {
         'categories': [], // We don't create categories from POS
@@ -75,21 +83,23 @@ class SyncService {
         // 3. Apply server changes to local DB
         await _applyServerChanges(serverChanges);
 
-        // 3b. Persist stock_mode + subscription_tier from server
+        // 3b. Persist stock_mode + subscription_tier from server — parallel
         const storage = FlutterSecureStorage();
         final stockMode = data['stock_mode']?.toString();
+        final subscriptionTier = data['subscription_tier']?.toString();
+        final writeOps = <Future>[];
         if (stockMode != null) {
           final previousMode = await storage.read(key: 'stock_mode');
-          await storage.write(key: 'stock_mode', value: stockMode);
+          writeOps.add(storage.write(key: 'stock_mode', value: stockMode));
           if (previousMode != null && previousMode != stockMode) {
             _stockModeChanged = true;
             _newStockMode = stockMode;
           }
         }
-        final subscriptionTier = data['subscription_tier']?.toString();
         if (subscriptionTier != null) {
-          await storage.write(key: 'subscription_tier', value: subscriptionTier);
+          writeOps.add(storage.write(key: 'subscription_tier', value: subscriptionTier));
         }
+        if (writeOps.isNotEmpty) await Future.wait(writeOps);
 
         // 4. Mark local changes as synced
         await _markAsSynced(
@@ -386,24 +396,24 @@ class SyncService {
     required List<ShiftLocal> shifts,
     required List<CashActivityLocal> cashActivities,
   }) async {
-    await db.transaction(() async {
+    await db.batch((batch) {
       for (var p in products) {
-        await db.update(db.products).replace(p.copyWith(isSynced: true));
+        batch.replace(db.products, p.copyWith(isSynced: true));
       }
       for (var o in orders) {
-        await db.update(db.orders).replace(o.copyWith(isSynced: true));
+        batch.replace(db.orders, o.copyWith(isSynced: true));
       }
       for (var oi in orderItems) {
-        await db.update(db.orderItems).replace(oi.copyWith(isSynced: true));
+        batch.replace(db.orderItems, oi.copyWith(isSynced: true));
       }
       for (var p in payments) {
-        await db.update(db.payments).replace(p.copyWith(isSynced: true));
+        batch.replace(db.payments, p.copyWith(isSynced: true));
       }
       for (var s in shifts) {
-        await db.update(db.shifts).replace(s.copyWith(isSynced: true));
+        batch.replace(db.shifts, s.copyWith(isSynced: true));
       }
       for (var ca in cashActivities) {
-        await db.update(db.cashActivities).replace(ca.copyWith(isSynced: true));
+        batch.replace(db.cashActivities, ca.copyWith(isSynced: true));
       }
     });
   }

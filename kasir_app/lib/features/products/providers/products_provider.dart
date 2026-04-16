@@ -203,8 +203,12 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
     }
 
     try {
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
+      final results = await Future.wait([
+        _storage.read(key: 'access_token'),
+        _storage.read(key: 'tenant_id'),
+      ]);
+      final token = results[0];
+      final tenantId = results[1];
 
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,

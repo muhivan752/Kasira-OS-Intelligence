@@ -161,9 +161,14 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
       clearFilter: status == null,
     );
     try {
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
-      final outletId = await _storage.read(key: 'outlet_id');
+      final results = await Future.wait([
+        _storage.read(key: 'access_token'),
+        _storage.read(key: 'tenant_id'),
+        _storage.read(key: 'outlet_id'),
+      ]);
+      final token = results[0];
+      final tenantId = results[1];
+      final outletId = results[2];
 
       if (outletId == null) {
         state = state.copyWith(isLoading: false, error: 'Outlet tidak ditemukan');
@@ -176,7 +181,7 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
         receiveTimeout: const Duration(seconds: 10),
       ));
 
-      final params = <String, dynamic>{'outlet_id': outletId, 'limit': 50};
+      final params = <String, dynamic>{'outlet_id': outletId, 'limit': 20};
       if (status != null) params['status'] = status;
 
       final resp = await dio.get(
@@ -202,8 +207,12 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
 
   Future<bool> updateStatus(String orderId, String newStatus, int rowVersion) async {
     try {
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
+      final results = await Future.wait([
+        _storage.read(key: 'access_token'),
+        _storage.read(key: 'tenant_id'),
+      ]);
+      final token = results[0];
+      final tenantId = results[1];
 
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,

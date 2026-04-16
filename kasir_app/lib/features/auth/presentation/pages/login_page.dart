@@ -182,12 +182,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return;
       }
 
-      await _storage.write(key: 'access_token', value: token);
-      await _storage.write(key: 'phone', value: state.phone);
-      if (tenantId != null) await _storage.write(key: 'tenant_id', value: tenantId);
-      if (outletId != null) await _storage.write(key: 'outlet_id', value: outletId);
-      if (stockMode != null) await _storage.write(key: 'stock_mode', value: stockMode);
-      if (subscriptionTier != null) await _storage.write(key: 'subscription_tier', value: subscriptionTier);
+      await Future.wait([
+        _storage.write(key: 'access_token', value: token),
+        _storage.write(key: 'phone', value: state.phone),
+        if (tenantId != null) _storage.write(key: 'tenant_id', value: tenantId),
+        if (outletId != null) _storage.write(key: 'outlet_id', value: outletId),
+        if (stockMode != null) _storage.write(key: 'stock_mode', value: stockMode),
+        if (subscriptionTier != null) _storage.write(key: 'subscription_tier', value: subscriptionTier),
+      ]);
 
       _timer?.cancel();
 
@@ -240,30 +242,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final savedPin = await _storage.read(key: 'user_pin');
 
       if (savedPin == pin) {
-        // Validasi token masih berlaku dengan hit /auth/me
+        // PIN benar → langsung masuk (jangan block UI)
+        // Validasi token async di background — kalau expired, 401 interceptor handle
+        state = state.copyWith(isLoading: false, pinAttempts: 0, isSuccess: true);
+        // Fire-and-forget token check
         final token = await _storage.read(key: 'access_token');
         if (token != null) {
-          try {
-            final dio = Dio(BaseOptions(
-              baseUrl: AppConfig.apiV1,
-              connectTimeout: const Duration(seconds: 5),
-              receiveTimeout: const Duration(seconds: 5),
-            ));
-            final res = await dio.get('/auth/me',
-                options: Options(headers: {'Authorization': 'Bearer $token'}));
+          Dio(BaseOptions(
+            baseUrl: AppConfig.apiV1,
+            connectTimeout: const Duration(seconds: 3),
+            receiveTimeout: const Duration(seconds: 3),
+          )).get('/auth/me',
+              options: Options(headers: {'Authorization': 'Bearer $token'}))
+          .then((res) {
             if (res.statusCode != 200) {
-              state = state.copyWith(
-                isLoading: false,
-                error: 'Sesi expired. Silakan login ulang dengan OTP.',
-                step: AuthStep.inputPhone,
-              );
-              return;
+              // Token invalid — will be caught by 401 interceptor on next API call
             }
-          } on DioException {
-            // Offline → izinkan PIN login tanpa validasi server
-          }
+          }).catchError((_) {
+            // Offline or error — no problem, offline-first
+          });
         }
-        state = state.copyWith(isLoading: false, pinAttempts: 0, isSuccess: true);
       } else {
         final attempts = state.pinAttempts + 1;
         if (attempts >= 3) {
@@ -326,9 +324,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       LocationService.sendLocationSilent();
 
       const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
-      final tenantId = await storage.read(key: 'tenant_id');
-      final outletId = await storage.read(key: 'outlet_id');
+      final results = await Future.wait([
+        storage.read(key: 'access_token'),
+        storage.read(key: 'tenant_id'),
+        storage.read(key: 'outlet_id'),
+      ]);
+      final token = results[0];
+      final tenantId = results[1];
+      final outletId = results[2];
 
       // debugPrint('[NAV] checkShift: token=${token != null ? "yes" : "null"} tenant=$tenantId outlet=$outletId');
 

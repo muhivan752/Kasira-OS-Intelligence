@@ -76,7 +76,20 @@ class _PosPageState extends ConsumerState<PosPage> {
             behavior: SnackBarBehavior.floating,
           ));
         }
-      }).catchError((_) {});
+      }).catchError((e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Row(children: [
+              Icon(LucideIcons.cloudOff, color: Colors.white, size: 16),
+              SizedBox(width: 8),
+              Text('Sinkronisasi gagal, coba lagi nanti'),
+            ]),
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.error,
+          ));
+        }
+      });
     }
     if (mounted) setState(() => _isOffline = offline);
   }

@@ -43,19 +43,31 @@ class TaxConfig {
   }
 }
 
+/// Cached tax config — survives provider rebuilds within same session.
+/// Invalidate explicitly when settings change.
+TaxConfig? _cachedTaxConfig;
+
 final taxConfigProvider = FutureProvider<TaxConfig>((ref) async {
+  // Return cache if available — avoids redundant API call
+  if (_cachedTaxConfig != null) return _cachedTaxConfig!;
+
   const storage = FlutterSecureStorage();
-  final token = await storage.read(key: 'access_token');
-  final outletId = await storage.read(key: 'outlet_id');
-  final tenantId = await storage.read(key: 'tenant_id');
+  final results = await Future.wait([
+    storage.read(key: 'access_token'),
+    storage.read(key: 'outlet_id'),
+    storage.read(key: 'tenant_id'),
+  ]);
+  final token = results[0];
+  final outletId = results[1];
+  final tenantId = results[2];
 
   if (outletId == null || outletId.isEmpty) return const TaxConfig();
 
   try {
     final dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiV1,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
+      connectTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 5),
     ));
 
     final response = await dio.get(
@@ -68,9 +80,15 @@ final taxConfigProvider = FutureProvider<TaxConfig>((ref) async {
 
     final data = response.data['data'] as Map<String, dynamic>?;
     if (data == null) return const TaxConfig();
-    return TaxConfig.fromJson(data);
+    _cachedTaxConfig = TaxConfig.fromJson(data);
+    return _cachedTaxConfig!;
   } catch (_) {
     // Graceful degrade — no tax config = no charges
     return const TaxConfig();
   }
 });
+
+/// Call this to force re-fetch tax config (e.g. after settings change)
+void invalidateTaxConfigCache() {
+  _cachedTaxConfig = null;
+}

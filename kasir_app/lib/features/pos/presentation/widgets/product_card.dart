@@ -61,6 +61,8 @@ class ProductCard extends StatelessWidget {
                       child: CachedNetworkImage(
                         imageUrl: imageUrl,
                         fit: BoxFit.cover,
+                        memCacheWidth: 300,
+                        fadeInDuration: const Duration(milliseconds: 150),
                         color: isOutOfStock ? Colors.grey : null,
                         colorBlendMode:
                             isOutOfStock ? BlendMode.saturation : null,

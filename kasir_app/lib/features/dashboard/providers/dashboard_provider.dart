@@ -44,9 +44,14 @@ class DashboardNotifier extends AsyncNotifier<DashboardStats> {
 
   Future<DashboardStats> _fetch() async {
     const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
-    final tenantId = await storage.read(key: 'tenant_id');
-    final outletId = await storage.read(key: 'outlet_id');
+    final results = await Future.wait([
+      storage.read(key: 'access_token'),
+      storage.read(key: 'tenant_id'),
+      storage.read(key: 'outlet_id'),
+    ]);
+    final token = results[0];
+    final tenantId = results[1];
+    final outletId = results[2];
 
     final dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiV1,
