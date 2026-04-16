@@ -501,56 +501,62 @@ async def create_connect_order(
             linked_tab_number = open_tab.tab_number
             await db.flush()
 
-    # Create Payment
+    # Create Payment — SKIP if dine-in linked to tab (tab handles payment)
     from backend.models.payment import Payment
     from backend.schemas.payment import PaymentMethod, PaymentStatus
     from backend.services.xendit import xendit_service
 
-    pay_method = PaymentMethod.qris if input_data.payment_method == 'qris' else PaymentMethod.cash
-    initial_status = PaymentStatus.pending if pay_method == PaymentMethod.qris else PaymentStatus.paid
-
-    payment = Payment(
-        order_id=order.id,
-        outlet_id=outlet.id,
-        payment_method=pay_method,
-        amount_due=subtotal,
-        amount_paid=subtotal if pay_method == PaymentMethod.cash else 0,
-        change_amount=0,
-        status=initial_status,
-        idempotency_key=input_data.idempotency_key
-    )
-    db.add(payment)
-    await db.flush()
-
     qris_url = None
     qris_expired_at = None
+    payment = None
 
-    if pay_method == PaymentMethod.qris:
-        if outlet.xendit_api_key or outlet.xendit_business_id:
-            try:
-                xendit_res = await xendit_service.create_qris_transaction(
-                    reference_id=f"{outlet.tenant_id}::{payment.id}",
-                    amount=float(payment.amount_due),
-                    for_user_id=outlet.xendit_business_id if not outlet.xendit_api_key else None,
-                    platform_fee_percent=0.2,
-                    merchant_api_key=outlet.xendit_api_key,
-                )
-                qris_url = xendit_res.get("qr_string") or xendit_res.get("qr_url")
-                payment.qris_url = qris_url
-                payment.xendit_raw = xendit_res
-                qris_expired_at = (
-                    datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15)
-                ).isoformat()
-            except Exception as e:
-                payment.status = PaymentStatus.failed
-                payment.xendit_raw = {"error": str(e)}
-        else:
-            # Outlet belum setup Xendit — tandai failed, kasir bisa fallback cash
-            payment.status = PaymentStatus.failed
-            payment.xendit_raw = {"error": "Outlet belum terhubung Xendit"}
-    else:
-        # Cash: order langsung masuk preparing
+    if linked_tab_number:
+        # Dine-in linked to tab → NO payment now, tab will collect later
+        # Order stays "pending" → kitchen sees it, payment handled by kasir via Tab
         order.status = "preparing"
+    else:
+        # Normal flow: create payment immediately
+        pay_method = PaymentMethod.qris if input_data.payment_method == 'qris' else PaymentMethod.cash
+        initial_status = PaymentStatus.pending if pay_method == PaymentMethod.qris else PaymentStatus.paid
+
+        payment = Payment(
+            order_id=order.id,
+            outlet_id=outlet.id,
+            payment_method=pay_method,
+            amount_due=subtotal,
+            amount_paid=subtotal if pay_method == PaymentMethod.cash else 0,
+            change_amount=0,
+            status=initial_status,
+            idempotency_key=input_data.idempotency_key
+        )
+        db.add(payment)
+        await db.flush()
+
+        if pay_method == PaymentMethod.qris:
+            if outlet.xendit_api_key or outlet.xendit_business_id:
+                try:
+                    xendit_res = await xendit_service.create_qris_transaction(
+                        reference_id=f"{outlet.tenant_id}::{payment.id}",
+                        amount=float(payment.amount_due),
+                        for_user_id=outlet.xendit_business_id if not outlet.xendit_api_key else None,
+                        platform_fee_percent=0.2,
+                        merchant_api_key=outlet.xendit_api_key,
+                    )
+                    qris_url = xendit_res.get("qr_string") or xendit_res.get("qr_url")
+                    payment.qris_url = qris_url
+                    payment.xendit_raw = xendit_res
+                    qris_expired_at = (
+                        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15)
+                    ).isoformat()
+                except Exception as e:
+                    payment.status = PaymentStatus.failed
+                    payment.xendit_raw = {"error": str(e)}
+            else:
+                payment.status = PaymentStatus.failed
+                payment.xendit_raw = {"error": "Outlet belum terhubung Xendit"}
+        else:
+            # Cash: order langsung masuk preparing
+            order.status = "preparing"
 
     # Create connect order for idempotency
     connect_order = ConnectOrder(
@@ -590,25 +596,26 @@ async def create_connect_order(
         },
     ))
 
-    # Append payment event
-    pay_event_type = "payment.completed" if payment.status == "paid" else "payment.pending"
-    db.add(Event(
-        outlet_id=outlet.id,
-        stream_id=f"payment:{payment.id}",
-        event_type=pay_event_type,
-        event_data={
-            "payment_id": str(payment.id),
-            "order_id": str(order.id),
-            "outlet_id": str(outlet.id),
-            "method": input_data.payment_method,
-            "amount_due": float(subtotal),
-            "amount_paid": float(subtotal) if payment.status == "paid" else 0,
-            "source": "storefront",
-        },
-        event_metadata={
-            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        },
-    ))
+    # Append payment event (skip if dine-in tab — no payment created)
+    if payment:
+        pay_event_type = "payment.completed" if payment.status == "paid" else "payment.pending"
+        db.add(Event(
+            outlet_id=outlet.id,
+            stream_id=f"payment:{payment.id}",
+            event_type=pay_event_type,
+            event_data={
+                "payment_id": str(payment.id),
+                "order_id": str(order.id),
+                "outlet_id": str(outlet.id),
+                "method": input_data.payment_method,
+                "amount_due": float(subtotal),
+                "amount_paid": float(subtotal) if payment.status == "paid" else 0,
+                "source": "storefront",
+            },
+            event_metadata={
+                "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            },
+        ))
 
     await db.commit()
     await db.refresh(order)
@@ -648,13 +655,18 @@ async def create_connect_order(
             "table_id": str(resolved_table_id) if resolved_table_id else None,
             "tab_number": linked_tab_number,
             "payment": {
-                "method": payment.payment_method,
-                "status": payment.status,
+                "method": payment.payment_method if payment else None,
+                "status": payment.status if payment else "tab",
                 "qris_url": qris_url,
                 "qris_expired_at": qris_expired_at,
+            } if payment else {
+                "method": "tab",
+                "status": "pending_tab",
+                "qris_url": None,
+                "qris_expired_at": None,
             },
         },
-        message="Order created successfully"
+        message="Pesanan masuk ke tab meja" if linked_tab_number else "Order created successfully"
     )
 
 class BookingInput(BaseModel):
