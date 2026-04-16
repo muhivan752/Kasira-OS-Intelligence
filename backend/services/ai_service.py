@@ -573,6 +573,27 @@ async def build_context(
         except Exception:
             pass
 
+        # Dine-in vs takeaway breakdown today
+        order_type_col = Event.event_data["order_type"].astext
+        otype_q = await db.execute(
+            select(
+                order_type_col.label("otype"),
+                func.count(Event.id).label("cnt"),
+            ).where(
+                Event.outlet_id == outlet_id,
+                Event.event_type == "order.created",
+                Event.created_at >= start_today,
+            ).group_by(order_type_col)
+        )
+        order_type_breakdown = []
+        try:
+            type_labels = {"dine_in": "Dine In", "takeaway": "Takeaway", "delivery": "Delivery"}
+            for r in otype_q.all():
+                label = type_labels.get(r.otype, r.otype)
+                order_type_breakdown.append(f"{label}: {r.cnt}")
+        except Exception:
+            pass
+
         # Peak hour (from order.created events this week)
         peak_hour_q = await db.execute(
             select(
@@ -701,6 +722,7 @@ MEJA:
         cancel_count = 0
         pay_breakdown = []
         source_breakdown = []
+        order_type_breakdown = []
         peak_hours = []
 
     today_str = today.strftime("%d %B %Y")
@@ -724,6 +746,7 @@ STOK KRITIS (perlu restock):
 
 INSIGHT OPERASIONAL:
 - Order dibatalkan hari ini: {cancel_count}
+- Tipe order: {", ".join(order_type_breakdown) if order_type_breakdown else "belum ada data"}
 - Sumber order: {", ".join(source_breakdown) if source_breakdown else "belum ada data"}
 - Metode bayar: {", ".join(pay_breakdown) if pay_breakdown else "belum ada data"}
 - Jam tersibuk (7 hari): {", ".join(peak_hours) if peak_hours else "belum cukup data"}

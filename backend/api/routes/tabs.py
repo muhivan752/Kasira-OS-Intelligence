@@ -43,12 +43,37 @@ from backend.schemas.tab import (
 )
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
+from backend.models.event import Event
 
 router = APIRouter(dependencies=[Depends(require_pro_tier)])
 
 
 def _utc_now():
     return datetime.now(timezone.utc)
+
+
+def _tab_event(db, tab: "Tab", event_type: str, data: dict, user_id=None):
+    """Append a tab lifecycle event to event store."""
+    base = {
+        "tab_id": str(tab.id),
+        "tab_number": tab.tab_number,
+        "outlet_id": str(tab.outlet_id),
+        "table_id": str(tab.table_id) if tab.table_id else None,
+        "status": tab.status,
+        "total_amount": float(tab.total_amount),
+        "guest_count": tab.guest_count,
+    }
+    base.update(data)
+    db.add(Event(
+        outlet_id=tab.outlet_id,
+        stream_id=f"tab:{tab.id}",
+        event_type=event_type,
+        event_data=base,
+        event_metadata={
+            "ts": _utc_now().isoformat(),
+            "user_id": str(user_id) if user_id else None,
+        },
+    ))
 
 
 def _tab_response(tab: Tab) -> TabResponse:
@@ -150,6 +175,7 @@ async def open_tab(
     db.add(tab)
     await db.flush()
 
+    _tab_event(db, tab, "tab.opened", {"customer_name": body.customer_name}, current_user.id)
     await log_audit(
         db=db, action="CREATE", entity="tab", entity_id=tab.id,
         after_state={"tab_number": tab_number, "table_id": str(body.table_id), "guest_count": body.guest_count},
@@ -235,6 +261,7 @@ async def add_order_to_tab(
     await _recalculate_tab(db, tab)
     tab.row_version += 1
 
+    _tab_event(db, tab, "tab.order_added", {"order_id": str(body.order_id)}, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
         after_state={"action": "add_order", "order_id": str(body.order_id), "total_amount": float(tab.total_amount)},
@@ -289,6 +316,7 @@ async def split_equal(
     tab.status = 'splitting'
     tab.row_version += 1
 
+    _tab_event(db, tab, "tab.split", {"method": "equal", "num_people": body.num_people}, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
         after_state={"action": "split_equal", "num_people": body.num_people},
@@ -374,6 +402,7 @@ async def split_per_item(
     tab.status = 'splitting'
     tab.row_version += 1
 
+    _tab_event(db, tab, "tab.split", {"method": "per_item", "assignments": len(body.assignments)}, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
         after_state={"action": "split_per_item", "assignments": len(body.assignments)},
@@ -431,6 +460,7 @@ async def split_custom(
     tab.status = 'splitting'
     tab.row_version += 1
 
+    _tab_event(db, tab, "tab.split", {"method": "custom", "splits": len(body.splits)}, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
         after_state={"action": "split_custom", "splits": len(body.splits)},
@@ -530,6 +560,11 @@ async def pay_tab_full(
 
     tab.row_version += 1
 
+    _tab_event(db, tab, "tab.paid", {
+        "method": "full", "amount": float(total),
+        "payment_method": body.payment_method, "payment_id": str(payment.id),
+        "order_ids": [str(o.id) for o in tab.orders],
+    }, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
         after_state={"action": "pay_full", "amount": float(total), "method": body.payment_method},
@@ -639,6 +674,11 @@ async def pay_split(
 
     tab.row_version += 1
 
+    _tab_event(db, tab, "tab.split_paid", {
+        "split_id": str(split_id), "split_label": split.label,
+        "amount": float(split_amount), "payment_method": body.payment_method,
+        "payment_id": str(payment.id), "all_paid": tab.status == 'paid',
+    }, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
         after_state={"action": "pay_split", "split_id": str(split_id), "amount": float(split_amount), "method": body.payment_method},
@@ -675,9 +715,11 @@ async def cancel_tab(
     tab.row_version += 1
 
     # Unlink orders from tab
+    unlinked_order_ids = [str(o.id) for o in tab.orders]
     for order in tab.orders:
         order.tab_id = None
 
+    _tab_event(db, tab, "tab.cancelled", {"unlinked_orders": unlinked_order_ids}, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
         after_state={"action": "cancel"},
@@ -757,6 +799,11 @@ async def move_table(
         if order.status not in ('completed', 'cancelled'):
             order.table_id = body.new_table_id
 
+    _tab_event(db, tab, "tab.moved_table", {
+        "from_table": old_table_name, "to_table": new_table.name,
+        "from_table_id": str(old_table_id) if old_table_id else None,
+        "to_table_id": str(body.new_table_id),
+    }, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
         after_state={"action": "move_table", "from": old_table_name, "to": new_table.name},
@@ -832,6 +879,10 @@ async def merge_tab(
     await _recalculate_tab(db, target)
     target.row_version += 1
 
+    _tab_event(db, target, "tab.merged", {
+        "source_tab_id": str(source.id), "source_tab_number": source.tab_number,
+        "new_guest_count": target.guest_count,
+    }, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=target.id,
         after_state={
@@ -869,6 +920,7 @@ async def request_bill(
     tab.status = 'asking_bill'
     tab.row_version += 1
 
+    _tab_event(db, tab, "tab.asking_bill", {}, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
         after_state={"action": "request_bill"},
