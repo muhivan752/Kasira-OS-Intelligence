@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "2.8.0",
-    "is_mandatory": true,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.8.0/kasira-pos-v2.8.0.apk",
-    "release_notes": "Registration flow, route fixes, 401 redirect fix — ready for 10 merchants"
+    "version": "2.9.0",
+    "is_mandatory": false,
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.9.0/kasira-pos-v2.9.0.apk",
+    "release_notes": "Bug fixes and improvements"
   },
   "dapur": {
-    "version": "2.8.0",
-    "is_mandatory": true,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.8.0/kasira-dapur-v2.8.0.apk",
-    "release_notes": "Registration flow, route fixes, 401 redirect fix — ready for 10 merchants"
+    "version": "2.9.0",
+    "is_mandatory": false,
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.9.0/kasira-dapur-v2.9.0.apk",
+    "release_notes": "Bug fixes and improvements"
   }
 }
