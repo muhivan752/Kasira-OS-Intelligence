@@ -174,6 +174,14 @@ async def open_tab(
         notes=body.notes,
     )
     db.add(tab)
+
+    # Mark table as occupied
+    if body.table_id:
+        tbl = await db.get(Table, body.table_id)
+        if tbl and tbl.status == 'available':
+            tbl.status = 'occupied'
+            tbl.row_version += 1
+
     await db.flush()
 
     _tab_event(db, tab, "tab.opened", {"customer_name": body.customer_name}, current_user.id)
@@ -560,6 +568,12 @@ async def pay_tab_full(
             if order.status not in ('completed', 'cancelled'):
                 order.status = 'completed'
                 order.row_version += 1
+        # Release table
+        if tab.table_id:
+            tbl = await db.get(Table, tab.table_id)
+            if tbl and tbl.status == 'occupied':
+                tbl.status = 'available'
+                tbl.row_version += 1
 
     tab.row_version += 1
 
@@ -671,6 +685,12 @@ async def pay_split(
                 if order.status not in ('completed', 'cancelled'):
                     order.status = 'completed'
                     order.row_version += 1
+            # Release table
+            if tab.table_id:
+                tbl = await db.get(Table, tab.table_id)
+                if tbl and tbl.status == 'occupied':
+                    tbl.status = 'available'
+                    tbl.row_version += 1
     else:
         split.status = 'pending'
         split.payment_id = payment.id
@@ -717,6 +737,13 @@ async def cancel_tab(
     tab.closed_by = current_user.id
     tab.closed_at = _utc_now()
     tab.row_version += 1
+
+    # Release table
+    if tab.table_id:
+        tbl = await db.get(Table, tab.table_id)
+        if tbl and tbl.status == 'occupied':
+            tbl.status = 'available'
+            tbl.row_version += 1
 
     # Unlink orders from tab
     unlinked_order_ids = [str(o.id) for o in tab.orders]
