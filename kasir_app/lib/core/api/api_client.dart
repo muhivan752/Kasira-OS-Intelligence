@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:go_router/go_router.dart';
 import '../config/app_config.dart';
 import '../sync/sync_provider.dart';
 
@@ -37,10 +38,10 @@ final apiClientProvider = Provider<Dio>((ref) {
         // Token expired/revoked — clear storage & redirect to login
         const storage = FlutterSecureStorage();
         await storage.deleteAll();
-        navigatorKey.currentState?.pushNamedAndRemoveUntil(
-          '/login',
-          (route) => false,
-        );
+        final ctx = navigatorKey.currentContext;
+        if (ctx != null) {
+          GoRouter.of(ctx).go('/login');
+        }
       }
       return handler.next(error);
     },
