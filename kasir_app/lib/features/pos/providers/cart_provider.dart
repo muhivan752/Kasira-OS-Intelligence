@@ -338,6 +338,17 @@ class CartNotifier extends StateNotifier<CartState> {
         // Non-critical — order is created, tab link failed but not blocking
       }
 
+      // 5. Set order to "preparing" — kitchen harus mulai masak
+      try {
+        await dio.put(
+          '/orders/$orderId/status',
+          options: Options(headers: headers),
+          data: {'status': 'preparing', 'row_version': 0},
+        );
+      } catch (_) {
+        // Non-critical — order exists, status will be updated by kasir
+      }
+
       state = state.copyWith(
         isSubmitting: false,
         submittedOrderId: orderId,

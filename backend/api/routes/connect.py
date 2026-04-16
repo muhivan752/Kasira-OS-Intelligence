@@ -510,9 +510,11 @@ async def create_connect_order(
     qris_expired_at = None
     payment = None
 
-    if linked_tab_number:
-        # Dine-in linked to tab → NO payment now, tab will collect later
-        # Order stays "pending" → kitchen sees it, payment handled by kasir via Tab
+    # Dine-in Pro = ALWAYS skip payment (bayar nanti via Tab, baik tab sudah ada atau belum)
+    dine_in_tab_mode = (db_order_type == 'dine_in' and is_pro and resolved_table_id)
+
+    if dine_in_tab_mode:
+        # No payment now — kasir will open tab + collect payment later
         order.status = "preparing"
     else:
         # Normal flow: create payment immediately
