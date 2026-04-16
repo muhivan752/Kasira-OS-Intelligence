@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "2.6.0",
+    "version": "2.7.0",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.6.0/kasira-pos-v2.6.0.apk",
-    "release_notes": "Dine-in Tab system, dark mode Pro, table management"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.7.0/kasira-pos-v2.7.0.apk",
+    "release_notes": "Production readiness: dine-in tab, table management, cleanup"
   },
   "dapur": {
-    "version": "2.6.0",
+    "version": "2.7.0",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.6.0/kasira-dapur-v2.6.0.apk",
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.7.0/kasira-dapur-v2.7.0.apk",
     "release_notes": "Kitchen display improvements"
   }
 }
