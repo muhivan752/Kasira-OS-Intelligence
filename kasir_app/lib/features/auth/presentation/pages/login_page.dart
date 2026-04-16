@@ -447,6 +447,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 _buildHeader(),
                 const SizedBox(height: 32),
                 _buildContent(authState),
+                if (authState.step == AuthStep.inputPhone || authState.step == AuthStep.pinLogin) ...[
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('Belum punya akun? ', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                      GestureDetector(
+                        onTap: () => context.go('/register'),
+                        child: const Text('Daftar Gratis', style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

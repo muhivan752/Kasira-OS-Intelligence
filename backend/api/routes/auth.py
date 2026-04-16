@@ -234,7 +234,10 @@ async def register(
     user_id = uuid.uuid4()
 
     schema_name = f"tenant_{str(tenant_id).replace('-', '')[:16]}"
-    slug = request.business_name.lower().replace(" ", "-")[:50]
+    # Slug: sanitize + append short UUID to prevent collision
+    base_slug = request.business_name.lower().replace(" ", "-")[:50]
+    slug_suffix = str(outlet_id).split("-")[0]  # first 8 chars of UUID
+    slug = f"{base_slug}-{slug_suffix}"
 
     from backend.models.tenant import SubscriptionTier, SubscriptionStatus
     from datetime import date as dt_date, timedelta
@@ -302,6 +305,8 @@ async def register(
         token_type="bearer",
         tenant_id=str(tenant_id),
         outlet_id=str(outlet_id),
+        subscription_tier="starter",
+        stock_mode="simple",
     )
     return StandardResponse(data=token, message=f"Registrasi berhasil{referral_msg}")
 

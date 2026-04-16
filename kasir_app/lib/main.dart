@@ -19,6 +19,7 @@ import 'features/reservations/presentation/pages/reservation_list_page.dart';
 import 'features/reservations/presentation/pages/table_grid_page.dart';
 import 'features/tabs/presentation/pages/tab_list_page.dart';
 import 'features/tabs/presentation/pages/tab_detail_page.dart';
+import 'features/auth/presentation/pages/register_page.dart';
 
 final _router = GoRouter(
   initialLocation: '/',
@@ -34,6 +35,10 @@ final _router = GoRouter(
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginPage(),
+    ),
+    GoRoute(
+      path: '/register',
+      builder: (context, state) => const RegisterPage(),
     ),
     GoRoute(
       path: '/shift/open',
