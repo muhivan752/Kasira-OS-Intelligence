@@ -251,12 +251,12 @@ class CartPanel extends ConsumerWidget {
 
   /// Dine-in: kirim order ke dapur, link ke tab — bayar nanti
   Future<void> _handleDineIn(BuildContext context, WidgetRef ref, CartState cart) async {
-    final result = await ref.read(cartProvider.notifier).submitDineInOrder();
-    if (result == null) return; // error shown in state
-
-    final tabNumber = result['tabNumber'] as String? ?? '';
-    final tabId = result['tabId'] as String? ?? '';
     final tableName = cart.tableName ?? 'Meja';
+    final result = await ref.read(cartProvider.notifier).submitDineInOrder();
+    if (result == null || !context.mounted) return;
+
+    final tabNumber = result['tabNumber']?.toString() ?? '';
+    final tabId = result['tabId']?.toString() ?? '';
 
     ref.read(cartProvider.notifier).clearCart();
     ref.invalidate(dashboardProvider);

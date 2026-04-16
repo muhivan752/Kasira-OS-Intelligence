@@ -943,15 +943,17 @@ async def request_bill(
 async def get_tab_by_table(
     request: Request,
     table_id: UUID,
+    outlet_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Any:
-    """Get open tab for a specific table. Returns null if no open tab."""
+    """Get open tab for a specific table. Scoped to outlet for security."""
     query = (
         select(Tab)
         .options(selectinload(Tab.splits), selectinload(Tab.orders), selectinload(Tab.table))
         .where(
             Tab.table_id == table_id,
+            Tab.outlet_id == outlet_id,
             Tab.status.in_(['open', 'asking_bill', 'splitting']),
             Tab.deleted_at.is_(None),
         )

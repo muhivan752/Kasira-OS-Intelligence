@@ -325,6 +325,17 @@ async def create_connect_order(
                 
                 raw = (payment.xendit_raw or {}) if payment else {}
                 q_url = (payment.qris_url or raw.get("qr_string")) if payment else None
+                pay_data = {
+                    "method": payment.payment_method if payment else "tab",
+                    "status": payment.status if payment else "pending_tab",
+                    "qris_url": q_url,
+                    "qris_expired_at": None,
+                } if payment else {
+                    "method": "tab",
+                    "status": "pending_tab",
+                    "qris_url": None,
+                    "qris_expired_at": None,
+                }
                 return StandardResponse(
                     success=True,
                     data={
@@ -332,12 +343,8 @@ async def create_connect_order(
                         "display_number": order.display_number,
                         "status": order.status,
                         "estimated_minutes": 15 if order.order_type == "pickup" else 30,
-                        "payment": {
-                            "method": payment.payment_method if payment else None,
-                            "status": payment.status if payment else None,
-                            "qris_url": q_url,
-                            "qris_expired_at": None,
-                        },
+                        "tab_number": None,
+                        "payment": pay_data,
                     },
                     message="Order retrieved from idempotency key"
                 )
@@ -489,7 +496,7 @@ async def create_connect_order(
                 Tab.outlet_id == outlet.id,
                 Tab.status.in_(['open', 'asking_bill']),
                 Tab.deleted_at.is_(None),
-            ).order_by(Tab.created_at.desc()).limit(1)
+            ).with_for_update().order_by(Tab.created_at.desc()).limit(1)
         )
         open_tab = tab_result.scalar_one_or_none()
         if open_tab:

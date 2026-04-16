@@ -257,6 +257,7 @@ class CartNotifier extends StateNotifier<CartState> {
       try {
         final tabRes = await dio.get(
           '/tabs/by-table/${state.tableId}',
+          queryParameters: {'outlet_id': outletId},
           options: Options(headers: headers),
         );
         final tabData = tabRes.data['data'];
@@ -269,6 +270,7 @@ class CartNotifier extends StateNotifier<CartState> {
       }
 
       // 2. If no open tab, create one
+      bool tabWasCreated = false;
       if (tabId == null) {
         try {
           final createRes = await dio.post(
@@ -281,18 +283,29 @@ class CartNotifier extends StateNotifier<CartState> {
               'guest_count': 1,
             },
           );
-          tabId = createRes.data['data']['id'] as String;
-          tabNumber = createRes.data['data']['tab_number'] as String?;
+          final tabData = createRes.data?['data'];
+          if (tabData is Map) {
+            tabId = tabData['id']?.toString();
+            tabNumber = tabData['tab_number']?.toString();
+            tabWasCreated = true;
+          }
         } on DioException catch (e) {
-          final msg = e.response?.data['detail'] ?? 'Gagal membuka tab';
-          state = state.copyWith(isSubmitting: false, error: msg.toString());
+          final code = e.response?.statusCode;
+          final msg = code == 403
+              ? 'Fitur Tab memerlukan paket Pro'
+              : (e.response?.data?['detail']?.toString() ?? 'Gagal membuka tab');
+          state = state.copyWith(isSubmitting: false, error: msg);
           return null;
         }
       }
+      if (tabId == null) {
+        state = state.copyWith(isSubmitting: false, error: 'Gagal membuka tab');
+        return null;
+      }
 
-      // 3. Create the order (status pending, no payment yet)
+      // 3. Create the order
       final subtotal = state.subtotal;
-      String orderId;
+      String? orderId;
       try {
         final orderRes = await dio.post(
           '/orders/',
@@ -320,34 +333,34 @@ class CartNotifier extends StateNotifier<CartState> {
                 .toList(),
           },
         );
-        orderId = orderRes.data['data']['id'] as String;
+        orderId = orderRes.data?['data']?['id']?.toString();
       } on DioException catch (e) {
-        final msg = e.response?.data['detail'] ?? 'Gagal membuat pesanan';
-        state = state.copyWith(isSubmitting: false, error: msg.toString());
+        // Order failed — cancel tab if we just created it (prevent orphan)
+        if (tabWasCreated) {
+          try { await dio.post('/tabs/$tabId/cancel', options: Options(headers: headers)); } catch (_) {}
+        }
+        final msg = e.response?.data?['detail']?.toString() ?? 'Gagal membuat pesanan';
+        state = state.copyWith(isSubmitting: false, error: msg);
+        return null;
+      }
+      if (orderId == null) {
+        if (tabWasCreated) {
+          try { await dio.post('/tabs/$tabId/cancel', options: Options(headers: headers)); } catch (_) {}
+        }
+        state = state.copyWith(isSubmitting: false, error: 'Gagal membuat pesanan');
         return null;
       }
 
-      // 4. Link order to tab
+      // 4. Link order to tab + set to preparing (best-effort, non-blocking)
       try {
-        await dio.post(
-          '/tabs/$tabId/orders',
-          options: Options(headers: headers),
-          data: {'order_id': orderId},
-        );
-      } catch (_) {
-        // Non-critical — order is created, tab link failed but not blocking
-      }
+        await dio.post('/tabs/$tabId/orders', options: Options(headers: headers),
+            data: {'order_id': orderId});
+      } catch (_) {}
 
-      // 5. Set order to "preparing" — kitchen harus mulai masak
       try {
-        await dio.put(
-          '/orders/$orderId/status',
-          options: Options(headers: headers),
-          data: {'status': 'preparing', 'row_version': 0},
-        );
-      } catch (_) {
-        // Non-critical — order exists, status will be updated by kasir
-      }
+        await dio.put('/orders/$orderId/status', options: Options(headers: headers),
+            data: {'status': 'preparing', 'row_version': 0});
+      } catch (_) {}
 
       state = state.copyWith(
         isSubmitting: false,
