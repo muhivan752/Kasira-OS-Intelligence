@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/services/session_cache.dart';
 
 class PaymentModal extends StatefulWidget {
   final double totalAmount;
@@ -48,7 +48,7 @@ class _PaymentModalState extends State<PaymentModal> {
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 10),
   ));
-  final _storage = const FlutterSecureStorage();
+  SessionCache get _cache => SessionCache.instance;
 
   Future<void> _submitCashPayment(double amountPaid) async {
     setState(() {
@@ -56,24 +56,13 @@ class _PaymentModalState extends State<PaymentModal> {
       _cashError = null;
     });
     try {
-      final results = await Future.wait([
-        _storage.read(key: 'access_token'),
-        _storage.read(key: 'tenant_id'),
-        _storage.read(key: 'outlet_id'),
-        _storage.read(key: 'shift_session_id'),
-      ]);
-      final token = results[0];
-      final tenantId = results[1];
-      final outletId = results[2] ?? '';
-      final shiftId = results[3];
+      final outletId = _cache.outletId ?? '';
+      final shiftId = _cache.shiftSessionId;
       final change = amountPaid - widget.totalAmount;
 
       await _dio.post(
         '/payments/',
-        options: Options(headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        options: Options(headers: _cache.authHeaders),
         data: {
           'order_id': widget.orderId,
           'outlet_id': outletId,
@@ -137,37 +126,26 @@ class _PaymentModalState extends State<PaymentModal> {
 
   void _startQrisPolling() {
     _qrisPollingTimer?.cancel();
-    // Pre-read credentials once for polling
-    Future.wait([
-      _storage.read(key: 'access_token'),
-      _storage.read(key: 'tenant_id'),
-    ]).then((creds) {
-      final pollToken = creds[0];
-      final pollTenantId = creds[1];
-      _qrisPollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
-        if (_qrisPaymentId == null) return;
-        try {
-          final response = await _dio.get(
-            '/payments/$_qrisPaymentId/status',
-            options: Options(headers: {
-              if (pollToken != null) 'Authorization': 'Bearer $pollToken',
-              if (pollTenantId != null) 'X-Tenant-ID': pollTenantId,
-            }),
-          );
-          final data = response.data['data'];
-          if (data != null && data['status'] == 'paid') {
-            timer.cancel();
-            _qrisTimer?.cancel();
-            if (mounted) setState(() => _isQrisPaid = true);
-            Future.delayed(const Duration(seconds: 2), () {
-              if (mounted) {
-                widget.onPaymentSuccess('QRIS', widget.totalAmount);
-                Navigator.pop(context);
-              }
-            });
-          }
-        } catch (_) {}
-      });
+    _qrisPollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      if (_qrisPaymentId == null) return;
+      try {
+        final response = await _dio.get(
+          '/payments/$_qrisPaymentId/status',
+          options: Options(headers: _cache.authHeaders),
+        );
+        final data = response.data['data'];
+        if (data != null && data['status'] == 'paid') {
+          timer.cancel();
+          _qrisTimer?.cancel();
+          if (mounted) setState(() => _isQrisPaid = true);
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) {
+              widget.onPaymentSuccess('QRIS', widget.totalAmount);
+              Navigator.pop(context);
+            }
+          });
+        }
+      } catch (_) {}
     });
   }
 
@@ -177,23 +155,12 @@ class _PaymentModalState extends State<PaymentModal> {
       _qrisError = null;
     });
     try {
-      final results = await Future.wait([
-        _storage.read(key: 'access_token'),
-        _storage.read(key: 'tenant_id'),
-        _storage.read(key: 'outlet_id'),
-        _storage.read(key: 'shift_session_id'),
-      ]);
-      final token = results[0];
-      final tenantId = results[1];
-      final outletId = results[2] ?? '';
-      final shiftId = results[3];
+      final outletId = _cache.outletId ?? '';
+      final shiftId = _cache.shiftSessionId;
 
       final response = await _dio.post(
         '/payments/',
-        options: Options(headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        options: Options(headers: _cache.authHeaders),
         data: {
           'order_id': widget.orderId,
           'outlet_id': outletId,

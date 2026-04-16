@@ -1,9 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../database/app_database.dart';
 import '../utils/hlc.dart';
 import '../utils/pn_counter.dart';
+import '../services/session_cache.dart';
 import 'package:flutter/foundation.dart';
 
 class SyncService {
@@ -83,23 +83,20 @@ class SyncService {
         // 3. Apply server changes to local DB
         await _applyServerChanges(serverChanges);
 
-        // 3b. Persist stock_mode + subscription_tier from server — parallel
-        const storage = FlutterSecureStorage();
+        // 3b. Persist stock_mode + subscription_tier via SessionCache
+        final cache = SessionCache.instance;
         final stockMode = data['stock_mode']?.toString();
         final subscriptionTier = data['subscription_tier']?.toString();
-        final writeOps = <Future>[];
         if (stockMode != null) {
-          final previousMode = await storage.read(key: 'stock_mode');
-          writeOps.add(storage.write(key: 'stock_mode', value: stockMode));
-          if (previousMode != null && previousMode != stockMode) {
+          await cache.setStockMode(stockMode);
+          if (cache.stockModeChanged) {
             _stockModeChanged = true;
             _newStockMode = stockMode;
           }
         }
         if (subscriptionTier != null) {
-          writeOps.add(storage.write(key: 'subscription_tier', value: subscriptionTier));
+          await cache.setSubscriptionTier(subscriptionTier);
         }
-        if (writeOps.isNotEmpty) await Future.wait(writeOps);
 
         // 4. Mark local changes as synced
         await _markAsSynced(

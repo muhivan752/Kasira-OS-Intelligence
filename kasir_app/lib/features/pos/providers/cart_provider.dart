@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart' as drift;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -9,6 +8,7 @@ import '../../../core/config/app_config.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/sync/sync_provider.dart';
 import '../../../core/utils/pn_counter.dart';
+import '../../../core/services/session_cache.dart';
 import 'tax_config_provider.dart';
 
 // ─── Model ───────────────────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ class CartNotifier extends StateNotifier<CartState> {
     );
   }
 
-  final _storage = const FlutterSecureStorage();
+  SessionCache get _cache => SessionCache.instance;
   static const _uuid = Uuid();
 
   String _generateUuid() => _uuid.v4();
@@ -231,16 +231,10 @@ class CartNotifier extends StateNotifier<CartState> {
     state = state.copyWith(isSubmitting: true, clearError: true);
 
     try {
-      final creds = await Future.wait([
-        _storage.read(key: 'access_token'),
-        _storage.read(key: 'tenant_id'),
-        _storage.read(key: 'outlet_id'),
-        _storage.read(key: 'shift_session_id'),
-      ]);
-      final token = creds[0];
-      final tenantId = creds[1];
-      final outletId = creds[2];
-      final shiftId = creds[3];
+      final token = _cache.accessToken;
+      final tenantId = _cache.tenantId;
+      final outletId = _cache.outletId;
+      final shiftId = _cache.shiftSessionId;
 
       if (outletId == null || outletId.isEmpty) {
         state = state.copyWith(isSubmitting: false, error: 'Outlet tidak ditemukan. Login ulang.');
@@ -252,10 +246,7 @@ class CartNotifier extends StateNotifier<CartState> {
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 15),
       ));
-      final headers = {
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (tenantId != null) 'X-Tenant-ID': tenantId,
-      };
+      final headers = _cache.authHeaders;
 
       // 1. Check if table already has an open tab
       String? tabId;
@@ -405,16 +396,8 @@ class CartNotifier extends StateNotifier<CartState> {
   // ── Online: langsung ke backend ─────────────────────────────────────────
   Future<String?> _submitOnline() async {
     try {
-      final creds = await Future.wait([
-        _storage.read(key: 'access_token'),
-        _storage.read(key: 'tenant_id'),
-        _storage.read(key: 'outlet_id'),
-        _storage.read(key: 'shift_session_id'),
-      ]);
-      final token = creds[0];
-      final tenantId = creds[1];
-      final outletId = creds[2];
-      final shiftId = creds[3];
+      final outletId = _cache.outletId;
+      final shiftId = _cache.shiftSessionId;
 
       if (outletId == null || outletId.isEmpty) {
         state = state.copyWith(
@@ -431,10 +414,7 @@ class CartNotifier extends StateNotifier<CartState> {
       final subtotal = state.subtotal;
       final response = await dio.post(
         '/orders/',
-        options: Options(headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        options: Options(headers: _cache.authHeaders),
         data: {
           'outlet_id': outletId,
           if (shiftId != null) 'shift_session_id': shiftId,
@@ -477,14 +457,9 @@ class CartNotifier extends StateNotifier<CartState> {
   // ── Offline: simpan ke Drift SQLite, deduct stok lokal ──────────────────
   Future<String?> _submitOffline() async {
     try {
-      final offCreds = await Future.wait([
-        _storage.read(key: 'outlet_id'),
-        _storage.read(key: 'user_id'),
-        _storage.read(key: 'shift_session_id'),
-      ]);
-      final outletId = offCreds[0] ?? '';
-      final userId = offCreds[1] ?? '';
-      final shiftId = offCreds[2];
+      final outletId = _cache.outletId ?? '';
+      final userId = _cache.userId ?? '';
+      final shiftId = _cache.shiftSessionId;
       final orderId = _generateUuid();
       final now = DateTime.now();
       final subtotal = state.subtotal;
@@ -516,7 +491,7 @@ class CartNotifier extends StateNotifier<CartState> {
         ));
 
         // 2. Simpan order items + deduct stok lokal
-        final stockMode = await _storage.read(key: 'stock_mode') ?? 'simple';
+        final stockMode = _cache.stockMode ?? 'simple';
 
         for (final item in state.items) {
           await _db.into(_db.orderItems).insert(OrderItemsCompanion(

@@ -1,10 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import '../config/app_config.dart';
 import '../sync/sync_provider.dart';
+import '../services/session_cache.dart';
 
 /// Global navigator key — digunakan untuk redirect ke login dari interceptor
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -21,23 +21,21 @@ final apiClientProvider = Provider<Dio>((ref) {
   ));
 
   dio.interceptors.add(InterceptorsWrapper(
-    onRequest: (options, handler) async {
-      final storage = const FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
-      final tenantId = await storage.read(key: 'tenant_id');
-      if (token != null) {
-        options.headers['Authorization'] = 'Bearer $token';
+    onRequest: (options, handler) {
+      // Read from in-memory cache — 0ms, no async
+      final cache = SessionCache.instance;
+      if (cache.accessToken != null) {
+        options.headers['Authorization'] = 'Bearer ${cache.accessToken}';
       }
-      if (tenantId != null) {
-        options.headers['X-Tenant-ID'] = tenantId;
+      if (cache.tenantId != null) {
+        options.headers['X-Tenant-ID'] = cache.tenantId;
       }
       return handler.next(options);
     },
     onError: (error, handler) async {
       if (error.response?.statusCode == 401) {
-        // Token expired/revoked — clear storage & redirect to login
-        const storage = FlutterSecureStorage();
-        await storage.deleteAll();
+        // Token expired/revoked — clear cache + storage & redirect to login
+        await SessionCache.instance.clear();
         final ctx = navigatorKey.currentContext;
         if (ctx != null) {
           GoRouter.of(ctx).go('/login');

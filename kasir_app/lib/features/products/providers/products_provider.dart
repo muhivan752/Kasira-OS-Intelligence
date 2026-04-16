@@ -1,11 +1,11 @@
 import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/sync/sync_provider.dart';
+import '../../../core/services/session_cache.dart';
 
 class ProductModel {
   final String id;
@@ -76,7 +76,6 @@ class ProductModel {
 }
 
 class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
-  final _storage = const FlutterSecureStorage();
 
   @override
   Future<List<ProductModel>> build() async {
@@ -99,7 +98,7 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
     final rows = await query.get();
 
     // Check stock_mode — if recipe, compute stock from ingredients
-    final stockMode = await _storage.read(key: 'stock_mode') ?? 'simple';
+    final stockMode = SessionCache.instance.stockMode ?? 'simple';
     Map<String, int> recipeStocks = {};
 
     if (stockMode == 'recipe') {
@@ -129,7 +128,7 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
   /// Compute available portions from local ingredient stock + recipes
   Future<Map<String, int>> _computeRecipeStockLocal(
       AppDatabase db, List<ProductLocal> products) async {
-    final outletId = await _storage.read(key: 'outlet_id') ?? '';
+    final outletId = SessionCache.instance.outletId ?? '';
     final stockEnabledIds = products.where((p) => p.stockEnabled).map((p) => p.id).toList();
     if (stockEnabledIds.isEmpty) return {};
 
@@ -203,12 +202,9 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
     }
 
     try {
-      final results = await Future.wait([
-        _storage.read(key: 'access_token'),
-        _storage.read(key: 'tenant_id'),
-      ]);
-      final token = results[0];
-      final tenantId = results[1];
+      final c = SessionCache.instance;
+      final token = c.accessToken;
+      final tenantId = c.tenantId;
 
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
@@ -257,8 +253,9 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
   }
 
   Future<void> toggleAvailability(String productId, bool newIsActive, int rowVersion) async {
-    final token = await _storage.read(key: 'access_token');
-    final tenantId = await _storage.read(key: 'tenant_id');
+    final c = SessionCache.instance;
+    final token = c.accessToken;
+    final tenantId = c.tenantId;
 
     final dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiV1,

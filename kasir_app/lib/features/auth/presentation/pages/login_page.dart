@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/services/location_service.dart';
+import '../../../../core/services/session_cache.dart';
 
 // --- STATE ---
 enum AuthStep { inputPhone, inputOtp, setPin, pinLogin }
@@ -182,14 +183,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return;
       }
 
-      await Future.wait([
-        _storage.write(key: 'access_token', value: token),
-        _storage.write(key: 'phone', value: state.phone),
-        if (tenantId != null) _storage.write(key: 'tenant_id', value: tenantId),
-        if (outletId != null) _storage.write(key: 'outlet_id', value: outletId),
-        if (stockMode != null) _storage.write(key: 'stock_mode', value: stockMode),
-        if (subscriptionTier != null) _storage.write(key: 'subscription_tier', value: subscriptionTier),
-      ]);
+      // Populate session cache — all subsequent reads are 0ms from memory
+      final cache = SessionCache.instance;
+      await cache.setAccessToken(token);
+      await cache.setPhone(state.phone);
+      if (tenantId != null) await cache.setTenantId(tenantId);
+      if (outletId != null) await cache.setOutletId(outletId);
+      if (stockMode != null) await cache.setStockMode(stockMode);
+      if (subscriptionTier != null) await cache.setSubscriptionTier(subscriptionTier);
 
       _timer?.cancel();
 
@@ -242,11 +243,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final savedPin = await _storage.read(key: 'user_pin');
 
       if (savedPin == pin) {
-        // PIN benar → langsung masuk (jangan block UI)
-        // Validasi token async di background — kalau expired, 401 interceptor handle
+        // PIN benar → init cache + langsung masuk (jangan block UI)
+        await SessionCache.instance.init();
         state = state.copyWith(isLoading: false, pinAttempts: 0, isSuccess: true);
         // Fire-and-forget token check
-        final token = await _storage.read(key: 'access_token');
+        final token = SessionCache.instance.accessToken;
         if (token != null) {
           Dio(BaseOptions(
             baseUrl: AppConfig.apiV1,
@@ -323,15 +324,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       // Silent location — fire and forget, never blocks
       LocationService.sendLocationSilent();
 
-      const storage = FlutterSecureStorage();
-      final results = await Future.wait([
-        storage.read(key: 'access_token'),
-        storage.read(key: 'tenant_id'),
-        storage.read(key: 'outlet_id'),
-      ]);
-      final token = results[0];
-      final tenantId = results[1];
-      final outletId = results[2];
+      // Init cache if not already (e.g. PIN login path)
+      final cache = SessionCache.instance;
+      if (!cache.isInitialized) await cache.init();
+      final token = cache.accessToken;
+      final tenantId = cache.tenantId;
+      final outletId = cache.outletId;
 
       // debugPrint('[NAV] checkShift: token=${token != null ? "yes" : "null"} tenant=$tenantId outlet=$outletId');
 
@@ -360,7 +358,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       // debugPrint('[NAV] shift response: status=${data?['status']}');
       if (!context.mounted) return;
       if (data != null && data['status'] == 'open') {
-        await storage.write(key: 'shift_session_id', value: data['id']);
+        cache.setShiftSessionId(data['id']);
         context.go('/dashboard');
       } else {
         context.go('/shift/open');

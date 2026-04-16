@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../providers/cart_provider.dart';
 import '../../presentation/pages/receipt_preview_page.dart';
 import 'payment_modal.dart';
@@ -14,11 +14,7 @@ import '../../../orders/providers/orders_provider.dart';
 import '../../../products/providers/products_provider.dart';
 import '../../../tables/presentation/pages/table_grid_page.dart';
 
-/// Cached tier provider — read once, reuse across rebuilds
-final _tierProvider = FutureProvider<String>((ref) async {
-  const storage = FlutterSecureStorage();
-  return await storage.read(key: 'subscription_tier') ?? 'starter';
-});
+// Tier is now read from SessionCache (0ms, in-memory)
 
 class CartPanel extends ConsumerWidget {
   const CartPanel({super.key});
@@ -568,10 +564,8 @@ class _DineInAwareButton extends ConsumerWidget {
       return _payNowButton();
     }
 
-    // Check tier via cached provider — no more reading storage every frame
-    final tierAsync = ref.watch(_tierProvider);
-    final tier = (tierAsync.valueOrNull ?? 'starter').toLowerCase();
-    final isPro = {'pro', 'business', 'enterprise'}.contains(tier);
+    // Check tier from in-memory cache — 0ms, no async
+    final isPro = SessionCache.instance.isPro;
 
     if (isPro) {
       return SizedBox(

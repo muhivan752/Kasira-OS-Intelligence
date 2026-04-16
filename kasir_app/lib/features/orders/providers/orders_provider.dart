@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/services/session_cache.dart';
 
 double _toDouble(dynamic v) {
   if (v is num) return v.toDouble();
@@ -151,8 +151,6 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
     fetch();
   }
 
-  final _storage = const FlutterSecureStorage();
-
   Future<void> fetch({String? status}) async {
     state = state.copyWith(
       isLoading: true,
@@ -161,14 +159,10 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
       clearFilter: status == null,
     );
     try {
-      final results = await Future.wait([
-        _storage.read(key: 'access_token'),
-        _storage.read(key: 'tenant_id'),
-        _storage.read(key: 'outlet_id'),
-      ]);
-      final token = results[0];
-      final tenantId = results[1];
-      final outletId = results[2];
+      final c = SessionCache.instance;
+      final token = c.accessToken;
+      final tenantId = c.tenantId;
+      final outletId = c.outletId;
 
       if (outletId == null) {
         state = state.copyWith(isLoading: false, error: 'Outlet tidak ditemukan');
@@ -207,12 +201,9 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
 
   Future<bool> updateStatus(String orderId, String newStatus, int rowVersion) async {
     try {
-      final results = await Future.wait([
-        _storage.read(key: 'access_token'),
-        _storage.read(key: 'tenant_id'),
-      ]);
-      final token = results[0];
-      final tenantId = results[1];
+      final c = SessionCache.instance;
+      final token = c.accessToken;
+      final tenantId = c.tenantId;
 
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
@@ -249,9 +240,9 @@ final ordersProvider = StateNotifierProvider<OrdersNotifier, OrdersState>(
 // ── Detail: FutureProvider.family ────────────────────────────────────────────
 
 final orderDetailProvider = FutureProvider.family<OrderModel, String>((ref, orderId) async {
-  const storage = FlutterSecureStorage();
-  final token = await storage.read(key: 'access_token');
-  final tenantId = await storage.read(key: 'tenant_id');
+  final c = SessionCache.instance;
+  final token = c.accessToken;
+  final tenantId = c.tenantId;
 
   final dio = Dio(BaseOptions(
     baseUrl: AppConfig.apiV1,

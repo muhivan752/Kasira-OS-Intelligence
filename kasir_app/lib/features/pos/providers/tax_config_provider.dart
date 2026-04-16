@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/services/session_cache.dart';
 
 class TaxConfig {
   final bool pb1Enabled;
@@ -51,15 +51,10 @@ final taxConfigProvider = FutureProvider<TaxConfig>((ref) async {
   // Return cache if available — avoids redundant API call
   if (_cachedTaxConfig != null) return _cachedTaxConfig!;
 
-  const storage = FlutterSecureStorage();
-  final results = await Future.wait([
-    storage.read(key: 'access_token'),
-    storage.read(key: 'outlet_id'),
-    storage.read(key: 'tenant_id'),
-  ]);
-  final token = results[0];
-  final outletId = results[1];
-  final tenantId = results[2];
+  final c = SessionCache.instance;
+  final token = c.accessToken;
+  final outletId = c.outletId;
+  final tenantId = c.tenantId;
 
   if (outletId == null || outletId.isEmpty) return const TaxConfig();
 

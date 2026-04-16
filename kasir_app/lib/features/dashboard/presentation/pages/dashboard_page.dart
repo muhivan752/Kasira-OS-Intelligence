@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../../../core/services/session_cache.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -20,10 +20,7 @@ final _currencyFmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decim
 
 const _proTiers = {'pro', 'business', 'enterprise'};
 
-final _subscriptionTierProvider = FutureProvider<String>((ref) async {
-  const storage = FlutterSecureStorage();
-  return await storage.read(key: 'subscription_tier') ?? 'starter';
-});
+// Tier now from SessionCache (0ms sync read)
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -43,9 +40,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _loadTier() async {
-    const storage = FlutterSecureStorage();
-    final tier = await storage.read(key: 'subscription_tier') ?? 'starter';
-    if (mounted) setState(() => _isPro = _proTiers.contains(tier));
+    if (mounted) setState(() => _isPro = SessionCache.instance.isPro);
   }
 
   List<Widget> get _pages => [
@@ -425,8 +420,7 @@ class _DashboardContent extends ConsumerWidget {
             const SizedBox(width: 8),
             ElevatedButton.icon(
               onPressed: () {
-                final tier = ref.read(_subscriptionTierProvider).valueOrNull ?? 'starter';
-                if (_proTiers.contains(tier)) {
+                if (SessionCache.instance.isPro) {
                   context.push('/tabs');
                 } else {
                   _DashboardPageState._showUpgradeSheet(context, 'Tab / Split Bill');

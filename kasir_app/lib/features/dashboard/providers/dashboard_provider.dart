@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/services/session_cache.dart';
 
 class DashboardStats {
   final double revenueToday;
@@ -43,15 +43,10 @@ class DashboardNotifier extends AsyncNotifier<DashboardStats> {
   Future<DashboardStats> build() => _fetch();
 
   Future<DashboardStats> _fetch() async {
-    const storage = FlutterSecureStorage();
-    final results = await Future.wait([
-      storage.read(key: 'access_token'),
-      storage.read(key: 'tenant_id'),
-      storage.read(key: 'outlet_id'),
-    ]);
-    final token = results[0];
-    final tenantId = results[1];
-    final outletId = results[2];
+    final c = SessionCache.instance;
+    final token = c.accessToken;
+    final tenantId = c.tenantId;
+    final outletId = c.outletId;
 
     final dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiV1,

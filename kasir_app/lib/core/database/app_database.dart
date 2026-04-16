@@ -57,6 +57,13 @@ LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
     final file = File(p.join(dbFolder.path, 'kasira_pos.sqlite'));
-    return NativeDatabase.createInBackground(file);
+    final db = NativeDatabase.createInBackground(file);
+    return db;
   });
+}
+
+/// Call once at app start to enable WAL mode for better concurrent read/write
+Future<void> enableWalMode(AppDatabase db) async {
+  await db.customStatement('PRAGMA journal_mode=WAL');
+  await db.customStatement('PRAGMA synchronous=NORMAL');
 }
