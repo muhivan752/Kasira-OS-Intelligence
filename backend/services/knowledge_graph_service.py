@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import List, Dict, Optional
 from uuid import UUID
 
+import sqlalchemy
 from sqlalchemy import select, delete, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -157,7 +158,58 @@ async def rebuild_graph(tenant_id: UUID, brand_id: UUID, db: AsyncSession) -> Di
                 ))
                 stats["co_dependency"] += 1
 
-    # 6. Bulk insert
+    # 6. Table → Product edges (via tabs + orders — which products sold at which table)
+    try:
+        from backend.models.tab import Tab
+        from backend.models.order import Order, OrderItem
+        from backend.models.reservation import Table as TableModel
+
+        # Get all paid tabs for this tenant's outlets
+        tab_orders_q = await db.execute(
+            select(
+                TableModel.id.label("table_id"),
+                TableModel.name.label("table_name"),
+                OrderItem.product_id,
+                func.count(OrderItem.id).label("cnt"),
+            )
+            .join(Tab, Tab.table_id == TableModel.id)
+            .join(Order, Order.tab_id == Tab.id)
+            .join(OrderItem, OrderItem.order_id == Order.id)
+            .where(
+                Tab.status == 'paid',
+                Tab.deleted_at.is_(None),
+                Order.deleted_at.is_(None),
+                OrderItem.deleted_at.is_(None),
+                TableModel.outlet_id.in_(
+                    select(Product.id).where(False)  # placeholder
+                ) if False else True,
+            )
+            .join(Product, Product.id == OrderItem.product_id)
+            .where(Product.brand_id == brand_id, Product.deleted_at.is_(None))
+            .group_by(TableModel.id, TableModel.name, OrderItem.product_id)
+        )
+        table_product_rows = tab_orders_q.all()
+
+        # table --served--> product (what gets ordered at this table)
+        table_products: Dict[UUID, int] = {}  # table_id → total orders
+        for row in table_product_rows:
+            weight = min(Decimal(str(row.cnt)) / Decimal("20"), Decimal("1.0"))
+            edges.append(KnowledgeGraphEdge(
+                tenant_id=tenant_id,
+                source_node_type="table",
+                source_node_id=row.table_id,
+                target_node_type="product",
+                target_node_id=row.product_id,
+                relation_type="served",
+                weight=weight,
+                metadata_payload={"count": row.cnt, "table_name": row.table_name},
+            ))
+            table_products[row.table_id] = table_products.get(row.table_id, 0) + row.cnt
+            stats["table_product"] = stats.get("table_product", 0) + 1
+    except Exception as e:
+        logger.debug(f"Table→Product KG edges skipped: {e}")
+
+    # 7. Bulk insert
     if edges:
         db.add_all(edges)
         await db.flush()
@@ -482,5 +534,37 @@ async def build_ai_context_from_graph(
                     lines.append(f"- {s['name']}: sisa {s['stock']:.0f} {s['unit']} (min: {s['min_stock']:.0f})")
     except Exception as e:
         logger.debug(f"HPP/stock context skipped: {e}")
+
+    # Table popularity from KG (served edges)
+    try:
+        table_pop_q = await db.execute(
+            select(
+                KnowledgeGraphEdge.source_node_id,
+                func.sum(KnowledgeGraphEdge.metadata_payload["count"].astext.cast(sqlalchemy.Integer)).label("total"),
+                func.count(KnowledgeGraphEdge.id).label("product_variety"),
+            ).where(
+                KnowledgeGraphEdge.tenant_id == tenant_id,
+                KnowledgeGraphEdge.relation_type == "served",
+                KnowledgeGraphEdge.deleted_at.is_(None),
+            ).group_by(KnowledgeGraphEdge.source_node_id)
+            .order_by(func.sum(KnowledgeGraphEdge.metadata_payload["count"].astext.cast(sqlalchemy.Integer)).desc())
+            .limit(5)
+        )
+        table_pop = table_pop_q.all()
+        if table_pop:
+            # Get table names
+            table_ids = [r.source_node_id for r in table_pop]
+            from backend.models.reservation import Table as TableModel
+            table_names_q = await db.execute(
+                select(TableModel.id, TableModel.name).where(TableModel.id.in_(table_ids))
+            )
+            tbl_name_map = {t.id: t.name for t in table_names_q.all()}
+
+            lines.append("\nMEJA PALING RAMAI (dari history tab):")
+            for r in table_pop:
+                tname = tbl_name_map.get(r.source_node_id, "?")
+                lines.append(f"- {tname}: {r.total} pesanan, {r.product_variety} jenis produk")
+    except Exception as e:
+        logger.debug(f"Table popularity context skipped: {e}")
 
     return "\n".join(lines)

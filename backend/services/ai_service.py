@@ -657,10 +657,12 @@ async def build_context(
         )
         available_tables = available_tables_q.scalar() or 0
 
-        # Tab/Bon info (Pro feature)
+        # Tab/Bon info (Pro feature) — active tabs + today stats + table occupancy
         tab_info = ""
         try:
             from backend.models.tab import Tab as TabModel
+
+            # 1. Active tabs
             open_tabs_q = await db.execute(
                 select(
                     TabModel.tab_number,
@@ -668,6 +670,7 @@ async def build_context(
                     TabModel.total_amount,
                     TabModel.guest_count,
                     TabModel.table_id,
+                    TabModel.opened_at,
                 ).where(
                     TabModel.outlet_id == outlet_id,
                     TabModel.status.in_(['open', 'asking_bill', 'splitting']),
@@ -675,19 +678,136 @@ async def build_context(
                 )
             )
             open_tabs = open_tabs_q.all()
+
+            # 2. Today's tab stats from event store
+            tab_opened_today = await db.execute(
+                select(func.count(Event.id)).where(
+                    Event.outlet_id == outlet_id,
+                    Event.event_type == "tab.opened",
+                    Event.created_at >= start_today,
+                )
+            )
+            tabs_opened_count = tab_opened_today.scalar() or 0
+
+            tab_paid_today_q = await db.execute(
+                select(
+                    func.count(Event.id),
+                    func.sum(Event.event_data["total_amount"].astext.cast(sqlalchemy.Numeric)),
+                ).where(
+                    Event.outlet_id == outlet_id,
+                    Event.event_type == "tab.paid",
+                    Event.created_at >= start_today,
+                )
+            )
+            tab_paid_row = tab_paid_today_q.one()
+            tabs_paid_count = tab_paid_row[0] or 0
+            tabs_revenue = float(tab_paid_row[1] or 0)
+
+            # 3. Average tab duration (opened → paid) from events today
+            avg_duration_str = ""
+            try:
+                avg_q = await db.execute(text("""
+                    SELECT AVG(EXTRACT(EPOCH FROM (closed.created_at - opened.created_at))) / 60 as avg_min
+                    FROM events opened
+                    JOIN events closed ON closed.stream_id = opened.stream_id
+                        AND closed.event_type = 'tab.paid'
+                    WHERE opened.outlet_id = :oid
+                        AND opened.event_type = 'tab.opened'
+                        AND opened.created_at >= :start
+                """), {"oid": str(outlet_id), "start": start_today})
+                avg_min = avg_q.scalar()
+                if avg_min and avg_min > 0:
+                    avg_duration_str = f"\n- Rata-rata durasi tab: {avg_min:.0f} menit (buka → bayar)"
+            except Exception:
+                pass
+
+            # 4. Table occupancy detail
+            table_detail_q = await db.execute(
+                select(
+                    Table.name,
+                    Table.status,
+                ).where(
+                    Table.outlet_id == outlet_id,
+                    Table.is_active == True,
+                    Table.deleted_at.is_(None),
+                ).order_by(Table.name)
+            )
+            all_tables = table_detail_q.all()
+            occupied_names = [t.name for t in all_tables if t.status == 'occupied']
+            available_names = [t.name for t in all_tables if t.status == 'available']
+
+            # 5. Tab event patterns (cancellations, splits, merges today)
+            tab_event_stats_q = await db.execute(
+                select(
+                    Event.event_type,
+                    func.count(Event.id),
+                ).where(
+                    Event.outlet_id == outlet_id,
+                    Event.event_type.like("tab.%"),
+                    Event.created_at >= start_today,
+                ).group_by(Event.event_type)
+            )
+            tab_event_map = {r[0]: r[1] for r in tab_event_stats_q.all()}
+
+            # Build tab info string
+            tab_lines_parts = []
+
+            # Stats
+            tab_lines_parts.append(f"\nTAB/BON HARI INI:")
+            tab_lines_parts.append(f"- Dibuka: {tabs_opened_count} tab | Selesai dibayar: {tabs_paid_count} tab")
+            if tabs_revenue > 0:
+                tab_lines_parts.append(f"- Revenue via tab: Rp{tabs_revenue:,.0f}")
+            if avg_duration_str:
+                tab_lines_parts.append(avg_duration_str.strip())
+            cancel_count_tab = tab_event_map.get("tab.cancelled", 0)
+            merge_count_tab = tab_event_map.get("tab.merged", 0)
+            split_count_tab = tab_event_map.get("tab.split", 0)
+            asking_bill_events = tab_event_map.get("tab.asking_bill", 0)
+            if cancel_count_tab or merge_count_tab or split_count_tab:
+                parts = []
+                if split_count_tab:
+                    parts.append(f"{split_count_tab} split")
+                if merge_count_tab:
+                    parts.append(f"{merge_count_tab} gabung meja")
+                if cancel_count_tab:
+                    parts.append(f"{cancel_count_tab} dibatalkan")
+                tab_lines_parts.append(f"- Aktivitas: {', '.join(parts)}")
+
+            # Active tabs
             if open_tabs:
-                tab_lines = []
                 asking_bill_count = 0
+                tab_detail_lines = []
+                now = datetime.now(timezone.utc)
                 for t in open_tabs:
                     status_label = {"open": "aktif", "asking_bill": "MINTA BILL", "splitting": "split bill"}.get(t.status, t.status)
-                    tab_lines.append(f"{t.tab_number} ({status_label}, {t.guest_count} tamu, Rp{float(t.total_amount):,.0f})")
+                    duration = ""
+                    if t.opened_at:
+                        mins = int((now - t.opened_at).total_seconds() / 60)
+                        duration = f", {mins} menit"
+                    # Find table name
+                    tbl_name = "?"
+                    for tbl in all_tables:
+                        if t.table_id and tbl.name:
+                            # Match by checking occupied tables
+                            pass
+                    tab_detail_lines.append(f"{t.tab_number} ({status_label}, {t.guest_count} tamu, Rp{float(t.total_amount):,.0f}{duration})")
                     if t.status == 'asking_bill':
                         asking_bill_count += 1
-                tab_info = f"""
-TAB/BON AKTIF ({len(open_tabs)} tab):
-{chr(10).join("- " + l for l in tab_lines)}"""
+                tab_lines_parts.append(f"\nTAB AKTIF ({len(open_tabs)} tab):")
+                for line in tab_detail_lines:
+                    tab_lines_parts.append(f"- {line}")
                 if asking_bill_count > 0:
-                    tab_info += f"\n⚠️ {asking_bill_count} tab MINTA BILL — perlu segera diproses!"
+                    tab_lines_parts.append(f"⚠️ {asking_bill_count} tab MINTA BILL — perlu segera diproses!")
+
+            # Table occupancy
+            if all_tables:
+                tab_lines_parts.append(f"\nMEJA ({len(available_names)}/{len(all_tables)} tersedia):")
+                if occupied_names:
+                    tab_lines_parts.append(f"- Terisi: {', '.join(occupied_names)}")
+                if available_names:
+                    tab_lines_parts.append(f"- Kosong: {', '.join(available_names)}")
+
+            tab_info = "\n".join(tab_lines_parts)
         except Exception:
             pass
 
@@ -759,7 +879,9 @@ INSTRUKSI:
 - Untuk reservasi: informasikan ketersediaan meja dan jam operasional
 - Untuk HPP: jelaskan komponen biaya, margin, dan dampak perubahan harga bahan
 - Untuk restock: bisa langsung eksekusi via chat (contoh: "restock kopi arabica 5kg")
-- Jika ditanya dampak kenaikan harga bahan, hitung ulang HPP dan margin baru"""
+- Jika ditanya dampak kenaikan harga bahan, hitung ulang HPP dan margin baru
+- Untuk tab/bon: laporkan tab aktif, tab yang minta bill, durasi, dan meja yang terisi
+- Untuk meja: jelaskan meja mana yang kosong/terisi dan tab yang sedang berjalan"""
 
     # Knowledge graph context (non-blocking)
     kg_context = ""
