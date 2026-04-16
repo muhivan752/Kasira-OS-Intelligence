@@ -9,8 +9,10 @@ import {
 } from '@/app/actions/api';
 import { Plus, Search, Edit2, Loader2, X, Trash2, Tag, Upload, ImageOff, Package, FlaskConical } from 'lucide-react';
 import { useRef } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function MenuPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'produk' | 'kategori'>('produk');
 
@@ -71,6 +73,11 @@ export default function MenuPage() {
       if (user) {
         const tier = user.subscription_tier || 'starter';
         setIsPro(['pro', 'business', 'enterprise'].includes(tier));
+      }
+    } catch (error: any) {
+      if (error?.message === 'SESSION_EXPIRED' || error?.message === 'Unauthorized') {
+        router.push('/login');
+        return;
       }
     } finally {
       setLoading(false);

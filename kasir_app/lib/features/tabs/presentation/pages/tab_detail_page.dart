@@ -262,8 +262,8 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
               child: Row(
                 children: [
                   _buildActionChip(LucideIcons.plus, 'Tambah\nPesanan', const Color(0xFF059669), () {
-                    // Navigate to POS with table pre-selected
-                    context.go('/pos');
+                    // Navigate to dashboard (POS is tab 0)
+                    context.go('/dashboard');
                   }),
                   const SizedBox(width: 8),
                   _buildActionChip(LucideIcons.arrowRightLeft, 'Pindah\nMeja', AppColors.info, () {

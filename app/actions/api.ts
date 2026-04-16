@@ -57,14 +57,15 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   }
 
   if (res.status === 401) {
-    // Clear auth cookies on 401 and redirect
+    // Clear auth cookies on 401
     const { cookies: getCookies } = await import('next/headers');
     const cookieStore = await getCookies();
     cookieStore.delete('token');
     cookieStore.delete('tenant_id');
     cookieStore.delete('outlet_id');
-    const { redirect } = await import('next/navigation');
-    redirect('/login');
+    // Throw instead of redirect — callers with try-catch can handle gracefully,
+    // page-level loaders will catch and redirect via client-side navigation
+    throw new Error('SESSION_EXPIRED');
   }
   return res;
 }

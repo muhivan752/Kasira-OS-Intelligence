@@ -51,7 +51,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         } else {
           setOutletName('Belum ada Outlet');
         }
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.message === 'SESSION_EXPIRED' || error?.message === 'Unauthorized') {
+          router.push('/login');
+          return;
+        }
         console.error('Failed to load user data', error);
       }
     }
