@@ -52,15 +52,12 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       // Fetch outlet name
-      final outletId = await _storage.read(key: 'outlet_id');
+      final outletId = SessionCache.instance.outletId;
       if (outletId != null && mounted) {
         try {
           final outletRes = await dio.get(
             '/outlets/$outletId',
-            options: Options(headers: {
-              if (token != null) 'Authorization': 'Bearer $token',
-              if (tenantId != null) 'X-Tenant-ID': tenantId,
-            }),
+            options: Options(headers: SessionCache.instance.authHeaders),
           );
           final outletData = outletRes.data['data'];
           if (mounted) {

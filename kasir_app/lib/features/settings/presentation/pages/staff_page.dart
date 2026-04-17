@@ -59,7 +59,7 @@ class _StaffPageState extends State<StaffPage> {
 
   Future<void> _toggleStatus(String userId, bool currentStatus) async {
     try {
-      final headers = await _getHeaders();
+      final headers = SessionCache.instance.authHeaders;
       await _dio.put(
         '/users/$userId/status',
         options: Options(headers: headers),
@@ -150,7 +150,7 @@ class _StaffPageState extends State<StaffPage> {
 
                       setDialogState(() => isSubmitting = true);
                       try {
-                        final headers = await _getHeaders();
+                        final headers = SessionCache.instance.authHeaders;
                         await _dio.post(
                           '/users/cashier',
                           options: Options(headers: headers),

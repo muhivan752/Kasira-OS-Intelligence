@@ -49,7 +49,6 @@ class _ShiftPageState extends State<ShiftPage> {
     setState(() { _isLoading = true; _error = null; });
     try {
       final outletId = SessionCache.instance.outletId;
-      final headers = await _headers();
 
       final res = await _dio.get(
         '/shifts/current',
