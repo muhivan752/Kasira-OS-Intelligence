@@ -17,6 +17,7 @@ from .table import Table
 from .reservation import Reservation
 from .loyalty import CustomerPoints, PointTransaction
 from .tab import Tab, TabSplit
+from .payment_refund import PaymentRefund
 from .ingredient import Ingredient
 from .recipe import Recipe, RecipeIngredient
 from .knowledge_graph import KnowledgeGraphEdge

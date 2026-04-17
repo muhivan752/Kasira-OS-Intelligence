@@ -71,3 +71,5 @@ class ShiftWithActivitiesResponse(ShiftResponse):
     cash_payments: List[CashPaymentSummary] = []
     total_cash_sales: float = 0
     total_qris_sales: float = 0
+    variance: Optional[float] = None  # ending_cash - expected_ending_cash
+    variance_status: Optional[str] = None  # 'balanced', 'surplus', 'deficit'

@@ -27,6 +27,8 @@ class Order(BaseModel):
     total_amount = Column(Numeric(12, 2), server_default='0', nullable=False)
     
     notes = Column(Text, nullable=True)
+    discount_approved_by = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    discount_reason = Column(String(200), nullable=True)
     row_version = Column(Integer, server_default='0', nullable=False)
 
     # Relationships

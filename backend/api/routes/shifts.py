@@ -239,11 +239,21 @@ async def close_shift(
         tenant_id=current_user.tenant_id,
     )
 
+    # Calculate variance
+    variance = float(shift_in.ending_cash) - expected_cash
+    variance_status = 'balanced' if abs(variance) < 1 else ('surplus' if variance > 0 else 'deficit')
+
+    resp = ShiftResponse.model_validate(shift)
+
     return StandardResponse(
         success=True,
-        data=ShiftResponse.model_validate(shift),
+        data={
+            **resp.model_dump(),
+            "variance": round(variance, 2),
+            "variance_status": variance_status,
+        },
         request_id=request.state.request_id,
-        message="Shift closed successfully"
+        message=f"Shift ditutup. {'Kas seimbang' if variance_status == 'balanced' else f'Selisih Rp {abs(variance):,.0f} ({variance_status})'}",
     )
 
 @router.post("/{shift_id}/activities", response_model=StandardResponse[CashActivityResponse])

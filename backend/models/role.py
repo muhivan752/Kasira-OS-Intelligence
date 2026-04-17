@@ -16,3 +16,6 @@ class Role(BaseModel):
     can_view_supplier_price = Column(Boolean, server_default="false", nullable=False)
     can_approve_hpp_update = Column(Boolean, server_default="false", nullable=False)
     can_scan_invoice = Column(Boolean, server_default="true", nullable=False)
+    can_refund = Column(Boolean, server_default="false", nullable=False)
+    can_approve_refund = Column(Boolean, server_default="false", nullable=False)
+    can_discount_override = Column(Boolean, server_default="false", nullable=False)

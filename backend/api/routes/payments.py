@@ -17,7 +17,7 @@ from backend.models.payment import Payment
 from backend.models.order import Order, OrderItem
 from backend.models.outlet import Outlet
 from backend.models.shift import Shift, ShiftStatus
-from backend.schemas.payment import PaymentCreate, PaymentResponse, PaymentStatus, PaymentMethod
+from backend.schemas.payment import PaymentCreate, PaymentResponse, PaymentStatus, PaymentMethod, RefundRequest, RefundApproval, RefundResponse
 from backend.schemas.order import OrderStatus
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
@@ -123,12 +123,12 @@ async def create_payment(
                 message="Payment already processed (idempotent)"
             )
 
-    # Verify order exists if provided (selectinload items+product for receipt)
+    # Verify order exists if provided — SELECT FOR UPDATE to prevent double payment
     if payment_in.order_id:
         order_result = await db.execute(
             select(Order).options(
                 selectinload(Order.items).selectinload(OrderItem.product)
-            ).where(Order.id == payment_in.order_id)
+            ).where(Order.id == payment_in.order_id).with_for_update()
         )
         order = order_result.scalar_one_or_none()
         if not order or order.deleted_at is not None:
@@ -630,6 +630,37 @@ async def get_payment_status(
         request_id=request.state.request_id
     )
 
+@router.get("/refunds", response_model=StandardResponse[list[RefundResponse]])
+async def list_refunds(
+    request: Request,
+    outlet_id: UUID,
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """List refunds for an outlet."""
+    from backend.models.payment_refund import PaymentRefund
+
+    query = (
+        select(PaymentRefund)
+        .join(Payment, PaymentRefund.payment_id == Payment.id)
+        .where(Payment.outlet_id == outlet_id, PaymentRefund.deleted_at.is_(None))
+        .order_by(PaymentRefund.created_at.desc())
+        .limit(50)
+    )
+    if status:
+        query = query.where(PaymentRefund.status == status)
+
+    result = await db.execute(query)
+    refunds = result.scalars().all()
+
+    return StandardResponse(
+        success=True,
+        data=[RefundResponse.model_validate(r) for r in refunds],
+        request_id=request.state.request_id,
+    )
+
+
 @router.get("/", response_model=StandardResponse[List[PaymentResponse]])
 async def read_payments(
     request: Request,
@@ -816,4 +847,230 @@ async def send_receipt_whatsapp(
         data={"phone": mask_phone(phone), "sent": sent},
         request_id=request.state.request_id,
         message="Struk berhasil dikirim via WhatsApp" if sent else "Gagal mengirim struk"
+    )
+
+
+# ── REFUND ENDPOINTS ─────────────────────────────────────────────────────────
+
+@router.post("/refunds", response_model=StandardResponse[RefundResponse])
+async def request_refund(
+    request: Request,
+    body: RefundRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Request a refund. Requires can_refund permission."""
+    from backend.models.payment_refund import PaymentRefund
+    from backend.models.role import Role
+    from decimal import Decimal as D
+
+    # Check permission
+    if current_user.role_id:
+        role = await db.get(Role, current_user.role_id)
+        if role and not role.can_refund and not current_user.is_superuser:
+            raise HTTPException(status_code=403, detail="Anda tidak punya izin untuk refund")
+    elif not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Anda tidak punya izin untuk refund")
+
+    # Validate payment exists and is paid
+    payment = await db.execute(
+        select(Payment).where(Payment.id == body.payment_id, Payment.deleted_at.is_(None)).with_for_update()
+    )
+    payment = payment.scalar_one_or_none()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment tidak ditemukan")
+    if payment.status != 'paid':
+        raise HTTPException(status_code=400, detail=f"Payment status '{payment.status}', hanya payment 'paid' yang bisa di-refund")
+
+    # Validate amount
+    refund_amount = D(str(body.amount))
+    if refund_amount > D(str(payment.amount_paid)):
+        raise HTTPException(status_code=400, detail="Jumlah refund melebihi jumlah pembayaran")
+
+    # Check no existing pending refund for this payment
+    existing = await db.execute(
+        select(PaymentRefund).where(
+            PaymentRefund.payment_id == body.payment_id,
+            PaymentRefund.status.in_(['pending', 'approved']),
+            PaymentRefund.deleted_at.is_(None),
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Sudah ada refund pending untuk payment ini")
+
+    refund = PaymentRefund(
+        payment_id=body.payment_id,
+        amount=refund_amount,
+        reason=body.reason,
+        requested_by=current_user.id,
+    )
+    db.add(refund)
+
+    # If user is owner/superuser, auto-approve
+    if current_user.is_superuser:
+        refund.status = 'approved'
+        refund.approved_by = current_user.id
+        refund.approved_at = datetime.now(timezone.utc)
+
+    await db.flush()
+
+    db.add(Event(
+        outlet_id=payment.outlet_id,
+        stream_id=f"refund:{refund.id}",
+        event_type="refund.requested",
+        event_data={
+            "refund_id": str(refund.id),
+            "payment_id": str(payment.id),
+            "amount": float(refund_amount),
+            "reason": body.reason,
+            "auto_approved": current_user.is_superuser,
+        },
+        event_metadata={"ts": datetime.now(timezone.utc).isoformat(), "user_id": str(current_user.id)},
+    ))
+    await log_audit(
+        db=db, action="CREATE", entity="refund", entity_id=refund.id,
+        after_state={"payment_id": str(body.payment_id), "amount": float(refund_amount), "reason": body.reason},
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data=RefundResponse.model_validate(refund),
+        request_id=request.state.request_id,
+        message="Refund berhasil diajukan" + (" dan disetujui" if current_user.is_superuser else ""),
+    )
+
+
+@router.post("/refunds/{refund_id}/approve", response_model=StandardResponse[RefundResponse])
+async def approve_refund(
+    request: Request,
+    refund_id: UUID,
+    body: RefundApproval,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Approve a pending refund and process it. Requires can_approve_refund or superuser."""
+    from backend.models.payment_refund import PaymentRefund
+    from backend.models.role import Role
+    from decimal import Decimal as D
+
+    # Check permission
+    if current_user.role_id:
+        role = await db.get(Role, current_user.role_id)
+        if role and not role.can_approve_refund and not current_user.is_superuser:
+            raise HTTPException(status_code=403, detail="Anda tidak punya izin untuk approve refund")
+    elif not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Anda tidak punya izin untuk approve refund")
+
+    refund = await db.execute(
+        select(PaymentRefund).where(PaymentRefund.id == refund_id, PaymentRefund.deleted_at.is_(None)).with_for_update()
+    )
+    refund = refund.scalar_one_or_none()
+    if not refund:
+        raise HTTPException(status_code=404, detail="Refund tidak ditemukan")
+    if refund.status != 'pending':
+        raise HTTPException(status_code=400, detail=f"Refund status '{refund.status}', hanya 'pending' yang bisa di-approve")
+    if refund.row_version != body.row_version:
+        raise HTTPException(status_code=409, detail="Data berubah, refresh dulu")
+
+    now = datetime.now(timezone.utc)
+    refund.status = 'completed'
+    refund.approved_by = current_user.id
+    refund.approved_at = now
+    refund.completed_at = now
+    refund.row_version += 1
+
+    # Update payment status
+    payment = await db.execute(
+        select(Payment).where(Payment.id == refund.payment_id).with_for_update()
+    )
+    payment = payment.scalar_one_or_none()
+    if payment:
+        payment.status = 'refunded'
+        payment.refunded_at = now
+        payment.refund_amount = D(str(refund.amount))
+        payment.row_version += 1
+
+        # Restore stock if order exists
+        if payment.order_id:
+            order = await db.get(Order, payment.order_id)
+            if order and order.status == 'completed':
+                from backend.services.stock_service import restore_stock_on_cancel, restore_ingredients_on_cancel
+                outlet = await db.get(Outlet, order.outlet_id)
+                stock_mode = getattr(outlet, 'stock_mode', 'simple') if outlet else 'simple'
+                if stock_mode == 'recipe':
+                    await restore_ingredients_on_cancel(db, order)
+                else:
+                    await restore_stock_on_cancel(db, order)
+
+    db.add(Event(
+        outlet_id=payment.outlet_id if payment else None,
+        stream_id=f"refund:{refund.id}",
+        event_type="refund.completed",
+        event_data={
+            "refund_id": str(refund.id),
+            "payment_id": str(refund.payment_id),
+            "amount": float(refund.amount),
+            "approved_by": str(current_user.id),
+        },
+        event_metadata={"ts": now.isoformat(), "user_id": str(current_user.id)},
+    ))
+    await log_audit(
+        db=db, action="UPDATE", entity="refund", entity_id=refund.id,
+        after_state={"action": "approve", "status": "completed"},
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data=RefundResponse.model_validate(refund),
+        request_id=request.state.request_id,
+        message="Refund disetujui dan diproses",
+    )
+
+
+@router.post("/refunds/{refund_id}/reject", response_model=StandardResponse[RefundResponse])
+async def reject_refund(
+    request: Request,
+    refund_id: UUID,
+    body: RefundApproval,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Reject a pending refund."""
+    from backend.models.payment_refund import PaymentRefund
+
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Hanya owner yang bisa reject refund")
+
+    refund = await db.execute(
+        select(PaymentRefund).where(PaymentRefund.id == refund_id, PaymentRefund.deleted_at.is_(None)).with_for_update()
+    )
+    refund = refund.scalar_one_or_none()
+    if not refund:
+        raise HTTPException(status_code=404, detail="Refund tidak ditemukan")
+    if refund.status != 'pending':
+        raise HTTPException(status_code=400, detail=f"Refund status '{refund.status}', hanya 'pending' yang bisa di-reject")
+    if refund.row_version != body.row_version:
+        raise HTTPException(status_code=409, detail="Data berubah, refresh dulu")
+
+    refund.status = 'rejected'
+    refund.approved_by = current_user.id
+    refund.approved_at = datetime.now(timezone.utc)
+    refund.row_version += 1
+
+    await log_audit(
+        db=db, action="UPDATE", entity="refund", entity_id=refund.id,
+        after_state={"action": "reject"},
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data=RefundResponse.model_validate(refund),
+        request_id=request.state.request_id,
+        message="Refund ditolak",
     )

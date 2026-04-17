@@ -113,6 +113,20 @@ async def create_order(
     subtotal = order_in.subtotal if order_in.subtotal > 0 else calculated_subtotal
     discount = order_in.discount_amount or D(0)
 
+    # Discount override check: if discount > 20% of subtotal, require permission
+    discount_approved_by = None
+    if discount > 0 and subtotal > 0:
+        discount_pct = (discount / subtotal) * 100
+        if discount_pct > 20 and not current_user.is_superuser:
+            from backend.models.role import Role
+            role = await db.get(Role, current_user.role_id) if current_user.role_id else None
+            if not role or not role.can_discount_override:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Diskon {discount_pct:.0f}% melebihi batas 20%. Perlu persetujuan supervisor."
+                )
+            discount_approved_by = current_user.id
+
     # Auto-calculate tax & service charge from outlet config
     tax_config = (await db.execute(
         select(OutletTaxConfig).where(
@@ -162,6 +176,7 @@ async def create_order(
         discount_amount=discount,
         total_amount=total_amount,
         notes=order_in.notes,
+        discount_approved_by=discount_approved_by,
         status=OrderStatus.pending
     )
     db.add(order)

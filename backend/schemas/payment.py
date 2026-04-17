@@ -53,3 +53,38 @@ class PaymentResponse(PaymentBase):
     updated_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
+
+# ── Refund Schemas ────────────────────────────────────────────────────────────
+
+class RefundStatus(str, Enum):
+    pending = 'pending'
+    approved = 'approved'
+    rejected = 'rejected'
+    completed = 'completed'
+    failed = 'failed'
+
+class RefundRequest(BaseModel):
+    payment_id: UUID
+    amount: Decimal = Field(..., gt=0)
+    reason: str = Field(..., min_length=3, max_length=500)
+
+class RefundApproval(BaseModel):
+    row_version: int
+
+class RefundResponse(BaseModel):
+    id: UUID
+    payment_id: UUID
+    amount: Decimal
+    reason: str
+    status: RefundStatus
+    requested_by: Optional[UUID] = None
+    approved_by: Optional[UUID] = None
+    approved_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    reference_id: Optional[str] = None
+    row_version: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
