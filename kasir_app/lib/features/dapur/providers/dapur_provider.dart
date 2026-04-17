@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/services/session_cache.dart';
 
 // ─── Models ──────────────────────────────────────────────────────────────────
 
@@ -119,7 +119,7 @@ class DapurState {
 
 class DapurNotifier extends StateNotifier<DapurState> {
   Timer? _pollTimer;
-  final _storage = const FlutterSecureStorage();
+  final _cache = SessionCache.instance;
 
   DapurNotifier() : super(const DapurState());
 
@@ -129,16 +129,10 @@ class DapurNotifier extends StateNotifier<DapurState> {
         receiveTimeout: const Duration(seconds: 8),
       ));
 
-  Future<Map<String, String>> get _headers async {
-    final token = await _storage.read(key: 'access_token');
-    final tenantId = await _storage.read(key: 'tenant_id');
-    final outletId = await _storage.read(key: 'outlet_id');
-    return {
-      if (token != null) 'Authorization': 'Bearer $token',
-      if (tenantId != null) 'X-Tenant-ID': tenantId,
-      if (outletId != null) 'X-Outlet-ID': outletId,
-    };
-  }
+  Map<String, String> get _headers => {
+    ..._cache.authHeaders,
+    if (_cache.outletId != null) 'X-Outlet-ID': _cache.outletId!,
+  };
 
   /// Start auto-polling every [intervalSeconds] seconds
   void startPolling({int intervalSeconds = 8}) {
@@ -159,8 +153,8 @@ class DapurNotifier extends StateNotifier<DapurState> {
     if (!silent) state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final headers = await _headers;
-      final outletId = await _storage.read(key: 'outlet_id');
+      final headers = _headers;
+      final outletId = _cache.outletId;
 
       // Active orders: pending + preparing + ready
       final activeRes = await _dio.get(
@@ -222,7 +216,7 @@ class DapurNotifier extends StateNotifier<DapurState> {
   /// Update status of a single order, returns true on success
   Future<bool> updateStatus(DapurOrder order, String newStatus) async {
     try {
-      final headers = await _headers;
+      final headers = _headers;
       await _dio.put(
         '/orders/${order.id}/status',
         data: {

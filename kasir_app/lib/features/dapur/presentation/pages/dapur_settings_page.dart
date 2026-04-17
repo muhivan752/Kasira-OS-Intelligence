@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/services/session_cache.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 
@@ -14,8 +14,6 @@ class DapurSettingsPage extends StatefulWidget {
 class _DapurSettingsPageState extends State<DapurSettingsPage> {
   bool _soundEnabled = true;
   int _pollInterval = 8; // seconds
-  final _storage = const FlutterSecureStorage();
-
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -43,7 +41,7 @@ class _DapurSettingsPageState extends State<DapurSettingsPage> {
     );
 
     if (confirm == true && mounted) {
-      await _storage.delete(key: 'access_token');
+      await SessionCache.instance.clear();
       if (mounted) context.go('/dapur/login');
     }
   }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../../../core/services/session_cache.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/reservation_provider.dart';
@@ -24,9 +24,8 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
     Future.microtask(() => ref.read(reservationProvider.notifier).fetchReservations());
   }
 
-  Future<void> _checkTier() async {
-    const storage = FlutterSecureStorage();
-    final tier = await storage.read(key: 'subscription_tier') ?? 'starter';
+  void _checkTier() {
+    final tier = SessionCache.instance.subscriptionTier ?? 'starter';
     if (!_proTiers.contains(tier) && mounted) {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(

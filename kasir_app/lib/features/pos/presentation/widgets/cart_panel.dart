@@ -6,13 +6,13 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/pos_mode_provider.dart';
 import '../../presentation/pages/receipt_preview_page.dart';
 import 'payment_modal.dart';
 import '../../../customers/presentation/widgets/customer_selection_modal.dart';
 import '../../../dashboard/providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../../products/providers/products_provider.dart';
-import '../../../tables/presentation/pages/table_grid_page.dart';
 
 // Tier is now read from SessionCache (0ms, in-memory)
 
@@ -60,76 +60,8 @@ class CartPanel extends ConsumerWidget {
           ),
         ),
 
-        // Order Type
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-          child: Row(
-            children: [
-              _OrderTypeBtn(
-                label: 'Dine In',
-                icon: LucideIcons.utensils,
-                isSelected: cart.orderType == 'Dine In',
-                onTap: () => ref.read(cartProvider.notifier).setOrderType('Dine In'),
-              ),
-              const SizedBox(width: 12),
-              _OrderTypeBtn(
-                label: 'Takeaway',
-                icon: LucideIcons.shoppingBag,
-                isSelected: cart.orderType == 'Takeaway',
-                onTap: () => ref.read(cartProvider.notifier).setOrderType('Takeaway'),
-              ),
-            ],
-          ),
-        ),
-
-        // Table Selection (Dine In only)
-        if (cart.orderType == 'Dine In')
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-            child: InkWell(
-              onTap: () => _showTablePicker(context, ref),
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: cart.tableId != null
-                      ? AppColors.primary.withOpacity(0.08)
-                      : AppColors.surfaceVariant,
-                  border: Border.all(
-                    color: cart.tableId != null ? AppColors.primary : AppColors.border,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      LucideIcons.armchair,
-                      color: cart.tableId != null ? AppColors.primary : AppColors.textSecondary,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        cart.tableName ?? 'Pilih Meja *',
-                        style: TextStyle(
-                          color: cart.tableId != null ? AppColors.primary : AppColors.textSecondary,
-                          fontSize: 13,
-                          fontWeight: cart.tableId != null ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                    if (cart.tableId != null)
-                      GestureDetector(
-                        onTap: () => ref.read(cartProvider.notifier).setTable(null),
-                        child: const Icon(LucideIcons.x, color: AppColors.textSecondary, size: 16),
-                      )
-                    else
-                      const Icon(LucideIcons.chevronRight, color: AppColors.textSecondary, size: 16),
-                  ],
-                ),
-              ),
-            ),
-          ),
+        // Mode + Table info bar
+        _PosModeBadge(cart: cart),
 
         // Customer
         Padding(
@@ -239,10 +171,10 @@ class CartPanel extends ConsumerWidget {
                         style: const TextStyle(color: AppColors.error, fontSize: 13),
                         textAlign: TextAlign.center),
                   ),
-                _DineInAwareButton(
+                _PaymentButtons(
                   cart: cart,
-                  onDineInPro: () => _handleDineIn(context, ref, cart),
                   onPayNow: () => _handlePayment(context, ref, cart),
+                  onPayLater: () => _handleDineIn(context, ref, cart),
                 ),
               ],
             ),
@@ -261,6 +193,7 @@ class CartPanel extends ConsumerWidget {
     final tabId = result['tabId']?.toString() ?? '';
 
     ref.read(cartProvider.notifier).clearCart();
+    ref.read(posModeProvider.notifier).state = PosMode.selection;
     ref.invalidate(dashboardProvider);
     ref.invalidate(ordersProvider);
     ref.invalidate(productsProvider);
@@ -331,6 +264,7 @@ class CartPanel extends ConsumerWidget {
             final taxInclusive = cart.taxInclusive;
             final totalAmount = cart.total;
             ref.read(cartProvider.notifier).clearCart();
+            ref.read(posModeProvider.notifier).state = PosMode.selection;
             // Invalidate providers supaya dashboard & order list langsung update
             ref.invalidate(dashboardProvider);
             ref.invalidate(ordersProvider);
@@ -354,38 +288,6 @@ class CartPanel extends ConsumerWidget {
         ),
       );
     }
-  }
-
-  void _showTablePicker(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        insetPadding: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: SizedBox(
-          width: double.maxFinite,
-          height: MediaQuery.of(context).size.height * 0.7,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: TableGridPage(
-              onTableSelected: (table) {
-                if (table.status == TableStatus.available || table.status == TableStatus.occupied) {
-                  ref.read(cartProvider.notifier).setTable(table.id, name: 'Meja ${table.name}');
-                  Navigator.pop(ctx);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Meja ${table.name} sedang ${table.status.name}'),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
-                }
-              },
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildEmptyCart() {
@@ -499,104 +401,146 @@ class _CartItemTile extends StatelessWidget {
   }
 }
 
-class _OrderTypeBtn extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
+class _PosModeBadge extends ConsumerWidget {
+  final CartState cart;
 
-  const _OrderTypeBtn({
-    required this.label,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
+  const _PosModeBadge({required this.cart});
 
   @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary.withOpacity(0.12) : AppColors.surface,
-            border: Border.all(color: isSelected ? AppColors.primary : AppColors.border),
-            borderRadius: BorderRadius.circular(10),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final posMode = ref.watch(posModeProvider);
+    final isDineIn = posMode == PosMode.dineInOrdering || posMode == PosMode.dineInTableSelect;
+    final isTakeaway = posMode == PosMode.takeaway;
+
+    // Don't show anything in selection mode
+    if (posMode == PosMode.selection) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDineIn
+              ? AppColors.primary.withOpacity(0.08)
+              : AppColors.accent.withOpacity(0.08),
+          border: Border.all(
+            color: isDineIn ? AppColors.primary : AppColors.accent,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: isSelected ? AppColors.primary : AppColors.textSecondary),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 13,
-                ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isDineIn ? LucideIcons.utensils : LucideIcons.shoppingBag,
+              color: isDineIn ? AppColors.primary : AppColors.accent,
+              size: 16,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isTakeaway ? 'Takeaway' : 'Dine In',
+                    style: TextStyle(
+                      color: isDineIn ? AppColors.primary : AppColors.accent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (isDineIn && cart.tableName != null)
+                    Text(
+                      cart.tableName!,
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                ],
               ),
-            ],
-          ),
+            ),
+            if (isDineIn && cart.tableName != null)
+              GestureDetector(
+                onTap: () {
+                  ref.read(cartProvider.notifier).setTable(null);
+                  ref.read(posModeProvider.notifier).state = PosMode.dineInTableSelect;
+                },
+                child: const Text('Ganti', style: TextStyle(fontSize: 12, color: AppColors.primary)),
+              ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _DineInAwareButton extends ConsumerWidget {
+class _PaymentButtons extends ConsumerWidget {
   final CartState cart;
-  final VoidCallback onDineInPro;
   final VoidCallback onPayNow;
+  final VoidCallback onPayLater;
 
-  const _DineInAwareButton({
+  const _PaymentButtons({
     required this.cart,
-    required this.onDineInPro,
     required this.onPayNow,
+    required this.onPayLater,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Starter dine-in = bayar sekarang (no tab). Pro dine-in = kirim ke dapur (tab).
-    if (cart.orderType != 'Dine In') {
-      return _payNowButton();
-    }
+    final posMode = ref.watch(posModeProvider);
+    final isDineInPro = posMode == PosMode.dineInOrdering && SessionCache.instance.isPro;
 
-    // Check tier from in-memory cache — 0ms, no async
-    final isPro = SessionCache.instance.isPro;
-
-    if (isPro) {
-      return SizedBox(
+    if (cart.isSubmitting) {
+      return const SizedBox(
         width: double.infinity,
         height: 50,
-        child: ElevatedButton.icon(
-          onPressed: cart.isSubmitting ? null : onDineInPro,
-          icon: cart.isSubmitting
-              ? const SizedBox(width: 20, height: 20,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(LucideIcons.chefHat, size: 18),
-          label: const Text('KIRIM KE DAPUR', style: TextStyle(fontWeight: FontWeight.bold)),
-          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669)),
-        ),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
-    // Starter: dine-in uses regular pay flow
-    return _payNowButton();
-  }
+    // Pro Dine-In: two buttons side by side
+    if (isDineInPro) {
+      return Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: onPayNow,
+                icon: const Icon(LucideIcons.creditCard, size: 16),
+                label: const Text('BAYAR\nLANGSUNG', textAlign: TextAlign.center,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SizedBox(
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: onPayLater,
+                icon: const Icon(LucideIcons.chefHat, size: 16),
+                label: const Text('BAYAR\nNANTI', textAlign: TextAlign.center,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
-  Widget _payNowButton() {
+    // Takeaway or Starter dine-in: single pay button
     return SizedBox(
       width: double.infinity,
       height: 50,
       child: ElevatedButton(
-        onPressed: cart.isSubmitting ? null : onPayNow,
-        child: cart.isSubmitting
-            ? const SizedBox(width: 20, height: 20,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : const Text('BAYAR SEKARANG', style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: onPayNow,
+        child: const Text('BAYAR SEKARANG', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
     );
   }

@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/config/app_config.dart';
+import '../../../core/services/session_cache.dart';
 
 class ChatMessage {
   final String id;
@@ -50,7 +50,7 @@ class AiChatState {
 class AiChatNotifier extends StateNotifier<AiChatState> {
   AiChatNotifier() : super(const AiChatState());
 
-  final _storage = const FlutterSecureStorage();
+  final _cache = SessionCache.instance;
   StreamSubscription? _streamSub;
   int _msgId = 0;
 
@@ -70,9 +70,9 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
     );
 
     try {
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
-      final outletId = await _storage.read(key: 'outlet_id');
+      final token = _cache.accessToken;
+      final tenantId = _cache.tenantId;
+      final outletId = _cache.outletId;
 
       if (token == null || outletId == null) {
         _setError(assistantMsg.id, 'Silakan login ulang.');

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/services/session_cache.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -19,8 +19,6 @@ class _DapurLoginPageState extends State<DapurLoginPage> {
   String _pin = '';
   bool _isLoading = false;
   String? _error;
-
-  final _storage = const FlutterSecureStorage();
 
   Dio get _dio => Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
@@ -49,7 +47,8 @@ class _DapurLoginPageState extends State<DapurLoginPage> {
     });
 
     try {
-      final phone = await _storage.read(key: 'phone') ?? '';
+      final cache = SessionCache.instance;
+      final phone = cache.phone ?? '';
       if (phone.isEmpty) {
         setState(() {
           _pin = '';
@@ -64,9 +63,9 @@ class _DapurLoginPageState extends State<DapurLoginPage> {
       });
 
       final data = res.data['data'];
-      await _storage.write(key: 'access_token', value: data['access_token'] as String);
-      await _storage.write(key: 'tenant_id', value: data['tenant_id'] as String);
-      await _storage.write(key: 'outlet_id', value: data['outlet_id'] as String);
+      await cache.setAccessToken(data['access_token'] as String);
+      await cache.setTenantId(data['tenant_id'] as String);
+      await cache.setOutletId(data['outlet_id'] as String);
 
       if (mounted) context.go('/dapur/dashboard');
     } on DioException catch (e) {

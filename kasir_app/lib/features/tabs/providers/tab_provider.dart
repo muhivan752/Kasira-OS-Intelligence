@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/services/session_cache.dart';
 
 // ── Models ──
 
@@ -147,7 +147,7 @@ class TabListState {
 class TabNotifier extends StateNotifier<TabListState> {
   TabNotifier() : super(const TabListState());
 
-  final _storage = const FlutterSecureStorage();
+  final _cache = SessionCache.instance;
 
   Dio get _dio => Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
@@ -155,26 +155,19 @@ class TabNotifier extends StateNotifier<TabListState> {
         receiveTimeout: const Duration(seconds: 10),
       ));
 
-  Future<Map<String, String>> _headers() async {
-    final token = await _storage.read(key: 'access_token');
-    final tenantId = await _storage.read(key: 'tenant_id');
-    return {
-      if (token != null) 'Authorization': 'Bearer $token',
-      if (tenantId != null) 'X-Tenant-ID': tenantId,
-    };
-  }
+  Map<String, String> get _headers => _cache.authHeaders;
 
   Future<void> fetchTabs({String? status}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final outletId = await _storage.read(key: 'outlet_id');
+      final outletId = _cache.outletId;
       final res = await _dio.get(
         '/tabs/',
         queryParameters: {
           'outlet_id': outletId,
           if (status != null) 'status': status,
         },
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
       );
       final list = (res.data['data'] as List)
           .map((t) => TabModel.fromJson(t as Map<String, dynamic>))
@@ -194,10 +187,10 @@ class TabNotifier extends StateNotifier<TabListState> {
     int guestCount = 1,
   }) async {
     try {
-      final outletId = await _storage.read(key: 'outlet_id');
+      final outletId = _cache.outletId;
       final res = await _dio.post(
         '/tabs/',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
         data: {
           'outlet_id': outletId,
           if (tableId != null) 'table_id': tableId,
@@ -218,7 +211,7 @@ class TabNotifier extends StateNotifier<TabListState> {
     try {
       final res = await _dio.get(
         '/tabs/$tabId',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
       );
       return TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
     } catch (_) {
@@ -230,7 +223,7 @@ class TabNotifier extends StateNotifier<TabListState> {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/orders',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
         data: {'order_id': orderId},
       );
       final tab = TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
@@ -246,7 +239,7 @@ class TabNotifier extends StateNotifier<TabListState> {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/split/equal',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
         data: {'num_people': numPeople, 'row_version': rowVersion},
       );
       return TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
@@ -261,7 +254,7 @@ class TabNotifier extends StateNotifier<TabListState> {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/split/per-item',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
         data: {'assignments': assignments, 'row_version': rowVersion},
       );
       return TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
@@ -276,7 +269,7 @@ class TabNotifier extends StateNotifier<TabListState> {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/split/custom',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
         data: {'splits': splits, 'row_version': rowVersion},
       );
       return TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
@@ -292,7 +285,7 @@ class TabNotifier extends StateNotifier<TabListState> {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/pay-full',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
         data: {
           'payment_method': paymentMethod,
           'amount_paid': amountPaid,
@@ -315,7 +308,7 @@ class TabNotifier extends StateNotifier<TabListState> {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/splits/$splitId/pay',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
         data: {
           'payment_method': paymentMethod,
           'amount_paid': amountPaid,
@@ -334,7 +327,7 @@ class TabNotifier extends StateNotifier<TabListState> {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/move-table',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
         data: {'new_table_id': newTableId, 'row_version': rowVersion},
       );
       final tab = TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
@@ -350,7 +343,7 @@ class TabNotifier extends StateNotifier<TabListState> {
     try {
       final res = await _dio.post(
         '/tabs/$targetTabId/merge',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
         data: {'source_tab_id': sourceTabId, 'row_version': rowVersion},
       );
       final tab = TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
@@ -366,7 +359,7 @@ class TabNotifier extends StateNotifier<TabListState> {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/request-bill',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
       );
       final tab = TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
       await fetchTabs();
@@ -381,7 +374,7 @@ class TabNotifier extends StateNotifier<TabListState> {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/cancel',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
       );
       final tab = TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
       await fetchTabs();

@@ -1,20 +1,20 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
+import 'session_cache.dart';
 
 /// Silent location service — fire once after login, never blocks UI.
 class LocationService {
-  static const _storage = FlutterSecureStorage();
   static const _flagKey = 'location_sent';
 
   /// Send outlet location to backend. Call once after login.
   /// Returns silently on any failure — never throws.
   static Future<void> sendLocationSilent() async {
     try {
-      // Only send once
-      final alreadySent = await _storage.read(key: _flagKey);
-      if (alreadySent == 'true') return;
+      // Only send once (use SharedPreferences — fast, non-sensitive)
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_flagKey) == true) return;
 
       // Check permission — request if not determined, skip if denied
       LocationPermission permission = await Geolocator.checkPermission();
@@ -38,10 +38,9 @@ class LocationService {
       );
 
       // Send to backend
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
-      final outletId = await _storage.read(key: 'outlet_id');
-      if (token == null || outletId == null) return;
+      final cache = SessionCache.instance;
+      final outletId = cache.outletId;
+      if (cache.accessToken == null || outletId == null) return;
 
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
@@ -55,14 +54,11 @@ class LocationService {
           'latitude': position.latitude,
           'longitude': position.longitude,
         },
-        options: Options(headers: {
-          'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        options: Options(headers: cache.authHeaders),
       );
 
       // Mark as sent — won't ask again
-      await _storage.write(key: _flagKey, value: 'true');
+      prefs.setBool(_flagKey, true);
     } catch (_) {
       // Silent — never crash the app for location
     }

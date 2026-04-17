@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../../core/config/app_config.dart';
@@ -21,7 +20,6 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
   bool _isMandatoryUpdate = false;
   String? _updateUrl;
 
-  final _storage = const FlutterSecureStorage();
   static const _versionJsonUrl =
       'https://raw.githubusercontent.com/muhivan752/Kasira-OS-Intelligence/main/version.json';
 

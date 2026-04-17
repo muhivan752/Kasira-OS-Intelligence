@@ -68,10 +68,14 @@ class SessionCache {
     outletId = prefs.getString('c_outlet_id');
     stockMode = prefs.getString('c_stock_mode');
     subscriptionTier = prefs.getString('c_subscription_tier');
-    // Token still needs SecureStorage
+    // Token still needs SecureStorage — read in parallel
     const secure = FlutterSecureStorage();
-    accessToken = await secure.read(key: 'access_token');
-    shiftSessionId = await secure.read(key: 'shift_session_id');
+    final results = await Future.wait([
+      secure.read(key: 'access_token'),
+      secure.read(key: 'shift_session_id'),
+    ]);
+    accessToken = results[0];
+    shiftSessionId = results[1];
     _initialized = true;
   }
 

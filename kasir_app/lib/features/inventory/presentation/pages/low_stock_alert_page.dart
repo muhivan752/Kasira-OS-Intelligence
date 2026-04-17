@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 
 enum StockLevel { out, critical, low }
@@ -60,10 +60,6 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
   Future<void> _load() async {
     setState(() { _isLoading = true; _error = null; });
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
-      final tenantId = await storage.read(key: 'tenant_id');
-
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
         connectTimeout: const Duration(seconds: 15),
@@ -72,10 +68,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
 
       final response = await dio.get(
         '/products/low-stock',
-        options: Options(headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        options: Options(headers: SessionCache.instance.authHeaders),
       );
 
       final list = (response.data['data'] as List? ?? [])
@@ -333,10 +326,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
     Navigator.pop(dialogCtx);
 
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
-      final tenantId = await storage.read(key: 'tenant_id');
-      final outletId = await storage.read(key: 'outlet_id');
+      final cache = SessionCache.instance;
 
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
@@ -346,13 +336,10 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
 
       await dio.post(
         '/products/${item.id}/restock',
-        options: Options(headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        options: Options(headers: cache.authHeaders),
         data: {
           'quantity': qty,
-          'outlet_id': outletId,
+          'outlet_id': cache.outletId,
           if (notesCtrl.text.trim().isNotEmpty) 'notes': notesCtrl.text.trim(),
         },
       );

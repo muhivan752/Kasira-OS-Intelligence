@@ -2,10 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 
 enum RegStep { inputInfo, inputOtp, setPin }
@@ -33,7 +34,7 @@ class _RegisterPageState extends State<RegisterPage> {
   String _businessType = 'cafe';
   String _referralCode = '';
 
-  final _storage = const FlutterSecureStorage();
+  final _cache = SessionCache.instance;
   Dio get _dio => Dio(BaseOptions(
     baseUrl: AppConfig.baseUrl,
     connectTimeout: const Duration(seconds: 15),
@@ -122,12 +123,12 @@ class _RegisterPageState extends State<RegisterPage> {
           : (resp.data as Map<String, dynamic>)['data'] as Map<String, dynamic>;
 
       final token = data['access_token']?.toString() ?? '';
-      await _storage.write(key: 'access_token', value: token);
-      await _storage.write(key: 'phone', value: _phoneCtrl.text.trim());
-      if (data['tenant_id'] != null) await _storage.write(key: 'tenant_id', value: data['tenant_id'].toString());
-      if (data['outlet_id'] != null) await _storage.write(key: 'outlet_id', value: data['outlet_id'].toString());
-      await _storage.write(key: 'stock_mode', value: data['stock_mode']?.toString() ?? 'simple');
-      await _storage.write(key: 'subscription_tier', value: data['subscription_tier']?.toString() ?? 'starter');
+      await _cache.setAccessToken(token);
+      await _cache.setPhone(_phoneCtrl.text.trim());
+      if (data['tenant_id'] != null) await _cache.setTenantId(data['tenant_id'].toString());
+      if (data['outlet_id'] != null) await _cache.setOutletId(data['outlet_id'].toString());
+      await _cache.setStockMode(data['stock_mode']?.toString() ?? 'simple');
+      await _cache.setSubscriptionTier(data['subscription_tier']?.toString() ?? 'starter');
 
       _timer?.cancel();
       setState(() { _step = RegStep.setPin; _isLoading = false; });
@@ -153,10 +154,11 @@ class _RegisterPageState extends State<RegisterPage> {
 
     setState(() { _isLoading = true; _error = null; });
     try {
-      await _storage.write(key: 'user_pin', value: pin);
+      // PIN stored via SecureStorage through cache write
+      const FlutterSecureStorage().write(key: 'user_pin', value: pin);
 
       // Set PIN on server too
-      final token = await _storage.read(key: 'access_token');
+      final token = _cache.accessToken;
       if (token != null) {
         try {
           await _dio.post('/api/v1/auth/pin/set',

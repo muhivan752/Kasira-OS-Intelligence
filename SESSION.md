@@ -269,6 +269,67 @@
 
 ---
 
+## ✅ SELESAI SESI INI (2026-04-11) — Reservasi Pro Feature
+
+### Backend
+- [x] Migration 064: `reservation_settings` table, upgrade `reservations` (new columns), `tables.floor_section`
+- [x] Models: `Reservation`, `ReservationSettings`, `Table` (updated)
+- [x] Schemas: full CRUD + storefront schemas
+- [x] Routes `reservations.py`: 10 endpoints (CRUD + confirm/seat/complete/cancel/no-show + settings)
+- [x] Routes `tables.py`: CRUD meja (create/update/delete + floor section)
+- [x] Routes `connect.py`: public storefront `GET /connect/{slug}/reservation/slots` + `POST /connect/{slug}/reservation`
+- [x] Auto-assign table logic (smallest capacity that fits, no time conflict)
+- [x] WA notification via Fonnte (konfirmasi + cancel)
+- [x] Pro tier gate (`require_pro_tier`)
+
+### Dashboard UI
+- [x] `/dashboard/reservasi` — daily timeline, date nav, status filter, create modal, detail modal with actions
+- [x] `/dashboard/reservasi/settings` — reservation settings form (enable, slot duration, hours, deposit, auto-confirm)
+- [x] `/dashboard/reservasi/meja` — table management grouped by floor section
+- [x] Sidebar: "Reservasi" nav with PRO badge
+- [x] API functions: 13 new server actions in `api.ts`
+
+### Also this session
+- [x] Fix dashboard-kasir sync (field names mismatch)
+- [x] Fix register: `is_superuser=true` for new merchant owners
+- [x] Fix OTP rate limit (3→10), error handling Flutter
+- [x] APK v1.2.0 built & published
+
+---
+
+## ✅ SELESAI SESI INI (2026-04-11) — WA Bot + Flutter Reservasi + Dashboard Fixes
+
+### WhatsApp AI Bot
+- [x] `POST /webhook/fonnte` + `/webhooks/fonnte` — dual route
+- [x] `wa_bot.py` — 7 intents keyword-based (greeting, menu, reservasi, cek/cancel reservasi, general, order_status)
+- [x] Multi-turn reservation flow via Redis (date→time→guests→name→confirm)
+- [x] Flexible parsing: "besok", "7 malam", "15 April"
+- [x] Auto-assign table, check slot availability
+- [x] AI fallback Claude Haiku for ambiguous messages (150 token max)
+- [x] Fonnte webhook URL set: `https://kasira.online/api/v1/webhooks/fonnte`
+
+### Flutter APK v1.3.0
+- [x] Tab "Reservasi" di bottom nav dashboard kasir
+- [x] Reservation list page (grouped by status, date nav, detail+actions)
+- [x] Table grid page (color-coded, floor sections)
+- [x] Create reservation modal
+- [x] Build success, published to GitHub Releases
+
+### Dashboard Fixes
+- [x] Tier-aware layout: 1 gradient PRO badge, flat nav for Pro, locked for Starter
+- [x] `/users/me` return `subscription_tier`
+- [x] `reports/daily` return `shift_status` (Flutter fix)
+- [x] `get_current_tenant` match UUID (was matching schema_name only)
+- [x] `require_pro_tier` use `.value` for enum comparison
+- [x] Storefront tier badge dynamic (was hardcoded 'starter')
+- [x] Reservation button conditional (only when enabled)
+- [x] Auto-invalidate Redis cache on outlet/settings/tier change
+- [x] Dashboard reservasi: auto-navigate to nearest upcoming + timezone fix
+- [x] Table model: position_x/y Float fix
+- [x] GitHub Actions workflow: reset to origin/main before version.json push
+
+---
+
 ## ⏭️ NEXT ACTION
 
 ### PRIORITAS 1 — Test Manual dari HP

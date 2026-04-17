@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class CashDrawerHistoryPage extends StatefulWidget {
@@ -31,11 +31,8 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
   Future<void> _load() async {
     setState(() { _isLoading = true; _error = null; });
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
-      final tenantId = await storage.read(key: 'tenant_id');
-      final outletId = await storage.read(key: 'outlet_id');
-      final shiftId = await storage.read(key: 'shift_session_id');
+      final cache = SessionCache.instance;
+      final shiftId = cache.shiftSessionId;
 
       if (shiftId == null) {
         setState(() { _activities = []; _isLoading = false; });
@@ -43,15 +40,11 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
       }
 
       final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1, connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 15)));
-      final headers = {
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (tenantId != null) 'X-Tenant-ID': tenantId,
-      };
 
       final res = await dio.get(
         '/shifts/$shiftId/activities',
-        queryParameters: {'outlet_id': outletId},
-        options: Options(headers: headers),
+        queryParameters: {'outlet_id': cache.outletId},
+        options: Options(headers: cache.authHeaders),
       );
 
       final data = res.data['data'];

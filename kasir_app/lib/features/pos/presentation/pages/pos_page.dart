@@ -12,7 +12,10 @@ import '../../providers/cart_provider.dart';
 import '../../providers/tax_config_provider.dart';
 import '../widgets/product_card.dart';
 import '../widgets/cart_panel.dart';
+import '../widgets/pos_mode_selector.dart';
+import '../../../tables/presentation/pages/table_grid_page.dart';
 import '../../../products/presentation/widgets/product_detail_sheet.dart';
+import '../../providers/pos_mode_provider.dart';
 
 class PosPage extends ConsumerStatefulWidget {
   const PosPage({super.key});
@@ -136,14 +139,43 @@ class _PosPageState extends ConsumerState<PosPage> {
     );
   }
 
+  void _goBackToModeSelection() {
+    final cart = ref.read(cartProvider);
+    if (cart.items.isNotEmpty) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Kembali ke Pilihan?'),
+          content: const Text('Keranjang belum kosong. Item akan tetap tersimpan.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                ref.read(posModeProvider.notifier).state = PosMode.selection;
+              },
+              child: const Text('Kembali'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ref.read(cartProvider.notifier).clearCart();
+      ref.read(posModeProvider.notifier).state = PosMode.selection;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.shortestSide >= 600;
     final productsAsync = ref.watch(productsProvider);
     final cart = ref.watch(cartProvider);
+    final posMode = ref.watch(posModeProvider);
     // Trigger tax config fetch (feeds into cart calculations)
     ref.watch(taxConfigProvider);
     final itemCount = cart.items.fold<int>(0, (sum, item) => sum + item.qty);
+    final showFab = !isWide && (posMode == PosMode.takeaway || posMode == PosMode.dineInOrdering);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -171,14 +203,13 @@ class _PosPageState extends ConsumerState<PosPage> {
             ),
           Expanded(
             child: isWide
-                ? _buildTabletLayout(productsAsync)
-                : _buildPhoneLayout(context, productsAsync),
+                ? _buildTabletLayout(productsAsync, posMode)
+                : _buildPhoneLayout(context, productsAsync, posMode),
           ),
         ],
       ),
-      floatingActionButton: isWide
-          ? null
-          : FloatingActionButton.extended(
+      floatingActionButton: showFab
+          ? FloatingActionButton.extended(
               onPressed: () => _openCartSheet(context),
               icon: Badge(
                 label: itemCount > 0 ? Text('$itemCount') : null,
@@ -192,21 +223,86 @@ class _PosPageState extends ConsumerState<PosPage> {
                   : const Text('Keranjang'),
               backgroundColor: AppColors.primary,
               elevation: 4,
-            ),
+            )
+          : null,
     );
   }
 
-  Widget _buildTabletLayout(AsyncValue<List<ProductModel>> productsAsync) {
+  Widget _buildMainContent(AsyncValue<List<ProductModel>> productsAsync, PosMode posMode, {required bool isWide}) {
+    final crossAxisCount = isWide ? 4 : 2;
+    switch (posMode) {
+      case PosMode.selection:
+        return const Expanded(child: PosModeSelector());
+      case PosMode.dineInTableSelect:
+        return Expanded(
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: const BoxDecoration(
+                  color: AppColors.surface,
+                  border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.utensils, size: 16, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Pilih Meja — Dine In',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: _goBackToModeSelection,
+                      icon: const Icon(LucideIcons.arrowLeft, size: 14),
+                      label: const Text('Kembali', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: TableGridPage(
+                  onTableSelected: (table) {
+                    if (table.status == TableStatus.available || table.status == TableStatus.occupied) {
+                      ref.read(cartProvider.notifier).setTable(table.id, name: table.name);
+                      ref.read(posModeProvider.notifier).state = PosMode.dineInOrdering;
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Meja ${table.name} sedang ${table.status.name}'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      case PosMode.takeaway:
+      case PosMode.dineInOrdering:
+        return Expanded(
+          child: Column(
+            children: [
+              _buildCategories(productsAsync),
+              Expanded(child: _buildProductGrid(productsAsync, crossAxisCount: crossAxisCount)),
+            ],
+          ),
+        );
+    }
+  }
+
+  Widget _buildTabletLayout(AsyncValue<List<ProductModel>> productsAsync, PosMode posMode) {
     return Row(
       children: [
-        // Left: product area
+        // Left: mode-dependent content
         Expanded(
           flex: 7,
           child: Column(
             children: [
-              _buildHeader(isWide: true),
-              _buildCategories(productsAsync),
-              Expanded(child: _buildProductGrid(productsAsync, crossAxisCount: 4)),
+              _buildHeader(isWide: true, posMode: posMode),
+              _buildMainContent(productsAsync, posMode, isWide: true),
             ],
           ),
         ),
@@ -224,17 +320,19 @@ class _PosPageState extends ConsumerState<PosPage> {
   }
 
   Widget _buildPhoneLayout(
-      BuildContext context, AsyncValue<List<ProductModel>> productsAsync) {
+      BuildContext context, AsyncValue<List<ProductModel>> productsAsync, PosMode posMode) {
     return Column(
       children: [
-        _buildHeader(isWide: false),
-        _buildCategories(productsAsync),
-        Expanded(child: _buildProductGrid(productsAsync, crossAxisCount: 2)),
+        _buildHeader(isWide: false, posMode: posMode),
+        _buildMainContent(productsAsync, posMode, isWide: false),
       ],
     );
   }
 
-  Widget _buildHeader({required bool isWide}) {
+  Widget _buildHeader({required bool isWide, required PosMode posMode}) {
+    final showSearch = posMode == PosMode.takeaway || posMode == PosMode.dineInOrdering;
+    final showBack = posMode != PosMode.selection;
+
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -252,6 +350,19 @@ class _PosPageState extends ConsumerState<PosPage> {
           ),
           child: Row(
             children: [
+              if (showBack) ...[
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: _goBackToModeSelection,
+                    icon: const Icon(LucideIcons.arrowLeft, color: AppColors.textSecondary, size: 18),
+                    tooltip: 'Kembali',
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               // Brand mark
               Container(
                 width: 36,
@@ -286,48 +397,50 @@ class _PosPageState extends ConsumerState<PosPage> {
                   ],
                 ),
               ),
-              // Search bar
-              Container(
-                width: isWide ? 260 : 150,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: const InputDecoration(
-                    hintText: 'Cari produk...',
-                    hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
-                    prefixIcon: Icon(LucideIcons.search,
-                        size: 16, color: AppColors.textTertiary),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 10),
-                    isDense: true,
+              // Search bar (only in ordering modes)
+              if (showSearch) ...[
+                Container(
+                  width: isWide ? 260 : 150,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  style: const TextStyle(fontSize: 13),
-                  onChanged: (val) =>
-                      setState(() => _searchQuery = val.toLowerCase()),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: const InputDecoration(
+                      hintText: 'Cari produk...',
+                      hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                      prefixIcon: Icon(LucideIcons.search,
+                          size: 16, color: AppColors.textTertiary),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(vertical: 10),
+                      isDense: true,
+                    ),
+                    style: const TextStyle(fontSize: 13),
+                    onChanged: (val) =>
+                        setState(() => _searchQuery = val.toLowerCase()),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              SizedBox(
-                width: 36,
-                height: 36,
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _searchQuery = '');
-                    ref.read(productsProvider.notifier).refresh();
-                  },
-                  icon: const Icon(LucideIcons.refreshCw,
-                      color: AppColors.textSecondary, size: 18),
-                  tooltip: 'Refresh',
+                const SizedBox(width: 6),
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                      ref.read(productsProvider.notifier).refresh();
+                    },
+                    icon: const Icon(LucideIcons.refreshCw,
+                        color: AppColors.textSecondary, size: 18),
+                    tooltip: 'Refresh',
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

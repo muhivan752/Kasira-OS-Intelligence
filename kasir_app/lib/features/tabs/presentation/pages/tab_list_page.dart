@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/services/session_cache.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/tab_provider.dart';
@@ -35,8 +35,7 @@ class _TabListPageState extends ConsumerState<TabListPage> with SingleTickerProv
 
   Future<void> _initPage() async {
     // Check tier first, then fetch
-    const storage = FlutterSecureStorage();
-    final tier = await storage.read(key: 'subscription_tier') ?? 'starter';
+    final tier = SessionCache.instance.subscriptionTier ?? 'starter';
     if (!mounted) return;
 
     if (!_proTiers.contains(tier)) {

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 
 enum TableStatus { available, occupied, reserved, dirty }
@@ -51,19 +51,13 @@ class _TableGridPageState extends State<TableGridPage> {
   Future<void> _load() async {
     setState(() => _isLoading = true);
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
-      final tenantId = await storage.read(key: 'tenant_id');
-      final outletId = await storage.read(key: 'outlet_id');
+      final cache = SessionCache.instance;
 
       final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1, connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 15)));
       final res = await dio.get(
         '/tables/',
-        queryParameters: {'outlet_id': outletId},
-        options: Options(headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        queryParameters: {'outlet_id': cache.outletId},
+        options: Options(headers: cache.authHeaders),
       );
 
       final list = (res.data['data'] as List? ?? []).map((t) {

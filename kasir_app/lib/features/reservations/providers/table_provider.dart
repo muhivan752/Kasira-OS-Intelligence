@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/services/session_cache.dart';
 
 // ── Model ──
 
@@ -54,7 +54,7 @@ class TableListState {
 class TableListNotifier extends StateNotifier<TableListState> {
   TableListNotifier() : super(const TableListState());
 
-  final _storage = const FlutterSecureStorage();
+  final _cache = SessionCache.instance;
 
   Dio get _dio => Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
@@ -62,23 +62,15 @@ class TableListNotifier extends StateNotifier<TableListState> {
         receiveTimeout: const Duration(seconds: 10),
       ));
 
-  Future<Map<String, String>> _headers() async {
-    final token = await _storage.read(key: 'access_token');
-    final tenantId = await _storage.read(key: 'tenant_id');
-    return {
-      if (token != null) 'Authorization': 'Bearer $token',
-      if (tenantId != null) 'X-Tenant-ID': tenantId,
-    };
-  }
+  Map<String, String> get _headers => _cache.authHeaders;
 
   Future<void> fetchTables() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final outletId = await _storage.read(key: 'outlet_id');
       final res = await _dio.get(
         '/tables/',
-        queryParameters: {'outlet_id': outletId},
-        options: Options(headers: await _headers()),
+        queryParameters: {'outlet_id': _cache.outletId},
+        options: Options(headers: _headers),
       );
       final list = (res.data['data'] as List)
           .map((t) => TableInfo.fromJson(t as Map<String, dynamic>))

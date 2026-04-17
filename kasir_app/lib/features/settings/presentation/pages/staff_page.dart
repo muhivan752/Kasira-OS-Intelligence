@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class StaffPage extends StatefulWidget {
@@ -13,7 +13,6 @@ class StaffPage extends StatefulWidget {
 }
 
 class _StaffPageState extends State<StaffPage> {
-  final _storage = const FlutterSecureStorage();
   bool _isLoading = true;
   List<Map<String, dynamic>> _staff = [];
   String? _error;
@@ -30,22 +29,13 @@ class _StaffPageState extends State<StaffPage> {
     _loadStaff();
   }
 
-  Future<Map<String, String>> _getHeaders() async {
-    final token = await _storage.read(key: 'access_token');
-    final tenantId = await _storage.read(key: 'tenant_id');
-    return {
-      if (token != null) 'Authorization': 'Bearer $token',
-      if (tenantId != null) 'X-Tenant-ID': tenantId,
-    };
-  }
-
   Future<void> _loadStaff() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
     try {
-      final headers = await _getHeaders();
+      final headers = SessionCache.instance.authHeaders;
       final response = await _dio.get(
         '/users/',
         options: Options(headers: headers),

@@ -1,14 +1,14 @@
 {
   "pos": {
     "version": "2.9.1",
-    "is_mandatory": false,
+    "is_mandatory": true,
     "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.9.1/kasira-pos-v2.9.1.apk",
-    "release_notes": "Bug fixes and improvements"
+    "release_notes": "SessionCache — loading instant setelah login, semua halaman 0ms credential read"
   },
   "dapur": {
     "version": "2.9.1",
-    "is_mandatory": false,
+    "is_mandatory": true,
     "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v2.9.1/kasira-dapur-v2.9.1.apk",
-    "release_notes": "Bug fixes and improvements"
+    "release_notes": "SessionCache — loading instant setelah login, semua halaman 0ms credential read"
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 
 /// Splash screen for Dapur (Kitchen) app.
@@ -18,8 +18,6 @@ class _DapurSplashPageState extends State<DapurSplashPage>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
-  final _storage = const FlutterSecureStorage();
-
   @override
   void initState() {
     super.initState();
@@ -45,7 +43,7 @@ class _DapurSplashPageState extends State<DapurSplashPage>
       return;
     }
 
-    final token = await _storage.read(key: 'access_token');
+    final token = SessionCache.instance.accessToken;
     if (!mounted) return;
 
     if (token != null) {

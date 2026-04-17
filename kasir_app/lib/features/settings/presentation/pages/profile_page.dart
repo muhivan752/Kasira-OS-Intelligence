@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/pages/login_page.dart';
 
@@ -14,7 +14,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final _storage = const FlutterSecureStorage();
   bool _isLoading = true;
   String _name = '-';
   String _phone = '-';
@@ -30,9 +29,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadProfile() async {
     try {
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
-
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
         connectTimeout: const Duration(seconds: 10),
@@ -41,10 +37,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       final response = await dio.get(
         '/users/me',
-        options: Options(headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        options: Options(headers: SessionCache.instance.authHeaders),
       );
 
       final data = response.data['data'];

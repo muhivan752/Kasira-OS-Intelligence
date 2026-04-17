@@ -5,8 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/services/printer_service.dart';
 
@@ -445,10 +445,6 @@ class _SendWaDialogState extends State<_SendWaDialog> {
     setState(() { _isLoading = true; _error = null; });
 
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
-      final tenantId = await storage.read(key: 'tenant_id');
-
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
         connectTimeout: const Duration(seconds: 15),
@@ -457,10 +453,7 @@ class _SendWaDialogState extends State<_SendWaDialog> {
 
       final response = await dio.post(
         '/payments/send-receipt',
-        options: Options(headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        options: Options(headers: SessionCache.instance.authHeaders),
         data: {'order_id': widget.orderId, 'phone': phone},
       );
 

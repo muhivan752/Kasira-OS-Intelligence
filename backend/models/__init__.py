@@ -13,7 +13,8 @@ from .audit_log import AuditLog
 from .customer import Customer
 from .connect import ConnectOutlet, ConnectOrder
 from .event import Event
-from .reservation import Table, Reservation
+from .table import Table
+from .reservation import Reservation
 from .loyalty import CustomerPoints, PointTransaction
 from .tab import Tab, TabSplit
 from .ingredient import Ingredient

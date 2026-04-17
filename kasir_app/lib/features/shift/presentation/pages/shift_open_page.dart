@@ -4,8 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class ShiftOpenPage extends StatefulWidget {
@@ -49,10 +49,8 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
     setState(() => _isLoading = true);
 
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
-      final tenantId = await storage.read(key: 'tenant_id');
-      final outletId = await storage.read(key: 'outlet_id');
+      final cache = SessionCache.instance;
+      final outletId = cache.outletId;
 
       if (outletId == null || outletId.isEmpty) {
         throw Exception('Outlet tidak ditemukan, silakan login ulang.');
@@ -67,10 +65,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
       final response = await dio.post(
         '/shifts/open',
         queryParameters: {'outlet_id': outletId},
-        options: Options(headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        options: Options(headers: cache.authHeaders),
         data: {
           'starting_cash': _openingCash,
           if (_notesController.text.trim().isNotEmpty) 'notes': _notesController.text.trim(),
@@ -78,7 +73,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
       );
 
       final shiftId = response.data['data']['id'] as String;
-      await storage.write(key: 'shift_session_id', value: shiftId);
+      await cache.setShiftSessionId(shiftId);
 
       if (mounted) {
         context.go('/dashboard');

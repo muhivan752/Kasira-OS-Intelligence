@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'add_customer_modal.dart';
 
@@ -17,8 +17,6 @@ class CustomerSelectionModal extends StatefulWidget {
 
 class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
   final _searchController = TextEditingController();
-  final _storage = const FlutterSecureStorage();
-
   List<Map<String, dynamic>> _customers = [];
   bool _isLoading = true;
   String? _error;
@@ -41,9 +39,6 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
       _error = null;
     });
     try {
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
-
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
         connectTimeout: const Duration(seconds: 15),
@@ -56,10 +51,7 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
           if (search != null && search.isNotEmpty) 'search': search,
           'limit': 50,
         },
-        options: Options(headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        options: Options(headers: SessionCache.instance.authHeaders),
       );
 
       final data = response.data['data'] as List;

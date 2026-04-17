@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/services/session_cache.dart';
 
 // ── Model ──
 
@@ -129,7 +129,7 @@ class ReservationState {
 class ReservationNotifier extends StateNotifier<ReservationState> {
   ReservationNotifier() : super(ReservationState());
 
-  final _storage = const FlutterSecureStorage();
+  final _cache = SessionCache.instance;
 
   Dio get _dio => Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
@@ -137,14 +137,7 @@ class ReservationNotifier extends StateNotifier<ReservationState> {
         receiveTimeout: const Duration(seconds: 10),
       ));
 
-  Future<Map<String, String>> _headers() async {
-    final token = await _storage.read(key: 'access_token');
-    final tenantId = await _storage.read(key: 'tenant_id');
-    return {
-      if (token != null) 'Authorization': 'Bearer $token',
-      if (tenantId != null) 'X-Tenant-ID': tenantId,
-    };
-  }
+  Map<String, String> get _headers => _cache.authHeaders;
 
   static String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -153,9 +146,8 @@ class ReservationNotifier extends StateNotifier<ReservationState> {
     final targetDate = date ?? state.selectedDate;
     state = state.copyWith(isLoading: true, clearError: true, selectedDate: targetDate);
     try {
-      final outletId = await _storage.read(key: 'outlet_id');
       final params = <String, dynamic>{
-        'outlet_id': outletId,
+        'outlet_id': _cache.outletId,
         'reservation_date': _formatDate(targetDate),
       };
       if (status != null) params['status'] = status;
@@ -163,7 +155,7 @@ class ReservationNotifier extends StateNotifier<ReservationState> {
       final res = await _dio.get(
         '/reservations/',
         queryParameters: params,
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
       );
       final list = (res.data['data'] as List)
           .map((r) => ReservationModel.fromJson(r as Map<String, dynamic>))
@@ -188,7 +180,6 @@ class ReservationNotifier extends StateNotifier<ReservationState> {
     String? source,
   }) async {
     try {
-      final outletId = await _storage.read(key: 'outlet_id');
       final data = <String, dynamic>{
         'reservation_date': reservationDate,
         'start_time': startTime,
@@ -202,9 +193,9 @@ class ReservationNotifier extends StateNotifier<ReservationState> {
 
       final res = await _dio.post(
         '/reservations/',
-        queryParameters: {'outlet_id': outletId},
+        queryParameters: {'outlet_id': _cache.outletId},
         data: data,
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
       );
       final reservation = ReservationModel.fromJson(res.data['data'] as Map<String, dynamic>);
       await fetchReservations();
@@ -225,7 +216,7 @@ class ReservationNotifier extends StateNotifier<ReservationState> {
     try {
       await _dio.put(
         '/reservations/$id/$action',
-        options: Options(headers: await _headers()),
+        options: Options(headers: _headers),
       );
       await fetchReservations();
       return true;

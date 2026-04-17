@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class AddCustomerModal extends StatefulWidget {
@@ -16,7 +16,6 @@ class _AddCustomerModalState extends State<AddCustomerModal> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
-  final _storage = const FlutterSecureStorage();
   bool _isLoading = false;
 
   @override
@@ -39,9 +38,6 @@ class _AddCustomerModalState extends State<AddCustomerModal> {
     setState(() => _isLoading = true);
 
     try {
-      final token = await _storage.read(key: 'access_token');
-      final tenantId = await _storage.read(key: 'tenant_id');
-
       final dio = Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
         connectTimeout: const Duration(seconds: 15),
@@ -50,10 +46,7 @@ class _AddCustomerModalState extends State<AddCustomerModal> {
 
       final response = await dio.post(
         '/customers/',
-        options: Options(headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          if (tenantId != null) 'X-Tenant-ID': tenantId,
-        }),
+        options: Options(headers: SessionCache.instance.authHeaders),
         data: {
           'name': name,
           if (_phoneController.text.trim().isNotEmpty) 'phone': _phoneController.text.trim(),

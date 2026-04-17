@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'cash_drawer_history_page.dart';
 
@@ -37,15 +37,7 @@ class _ShiftPageState extends State<ShiftPage> {
     super.dispose();
   }
 
-  Future<Map<String, dynamic>> _headers() async {
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
-    final tenantId = await storage.read(key: 'tenant_id');
-    return {
-      if (token != null) 'Authorization': 'Bearer $token',
-      if (tenantId != null) 'X-Tenant-ID': tenantId,
-    };
-  }
+  Map<String, String> get _headers => SessionCache.instance.authHeaders;
 
   Dio get _dio => Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
@@ -56,14 +48,13 @@ class _ShiftPageState extends State<ShiftPage> {
   Future<void> _loadShift() async {
     setState(() { _isLoading = true; _error = null; });
     try {
-      const storage = FlutterSecureStorage();
-      final outletId = await storage.read(key: 'outlet_id');
+      final outletId = SessionCache.instance.outletId;
       final headers = await _headers();
 
       final res = await _dio.get(
         '/shifts/current',
         queryParameters: {'outlet_id': outletId},
-        options: Options(headers: headers),
+        options: Options(headers: _headers),
       );
       setState(() { _shift = res.data['data']; _isLoading = false; });
     } catch (_) {
@@ -83,15 +74,13 @@ class _ShiftPageState extends State<ShiftPage> {
     setState(() => _isClosing = true);
     try {
       final shiftId = _shift!['id'];
-      final headers = await _headers();
       await _dio.post(
         '/shifts/$shiftId/close',
-        options: Options(headers: headers),
+        options: Options(headers: _headers),
         data: {'ending_cash': actualCash},
       );
 
-      const storage = FlutterSecureStorage();
-      await storage.delete(key: 'shift_session_id');
+      await SessionCache.instance.setShiftSessionId(null);
 
       if (mounted) context.go('/shift/open');
     } on DioException catch (e) {
