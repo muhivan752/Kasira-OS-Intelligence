@@ -73,7 +73,7 @@ class _ShiftPageState extends State<ShiftPage> {
     setState(() => _isClosing = true);
     try {
       final shiftId = _shift!['id'];
-      await _dio.post(
+      final closeRes = await _dio.post(
         '/shifts/$shiftId/close',
         options: Options(headers: _headers),
         data: {'ending_cash': actualCash},
@@ -81,7 +81,71 @@ class _ShiftPageState extends State<ShiftPage> {
 
       await SessionCache.instance.setShiftSessionId(null);
 
-      if (mounted) context.go('/shift/open');
+      // Show variance result before navigating
+      if (mounted) {
+        final data = closeRes.data['data'];
+        final variance = (data?['variance'] as num?)?.toDouble() ?? 0;
+        final varianceStatus = data?['variance_status'] as String? ?? 'balanced';
+        final message = closeRes.data['message'] as String? ?? 'Shift ditutup';
+
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            icon: Icon(
+              varianceStatus == 'balanced' ? LucideIcons.checkCircle2 : LucideIcons.alertTriangle,
+              color: varianceStatus == 'balanced' ? AppColors.success : AppColors.warning,
+              size: 48,
+            ),
+            title: Text(varianceStatus == 'balanced' ? 'Shift Ditutup' : 'Shift Ditutup — Ada Selisih'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary)),
+                if (varianceStatus != 'balanced') ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: (varianceStatus == 'surplus' ? AppColors.success : AppColors.error).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          varianceStatus == 'surplus' ? LucideIcons.trendingUp : LucideIcons.trendingDown,
+                          color: varianceStatus == 'surplus' ? AppColors.success : AppColors.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${varianceStatus == 'surplus' ? '+' : '-'} ${_currency.format(variance.abs())}',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: varianceStatus == 'surplus' ? AppColors.success : AppColors.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  context.go('/shift/open');
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return; // already navigated in dialog
+      }
     } on DioException catch (e) {
       final msg = e.response?.data?['detail'] ?? 'Gagal tutup shift';
       if (mounted) {

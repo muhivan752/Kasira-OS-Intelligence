@@ -167,9 +167,24 @@ class CartPanel extends ConsumerWidget {
                 if (cart.error != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: Text(cart.error!,
-                        style: const TextStyle(color: AppColors.error, fontSize: 13),
-                        textAlign: TextAlign.center),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.alertCircle, color: AppColors.error, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(cart.error!,
+                                style: const TextStyle(color: AppColors.error, fontSize: 12),
+                                textAlign: TextAlign.left),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 _PaymentButtons(
                   cart: cart,

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/orders_provider.dart';
 
@@ -194,12 +197,14 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
         ),
 
         // ── Action Buttons ──
-        if (order.status != 'completed' && order.status != 'cancelled') ...[
+        if (order.status != 'cancelled') ...[
           const SizedBox(height: 20),
           const Divider(height: 1, color: AppColors.border),
           const SizedBox(height: 16),
           if (_updating)
             const Center(child: CircularProgressIndicator())
+          else if (order.status == 'completed')
+            _buildRefundButton(order)
           else
             _buildActionButtons(order),
         ],
@@ -283,6 +288,127 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildRefundButton(OrderModel order) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => _showRefundDialog(order),
+        icon: const Icon(LucideIcons.rotateCcw, size: 18),
+        label: const Text('Ajukan Refund'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.warning,
+          side: const BorderSide(color: AppColors.warning),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  void _showRefundDialog(OrderModel order) {
+    final amountCtrl = TextEditingController(text: order.totalAmount.toStringAsFixed(0));
+    final reasonCtrl = TextEditingController();
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Ajukan Refund'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Order ${order.orderNumber}', style: const TextStyle(color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: amountCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Jumlah Refund',
+                  prefixText: 'Rp ',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonCtrl,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  labelText: 'Alasan Refund *',
+                  hintText: 'Contoh: Makanan tidak sesuai pesanan',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+            ElevatedButton(
+              onPressed: isSubmitting ? null : () async {
+                final reason = reasonCtrl.text.trim();
+                if (reason.length < 3) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Alasan refund wajib diisi (min 3 karakter)'), backgroundColor: AppColors.error),
+                  );
+                  return;
+                }
+                setDialogState(() => isSubmitting = true);
+                try {
+                  // Get payment_id for this order
+                  final cache = SessionCache.instance;
+                  final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1, connectTimeout: const Duration(seconds: 15)));
+                  final payRes = await dio.get(
+                    '/payments/',
+                    queryParameters: {'outlet_id': cache.outletId, 'order_id': order.id},
+                    options: Options(headers: cache.authHeaders),
+                  );
+                  final payments = payRes.data['data'] as List? ?? [];
+                  if (payments.isEmpty) {
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Payment tidak ditemukan'), backgroundColor: AppColors.error),
+                      );
+                    }
+                    return;
+                  }
+                  final paymentId = payments.first['id'];
+                  final amount = double.tryParse(amountCtrl.text.trim()) ?? order.totalAmount;
+
+                  final refundRes = await dio.post(
+                    '/payments/refunds',
+                    options: Options(headers: cache.authHeaders),
+                    data: {'payment_id': paymentId, 'amount': amount, 'reason': reason},
+                  );
+
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    final msg = refundRes.data['message'] ?? 'Refund diajukan';
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(msg), backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating),
+                    );
+                  }
+                } on DioException catch (e) {
+                  setDialogState(() => isSubmitting = false);
+                  final detail = e.response?.data?['detail'] ?? 'Gagal mengajukan refund';
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(detail.toString()), backgroundColor: AppColors.error),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
+              child: isSubmitting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Ajukan Refund'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildBadge(String label, String value, Color color) {
