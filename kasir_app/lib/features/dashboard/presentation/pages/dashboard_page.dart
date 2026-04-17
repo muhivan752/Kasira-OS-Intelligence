@@ -15,6 +15,7 @@ import '../../../ai/presentation/pages/ai_chat_page.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
+import '../../../pos/providers/pos_mode_provider.dart';
 
 final _currencyFmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -22,14 +23,14 @@ const _proTiers = {'pro', 'business', 'enterprise'};
 
 // Tier now from SessionCache (0ms sync read)
 
-class DashboardPage extends StatefulWidget {
+class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  State<DashboardPage> createState() => _DashboardPageState();
+  ConsumerState<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends ConsumerState<DashboardPage> {
   int _selectedIndex = 0;
   bool _isPro = false;
 
@@ -37,6 +38,14 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     _loadTier();
+    // If POS mode was pre-set (e.g. from "Tambah Pesanan" in tab detail),
+    // auto-switch to POS tab
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final mode = ref.read(posModeProvider);
+      if (mode != PosMode.selection && _selectedIndex != 1) {
+        setState(() => _selectedIndex = 1);
+      }
+    });
   }
 
   Future<void> _loadTier() async {

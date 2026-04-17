@@ -6,6 +6,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/tab_provider.dart';
 import '../../../tables/presentation/pages/table_grid_page.dart';
+import '../../../pos/providers/cart_provider.dart';
+import '../../../pos/providers/pos_mode_provider.dart';
 import '../widgets/split_bill_modal.dart';
 import '../widgets/pay_split_modal.dart';
 import '../widgets/tab_header.dart';
@@ -95,7 +97,15 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
             TabBottomActions(
               tab: tab,
               currency: _currency,
-              onAddOrder: () => context.go('/dashboard'),
+              onAddOrder: () {
+                // Pre-set POS to dine-in ordering with this table
+                ref.read(cartProvider.notifier).setOrderType('Dine In');
+                if (tab.tableId != null) {
+                  ref.read(cartProvider.notifier).setTable(tab.tableId!, name: tab.tableName);
+                }
+                ref.read(posModeProvider.notifier).state = PosMode.dineInOrdering;
+                context.go('/dashboard');
+              },
               onMoveTable: () => _showMoveTableModal(tab),
               onMergeTab: () => _showMergeTabModal(tab),
               onCancel: () => _confirmCancel(tab),
