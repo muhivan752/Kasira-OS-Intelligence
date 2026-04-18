@@ -37,6 +37,8 @@ RESTOCK_KEYWORDS = [
     "restock", "tambah stok", "masukin stok", "isi stok", "stok masuk",
     "baru beli", "beli bahan", "datang bahan", "terima bahan",
     "update stok", "nambah stok", "restok",
+    "tambah bahan", "tambahin bahan", "nambah bahan", "tambahkan bahan",
+    "stok bahan", "isi bahan", "masukin bahan", "masukkan bahan",
 ]
 
 

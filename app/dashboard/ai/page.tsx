@@ -30,25 +30,43 @@ export default function AIChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    async function loadOutlet() {
-      try {
-        const res = await fetch('/api/ai/outlet');
-        if (res.ok) {
-          const data = await res.json();
+  const loadOutlet = useCallback(async (): Promise<string | null> => {
+    try {
+      const res = await fetch('/api/ai/outlet', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.outlet_id) {
           setOutletId(data.outlet_id);
+          return data.outlet_id;
         }
-      } catch {}
-    }
-    loadOutlet();
+      }
+    } catch {}
+    return null;
   }, []);
+
+  useEffect(() => {
+    loadOutlet();
+  }, [loadOutlet]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || loading || !outletId) return;
+    if (!text.trim() || loading) return;
+    // Lazy-fetch outletId kalau belum ada (initial load race / session lama)
+    let effectiveOutletId = outletId;
+    if (!effectiveOutletId) {
+      effectiveOutletId = await loadOutlet();
+      if (!effectiveOutletId) {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'error',
+          content: 'Outlet belum teridentifikasi. Coba logout & login ulang.',
+        }]);
+        return;
+      }
+    }
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -68,7 +86,7 @@ export default function AIChatPage() {
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text.trim(), outlet_id: outletId }),
+        body: JSON.stringify({ message: text.trim(), outlet_id: effectiveOutletId }),
       });
 
       if (res.status === 403) {
@@ -150,7 +168,7 @@ export default function AIChatPage() {
       setLoading(false);
       inputRef.current?.focus();
     }
-  }, [loading, outletId]);
+  }, [loading, outletId, loadOutlet]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
