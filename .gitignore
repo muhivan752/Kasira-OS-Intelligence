@@ -6,3 +6,10 @@ coverage/
 .env*
 !.env.example
 public/apk/
+
+# Claude Code — local settings (permission allowlist, kadang berisi credentials)
+.claude/settings.local.json
+
+# Python bytecode
+__pycache__/
+*.pyc
