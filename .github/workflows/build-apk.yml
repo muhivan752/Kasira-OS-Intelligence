@@ -8,13 +8,13 @@ on:
         required: true
         default: '1.0.0'
       is_mandatory:
-        description: 'Force update? (true/false)'
+        description: 'Force update? (true/false/auto). "auto" = preserve nilai di version.json (kalau version match), fallback false.'
         required: false
-        default: 'false'
+        default: 'auto'
       release_notes:
-        description: 'Release notes'
+        description: 'Release notes. Kosong = preserve dari version.json (kalau version match), fallback "Bug fixes and improvements".'
         required: false
-        default: 'Bug fixes and improvements'
+        default: ''
 
 jobs:
   build:
@@ -139,12 +139,51 @@ jobs:
 
       # ── Generate version.json → commit ke repo (Flutter baca via raw.githubusercontent.com) ──
       - name: Generate & Commit version.json
+        id: gen_version
         run: |
           VERSION="${{ github.event.inputs.version }}"
           IS_MANDATORY="${{ github.event.inputs.is_mandatory }}"
           NOTES="${{ github.event.inputs.release_notes }}"
           REPO="muhivan752/Kasira-OS-Intelligence"
           BASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git reset --hard origin/main
+
+          # Resolve is_mandatory + release_notes:
+          # - "auto"/kosong → pakai existing version.json kalau version match, else default
+          # - nilai eksplisit → pakai itu (overwrite)
+          if [ -f version.json ]; then
+            EXISTING_VERSION=$(jq -r '.pos.version // ""' version.json)
+            EXISTING_MANDATORY=$(jq -r '.pos.is_mandatory // false' version.json)
+            EXISTING_NOTES=$(jq -r '.pos.release_notes // ""' version.json)
+          else
+            EXISTING_VERSION=""
+            EXISTING_MANDATORY="false"
+            EXISTING_NOTES=""
+          fi
+
+          if [ "$IS_MANDATORY" = "auto" ]; then
+            if [ "$EXISTING_VERSION" = "$VERSION" ]; then
+              IS_MANDATORY="$EXISTING_MANDATORY"
+              echo "is_mandatory preserved from existing version.json: $IS_MANDATORY"
+            else
+              IS_MANDATORY="false"
+              echo "is_mandatory fallback to false (version bump or no existing)"
+            fi
+          fi
+
+          if [ -z "$NOTES" ]; then
+            if [ "$EXISTING_VERSION" = "$VERSION" ] && [ -n "$EXISTING_NOTES" ] && [ "$EXISTING_NOTES" != "null" ]; then
+              NOTES="$EXISTING_NOTES"
+              echo "release_notes preserved from existing version.json"
+            else
+              NOTES="Bug fixes and improvements"
+              echo "release_notes fallback to default"
+            fi
+          fi
 
           cat > version.json <<EOF
           {
@@ -163,17 +202,17 @@ jobs:
           }
           EOF
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Simpan version.json, lalu push ke branch main
-          cp version.json /tmp/version.json
-          git fetch origin main
-          git reset --hard origin/main
-          cp /tmp/version.json version.json
           git add version.json
           git commit -m "chore: update version.json → v${VERSION}" || echo "No changes to commit"
           git push origin main || echo "Push failed, continuing to release"
+
+          # Expose resolved values untuk step "Create GitHub Release" (multi-line safe)
+          echo "is_mandatory=${IS_MANDATORY}" >> $GITHUB_OUTPUT
+          {
+            echo "release_notes<<NOTES_EOF"
+            echo "${NOTES}"
+            echo "NOTES_EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
@@ -191,10 +230,10 @@ jobs:
           body: |
             ## Kasira v${{ github.event.inputs.version }}
 
-            ${{ github.event.inputs.release_notes }}
+            ${{ steps.gen_version.outputs.release_notes }}
 
             ### Info Update
-            - **Force Update**: ${{ github.event.inputs.is_mandatory }}
+            - **Force Update**: ${{ steps.gen_version.outputs.is_mandatory }}
             - **Build**: #${{ github.run_number }}
             - **Platform**: Android
 
