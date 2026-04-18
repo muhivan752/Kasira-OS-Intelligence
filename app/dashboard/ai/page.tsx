@@ -31,6 +31,7 @@ interface Message {
   applying?: boolean;
   proposalApplied?: boolean;
   proposalError?: string;
+  recipeExists?: boolean;  // set kalau backend return code=recipe_exists
 }
 
 const UNIT_OPTIONS = ['gram', 'ml', 'pcs', 'bungkus'] as const;
@@ -86,9 +87,16 @@ export default function AIChatPage() {
     loadOutlet();
   }, [loadOutlet]);
 
+  // Scroll hanya saat jumlah pesan bertambah — BUKAN saat user mengetik di form
+  // yang trigger re-render msg.editableProposal. Tanpa ini, mobile keyboard
+  // naik lalu page auto-scroll ke bawah saat user isi angka.
+  const prevCountRef = useRef(0);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (messages.length > prevCountRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    prevCountRef.current = messages.length;
+  }, [messages.length]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || loading) return;
@@ -237,7 +245,7 @@ export default function AIChatPage() {
     );
   }, []);
 
-  const applyProposal = useCallback(async (messageId: string, proposal: RecipeProposal) => {
+  const applyProposal = useCallback(async (messageId: string, proposal: RecipeProposal, replace = false) => {
     // Validate form before send
     if (!proposal.product_name.trim()) {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, proposalError: 'Nama produk harus diisi.' } : m));
@@ -249,7 +257,7 @@ export default function AIChatPage() {
     }
     for (const ing of proposal.ingredients) {
       if (!ing.name.trim() || ing.qty <= 0 || ing.buy_price <= 0 || ing.buy_qty <= 0) {
-        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, proposalError: `Bahan "${ing.name || '(kosong)'}" belum lengkap — nama, qty, harga, isi wajib > 0.` } : m));
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, proposalError: `Bahan "${ing.name || '(kosong)'}" belum lengkap — nama, isi, harga, qty wajib > 0.` } : m));
         return;
       }
     }
@@ -261,7 +269,7 @@ export default function AIChatPage() {
     }
 
     setMessages(prev =>
-      prev.map(m => (m.id === messageId ? { ...m, proposalError: undefined, applying: true } : m))
+      prev.map(m => (m.id === messageId ? { ...m, proposalError: undefined, recipeExists: false, applying: true } : m))
     );
 
     try {
@@ -278,12 +286,23 @@ export default function AIChatPage() {
             buy_price: i.buy_price,
             buy_qty: i.buy_qty,
           })),
+          replace,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        const detail = data.detail || data.error || 'Gagal membuat resep.';
+        // Deteksi structured error recipe_exists
+        const detailObj = data.detail;
+        if (res.status === 409 && detailObj && typeof detailObj === 'object' && detailObj.code === 'recipe_exists') {
+          setMessages(prev =>
+            prev.map(m => (m.id === messageId
+              ? { ...m, proposalError: detailObj.message, recipeExists: true, applying: false }
+              : m))
+          );
+          return;
+        }
+        const detail = typeof detailObj === 'string' ? detailObj : (detailObj?.message || data.error || 'Gagal membuat resep.');
         setMessages(prev =>
           prev.map(m => (m.id === messageId ? { ...m, proposalError: detail, applying: false } : m))
         );
@@ -463,10 +482,12 @@ export default function AIChatPage() {
                                 <span className="whitespace-nowrap">Pake:</span>
                                 <input
                                   type="number"
+                                  inputMode="decimal"
                                   step="any"
                                   min="0"
                                   value={ing.qty || ''}
                                   disabled={disabled}
+                                  onFocus={e => e.currentTarget.select()}
                                   onChange={e => updateProposal(msg.id, p => ({
                                     ...p,
                                     ingredients: p.ingredients.map((x, i) => i === idx ? { ...x, qty: parseFloat(e.target.value) || 0 } : x),
@@ -491,10 +512,12 @@ export default function AIChatPage() {
                                 <span className="whitespace-nowrap">Beli Rp:</span>
                                 <input
                                   type="number"
+                                  inputMode="decimal"
                                   step="any"
                                   min="0"
                                   value={ing.buy_price || ''}
                                   disabled={disabled}
+                                  onFocus={e => e.currentTarget.select()}
                                   onChange={e => updateProposal(msg.id, p => ({
                                     ...p,
                                     ingredients: p.ingredients.map((x, i) => i === idx ? { ...x, buy_price: parseFloat(e.target.value) || 0 } : x),
@@ -507,10 +530,12 @@ export default function AIChatPage() {
                                 <span className="whitespace-nowrap">Isi:</span>
                                 <input
                                   type="number"
+                                  inputMode="decimal"
                                   step="any"
                                   min="0"
                                   value={ing.buy_qty || ''}
                                   disabled={disabled}
+                                  onFocus={e => e.currentTarget.select()}
                                   onChange={e => updateProposal(msg.id, p => ({
                                     ...p,
                                     ingredients: p.ingredients.map((x, i) => i === idx ? { ...x, buy_qty: parseFloat(e.target.value) || 0 } : x),
@@ -554,10 +579,32 @@ export default function AIChatPage() {
                       <span className="font-bold text-gray-900">{rp(hpp)}</span>
                     </div>
 
-                    {msg.proposalError && (
+                    {msg.proposalError && !msg.recipeExists && (
                       <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
                         {msg.proposalError}
                       </p>
+                    )}
+
+                    {msg.recipeExists && !msg.proposalApplied && (
+                      <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 space-y-2">
+                        <p className="text-xs text-amber-800">{msg.proposalError}</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => applyProposal(msg.id, ep, true)}
+                            disabled={msg.applying}
+                            className="flex-1 px-3 py-1.5 text-xs font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-60 transition-colors"
+                          >
+                            {msg.applying ? 'Mengganti...' : 'Ya, Ganti Resep Lama'}
+                          </button>
+                          <button
+                            onClick={() => setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, proposalError: undefined, recipeExists: false } : m))}
+                            disabled={msg.applying}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                          >
+                            Batal
+                          </button>
+                        </div>
+                      </div>
                     )}
 
                     {msg.proposalApplied ? (
@@ -565,7 +612,7 @@ export default function AIChatPage() {
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>Resep sudah dibuat</span>
                       </div>
-                    ) : (
+                    ) : !msg.recipeExists && (
                       <button
                         onClick={() => applyProposal(msg.id, ep)}
                         disabled={msg.applying}

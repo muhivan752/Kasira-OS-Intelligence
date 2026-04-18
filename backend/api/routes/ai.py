@@ -187,6 +187,7 @@ class ProposalIngredient(BaseModel):
 class ApplyRecipeRequest(BaseModel):
     outlet_id: str
     product_name: str = Field(..., min_length=1, max_length=120)
+    replace: bool = False  # True = soft-delete existing active recipe + recipe_ingredients
     ingredients: List[ProposalIngredient] = Field(..., min_length=1, max_length=20)
 
 
@@ -250,9 +251,31 @@ async def apply_recipe_proposal(
         )
     )).scalar_one_or_none()
     if existing_recipe:
-        raise HTTPException(
-            status_code=409,
-            detail=f'Produk "{product.name}" sudah punya resep aktif. Edit manual di halaman Menu kalau mau ubah.',
+        if not body.replace:
+            # Structured 409 — frontend detect code=recipe_exists → tampil tombol "Ganti"
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "recipe_exists",
+                    "message": f'Produk "{product.name}" udah punya resep aktif. Mau diganti dengan resep baru ini?',
+                    "product_name": product.name,
+                },
+            )
+        # User confirm replace — soft-delete old recipe + ingredients-nya
+        from sqlalchemy import update as sql_update
+        now = datetime.now(timezone.utc)
+        await db.execute(
+            sql_update(Recipe)
+            .where(Recipe.id == existing_recipe.id)
+            .values(is_active=False, deleted_at=now)
+        )
+        await db.execute(
+            sql_update(RecipeIngredient)
+            .where(
+                RecipeIngredient.recipe_id == existing_recipe.id,
+                RecipeIngredient.deleted_at.is_(None),
+            )
+            .values(deleted_at=now)
         )
 
     # Load existing ingredients dalam brand (untuk dedup)
