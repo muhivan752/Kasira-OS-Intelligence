@@ -158,6 +158,40 @@ curl -X POST -H "Authorization: token <PAT>" \
 
 ---
 
+## Tier Gating — Endpoint Spec
+
+### 🆓 ALL TIERS (Starter, Pro, Business, Enterprise)
+| Endpoint | Catatan |
+|----------|---------|
+| `/auth/*`, `/health`, `/webhooks/*` | Public / infrastructure |
+| `/products/*`, `/categories/*`, `/orders/*`, `/payments/*` (non-refund/partial) | Basic POS |
+| `/refunds/*` | Semua tier (customer batal beli = reality semua cafe) |
+| `/shifts/*` | Basic shift management |
+| `/customers/*`, `/connect/{slug}/*` | Storefront + customer CRUD |
+| `/reports/summary`, `/reports/daily` | Basic reports (revenue, payment breakdown, top products) |
+| `/embeddings/status` | Read-only info |
+| `/ai/context/{outlet_id}` (DELETE) | Cache clear — safe for all |
+
+### 🔒 PRO+ ONLY (`require_pro_tier` dep)
+| Endpoint | Gating Mechanism |
+|----------|-----------------|
+| `/ingredients/*`, `/recipes/*`, `/recipe-ingredients/*` | Router-level |
+| `/tables/*`, `/tabs/*`, `/reservations/*` | Router-level |
+| `/loyalty/*` | Router-level |
+| `/knowledge-graph/*` | Router-level |
+| `/analytics/*` (menu-engineering, combos, hourly) | Router-level |
+| `/embeddings/generate` | Endpoint-level |
+| `/ai/chat` | Endpoint-level (via `tenant: Tenant = Depends(require_pro_tier)`) |
+| `/payments` partial_payment fields | Inline check (Rule #43) |
+
+### ⚠️ Gotcha untuk tier gating
+1. Jangan pakai **manual tier check inline** — pakai `Depends(deps.require_pro_tier)` dep untuk consistency.
+2. `require_pro_tier` butuh header `X-Tenant-ID` (via `get_current_tenant`). Pastiin Flutter/dashboard kirim header ini di semua request auth.
+3. Kalau endpoint butuh **tier VALUE** (bukan cuma check), inject `tenant: Tenant = Depends(require_pro_tier)` lalu extract: `tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)`.
+4. Router-level gate lebih aman daripada per-endpoint — 1 miss endpoint = bug silent.
+
+---
+
 ## GOLDEN RULES — Dikelompokkan per Domain
 
 ### 🗄️ DATA LAYER

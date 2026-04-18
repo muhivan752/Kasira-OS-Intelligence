@@ -46,9 +46,10 @@ async def ai_chat(
     body: ChatRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
+    tenant: Tenant = Depends(deps.require_pro_tier),
 ) -> StreamingResponse:
     """
-    AI chat dengan SSE streaming.
+    AI chat dengan SSE streaming. Pro+ only (di-gate via require_pro_tier dep).
 
     Response format (per chunk):
         data: {"type": "chunk", "content": "..."}
@@ -67,19 +68,9 @@ async def ai_chat(
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
 
-    # Ambil tier dari tenant
-    tenant_result = await db.execute(
-        select(Tenant).where(Tenant.id == current_user.tenant_id, Tenant.deleted_at.is_(None))
-    )
-    tenant = tenant_result.scalar_one_or_none()
-    tier = getattr(getattr(tenant, "subscription_tier", None), "value", "starter")
-
-    # AI Chatbot = Pro+ only
-    if tier not in ("pro", "business", "enterprise"):
-        raise HTTPException(
-            status_code=403,
-            detail="AI Chatbot hanya tersedia untuk paket Pro. Upgrade untuk mengakses."
-        )
+    # Tier dari tenant yg udah divalidasi dep (Pro+ terjamin lolos check)
+    raw_tier = getattr(tenant, "subscription_tier", "starter") or "starter"
+    tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
 
     redis = await get_redis_client()
 

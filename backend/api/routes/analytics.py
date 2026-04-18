@@ -11,13 +11,16 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
+from backend.api import deps
 from backend.api.deps import get_current_user
 from backend.models.user import User
 from backend.models.platform import PlatformDailyStats
 from backend.schemas.response import StandardResponse
 from backend.services.menu_engineering_service import classify_menu, detect_combos
 
-router = APIRouter()
+# Analytics = Pro+ only (menu engineering, combo detection, hourly trends)
+# butuh data yg hanya tersedia di Pro (recipe cost, KG) atau analysis yg advanced.
+router = APIRouter(dependencies=[Depends(deps.require_pro_tier)])
 
 
 @router.get("/menu-engineering", response_model=StandardResponse)
