@@ -11,6 +11,35 @@ import { Plus, Search, Edit2, Loader2, X, Trash2, Tag, Upload, ImageOff, Package
 import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
+// Deteksi kemungkinan user salah unit saat input qty per porsi.
+// Scenario: bahan di-track dalam kg/liter (unit besar) tapi qty resep < 1 →
+// kemungkinan user mikir dalam gram/ml. Sebaliknya juga.
+function detectUnitWarning(unit: string, qty: number): string | null {
+  if (!qty || qty <= 0) return null;
+  const u = (unit || '').toLowerCase().trim();
+
+  // kg / liter — unit besar, qty < 1 biasanya dianggap aneh untuk cafe (kecuali bahan mahal seperti biji kopi 0.02 kg)
+  if ((u === 'kg' || u === 'l' || u === 'liter' || u === 'lt') && qty < 0.05) {
+    const inSmaller = qty * 1000;
+    const smallerUnit = u === 'kg' ? 'gram' : 'ml';
+    return `${qty} ${u} = ${inSmaller.toFixed(0)} ${smallerUnit}. Biar gampang, ganti bahan ini ke unit ${smallerUnit} di halaman Bahan Baku.`;
+  }
+
+  // gram / ml — unit kecil, qty > 1000 biasanya salah (kecuali misal 1500ml untuk pitcher, rare)
+  if ((u === 'g' || u === 'gr' || u === 'gram' || u === 'ml') && qty >= 1000) {
+    const inLarger = qty / 1000;
+    const largerUnit = (u === 'ml') ? 'liter' : 'kg';
+    return `${qty} ${u} = ${inLarger.toFixed(1)} ${largerUnit}. Pastiin benar — biasanya per porsi lebih kecil.`;
+  }
+
+  // pcs / buah / butir — qty > 50 untuk 1 porsi biasanya salah
+  if ((u === 'pcs' || u === 'buah' || u === 'butir' || u === 'piece') && qty > 50) {
+    return `${qty} ${u} untuk 1 porsi terlihat banyak. Pastiin benar.`;
+  }
+
+  return null;
+}
+
 export default function MenuPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -708,32 +737,41 @@ export default function MenuPage() {
                       <div className="space-y-2">
                         {recipeIngredients.map((ri, idx) => {
                           const lineCost = ri.quantity * ri.cost;
+                          const unitWarning = detectUnitWarning(ri.quantity_unit, ri.quantity);
                           return (
-                            <div key={ri.ingredient_id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">{ri.name}</p>
-                                <p className="text-xs text-gray-400">
-                                  {ri.buy_price > 0 && `${fmt(ri.buy_price)}/${ri.buy_qty}${ri.quantity_unit} → `}
-                                  {fmt(ri.cost)}/{ri.quantity_unit}
-                                  {ri.quantity > 0 && ` = ${fmt(lineCost)}`}
-                                </p>
+                            <div key={ri.ingredient_id} className="space-y-1">
+                              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">{ri.name}</p>
+                                  <p className="text-xs text-gray-400">
+                                    {ri.buy_price > 0 && `${fmt(ri.buy_price)}/${ri.buy_qty}${ri.quantity_unit} → `}
+                                    {fmt(ri.cost)}/{ri.quantity_unit}
+                                    {ri.quantity > 0 && ` = ${fmt(lineCost)}`}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <input type="number" step="any" min="0" placeholder="Qty"
+                                    value={ri.quantity || ''}
+                                    onChange={e => {
+                                      const updated = [...recipeIngredients];
+                                      updated[idx] = { ...updated[idx], quantity: parseFloat(e.target.value) || 0 };
+                                      setRecipeIngredients(updated);
+                                    }}
+                                    className="w-20 px-2 py-1.5 border rounded-lg text-sm text-right" />
+                                  <span className="text-sm font-semibold text-gray-700 w-10">{ri.quantity_unit}</span>
+                                </div>
+                                <button type="button" onClick={() => {
+                                  setRecipeIngredients(recipeIngredients.filter((_, i) => i !== idx));
+                                }} className="p-1 text-red-400 hover:text-red-600">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <input type="number" step="any" min="0" placeholder="Qty"
-                                  value={ri.quantity || ''}
-                                  onChange={e => {
-                                    const updated = [...recipeIngredients];
-                                    updated[idx] = { ...updated[idx], quantity: parseFloat(e.target.value) || 0 };
-                                    setRecipeIngredients(updated);
-                                  }}
-                                  className="w-20 px-2 py-1.5 border rounded-lg text-sm text-right" />
-                                <span className="text-sm font-semibold text-gray-700 w-10">{ri.quantity_unit}</span>
-                              </div>
-                              <button type="button" onClick={() => {
-                                setRecipeIngredients(recipeIngredients.filter((_, i) => i !== idx));
-                              }} className="p-1 text-red-400 hover:text-red-600">
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {unitWarning && (
+                                <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                                  <span className="text-amber-600 flex-shrink-0">⚠</span>
+                                  <span>{unitWarning}</span>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
