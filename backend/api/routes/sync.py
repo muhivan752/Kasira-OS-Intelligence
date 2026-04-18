@@ -71,9 +71,47 @@ async def sync_data(
         if request.changes.orders:
             await process_table_sync(db, Order, request.changes.orders, {"outlet_id": outlet_id}, server_hlc, conflict_strategy="financial_strict")
         if request.changes.order_items:
-            await process_table_sync(db, OrderItem, request.changes.order_items, {}, server_hlc)
+            # 🔒 Tenant isolation + terminal-state guard (cegah cross-tenant write + ghost discount)
+            # Client bisa aja push OrderItem dengan UUID sembarang. Kita WAJIB verify:
+            #   1. Parent Order.outlet_id == outlet_id (tenant check)
+            #   2. Parent Order bukan dalam state terminal (paid/completed/refunded/cancelled)
+            # Kalau parent belum ada di DB (new order di batch yang sama), cek batch orders juga.
+            item_order_ids = [oi.get("order_id") for oi in request.changes.order_items if oi.get("order_id")]
+            trusted_order_items = []
+            if item_order_ids:
+                parent_rows = (await db.execute(
+                    select(Order.id, Order.status, Order.outlet_id).where(Order.id.in_(item_order_ids))
+                )).all()
+                parent_map = {}
+                for pid, pstatus, poutlet in parent_rows:
+                    status_str = pstatus.value if hasattr(pstatus, 'value') else str(pstatus)
+                    parent_map[str(pid)] = (status_str, str(poutlet))
+                batch_order_ids = {str(o.get("id")) for o in (request.changes.orders or []) if o.get("id")}
+                terminal_states = {"paid", "completed", "refunded", "cancelled"}
+                for oi in request.changes.order_items:
+                    oid = str(oi.get("order_id") or "")
+                    if oid in parent_map:
+                        pstatus, poutlet = parent_map[oid]
+                        if poutlet != str(outlet_id):
+                            logger.warning("sync: reject cross-tenant order_item order_id=%s", oid)
+                            continue
+                        if pstatus in terminal_states:
+                            logger.warning("sync: reject order_item on terminal order_id=%s status=%s", oid, pstatus)
+                            continue
+                        trusted_order_items.append(oi)
+                    elif oid in batch_order_ids:
+                        # Parent ikut di-push di batch yang sama — orders.push flushed duluan, jadi
+                        # kalau gak ketemu di parent_map artinya orders.push juga di-reject/filter.
+                        # Aman: skip defensif.
+                        logger.warning("sync: reject order_item with batch-parent order_id=%s (parent filtered)", oid)
+                        continue
+                    else:
+                        logger.warning("sync: reject order_item unknown parent order_id=%s", oid)
+
+            await process_table_sync(db, OrderItem, trusted_order_items, {}, server_hlc, conflict_strategy="financial_strict")
             # Trigger stock deduction untuk order items yang baru sync dari offline
-            # Idempotent — skip kalau stock.sale event sudah ada untuk order ini
+            # Idempotent — stock_service._is_sale_already_recorded + ingredient_stock_service
+            # event-log check cegah double-deduct saat retry.
             tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
             tenant = tenant_res.scalar_one_or_none()
             raw_tier = getattr(tenant, "subscription_tier", "starter") or "starter" if tenant else "starter"
@@ -82,7 +120,7 @@ async def sync_data(
             sm = getattr(outlet, 'stock_mode', 'simple')
             stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
 
-            for item_data in request.changes.order_items:
+            for item_data in trusted_order_items:
                 product = await db.get(Product, item_data.get("product_id"))
                 if not (product and product.stock_enabled):
                     continue
@@ -126,7 +164,28 @@ async def sync_data(
         if request.changes.shifts:
             await process_table_sync(db, Shift, request.changes.shifts, {"outlet_id": outlet_id}, server_hlc, conflict_strategy="financial_strict")
         if request.changes.cash_activities:
-            await process_table_sync(db, CashActivity, request.changes.cash_activities, {}, server_hlc, conflict_strategy="financial_strict")
+            # 🔒 Tenant isolation: CashActivity terhubung ke Shift via shift_id.
+            # Hanya terima CA yang shift-nya milik outlet ini.
+            ca_shift_ids = [ca.get("shift_id") for ca in request.changes.cash_activities if ca.get("shift_id")]
+            trusted_ca = []
+            if ca_shift_ids:
+                valid_shifts = (await db.execute(
+                    select(Shift.id).where(
+                        Shift.id.in_(ca_shift_ids),
+                        Shift.outlet_id == outlet_id,
+                    )
+                )).scalars().all()
+                valid_shift_ids = {str(sid) for sid in valid_shifts}
+                batch_shift_ids = {str(s.get("id")) for s in (request.changes.shifts or []) if s.get("id")}
+                for ca in request.changes.cash_activities:
+                    sid = str(ca.get("shift_id") or "")
+                    if sid in valid_shift_ids:
+                        trusted_ca.append(ca)
+                    elif sid in batch_shift_ids:
+                        logger.warning("sync: reject cash_activity with batch-parent shift=%s (filtered)", sid)
+                    else:
+                        logger.warning("sync: reject cash_activity unknown/cross-tenant shift=%s", sid)
+            await process_table_sync(db, CashActivity, trusted_ca, {}, server_hlc, conflict_strategy="financial_strict")
         if request.changes.outlet_stock:
             await process_stock_sync(db, request.changes.outlet_stock, outlet_id, server_hlc)
             

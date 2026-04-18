@@ -50,11 +50,28 @@ async def process_table_sync(db: AsyncSession, model_class, client_records: List
             
             if not is_authorized:
                 continue # Skip unauthorized update
-                
-            # Financial Strict Strategy: Server wins if status is final
-            if conflict_strategy == "financial_strict" and hasattr(db_record, "status"):
-                if db_record.status in ["paid", "completed", "refunded", "cancelled"]:
-                    continue # Skip update, server wins
+
+            # Financial Strict Strategy: server wins kalau record udah final.
+            # Per-model terminal states (avoid import cycle, pake class name):
+            #   - Order    → paid/completed/refunded/cancelled
+            #   - Payment  → paid/refunded/failed/expired/cancelled
+            #   - Shift    → closed
+            #   - OrderItem → tidak punya status sendiri, diguard di route (parent Order check)
+            #   - CashActivity → never overwritable sekali insert (append-only semantics)
+            if conflict_strategy == "financial_strict":
+                model_name = type(db_record).__name__
+                if model_name == "CashActivity":
+                    continue  # CashActivity = append-only
+                current_status = getattr(db_record, "status", None)
+                if current_status is not None:
+                    status_str = current_status.value if hasattr(current_status, 'value') else str(current_status)
+                    terminal_by_model = {
+                        "Order": {"paid", "completed", "refunded", "cancelled"},
+                        "Payment": {"paid", "refunded", "failed", "expired", "cancelled"},
+                        "Shift": {"closed"},
+                    }
+                    if status_str in terminal_by_model.get(model_name, set()):
+                        continue  # Skip update, server wins
             
             # Optimistic Locking & CRDT Conflict Resolution
             db_updated_at = db_record.updated_at
