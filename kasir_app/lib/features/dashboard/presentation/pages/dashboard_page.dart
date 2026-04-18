@@ -11,6 +11,7 @@ import '../../../shift/presentation/pages/shift_page.dart';
 import '../../../products/presentation/pages/product_management_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
 import '../../../reservations/presentation/pages/reservation_list_page.dart';
+import '../../../tables/presentation/pages/table_grid_page.dart';
 import '../../../ai/presentation/pages/ai_chat_page.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/dashboard_provider.dart';
@@ -430,13 +431,21 @@ class _DashboardContent extends ConsumerWidget {
             ElevatedButton.icon(
               onPressed: () {
                 if (SessionCache.instance.isPro) {
-                  context.push('/tabs');
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('Denah Meja')),
+                        body: const TableGridPage(),
+                      ),
+                    ),
+                  );
                 } else {
-                  _DashboardPageState._showUpgradeSheet(context, 'Tab / Split Bill');
+                  _DashboardPageState._showUpgradeSheet(context, 'Denah Meja & Tab');
                 }
               },
-              icon: const Icon(LucideIcons.split, size: 16),
-              label: Text(isWide ? 'Tab / Bon' : 'Tab'),
+              icon: const Icon(LucideIcons.layoutGrid, size: 16),
+              label: Text(isWide ? 'Denah Meja' : 'Meja'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.info,
                 padding: isWide

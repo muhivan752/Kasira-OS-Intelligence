@@ -5,9 +5,11 @@ Golden Rules yang diimplementasikan:
 - Rule #25: Model dipilih via get_model_for_tier() — TIDAK pernah hardcoded
 - Rule #26: Starter/rutin = Haiku, Pro+ kompleks = Sonnet
 - Rule #27: 3 optimasi — batching context, cache Redis, compress context
-- Rule #54: Intent WAJIB classified, WRITE butuh konfirmasi
+- Rule #54: Intent classified untuk RESTOCK (actionable). Chat umum langsung ke Claude.
 - Rule #55: System prompt max 800 token, cache Redis 5 menit
-- Rule #56: UNKNOWN intent = tolak sopan
+
+Design: AI asisten bisnis umum untuk UMKM Indonesia — F&B, retail, vape, sepeda listrik, dll.
+Bukan F&B-only. Merchant yang tanya common knowledge (takaran, operasional, pricing) harus dapat jawaban konkret.
 """
 
 import json
@@ -26,61 +28,15 @@ logger = logging.getLogger(__name__)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-INTENT_READ = "READ"
-INTENT_WRITE = "WRITE"
+INTENT_CHAT = "CHAT"
 INTENT_RESTOCK = "RESTOCK"
-INTENT_UNKNOWN = "UNKNOWN"
 
-# Keywords untuk intent classification (Bahasa Indonesia + sedikit Inggris)
-READ_KEYWORDS = [
-    "laporan", "omzet", "pendapatan", "revenue", "penjualan", "berapa",
-    "transaksi", "order", "pesanan", "produk terlaris", "best seller",
-    "stok", "stock", "sisa", "pelanggan", "customer", "kasir",
-    "shift", "hari ini", "kemarin", "minggu ini", "bulan ini",
-    "performa", "statistik", "analisa", "trend", "grafik", "summary",
-    "total", "rata-rata", "average", "tertinggi", "terendah",
-    # HPP / cost queries
-    "hpp", "harga pokok", "cost", "margin", "untung", "laba", "profit",
-    "biaya bahan", "biaya produksi", "food cost", "naik harga",
-    "dampak harga", "impact", "bahan baku", "ingredient",
-    # Reservation queries
-    "reservasi", "booking", "book", "pesan meja", "meja kosong",
-    "meja tersedia", "available", "jadwal", "jam buka", "jam tutup",
-    "buka jam", "tutup jam", "kapan bisa", "ada meja",
-]
-
+# Keyword detection hanya untuk RESTOCK (actionable — langsung update DB).
+# Selain itu semua pertanyaan → CHAT → Claude yang jawab via system prompt.
 RESTOCK_KEYWORDS = [
     "restock", "tambah stok", "masukin stok", "isi stok", "stok masuk",
     "baru beli", "beli bahan", "datang bahan", "terima bahan",
     "update stok", "nambah stok", "restok",
-]
-
-WRITE_KEYWORDS = [
-    "tambah", "buat", "create", "hapus", "delete", "ubah", "update",
-    "ganti", "edit", "set", "jadikan", "nonaktifkan", "aktifkan",
-    "harga", "nama produk", "diskon",
-    "promo", "tutup outlet", "buka outlet",
-]
-
-BUSINESS_CONTEXT_KEYWORDS = [
-    "menu", "produk", "makanan", "minuman", "cafe", "restoran", "warung",
-    "kasir", "pembayaran", "qris", "cash", "tunai", "pelanggan",
-    "meja", "takeaway", "dine in", "delivery", "pesanan", "order",
-    "omzet", "penjualan", "pendapatan", "shift", "laporan", "stok",
-    "bahan", "ingredient", "supplier", "dapur", "kitchen",
-    "promo", "diskon", "loyalty", "poin", "voucher",
-    "reservasi", "booking", "jam buka", "jam operasional",
-    # F&B knowledge umum — AI boleh jawab dari knowledge Claude
-    "resep", "recipe", "cara buat", "cara bikin", "brewing", "espresso",
-    "latte", "cappuccino", "americano", "kopi", "teh", "jus", "smoothie",
-    "food cost", "pricing", "harga jual", "markup", "margin ideal",
-    "tips", "saran", "rekomendasi", "ide menu", "menu baru",
-    "trend", "viral", "populer", "musim", "seasonal",
-    "operasional", "manajemen", "kelola", "efisiensi", "waste",
-    "barista", "teknik", "grind", "roast", "beans", "arabica", "robusta",
-    "frozen", "dessert", "pastry", "snack", "nasi", "mie", "roti",
-    "packaging", "take away", "grab", "gojek", "ojol",
-    "dekorasi", "interior", "suasana", "ambiance", "musik",
 ]
 
 
@@ -119,23 +75,16 @@ async def get_model_for_tier(tier: str, task: str = "routine", tenant_id: str = 
 def classify_intent(message: str) -> str:
     """
     Klasifikasi intent pesan owner.
-    Returns: READ | WRITE | UNKNOWN
+    Returns: RESTOCK (actionable — update DB langsung) | CHAT (default — Claude jawab)
+
+    Scope filtering dilakukan di system prompt, bukan di classifier.
+    Ini supaya AI bisa bantu common sense question (takaran, tips operasional, dll)
+    tanpa keblock keyword matching yang terlalu strict.
     """
     msg_lower = message.lower()
-
-    # Cek apakah pesan relevan dengan konteks bisnis
-    has_business_context = any(kw in msg_lower for kw in BUSINESS_CONTEXT_KEYWORDS)
-    has_read = any(kw in msg_lower for kw in READ_KEYWORDS)
-    has_restock = any(kw in msg_lower for kw in RESTOCK_KEYWORDS)
-    has_write = any(kw in msg_lower for kw in WRITE_KEYWORDS)
-
-    if has_restock:
+    if any(kw in msg_lower for kw in RESTOCK_KEYWORDS):
         return INTENT_RESTOCK
-    if has_write:
-        return INTENT_WRITE
-    if has_read or has_business_context:
-        return INTENT_READ
-    return INTENT_UNKNOWN
+    return INTENT_CHAT
 
 
 # ─── Restock via AI ──────────────────────────────────────────────────────────
@@ -857,10 +806,13 @@ MEJA:
         peak_hours = []
 
     today_str = today.strftime("%d %B %Y")
-    context = f"""Kamu adalah asisten AI untuk {outlet_name}, sebuah cafe di Indonesia.
+    context = f"""Kamu adalah asisten AI Kasira untuk {outlet_name} di Indonesia.
+
+SIAPA USER LO: owner/kasir UMKM Indonesia. Bisnisnya bisa apa aja — cafe, resto, toko sepeda listrik, toko vape, fashion, kelontong, laundry, dll. LIHAT daftar produk di bawah untuk tau jenis bisnisnya, lalu jawab sesuai konteks itu. Banyak user baru pertama kali jualan dan butuh bimbingan konkret.
+
 Tanggal: {today_str}
 
-MENU/PRODUK YANG DIJUAL:
+PRODUK YANG DIJUAL:
 {chr(10).join("- " + p for p in product_menu_list) if product_menu_list else "- Belum ada produk"}
 
 DATA BISNIS HARI INI:
@@ -882,19 +834,24 @@ INSIGHT OPERASIONAL:
 - Metode bayar: {", ".join(pay_breakdown) if pay_breakdown else "belum ada data"}
 - Jam tersibuk (7 hari): {", ".join(peak_hours) if peak_hours else "belum cukup data"}
 {reservation_info}
-INSTRUKSI:
-- PRIORITAS UTAMA: data bisnis outlet ini (omzet, stok, HPP, tab, meja, dll)
-- Gunakan bahasa Indonesia yang ramah dan profesional
+GAYA JAWAB:
+- Bahasa Indonesia casual tapi sopan, jangan bertele-tele
 - Angka dalam format Rupiah (Rp x.xxx)
-- Jawaban singkat dan langsung to the point
-- Untuk reservasi: informasikan ketersediaan meja dan jam operasional
-- Untuk HPP: jelaskan komponen biaya, margin, dan dampak perubahan harga bahan
-- Untuk restock: bisa langsung eksekusi via chat (contoh: "restock kopi arabica 5kg")
-- Jika ditanya dampak kenaikan harga bahan, hitung ulang HPP dan margin baru
-- Untuk tab/bon: laporkan tab aktif, tab yang minta bill, durasi, dan meja yang terisi
-- Untuk meja: jelaskan meja mana yang kosong/terisi dan tab yang sedang berjalan
-- BOLEH jawab pertanyaan F&B umum: resep minuman/makanan, teknik brewing, tips operasional cafe/resto, food cost ideal, saran menu, pricing strategy, trend F&B
-- TOLAK topik di luar F&B dan bisnis (politik, coding, medis, hukum, curhat, dll)"""
+- Kalau data outlet ada di atas, pakai itu (omzet, stok, HPP, tab, meja)
+- Kalau user nanya hal umum yang gak ada datanya, JAWAB dari pengetahuan umum — jangan tolak. Contoh:
+  * "gula putih untuk 1 es teh biasanya berapa gr" → kasih angka konkret (misal 15-20g) + tips
+  * "harga jual pod vape yang wajar" → kasih range margin 30-50% + tips pricing
+  * "cara jaga stok sparepart sepeda listrik" → kasih tips inventory retail
+  * "cara bikin latte art" → jelasin step
+- User banyak yang baru belajar — kasih contoh konkret (gram/ml/persen/range harga), bukan jawaban abstrak
+- Untuk restock: bisa langsung eksekusi via chat (contoh: "restock gula 5kg")
+- Untuk HPP: jelasin komponen biaya, margin, dampak perubahan harga
+- Untuk tab/meja: laporkan tab aktif, yang minta bill, durasi, meja terisi
+
+BATASAN:
+- Tolak topik benar-benar di luar bisnis (politik, medis serius, curhat pribadi, coding, hukum). Untuk ini bilang sopan: "Aku fokus bantu bisnis lo. Coba tanya yang lain ya."
+- Kalau user minta ubah data (harga, produk, diskon, promo) — arahin ke menu settings app, jangan ngaku bisa eksekusi
+- Kalau gak tau jawabannya, bilang jujur gak tau — jangan ngarang angka bisnis"""
 
     # Knowledge graph context (non-blocking)
     kg_context = ""
@@ -971,17 +928,8 @@ async def stream_ai_response(
     def sse(payload: dict) -> str:
         return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
-    # 1. Classify intent (Rule #54, #56)
+    # 1. Classify intent — RESTOCK = actionable, selain itu langsung ke Claude
     intent = classify_intent(message)
-
-    if intent == INTENT_UNKNOWN:
-        yield sse({
-            "type": "chunk",
-            "content": "Maaf, saya hanya bisa membantu seputar bisnis dan dunia F&B. "
-                       "Contoh: omzet hari ini, resep kopi, tips operasional cafe, atau stok yang perlu diisi.",
-        })
-        yield sse({"type": "done", "intent": intent, "tokens_used": 0})
-        return
 
     if intent == INTENT_RESTOCK:
         # Parse and execute restock
@@ -1014,17 +962,6 @@ async def stream_ai_response(
         except Exception:
             pass
 
-        yield sse({"type": "done", "intent": intent, "tokens_used": 0})
-        return
-
-    if intent == INTENT_WRITE:
-        yield sse({
-            "type": "chunk",
-            "content": "Permintaan ini akan mengubah data bisnis Anda. "
-                       "Silakan lakukan perubahan langsung di menu pengaturan aplikasi Kasira "
-                       "untuk memastikan keamanan data.\n\n"
-                       "Untuk restock bahan baku, coba: *restock kopi arabica 1kg*",
-        })
         yield sse({"type": "done", "intent": intent, "tokens_used": 0})
         return
 

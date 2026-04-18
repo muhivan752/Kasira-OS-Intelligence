@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
@@ -230,7 +231,7 @@ class _TableGridPageState extends State<TableGridPage> {
         if (widget.onTableSelected != null) {
           widget.onTableSelected!(table);
         } else if (table.status == TableStatus.occupied) {
-          _showTableDetail(table);
+          _openTabForTable(table);
         } else if (isSelectable) {
           _showTableDetail(table);
         }
@@ -374,6 +375,55 @@ class _TableGridPageState extends State<TableGridPage> {
           statusLabel: 'Perlu Dibersihkan',
         );
     }
+  }
+
+  Future<void> _openTabForTable(TableModel table) async {
+    final cache = SessionCache.instance;
+    final loadingDialog = showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+      ));
+      final res = await dio.get(
+        '/tabs/',
+        queryParameters: {
+          'outlet_id': cache.outletId,
+          'table_id': table.id,
+          'status': 'open',
+        },
+        options: Options(headers: cache.authHeaders),
+      );
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+      final list = (res.data['data'] as List? ?? []);
+      if (list.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Tidak ada tab aktif di ${table.name}'),
+              backgroundColor: AppColors.warning,
+            ),
+          );
+        }
+        return;
+      }
+      final tabId = list.first['id'] as String;
+      if (mounted) context.push('/tabs/$tabId');
+    } catch (e) {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat tab: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+    // Ignore linter for unused loadingDialog future
+    loadingDialog.ignore();
   }
 
   void _showTableDetail(TableModel table) {
