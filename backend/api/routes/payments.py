@@ -313,7 +313,6 @@ async def create_payment(
     ))
 
     await db.commit()
-    await db.refresh(payment)
 
     # Audit log
     await log_audit(

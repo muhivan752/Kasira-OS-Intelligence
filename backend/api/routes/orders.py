@@ -189,7 +189,10 @@ async def create_order(
     sm = getattr(outlet, 'stock_mode', 'simple')
     stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
 
-    for item_in in order_in.items:
+    # Sort items by product_id → konsisten lock order across concurrent orders → no deadlock.
+    sorted_items = sorted(order_in.items, key=lambda i: str(i.product_id))
+
+    for item_in in sorted_items:
         # Fetch product to check stock
         product = await db.get(Product, item_in.product_id)
         if not product or product.deleted_at is not None:
@@ -273,6 +276,10 @@ async def create_order(
 
     # 1. Pastikan commit sudah selesai
     await db.commit()
+
+    # Re-set RLS tenant context: SET LOCAL resets after commit (new implicit tx).
+    # Without this, selectinload query below gets blocked by RLS policy.
+    await db.execute(text(f"SET LOCAL app.current_tenant_id = '{current_user.tenant_id}'"))
 
     # 2. Ambil ulang data Order — selectinload di semua level (wajib untuk async)
     query = (
