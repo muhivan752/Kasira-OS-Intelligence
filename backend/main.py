@@ -24,13 +24,31 @@ from backend.services.xendit import xendit_service
 
 def _rate_limit_key(request: Request) -> str:
     """
-    Rate limit key: pakai user_id kalau authenticated (pasang di request.state
-    via auth dep), fallback ke IP. Ini supaya user di belakang NAT/CGN gak
-    terkena limit gabungan.
+    Rate limit key:
+      1. Authorization Bearer JWT → decode `sub` (user_id) — per-user limit
+      2. Fallback ke IP (untuk public endpoint atau request tanpa JWT)
+
+    Parsing JWT disini tanpa validate expiry/signature — fine untuk key-func doang,
+    karena endpoint dep `get_current_user` nanti tetep validate. Tujuan: user di
+    belakang NAT/CGN gak kena limit gabungan.
     """
-    user_id = getattr(request.state, "rate_limit_user_id", None)
-    if user_id:
-        return f"user:{user_id}"
+    auth = request.headers.get("authorization") or request.headers.get("Authorization")
+    if auth and auth.lower().startswith("bearer "):
+        token = auth.split(None, 1)[1].strip()
+        try:
+            # JWT = header.payload.signature — decode payload only
+            import base64, json as _json
+            parts = token.split(".")
+            if len(parts) == 3:
+                payload_raw = parts[1]
+                # b64url padding
+                payload_raw += "=" * (-len(payload_raw) % 4)
+                payload = _json.loads(base64.urlsafe_b64decode(payload_raw))
+                sub = payload.get("sub")
+                if sub:
+                    return f"user:{sub}"
+        except Exception:
+            pass
     return get_remote_address(request)
 
 

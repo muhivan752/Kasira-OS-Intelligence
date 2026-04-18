@@ -13,3 +13,7 @@ public/apk/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Load test — local results + JWT config (contains tokens)
+load_test/results/
+load_test/config.json
