@@ -42,14 +42,17 @@ RESTOCK_KEYWORDS = [
     "stok bahan", "isi bahan", "masukin bahan", "masukkan bahan",
 ]
 
-# Keyword detection untuk SETUP_RECIPE — AI generate proposal bahan + qty,
-# user confirm via tombol di dashboard lalu execute via /ai/apply-recipe.
-SETUP_RECIPE_KEYWORDS = [
-    "setup resep", "bikin resep", "buat resep", "bikinin resep",
-    "atur resep", "tambah resep", "tambahin resep", "tambahkan resep",
-    "susun resep", "resep untuk", "resep buat", "isi resep",
-    "setup isi", "bikin isi", "atur isi per porsi",
-    "setup komposisi", "bikin komposisi",
+# SETUP_RECIPE action+target word pairs (flexible match — handle variasi
+# "buatkan resep", "bikinin resep", "tolong setup resep", dll).
+SETUP_RECIPE_ACTION_WORDS = [
+    "setup", "bikin", "bikinin", "buat", "buatkan", "buatin",
+    "atur", "susun", "tambah", "tambahin", "tambahkan",
+    "rancang", "rancangin", "siapin", "siapkan",
+    "tolong buat", "tolong bikin", "tolong setup",
+    "minta", "mau",
+]
+SETUP_RECIPE_TARGET_WORDS = [
+    "resep", "komposisi", "recipe", "isi per porsi", "racikan",
 ]
 
 
@@ -78,12 +81,15 @@ def classify_intent(message: str) -> str:
       - RESTOCK (actionable — update DB langsung)
       - CHAT (default — Claude jawab)
 
-    Scope filtering dilakukan di system prompt, bukan di classifier.
-    SETUP_RECIPE di-check duluan supaya "tambah bahan untuk resep kopi susu"
-    masuk ke SETUP_RECIPE, bukan RESTOCK.
+    SETUP_RECIPE pakai action+target word pair (flexible) supaya variasi
+    ejaan casual ("buatkan resep", "bikinin resep", "mau resep") tetap
+    ke-match. SETUP_RECIPE di-check duluan supaya "tambah bahan untuk
+    resep kopi susu" masuk ke SETUP_RECIPE, bukan RESTOCK.
     """
     msg_lower = message.lower()
-    if any(kw in msg_lower for kw in SETUP_RECIPE_KEYWORDS):
+    has_action = any(aw in msg_lower for aw in SETUP_RECIPE_ACTION_WORDS)
+    has_target = any(tw in msg_lower for tw in SETUP_RECIPE_TARGET_WORDS)
+    if has_action and has_target:
         return INTENT_SETUP_RECIPE
     if any(kw in msg_lower for kw in RESTOCK_KEYWORDS):
         return INTENT_RESTOCK
@@ -274,10 +280,10 @@ RECIPE_EXPERT_SYSTEM_PROMPT = """Kamu "Asisten Setup" — ahli UMKM Indonesia (F
 
 OUTPUT FORMAT WAJIB (super strict — user liat form editable, bukan text):
 
-Baris 1: "Nih proposal awalnya, edit angka kalau perlu lalu klik **Buat Resep**:"
+Baris 1: "Oke, ini tebakan gue. Sesuaiin sama kondisi usaha kamu, terus klik **Buat Resep**:"
 Baris 2+: <RECIPE_PROPOSAL>JSON</RECIPE_PROPOSAL>
 
-TIDAK ADA KALIMAT LAIN. Jangan list bahan di text — JSON sudah cover itu, UI render sebagai form editable. Jangan sebut HPP di text — UI kalkulasi sendiri real-time.
+TIDAK ADA KALIMAT LAIN. Jangan list bahan di text — JSON sudah cover itu, UI render sebagai form editable. Jangan sebut HPP/modal di text — UI kalkulasi sendiri real-time.
 
 FORMAT JSON (wajib valid, cuma dalam tag, no markdown fence):
 {

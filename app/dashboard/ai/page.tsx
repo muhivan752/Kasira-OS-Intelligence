@@ -36,8 +36,8 @@ interface Message {
 const UNIT_OPTIONS = ['gram', 'ml', 'pcs', 'bungkus'] as const;
 
 const SUGGESTIONS = [
-  'Setup resep Kopi Susu Gula Aren',
-  'Bikin resep Es Matcha Latte',
+  'Buatkan resep Kopi Susu Gula Aren',
+  'Bikinin resep Es Matcha Latte',
   'Berapa omzet hari ini?',
   'Stok apa yang perlu diisi?',
 ];
@@ -292,17 +292,17 @@ export default function AIChatPage() {
 
       const d = data.data || {};
       const lines = [
-        `✅ Resep **${d.product_name}** berhasil dibuat.`,
+        `Resep **${d.product_name}** siap dipakai.`,
         '',
-        `HPP: **${rp(d.hpp)}**` +
+        `Modal per porsi: **${rp(d.hpp)}**` +
           (d.product_base_price ? ` · Harga jual: ${rp(d.product_base_price)}` : '') +
-          (typeof d.margin_pct === 'number' ? ` · Margin: **${d.margin_pct}%**` : ''),
+          (typeof d.margin_pct === 'number' ? ` · Untung: **${d.margin_pct}%**` : ''),
       ];
       if (d.created_ingredients?.length) {
-        lines.push('', `Bahan baru: ${d.created_ingredients.map((i: any) => i.name).join(', ')}`);
+        lines.push('', `Bahan baru ditambah: ${d.created_ingredients.map((i: any) => i.name).join(', ')}`);
       }
       if (d.reused_ingredients?.length) {
-        lines.push(`Dipakai ulang: ${d.reused_ingredients.map((i: any) => i.name).join(', ')}`);
+        lines.push(`Pakai bahan yang udah ada: ${d.reused_ingredients.map((i: any) => i.name).join(', ')}`);
       }
 
       setMessages(prev => [
@@ -460,7 +460,7 @@ export default function AIChatPage() {
                             </div>
                             <div className="grid grid-cols-[1fr_auto] gap-1.5 text-xs">
                               <label className="flex items-center gap-1 text-gray-500">
-                                <span className="whitespace-nowrap">Qty:</span>
+                                <span className="whitespace-nowrap">Pake:</span>
                                 <input
                                   type="number"
                                   step="any"
@@ -504,7 +504,7 @@ export default function AIChatPage() {
                                 />
                               </label>
                               <label className="flex items-center gap-1 text-gray-500">
-                                <span className="whitespace-nowrap">per:</span>
+                                <span className="whitespace-nowrap">Isi:</span>
                                 <input
                                   type="number"
                                   step="any"
@@ -522,7 +522,7 @@ export default function AIChatPage() {
                               </label>
                             </div>
                             <div className="text-[10px] text-gray-500 text-right">
-                              Cost per porsi ≈ {rp(costPerPorsi)}
+                              Modal 1 porsi ≈ {rp(costPerPorsi)}
                             </div>
                           </div>
                         );
@@ -545,10 +545,10 @@ export default function AIChatPage() {
                       )}
                     </div>
 
-                    {/* HPP summary — live calculated */}
+                    {/* Modal per Porsi — live calculated */}
                     <div className="flex justify-between items-baseline text-xs pt-2 border-t border-gray-100">
                       <span className="text-gray-500">
-                        HPP total
+                        Modal per porsi
                         {priceRange && <span className="text-gray-400"> · Normal jual {rp(priceRange[0])}–{rp(priceRange[1])}</span>}
                       </span>
                       <span className="font-bold text-gray-900">{rp(hpp)}</span>
