@@ -240,8 +240,8 @@ curl -X POST -H "Authorization: token <PAT>" \
 ### 🤖 AI
 | # | Rule |
 |---|------|
-| 25 | Claude API model dipilih via `get_model_for_tier(tier, task)` |
-| 26 | Starter = Haiku, Pro+ = Sonnet untuk task kompleks |
+| 25 | AI chat (`/ai/chat`) = **Pro+ only**. Starter TIDAK punya akses AI chatbot (gated via `require_pro_tier`). |
+| 26 | Di dalam tier Pro+: model dipilih via `get_model_for_tier(tier, task)` — default Haiku, Sonnet cuma untuk task berat (analisa mendalam). |
 | 55 | System prompt max 800 token, di-cache Redis 5 menit |
 
 ### 📱 MOBILE (Flutter)
