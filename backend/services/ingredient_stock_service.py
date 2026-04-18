@@ -37,6 +37,7 @@ async def deduct_ingredients_for_product(
     order_id: UUID,
     user_id: UUID,
     tier: str,
+    product_name: str | None = None,
 ) -> None:
     """
     Deduct ingredient stock based on active recipe for a product.
@@ -70,7 +71,15 @@ async def deduct_ingredients_for_product(
     )).scalar_one_or_none()
 
     if not recipe:
-        raise HTTPException(status_code=400, detail="Produk belum memiliki resep aktif. Tambahkan resep terlebih dahulu.")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "RECIPE_MISSING",
+                "mode": "recipe",
+                "message": f"Produk {product_name or ''} belum memiliki resep aktif. Tambahkan resep terlebih dahulu.".strip(),
+                "product_name": product_name,
+            },
+        )
 
     # Filter active, non-optional ingredients (ghost stock guard: skip soft-deleted ingredient)
     active_ingredients = [
@@ -82,7 +91,15 @@ async def deduct_ingredients_for_product(
     ]
 
     if not active_ingredients:
-        raise HTTPException(status_code=400, detail="Resep produk ini belum memiliki bahan baku. Tambahkan bahan dan jumlah per porsi di menu Resep.")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "RECIPE_EMPTY",
+                "mode": "recipe",
+                "message": f"Resep {product_name or 'produk ini'} belum memiliki bahan baku. Tambahkan bahan dan jumlah per porsi di menu Resep.",
+                "product_name": product_name,
+            },
+        )
 
     # Validate all quantities > 0
     zero_qty = [
@@ -92,7 +109,13 @@ async def deduct_ingredients_for_product(
     if zero_qty:
         raise HTTPException(
             status_code=400,
-            detail=f"Bahan berikut belum diisi jumlah per porsi: {', '.join(zero_qty[:5])}. Edit resep dan isi qty yang benar."
+            detail={
+                "code": "RECIPE_ZERO_QTY",
+                "mode": "recipe",
+                "message": f"Bahan berikut belum diisi jumlah per porsi: {', '.join(zero_qty[:5])}. Edit resep dan isi qty yang benar.",
+                "product_name": product_name,
+                "ingredients": zero_qty[:10],
+            },
         )
 
     # 2. Pre-check: load all outlet_stock records and verify sufficient stock
@@ -111,19 +134,33 @@ async def deduct_ingredients_for_product(
     stock_map = {s.ingredient_id: s for s in stocks}
 
     # Check all ingredients have sufficient stock before deducting any
-    insufficient = []
+    insufficient_msgs = []
+    insufficient_items = []
     for ri in active_ingredients:
         needed = ri.quantity * quantity
         stock = stock_map.get(ri.ingredient_id)
         available = stock.computed_stock if stock else 0.0
         if available < needed:
             ing_name = ri.ingredient.name if ri.ingredient else str(ri.ingredient_id)
-            insufficient.append(f"{ing_name} (butuh {needed} {ri.quantity_unit}, sisa {available})")
+            insufficient_msgs.append(f"{ing_name} (butuh {needed} {ri.quantity_unit}, sisa {available})")
+            insufficient_items.append({
+                "name": ing_name,
+                "product_name": product_name,
+                "available": float(available),
+                "needed": float(needed),
+                "unit": ri.quantity_unit,
+            })
 
-    if insufficient:
+    if insufficient_items:
         raise HTTPException(
             status_code=400,
-            detail=f"Stok bahan baku tidak cukup: {'; '.join(insufficient)}"
+            detail={
+                "code": "STOCK_INSUFFICIENT",
+                "mode": "recipe",
+                "message": f"Stok bahan tidak cukup untuk {product_name or 'produk ini'}: {'; '.join(insufficient_msgs)}",
+                "product_name": product_name,
+                "items": insufficient_items,
+            },
         )
 
     # 3. Deduct each ingredient with optimistic lock
@@ -133,8 +170,23 @@ async def deduct_ingredients_for_product(
         stock = stock_map.get(ri.ingredient_id)
 
         if not stock:
-            # Should not happen (caught above), but safety net
-            raise HTTPException(status_code=400, detail=f"Stok {ri.ingredient.name} belum diinisialisasi")
+            ing_name = ri.ingredient.name if ri.ingredient else str(ri.ingredient_id)
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "STOCK_NOT_INITIALIZED",
+                    "mode": "recipe",
+                    "message": f"Stok {ing_name} belum diinisialisasi. Lakukan restock terlebih dahulu.",
+                    "product_name": product_name,
+                    "items": [{
+                        "name": ing_name,
+                        "product_name": product_name,
+                        "available": 0,
+                        "needed": float(ri.quantity * quantity),
+                        "unit": ri.quantity_unit,
+                    }],
+                },
+            )
 
         stock_before = stock.computed_stock
         stock_after = stock_before - deduct_qty
@@ -178,7 +230,23 @@ async def deduct_ingredients_for_product(
             # Refresh for next attempt
             await db.refresh(stock)
         else:
-            raise HTTPException(status_code=409, detail=f"Concurrent update pada stok {ri.ingredient.name}, coba lagi")
+            ing_name = ri.ingredient.name if ri.ingredient else str(ri.ingredient_id)
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "STOCK_RACE_CONDITION",
+                    "mode": "recipe",
+                    "message": f"Stok {ing_name} baru saja berubah. Coba lagi.",
+                    "product_name": product_name,
+                    "items": [{
+                        "name": ing_name,
+                        "product_name": product_name,
+                        "available": 0,
+                        "needed": float(ri.quantity * quantity),
+                        "unit": ri.quantity_unit,
+                    }],
+                },
+            )
 
     logger.info(
         "Ingredient stock deducted for order %s, product %s, %d ingredients",

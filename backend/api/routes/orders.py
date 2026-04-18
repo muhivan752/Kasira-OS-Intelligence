@@ -209,6 +209,7 @@ async def create_order(
                     order_id=order.id,
                     user_id=current_user.id,
                     tier=tier,
+                    product_name=product.name,
                 )
             else:
                 await deduct_stock(

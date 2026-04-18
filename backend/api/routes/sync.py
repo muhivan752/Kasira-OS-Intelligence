@@ -137,6 +137,7 @@ async def sync_data(
                             order_id=order_id_val,
                             user_id=current_user.id,
                             tier=tier,
+                            product_name=product.name,
                         )
                     else:
                         await svc_deduct_stock(

@@ -79,7 +79,18 @@ async def deduct_stock(
     if product.stock_qty < quantity:
         raise HTTPException(
             status_code=400,
-            detail=f"Stok {product.name} tidak mencukupi. Tersedia: {product.stock_qty}"
+            detail={
+                "code": "STOCK_INSUFFICIENT",
+                "mode": "simple",
+                "message": f"Stok {product.name} tidak mencukupi. Tersedia: {product.stock_qty}",
+                "items": [{
+                    "name": product.name,
+                    "product_name": product.name,
+                    "available": product.stock_qty,
+                    "needed": quantity,
+                    "unit": "pcs",
+                }],
+            },
         )
 
     stock_before = product.stock_qty
@@ -116,7 +127,21 @@ async def deduct_stock(
         if attempt > 0:
             refreshed = await db.get(Product, product.id)
             if not refreshed or refreshed.stock_qty < quantity:
-                raise HTTPException(status_code=400, detail=f"Stok {product.name} tidak mencukupi")
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "code": "STOCK_INSUFFICIENT",
+                        "mode": "simple",
+                        "message": f"Stok {product.name} tidak mencukupi",
+                        "items": [{
+                            "name": product.name,
+                            "product_name": product.name,
+                            "available": refreshed.stock_qty if refreshed else 0,
+                            "needed": quantity,
+                            "unit": "pcs",
+                        }],
+                    },
+                )
             stock_before = refreshed.stock_qty
             stock_after = stock_before - quantity
             is_active = True if stock_after > 0 else (refreshed.is_active and not refreshed.stock_auto_hide)
@@ -166,7 +191,18 @@ async def deduct_stock(
             await db.rollback()
             raise HTTPException(
                 status_code=400,
-                detail=f"Stok {product.name} tidak mencukupi (race condition detected)"
+                detail={
+                    "code": "STOCK_RACE_CONDITION",
+                    "mode": "simple",
+                    "message": f"Stok {product.name} baru saja terjual. Silakan cek ulang stok.",
+                    "items": [{
+                        "name": product.name,
+                        "product_name": product.name,
+                        "available": 0,
+                        "needed": quantity,
+                        "unit": "pcs",
+                    }],
+                },
             )
 
     raise HTTPException(status_code=409, detail="Konflik data produk setelah 3x retry, silakan coba lagi")
