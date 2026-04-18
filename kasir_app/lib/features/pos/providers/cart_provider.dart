@@ -457,6 +457,12 @@ class CartNotifier extends StateNotifier<CartState> {
   // ── Offline: simpan ke Drift SQLite, deduct stok lokal ──────────────────
   Future<String?> _submitOffline() async {
     try {
+      // Pre-check stock (mirror backend guard agar gak oversell offline)
+      final stockError = await _validateOfflineStock();
+      if (stockError != null) {
+        state = state.copyWith(isSubmitting: false, error: stockError);
+        return null;
+      }
       final outletId = _cache.outletId ?? '';
       final userId = _cache.userId ?? '';
       final shiftId = _cache.shiftSessionId;
@@ -528,12 +534,13 @@ class CartNotifier extends StateNotifier<CartState> {
                 final newNeg = PNCounter.increment(negMap, nodeId, amount: item.qty);
                 final newStock = PNCounter.getValue(posMap, newNeg);
 
+                // Rule #20: produk stock=0 tetap muncul (is_available dikomputasi dari stockQty),
+                // jangan paksa isActive=false karena itu flag on/off manual dari owner.
                 await (_db.update(_db.products)
                       ..where((p) => p.id.equals(item.productId)))
                     .write(ProductsCompanion(
                   crdtNegative: drift.Value(PNCounter.toJson(newNeg)),
                   stockQty: drift.Value(newStock),
-                  isActive: drift.Value(newStock > 0),
                   isSynced: const drift.Value(false),
                 ));
               }
@@ -563,11 +570,21 @@ class CartNotifier extends StateNotifier<CartState> {
     if (recipe == null) return;
 
     // Load non-optional recipe ingredients
-    final riList = await (_db.select(_db.recipeIngredients)
+    final rawRiList = await (_db.select(_db.recipeIngredients)
           ..where((ri) => ri.recipeId.equals(recipe.id))
           ..where((ri) => ri.isDeleted.equals(false))
           ..where((ri) => ri.isOptional.equals(false)))
         .get();
+
+    // Filter ingredients yang sudah soft-deleted (ghost stock guard)
+    final ingIds = rawRiList.map((ri) => ri.ingredientId).toSet().toList();
+    if (ingIds.isEmpty) return;
+    final activeIngs = await (_db.select(_db.ingredients)
+          ..where((i) => i.id.isIn(ingIds))
+          ..where((i) => i.isDeleted.equals(false)))
+        .get();
+    final activeSet = activeIngs.map((i) => i.id).toSet();
+    final riList = rawRiList.where((ri) => activeSet.contains(ri.ingredientId)).toList();
 
     // Deduct each ingredient from outlet_stock
     for (final ri in riList) {
@@ -590,6 +607,82 @@ class CartNotifier extends StateNotifier<CartState> {
         ));
       }
     }
+  }
+
+  /// Pre-check: pastikan stok cukup sebelum insert order offline.
+  /// Return null kalau cukup, atau pesan error siap tampil ke user.
+  Future<String?> _validateOfflineStock() async {
+    final stockMode = _cache.stockMode ?? 'simple';
+    final outletId = _cache.outletId ?? '';
+
+    // Aggregate qty per product (item bisa muncul lebih dari sekali di cart)
+    final qtyByProduct = <String, int>{};
+    for (final item in state.items) {
+      if (item.stockQty == null) continue;
+      qtyByProduct[item.productId] = (qtyByProduct[item.productId] ?? 0) + item.qty;
+    }
+    if (qtyByProduct.isEmpty) return null;
+
+    if (stockMode == 'recipe') {
+      // Aggregate ingredient requirements across all items
+      final required = <String, double>{};
+      for (final entry in qtyByProduct.entries) {
+        final recipe = await (_db.select(_db.recipes)
+              ..where((r) => r.productId.equals(entry.key))
+              ..where((r) => r.isActive.equals(true))
+              ..where((r) => r.isDeleted.equals(false)))
+            .getSingleOrNull();
+        if (recipe == null) continue;
+        final rawRi = await (_db.select(_db.recipeIngredients)
+              ..where((ri) => ri.recipeId.equals(recipe.id))
+              ..where((ri) => ri.isDeleted.equals(false))
+              ..where((ri) => ri.isOptional.equals(false)))
+            .get();
+        final ingIds = rawRi.map((ri) => ri.ingredientId).toSet().toList();
+        if (ingIds.isEmpty) continue;
+        final activeIngs = await (_db.select(_db.ingredients)
+              ..where((i) => i.id.isIn(ingIds))
+              ..where((i) => i.isDeleted.equals(false)))
+            .get();
+        final activeSet = activeIngs.map((i) => i.id).toSet();
+        for (final ri in rawRi) {
+          if (!activeSet.contains(ri.ingredientId)) continue;
+          if (ri.quantity <= 0) continue;
+          required[ri.ingredientId] =
+              (required[ri.ingredientId] ?? 0) + ri.quantity * entry.value;
+        }
+      }
+      if (required.isEmpty) return null;
+
+      final stocks = await (_db.select(_db.outletStocks)
+            ..where((os) => os.outletId.equals(outletId))
+            ..where((os) => os.ingredientId.isIn(required.keys.toList()))
+            ..where((os) => os.isDeleted.equals(false)))
+          .get();
+      final stockMap = {for (final s in stocks) s.ingredientId: s.computedStock};
+
+      for (final entry in required.entries) {
+        final available = stockMap[entry.key] ?? 0.0;
+        if (available < entry.value) {
+          final ing = await (_db.select(_db.ingredients)
+                ..where((i) => i.id.equals(entry.key)))
+              .getSingleOrNull();
+          return 'Stok ${ing?.name ?? 'bahan'} tidak cukup';
+        }
+      }
+    } else {
+      // Simple mode
+      for (final entry in qtyByProduct.entries) {
+        final product = await (_db.select(_db.products)
+              ..where((p) => p.id.equals(entry.key)))
+            .getSingleOrNull();
+        if (product == null || !product.stockEnabled) continue;
+        if (product.stockQty < entry.value) {
+          return 'Stok ${product.name} tidak cukup (tersedia: ${product.stockQty.toInt()})';
+        }
+      }
+    }
+    return null;
   }
 
   Future<bool> _checkOnline() async {

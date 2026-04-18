@@ -77,8 +77,7 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 - [ ] `backend/services/stock_service.py` — simple mode deduct + restore
 - [ ] `backend/services/ingredient_stock_service.py` — recipe mode deduct + restore
 - [ ] `backend/api/routes/sync.py` — offline order sync stock deduction (line ~76)
-- [ ] `backend/api/routes/products.py` — `compute_recipe_stock()` display
-- [ ] `backend/api/routes/connect.py` — storefront inline recipe calc
+- [ ] `backend/api/routes/products.py` — `compute_recipe_stock()` display (shared, juga dipakai connect.py storefront)
 - [ ] `kasir_app/lib/features/pos/providers/cart_provider.dart` — offline deduction
 - [ ] `kasir_app/lib/features/products/providers/products_provider.dart` — offline display
 

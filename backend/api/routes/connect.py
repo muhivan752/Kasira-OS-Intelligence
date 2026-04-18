@@ -20,6 +20,7 @@ from backend.models.connect import ConnectOutlet, ConnectOrder
 from backend.models.customer import Customer
 from backend.services.audit import log_audit
 from backend.services.stock_service import deduct_stock
+from backend.api.routes.products import compute_recipe_stock
 from backend.models.event import Event
 import datetime
 
@@ -140,7 +141,6 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
     stock_mode = stock_mode.value if hasattr(stock_mode, 'value') else str(stock_mode or 'simple')
 
     if stock_mode == 'recipe':
-        # Recipe mode: include all active products, calculate stock from ingredients
         products_result = await db.execute(
             select(Product).where(
                 Product.brand_id == outlet.brand_id,
@@ -150,60 +150,8 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
         )
         products = products_result.scalars().all()
 
-        # Calculate available stock from recipe ingredients
-        from backend.models.recipe import Recipe, RecipeIngredient
-        from backend.models.product import OutletStock
-        import math
-
-        recipe_stock_map = {}  # product_id -> available portions
-        for p in products:
-            recipe_result = await db.execute(
-                select(Recipe)
-                .options(selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient))
-                .where(
-                    Recipe.product_id == p.id,
-                    Recipe.is_active == True,
-                    Recipe.deleted_at.is_(None),
-                )
-            )
-            recipe = recipe_result.scalar_one_or_none()
-            if not recipe:
-                recipe_stock_map[p.id] = 0
-                continue
-
-            active_ingredients = [
-                ri for ri in recipe.ingredients
-                if ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
-                and ri.ingredient is not None and ri.ingredient.deleted_at is None
-            ]
-            if not active_ingredients:
-                recipe_stock_map[p.id] = 0
-                continue
-
-            # Get outlet stock for all ingredients
-            ingredient_ids = [ri.ingredient_id for ri in active_ingredients]
-            stocks_result = await db.execute(
-                select(OutletStock).where(
-                    OutletStock.outlet_id == outlet.id,
-                    OutletStock.ingredient_id.in_(ingredient_ids),
-                    OutletStock.deleted_at.is_(None),
-                )
-            )
-            stock_map = {s.ingredient_id: s.computed_stock for s in stocks_result.scalars().all()}
-
-            # Available portions = min(ingredient_stock / qty_per_portion) for all ingredients
-            min_portions = float('inf')
-            for ri in active_ingredients:
-                available = stock_map.get(ri.ingredient_id, 0.0)
-                portions = available / ri.quantity
-                min_portions = min(min_portions, portions)
-
-            recipe_stock_map[p.id] = max(0, int(math.floor(min_portions))) if min_portions != float('inf') else 0
-
-        # Show ALL active products, mark availability based on stock
-        products_with_stock = [
-            (p, recipe_stock_map.get(p.id, 0)) for p in products
-        ]
+        recipe_stock_map = await compute_recipe_stock(db, outlet.id, [p.id for p in products])
+        products_with_stock = [(p, recipe_stock_map.get(p.id, 0)) for p in products]
     else:
         # Simple mode: show all active products
         products_result = await db.execute(

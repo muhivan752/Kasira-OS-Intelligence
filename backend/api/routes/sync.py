@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
@@ -17,9 +19,12 @@ from backend.models.shift import Shift, CashActivity
 from backend.services.sync import process_table_sync, process_stock_sync, get_table_changes, utc_now
 from backend.services.crdt import HLC
 from backend.services.stock_service import deduct_stock as svc_deduct_stock
+from backend.services.ingredient_stock_service import deduct_ingredients_for_product as svc_deduct_ingredients
 from backend.models.tenant import Tenant
 from backend.models.ingredient import Ingredient
 from backend.models.recipe import Recipe, RecipeIngredient
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -72,21 +77,49 @@ async def sync_data(
             tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
             tenant = tenant_res.scalar_one_or_none()
             tier = getattr(getattr(tenant, "subscription_tier", None), "value", "starter")
+
+            sm = getattr(outlet, 'stock_mode', 'simple')
+            stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
+
             for item_data in request.changes.order_items:
                 product = await db.get(Product, item_data.get("product_id"))
-                if product and product.stock_enabled:
-                    try:
-                        await svc_deduct_stock(
+                if not (product and product.stock_enabled):
+                    continue
+                order_id_val = item_data.get("order_id")
+                qty_val = item_data.get("quantity", 1)
+                try:
+                    if stock_mode == 'recipe':
+                        await svc_deduct_ingredients(
                             db,
-                            product=product,
-                            quantity=item_data.get("quantity", 1),
+                            product_id=product.id,
+                            quantity=qty_val,
                             outlet_id=outlet_id,
-                            order_id=item_data.get("order_id"),
+                            order_id=order_id_val,
                             user_id=current_user.id,
                             tier=tier,
                         )
-                    except Exception:
-                        pass  # jangan gagalkan sync karena stock conflict
+                    else:
+                        await svc_deduct_stock(
+                            db,
+                            product=product,
+                            quantity=qty_val,
+                            outlet_id=outlet_id,
+                            order_id=order_id_val,
+                            user_id=current_user.id,
+                            tier=tier,
+                        )
+                except HTTPException as e:
+                    # Insufficient stock saat offline order overshoot — log & lanjut
+                    # supaya sync gak gagal total karena 1 item bermasalah.
+                    logger.warning(
+                        "sync stock deduct skipped product=%s order=%s: %s",
+                        product.id, order_id_val, e.detail,
+                    )
+                except Exception:
+                    logger.exception(
+                        "sync stock deduct failed product=%s order=%s",
+                        product.id, order_id_val,
+                    )
         if request.changes.payments:
             await process_table_sync(db, Payment, request.changes.payments, {"outlet_id": outlet_id}, server_hlc, conflict_strategy="financial_strict")
         if request.changes.shifts:

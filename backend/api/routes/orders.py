@@ -188,6 +188,9 @@ async def create_order(
     tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
     tier = getattr(getattr(tenant_check, "subscription_tier", None), "value", "starter")
 
+    sm = getattr(outlet, 'stock_mode', 'simple')
+    stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
+
     for item_in in order_in.items:
         # Fetch product to check stock
         product = await db.get(Product, item_in.product_id)
@@ -196,7 +199,7 @@ async def create_order(
 
         # Deduct stock — branch by outlet stock_mode
         if product.stock_enabled:
-            if outlet.stock_mode == "recipe":
+            if stock_mode == "recipe":
                 await deduct_ingredients_for_product(
                     db,
                     product_id=product.id,

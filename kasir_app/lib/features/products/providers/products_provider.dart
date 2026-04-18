@@ -146,11 +146,21 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
     // Load recipe ingredients
     final recipeIds = recipes.map((r) => r.id).toList();
     if (recipeIds.isEmpty) return {};
-    final riList = await (db.select(db.recipeIngredients)
+    final rawRiList = await (db.select(db.recipeIngredients)
           ..where((ri) => ri.recipeId.isIn(recipeIds))
           ..where((ri) => ri.isDeleted.equals(false))
           ..where((ri) => ri.isOptional.equals(false)))
         .get();
+
+    // Filter out recipe_ingredients that reference deleted ingredients (ghost stock guard)
+    final allIngIds = rawRiList.map((ri) => ri.ingredientId).toSet().toList();
+    if (allIngIds.isEmpty) return {};
+    final activeIngs = await (db.select(db.ingredients)
+          ..where((i) => i.id.isIn(allIngIds))
+          ..where((i) => i.isDeleted.equals(false)))
+        .get();
+    final activeIngIds = activeIngs.map((i) => i.id).toSet();
+    final riList = rawRiList.where((ri) => activeIngIds.contains(ri.ingredientId)).toList();
 
     // Collect ingredient IDs and load outlet stocks
     final ingredientIds = riList.map((ri) => ri.ingredientId).toSet().toList();

@@ -994,15 +994,49 @@ async def approve_refund(
 
         # Restore stock if order exists
         if payment.order_id:
-            order = await db.get(Order, payment.order_id)
+            from backend.services.stock_service import restore_stock_on_cancel
+            from backend.services.ingredient_stock_service import restore_ingredients_on_cancel
+            from backend.models.tenant import Tenant
+
+            order_q = await db.execute(
+                select(Order)
+                .where(Order.id == payment.order_id)
+                .options(selectinload(Order.items).selectinload(OrderItem.product))
+            )
+            order = order_q.scalar_one_or_none()
             if order and order.status == 'completed':
-                from backend.services.stock_service import restore_stock_on_cancel, restore_ingredients_on_cancel
                 outlet = await db.get(Outlet, order.outlet_id)
-                stock_mode = getattr(outlet, 'stock_mode', 'simple') if outlet else 'simple'
-                if stock_mode == 'recipe':
-                    await restore_ingredients_on_cancel(db, order)
-                else:
-                    await restore_stock_on_cancel(db, order)
+                tier = "starter"
+                stock_mode = "simple"
+                if outlet:
+                    sm = getattr(outlet, 'stock_mode', 'simple')
+                    stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
+                    if outlet.tenant_id:
+                        tenant = await db.get(Tenant, outlet.tenant_id)
+                        if tenant:
+                            tier_val = getattr(tenant, 'subscription_tier', None) or "starter"
+                            tier = tier_val.value if hasattr(tier_val, 'value') else str(tier_val)
+                for item in order.items:
+                    product = item.product
+                    if product and product.stock_enabled:
+                        if stock_mode == 'recipe':
+                            await restore_ingredients_on_cancel(
+                                db,
+                                product_id=product.id,
+                                quantity=item.quantity,
+                                outlet_id=order.outlet_id,
+                                order_id=order.id,
+                                tier=tier,
+                            )
+                        else:
+                            await restore_stock_on_cancel(
+                                db,
+                                product=product,
+                                quantity=item.quantity,
+                                outlet_id=order.outlet_id,
+                                order_id=order.id,
+                                tier=tier,
+                            )
 
     db.add(Event(
         outlet_id=payment.outlet_id if payment else None,

@@ -919,35 +919,41 @@ async def stream_ai_response(
         # Parse and execute restock
         result = await parse_restock_intent(message, outlet_id, tenant_id, db)
         if not result["success"]:
-            yield sse({"type": "chunk", "content": result["error"]})
-            yield sse({"type": "done", "intent": intent, "tokens_used": 0})
-            return
-
-        # Execute restock
-        ok = await execute_restock(
-            ingredient_id=result["ingredient_id"],
-            outlet_id=outlet_id,
-            quantity=result["quantity"],
-            user_id=user_id,
-            db=db,
-        )
-        if ok:
-            qty_display = f"{result['quantity']:,.0f}" if result['quantity'] == int(result['quantity']) else f"{result['quantity']:,.1f}"
-            yield sse({"type": "chunk", "content": (
-                f"Stok **{result['ingredient_name']}** berhasil ditambah **{qty_display} {result['unit']}**.\n\n"
-                f"Stok sekarang: **{result['stock_after']:,.0f} {result['unit']}**"
-            )})
+            # Parse gagal (mis. user gak nyebut bahan/qty spesifik) → fall through ke Claude
+            # supaya AI bisa ask clarifying question dengan context KG + stok kritis.
+            # Intent tetap CHAT, error info diinjeksi ke context.
+            intent = INTENT_CHAT
+            message = (
+                f"{message}\n\n"
+                f"[CONTEXT: User mau restock tapi parse gagal — {result['error']}. "
+                f"Tanya balik bahan mana + jumlah berapa. Tunjukin stok kritis dari context kalau ada.]"
+            )
         else:
-            yield sse({"type": "chunk", "content": f"Gagal restock {result['ingredient_name']}. Coba lagi atau restock manual di halaman Bahan Baku."})
+            # Execute restock
+            ok = await execute_restock(
+                ingredient_id=result["ingredient_id"],
+                outlet_id=outlet_id,
+                quantity=result["quantity"],
+                user_id=user_id,
+                db=db,
+            )
+            if ok:
+                qty_display = f"{result['quantity']:,.0f}" if result['quantity'] == int(result['quantity']) else f"{result['quantity']:,.1f}"
+                yield sse({"type": "chunk", "content": (
+                    f"Stok **{result['ingredient_name']}** berhasil ditambah **{qty_display} {result['unit']}**.\n\n"
+                    f"Stok sekarang: **{result['stock_after']:,.0f} {result['unit']}**"
+                )})
+            else:
+                yield sse({"type": "chunk", "content": f"Gagal restock {result['ingredient_name']}. Coba lagi atau restock manual di halaman Bahan Baku."})
 
-        # Invalidate context cache (stock changed)
-        try:
-            await redis_client.delete(f"ai:context:{outlet_id}")
-        except Exception:
-            pass
+            # Invalidate context cache (stock changed)
+            try:
+                await redis_client.delete(f"ai:context:{outlet_id}")
+            except Exception:
+                pass
 
-        yield sse({"type": "done", "intent": intent, "tokens_used": 0})
-        return
+            yield sse({"type": "done", "intent": INTENT_RESTOCK, "tokens_used": 0})
+            return
 
     # 2. Cek API key
     if not settings.ANTHROPIC_API_KEY:
