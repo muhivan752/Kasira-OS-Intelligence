@@ -211,6 +211,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Auto-switch ke POS tab kalau posMode non-selection (mis. dari "Tambah Pesanan")
+    final currentMode = ref.watch(posModeProvider);
+    if (currentMode != PosMode.selection && _selectedIndex != 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _selectedIndex != 1) {
+          setState(() => _selectedIndex = 1);
+        }
+      });
+    }
+
     final isWide = MediaQuery.of(context).size.width >= 600;
 
     if (isWide) {
