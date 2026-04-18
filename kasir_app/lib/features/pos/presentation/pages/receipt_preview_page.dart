@@ -9,6 +9,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/services/printer_service.dart';
+import '../../providers/tax_config_provider.dart';
 
 class ReceiptItem {
   final String name;
@@ -82,6 +83,9 @@ class ReceiptPreviewPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final printerState = ref.watch(printerProvider);
+    final taxConfig = ref.watch(taxConfigProvider).valueOrNull;
+    final taxNumber = taxConfig?.taxNumber;
+    final customFooter = taxConfig?.receiptFooter;
     final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
     final dateFormat = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
     final now = DateTime.now();
@@ -158,6 +162,14 @@ class ReceiptPreviewPage extends ConsumerWidget {
                             style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
                             textAlign: TextAlign.center,
                           ),
+                          if (taxNumber != null && taxNumber.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'NPWP: $taxNumber',
+                              style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 11),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -273,10 +285,12 @@ class ReceiptPreviewPage extends ConsumerWidget {
                           ),
 
                           const SizedBox(height: 24),
-                          const Text(
-                            'Terima kasih atas kunjungan Anda!\nPowered by Kasira',
+                          Text(
+                            (customFooter != null && customFooter.isNotEmpty)
+                                ? 'Terima kasih atas kunjungan Anda!\n$customFooter'
+                                : 'Terima kasih atas kunjungan Anda!\nPowered by Kasira',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: AppColors.textTertiary,
                               fontSize: 12,
                             ),
@@ -374,6 +388,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
       return;
     }
 
+    final taxConfig = ref.read(taxConfigProvider).valueOrNull;
     final dateFormat = DateFormat('dd/MM/yy HH:mm', 'id_ID');
     final data = ReceiptData(
       outletName: outletName,
@@ -393,6 +408,8 @@ class ReceiptPreviewPage extends ConsumerWidget {
       paymentMethod: paymentMethod,
       amountPaid: amountPaid,
       changeAmount: changeAmount,
+      taxNumber: taxConfig?.taxNumber,
+      customFooter: taxConfig?.receiptFooter,
     );
 
     final bytes = buildReceipt(data);

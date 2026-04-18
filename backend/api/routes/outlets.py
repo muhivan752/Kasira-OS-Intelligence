@@ -462,6 +462,8 @@ async def update_tax_config(
     )).scalar_one_or_none()
 
     update_data = config_in.model_dump(exclude_unset=True)
+    # Strip optimistic-lock field — bukan kolom model
+    expected_row_version = update_data.pop("expected_row_version", None)
 
     if not config:
         # Create new config
@@ -470,12 +472,20 @@ async def update_tax_config(
         await db.flush()
         before_state = None
     else:
+        # Optimistic lock check (Golden Rule #29-30)
+        if expected_row_version is not None and expected_row_version != config.row_version:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Tax config sudah di-update oleh session lain (expected row_version={expected_row_version}, current={config.row_version}). Refresh dulu.",
+            )
         before_state = {
             "pb1_enabled": config.pb1_enabled,
             "tax_pct": config.tax_pct,
             "service_charge_enabled": config.service_charge_enabled,
             "service_charge_pct": config.service_charge_pct,
             "tax_inclusive": config.tax_inclusive,
+            "tax_number": config.tax_number,
+            "receipt_footer": config.receipt_footer,
         }
         for k, v in update_data.items():
             setattr(config, k, v)

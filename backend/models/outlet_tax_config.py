@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Boolean, Float, Integer, ForeignKey
+from sqlalchemy import Column, Boolean, Float, Integer, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from backend.models.base import BaseModel
 
@@ -22,5 +22,11 @@ class OutletTaxConfig(BaseModel):
 
     # Harga sudah termasuk pajak?
     tax_inclusive = Column(Boolean(), server_default="false", nullable=False)
+
+    # NPWP / tax identification number (format bebas, biasanya 15-20 digit dgn separator)
+    tax_number = Column(String(30), nullable=True)
+
+    # Custom receipt footer (override default "Powered by Kasira")
+    receipt_footer = Column(String(200), nullable=True)
 
     row_version = Column(Integer, server_default="0", nullable=False)

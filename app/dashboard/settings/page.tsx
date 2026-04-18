@@ -23,9 +23,13 @@ export default function SettingsPage() {
     service_charge_enabled: false,
     service_charge_pct: 5,
     tax_inclusive: false,
+    tax_number: '',
+    receipt_footer: '',
+    row_version: 0,
   });
   const [savingTax, setSavingTax] = useState(false);
   const [taxSaved, setTaxSaved] = useState(false);
+  const [taxError, setTaxError] = useState('');
 
   // Referral
   const [referralCode, setReferralCode] = useState('');
@@ -67,7 +71,18 @@ export default function SettingsPage() {
         // Load tax config
         try {
           const tc = await getTaxConfig(data.id);
-          if (tc) setTaxConfig(tc);
+          if (tc) {
+            setTaxConfig({
+              pb1_enabled: tc.pb1_enabled ?? false,
+              tax_pct: tc.tax_pct ?? 10,
+              service_charge_enabled: tc.service_charge_enabled ?? false,
+              service_charge_pct: tc.service_charge_pct ?? 5,
+              tax_inclusive: tc.tax_inclusive ?? false,
+              tax_number: tc.tax_number ?? '',
+              receipt_footer: tc.receipt_footer ?? '',
+              row_version: tc.row_version ?? 0,
+            });
+          }
         } catch {}
       }
       const user = await getCurrentUser();
@@ -131,12 +146,29 @@ export default function SettingsPage() {
   async function handleTaxSave() {
     if (!outlet) return;
     setSavingTax(true);
+    setTaxError('');
     try {
-      await updateTaxConfig(outlet.id, taxConfig);
+      const payload = {
+        pb1_enabled: taxConfig.pb1_enabled,
+        tax_pct: taxConfig.tax_pct,
+        service_charge_enabled: taxConfig.service_charge_enabled,
+        service_charge_pct: taxConfig.service_charge_pct,
+        tax_inclusive: taxConfig.tax_inclusive,
+        tax_number: taxConfig.tax_number.trim() || null,
+        receipt_footer: taxConfig.receipt_footer.trim() || null,
+        expected_row_version: taxConfig.row_version,
+      };
+      const updated = await updateTaxConfig(outlet.id, payload);
+      if (updated) {
+        setTaxConfig(c => ({
+          ...c,
+          row_version: updated.row_version ?? c.row_version + 1,
+        }));
+      }
       setTaxSaved(true);
       setTimeout(() => setTaxSaved(false), 2000);
     } catch (e: any) {
-      alert(e.message || 'Gagal menyimpan');
+      setTaxError(e.message || 'Gagal menyimpan');
     }
     setSavingTax(false);
   }
@@ -453,9 +485,48 @@ export default function SettingsPage() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
               <Receipt className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">Pajak & Service Charge</h2>
+              <h2 className="text-lg font-bold text-gray-900">Pajak, Struk & Identitas</h2>
             </div>
             <div className="p-6 space-y-5">
+              {/* NPWP & Footer Struk */}
+              <div className="pb-4 border-b border-gray-100 space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
+                    NPWP (Nomor Pokok Wajib Pajak)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={30}
+                    value={taxConfig.tax_number}
+                    onChange={e => setTaxConfig(c => ({ ...c, tax_number: e.target.value }))}
+                    placeholder="Contoh: 01.234.567.8-901.000"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Tampil di header struk (kalau diisi). Kosongkan kalau bukan PKP / belum punya NPWP.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
+                    Pesan Footer Struk
+                  </label>
+                  <textarea
+                    rows={2}
+                    maxLength={200}
+                    value={taxConfig.receipt_footer}
+                    onChange={e => setTaxConfig(c => ({ ...c, receipt_footer: e.target.value }))}
+                    placeholder="Contoh: Ikuti IG @kasiracoffee — Promo kopi 10% tiap Jumat!"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Ganti "Powered by Kasira" di bawah struk dengan pesan kamu. Max 200 karakter.
+                    {taxConfig.receipt_footer.length > 0 && (
+                      <span className="ml-2 text-gray-400">({taxConfig.receipt_footer.length}/200)</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
               {/* PB1 / Pajak Restoran */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -588,13 +659,18 @@ export default function SettingsPage() {
                 </div>
               )}
 
+              {taxError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {taxError}
+                </p>
+              )}
               <button
                 onClick={handleTaxSave}
                 disabled={savingTax}
                 className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 {savingTax ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                {taxSaved ? 'Tersimpan!' : 'Simpan Pengaturan Pajak'}
+                {taxSaved ? 'Tersimpan!' : 'Simpan Pengaturan'}
               </button>
             </div>
           </div>

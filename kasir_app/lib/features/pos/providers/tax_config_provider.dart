@@ -9,6 +9,8 @@ class TaxConfig {
   final bool serviceChargeEnabled;
   final double serviceChargePct;
   final bool taxInclusive;
+  final String? taxNumber;
+  final String? receiptFooter;
 
   const TaxConfig({
     this.pb1Enabled = false,
@@ -16,15 +18,27 @@ class TaxConfig {
     this.serviceChargeEnabled = false,
     this.serviceChargePct = 0.0,
     this.taxInclusive = false,
+    this.taxNumber,
+    this.receiptFooter,
   });
 
-  factory TaxConfig.fromJson(Map<String, dynamic> json) => TaxConfig(
-        pb1Enabled: json['pb1_enabled'] as bool? ?? false,
-        taxPct: (json['tax_pct'] as num? ?? 10.0).toDouble(),
-        serviceChargeEnabled: json['service_charge_enabled'] as bool? ?? false,
-        serviceChargePct: (json['service_charge_pct'] as num? ?? 0.0).toDouble(),
-        taxInclusive: json['tax_inclusive'] as bool? ?? false,
-      );
+  factory TaxConfig.fromJson(Map<String, dynamic> json) {
+    String? _trimOrNull(dynamic v) {
+      if (v is! String) return null;
+      final t = v.trim();
+      return t.isEmpty ? null : t;
+    }
+
+    return TaxConfig(
+      pb1Enabled: json['pb1_enabled'] as bool? ?? false,
+      taxPct: (json['tax_pct'] as num? ?? 10.0).toDouble(),
+      serviceChargeEnabled: json['service_charge_enabled'] as bool? ?? false,
+      serviceChargePct: (json['service_charge_pct'] as num? ?? 0.0).toDouble(),
+      taxInclusive: json['tax_inclusive'] as bool? ?? false,
+      taxNumber: _trimOrNull(json['tax_number']),
+      receiptFooter: _trimOrNull(json['receipt_footer']),
+    );
+  }
 
   /// Calculate tax amount from subtotal (after discount)
   double calcTax(double taxableAmount) {

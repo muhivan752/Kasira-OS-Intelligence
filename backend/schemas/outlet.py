@@ -1,5 +1,5 @@
 from typing import Optional, Any
-from pydantic import BaseModel, UUID4
+from pydantic import BaseModel, UUID4, Field
 from datetime import datetime
 
 class OutletBase(BaseModel):
@@ -75,6 +75,9 @@ class TaxConfigResponse(BaseModel):
     service_charge_enabled: bool = False
     service_charge_pct: float = 0.0
     tax_inclusive: bool = False
+    tax_number: Optional[str] = None
+    receipt_footer: Optional[str] = None
+    row_version: int = 0
 
     class Config:
         from_attributes = True
@@ -86,3 +89,7 @@ class TaxConfigUpdate(BaseModel):
     service_charge_enabled: Optional[bool] = None
     service_charge_pct: Optional[float] = None
     tax_inclusive: Optional[bool] = None
+    tax_number: Optional[str] = Field(default=None, max_length=30)
+    receipt_footer: Optional[str] = Field(default=None, max_length=200)
+    # Optimistic lock (Golden Rule #29-30). Wajib kalau config sudah ada.
+    expected_row_version: Optional[int] = None

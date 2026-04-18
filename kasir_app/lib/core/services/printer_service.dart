@@ -250,6 +250,8 @@ class ReceiptData {
   final String paymentMethod;
   final double amountPaid;
   final double changeAmount;
+  final String? taxNumber;
+  final String? customFooter;
 
   const ReceiptData({
     required this.outletName,
@@ -264,6 +266,8 @@ class ReceiptData {
     required this.paymentMethod,
     required this.amountPaid,
     required this.changeAmount,
+    this.taxNumber,
+    this.customFooter,
   });
 }
 
@@ -332,6 +336,9 @@ Uint8List buildReceipt(ReceiptData d) {
   bytes.addAll(EscPos.fontNormal);
   bytes.addAll(EscPos.boldOff);
   bytes.addAll(EscPos.line(d.outletAddress));
+  if (d.taxNumber != null && d.taxNumber!.isNotEmpty) {
+    bytes.addAll(EscPos.line('NPWP: ${d.taxNumber}'));
+  }
   bytes.addAll([0x0A]);
 
   bytes.addAll(EscPos.alignLeft);
@@ -374,7 +381,13 @@ Uint8List buildReceipt(ReceiptData d) {
   bytes.addAll(EscPos.divider(width: w));
   bytes.addAll(EscPos.alignCenter);
   bytes.addAll(EscPos.line('Terima kasih!'));
-  bytes.addAll(EscPos.line('Powered by Kasira'));
+  if (d.customFooter != null && d.customFooter!.trim().isNotEmpty) {
+    for (final l in _wrapWords(d.customFooter!.trim(), w)) {
+      bytes.addAll(EscPos.line(l));
+    }
+  } else {
+    bytes.addAll(EscPos.line('Powered by Kasira'));
+  }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);
 
