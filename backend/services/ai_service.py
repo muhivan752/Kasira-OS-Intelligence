@@ -2,8 +2,8 @@
 Kasira AI Service — AI Chatbot untuk Owner/Manager
 
 Golden Rules yang diimplementasikan:
-- Rule #25: Model dipilih via get_model_for_tier() — TIDAK pernah hardcoded
-- Rule #26: Starter/rutin = Haiku, Pro+ kompleks = Sonnet
+- Rule #25: Model dipilih via get_model_for_tier() — sekarang SELALU Haiku 4.5
+- Rule #26: Haiku untuk semua task. Analisa bisnis UMKM gak butuh Sonnet (bukan coding/math)
 - Rule #27: 3 optimasi — batching context, cache Redis, compress context
 - Rule #54: Intent classified untuk RESTOCK (actionable). Chat umum langsung ke Claude.
 - Rule #55: System prompt max 800 token, cache Redis 5 menit
@@ -44,29 +44,14 @@ RESTOCK_KEYWORDS = [
 
 async def get_model_for_tier(tier: str, task: str = "routine", tenant_id: str = None) -> str:
     """
-    Pilih Claude model berdasarkan tier outlet dan kompleksitas task.
-    Rule #25: Tidak pernah hardcoded.
-    Rule #26: Starter/rutin = Haiku. Sonnet hanya Pro+ task kompleks.
+    Pilih Claude model — SELALU Haiku 4.5.
 
-    Budget control: Sonnet capped at 5/tenant/day to prevent overspend.
-    Haiku ~$0.003/req, Sonnet ~$0.012/req (4x more expensive).
+    Reasoning: Kasira AI tasks = analisa bisnis UMKM dengan context yang udah dipre-build
+    (omzet, stok, HPP, KG, menu engineering). Itu bukan task yang butuh reasoning mendalam
+    kayak coding/math proof. Haiku 4.5 fully capable untuk business analytics.
+
+    Sonnet ~4x biaya Haiku. Overkill untuk use case ini. Biaya matters.
     """
-    SONNET_DAILY_LIMIT = 5  # max 5 Sonnet requests per tenant per day
-
-    if tier in ("pro", "enterprise", "business") and task == "complex" and tenant_id:
-        try:
-            from backend.services.redis import get_redis_client
-            from datetime import date as dt_date
-            redis = await get_redis_client()
-            today = dt_date.today().isoformat()
-            sonnet_key = f"ai_sonnet:{tenant_id}:{today}"
-            count = int(await redis.get(sonnet_key) or 0)
-            if count < SONNET_DAILY_LIMIT:
-                await redis.incr(sonnet_key)
-                await redis.expire(sonnet_key, 86400)
-                return "claude-sonnet-4-6"
-        except Exception:
-            pass  # Redis down → fallback to Haiku
     return "claude-haiku-4-5-20251001"
 
 
@@ -267,23 +252,10 @@ async def execute_restock(ingredient_id: str, outlet_id: str, quantity: float, u
 
 def classify_task_complexity(message: str) -> str:
     """
-    Tentukan apakah task ini kompleks atau rutin.
-
-    Default: Haiku (murah, cukup untuk 95% pertanyaan).
-    Sonnet HANYA kalau user minta analisa/prediksi/bandingkan — bukan sekadar tanya "kenapa".
-    Biaya Sonnet 4x Haiku, daily cap 5/tenant di get_model_for_tier().
+    DEPRECATED — semua request pakai Haiku 4.5. Function ini tetap ada untuk
+    backward-compat dengan caller yang masih manggil, tapi return value gak
+    ngaruh lagi ke get_model_for_tier().
     """
-    complex_patterns = [
-        "analisa", "analisis", "analyze",
-        "prediksi", "forecast", "proyeksi",
-        "bandingkan", "compare",
-        "strategi bisnis", "strategi marketing",
-        "deep dive", "breakdown lengkap",
-    ]
-    msg_lower = message.lower()
-    # Perlu keyword BERAT + pesan minimum 40 char (biar "analisa dong" tetep Haiku)
-    if len(message) >= 40 and any(p in msg_lower for p in complex_patterns):
-        return "complex"
     return "routine"
 
 
