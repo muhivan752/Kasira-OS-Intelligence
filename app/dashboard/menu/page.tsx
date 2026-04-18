@@ -7,7 +7,7 @@ import {
   createCategory, updateCategory, deleteCategory,
   getIngredients, getRecipes, createRecipe, updateRecipe, getCurrentUser,
 } from '@/app/actions/api';
-import { Plus, Search, Edit2, Loader2, X, Trash2, Tag, Upload, ImageOff, Package, FlaskConical } from 'lucide-react';
+import { Plus, Search, Edit2, Loader2, X, Trash2, Tag, Upload, ImageOff, Package, FlaskConical, Sparkles } from 'lucide-react';
 import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -18,6 +18,7 @@ export default function MenuPage() {
 
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [productsWithRecipe, setProductsWithRecipe] = useState<Set<string>>(new Set());
   const [brandId, setBrandId] = useState('');
   const [outletId, setOutletId] = useState('');
   const [stockMode, setStockMode] = useState('simple');
@@ -69,6 +70,17 @@ export default function MenuPage() {
         ]);
         setProducts(prods || []);
         setCategories(cats || []);
+
+        // Fetch recipes (Pro only) untuk tandai produk yang belum punya resep
+        if (outlet.stock_mode === 'recipe') {
+          try {
+            const recipes = await getRecipes({ brand_id: outlet.brand_id });
+            const withRecipe = new Set<string>(
+              (recipes || []).map((r: any) => r.product_id).filter(Boolean)
+            );
+            setProductsWithRecipe(withRecipe);
+          } catch { /* tier starter / no Pro — skip */ }
+        }
       }
       if (user) {
         const tier = user.subscription_tier || 'starter';
@@ -380,7 +392,9 @@ export default function MenuPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredProducts.length > 0 ? filteredProducts.map(p => (
+                  {filteredProducts.length > 0 ? filteredProducts.map(p => {
+                    const needsRecipe = stockMode === 'recipe' && isPro && !productsWithRecipe.has(p.id);
+                    return (
                     <tr key={p.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -392,6 +406,11 @@ export default function MenuPage() {
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
                             {p.description && <p className="text-xs text-gray-400 truncate max-w-[180px]">{p.description}</p>}
+                            {needsRecipe && (
+                              <p className="text-[10px] text-amber-600 font-medium mt-0.5 flex items-center gap-1">
+                                ⚠ Belum ada resep
+                              </p>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -419,6 +438,16 @@ export default function MenuPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          {needsRecipe && (
+                            <button
+                              onClick={() => router.push(`/dashboard/ai?setup=${encodeURIComponent(p.name)}`)}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
+                              title="Setup resep otomatis dengan AI"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              AI Setup
+                            </button>
+                          )}
                           <button onClick={() => openProductModal(p)}
                             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
                             <Edit2 className="w-4 h-4" />
@@ -433,7 +462,8 @@ export default function MenuPage() {
                         </div>
                       </td>
                     </tr>
-                  )) : (
+                  );
+                  }) : (
                     <tr>
                       <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">
                         Tidak ada produk ditemukan

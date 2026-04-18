@@ -68,6 +68,7 @@ export default function AIChatPage() {
   const [error, setError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sendMessageRef = useRef<((text: string) => Promise<void>) | null>(null);
 
   const loadOutlet = useCallback(async (): Promise<string | null> => {
     try {
@@ -86,6 +87,24 @@ export default function AIChatPage() {
   useEffect(() => {
     loadOutlet();
   }, [loadOutlet]);
+
+  // Handle ?setup=<product_name> query param — auto-trigger AI recipe setup
+  // (dari entry point Menu page). Jalan sekali per mount setelah outlet siap.
+  const autoSetupSentRef = useRef(false);
+  useEffect(() => {
+    if (autoSetupSentRef.current || !outletId || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const setup = params.get('setup');
+    if (setup) {
+      autoSetupSentRef.current = true;
+      // Clear query string biar refresh gak re-trigger
+      window.history.replaceState({}, '', '/dashboard/ai');
+      // Fire dengan delay kecil supaya state outletId stable
+      setTimeout(() => {
+        sendMessageRef.current?.(`buatkan resep ${setup}`);
+      }, 120);
+    }
+  }, [outletId]);
 
   // Scroll hanya saat jumlah pesan bertambah — BUKAN saat user mengetik di form
   // yang trigger re-render msg.editableProposal. Tanpa ini, mobile keyboard
@@ -225,6 +244,10 @@ export default function AIChatPage() {
       inputRef.current?.focus();
     }
   }, [loading, outletId, loadOutlet]);
+
+  // Sync sendMessage ke ref (dalam render body — safe untuk refs, no trigger
+  // re-render). Dipakai oleh auto-setup effect tanpa cycle deps.
+  sendMessageRef.current = sendMessage;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
