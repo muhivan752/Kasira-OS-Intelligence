@@ -424,6 +424,9 @@ class _DashboardContent extends ConsumerWidget {
               onPressed: () {
                 ref.read(dashboardProvider.notifier).refresh();
                 ref.read(ordersProvider.notifier).fetch();
+                if (SessionCache.instance.isPro) {
+                  ref.read(tabProvider.notifier).fetchTabs();
+                }
               },
               icon: const Icon(LucideIcons.refreshCw, color: AppColors.textSecondary),
               tooltip: 'Refresh',
@@ -612,16 +615,32 @@ class _DashboardContent extends ConsumerWidget {
   }
 }
 
-class _ActiveTabsBadge extends ConsumerWidget {
+class _ActiveTabsBadge extends ConsumerStatefulWidget {
   final bool isWide;
   const _ActiveTabsBadge({required this.isWide});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ActiveTabsBadge> createState() => _ActiveTabsBadgeState();
+}
+
+class _ActiveTabsBadgeState extends ConsumerState<_ActiveTabsBadge> {
+  @override
+  void initState() {
+    super.initState();
+    // Seed tabProvider once — count derives from it
+    if (SessionCache.instance.isPro) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ref.read(tabProvider.notifier).fetchTabs();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isPro = SessionCache.instance.isPro;
-    final countAsync = isPro ? ref.watch(activeTabsCountProvider) : const AsyncValue<int>.data(0);
-    final count = countAsync.maybeWhen(data: (c) => c, orElse: () => 0);
+    final count = isPro ? ref.watch(activeTabsCountProvider) : 0;
     final hasActive = count > 0;
+    final isWide = widget.isWide;
 
     return InkWell(
       borderRadius: BorderRadius.circular(10),

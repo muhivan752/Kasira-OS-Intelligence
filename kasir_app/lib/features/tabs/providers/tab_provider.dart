@@ -155,37 +155,11 @@ class TabItemModel {
       );
 }
 
-// ── Active Tabs Count (for dashboard badge) ──
+// ── Active Tabs Count (derived from tabProvider state, auto-updates) ──
 
-final activeTabsCountProvider = FutureProvider.autoDispose<int>((ref) async {
-  final cache = SessionCache.instance;
-  final outletId = cache.outletId;
-  if (outletId == null) return 0;
-  final dio = Dio(BaseOptions(
-    baseUrl: AppConfig.apiV1,
-    connectTimeout: const Duration(seconds: 8),
-    receiveTimeout: const Duration(seconds: 8),
-  ));
-  try {
-    final res = await dio.get(
-      '/tabs/',
-      queryParameters: {'outlet_id': outletId, 'status': 'open'},
-      options: Options(headers: cache.authHeaders),
-    );
-    final list = (res.data['data'] as List?) ?? [];
-    int count = list.length;
-    try {
-      final res2 = await dio.get(
-        '/tabs/',
-        queryParameters: {'outlet_id': outletId, 'status': 'asking_bill'},
-        options: Options(headers: cache.authHeaders),
-      );
-      count += ((res2.data['data'] as List?) ?? []).length;
-    } catch (_) {}
-    return count;
-  } catch (_) {
-    return 0;
-  }
+final activeTabsCountProvider = Provider<int>((ref) {
+  final tabs = ref.watch(tabProvider).tabs;
+  return tabs.where((t) => t.isOpen).length;
 });
 
 // ── Add Order Context (state for "tambah pesanan" flow) ──
