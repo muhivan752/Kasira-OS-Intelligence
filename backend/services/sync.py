@@ -65,8 +65,12 @@ async def process_table_sync(db: AsyncSession, model_class, client_records: List
                 current_status = getattr(db_record, "status", None)
                 if current_status is not None:
                     status_str = current_status.value if hasattr(current_status, 'value') else str(current_status)
+                    # Terminal states match actual enum values (see models):
+                    #   - Order.status: pending|preparing|ready|served|completed|cancelled
+                    #   - Payment.status: pending|paid|partial|expired|cancelled|refunded|failed
+                    #   - Shift.status: open|closed
                     terminal_by_model = {
-                        "Order": {"paid", "completed", "refunded", "cancelled"},
+                        "Order": {"completed", "cancelled"},
                         "Payment": {"paid", "refunded", "failed", "expired", "cancelled"},
                         "Shift": {"closed"},
                     }

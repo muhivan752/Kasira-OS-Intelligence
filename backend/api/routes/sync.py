@@ -87,7 +87,8 @@ async def sync_data(
                     status_str = pstatus.value if hasattr(pstatus, 'value') else str(pstatus)
                     parent_map[str(pid)] = (status_str, str(poutlet))
                 batch_order_ids = {str(o.get("id")) for o in (request.changes.orders or []) if o.get("id")}
-                terminal_states = {"paid", "completed", "refunded", "cancelled"}
+                # Order.status enum: pending|preparing|ready|served|completed|cancelled
+                terminal_states = {"completed", "cancelled"}
                 for oi in request.changes.order_items:
                     oid = str(oi.get("order_id") or "")
                     if oid in parent_map:
