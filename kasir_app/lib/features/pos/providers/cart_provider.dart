@@ -122,6 +122,43 @@ class CartState {
       );
 }
 
+// ─── Helper: parse structured error detail dari backend ─────────────────────
+// Backend stock_service & ingredient_stock_service return detail dalam format:
+//   {code, mode, message, items: [{name, product_name, available, needed, unit}]}
+// Fungsi ini fallback ke plain string kalau detail bukan Map.
+String parseStockErrorDetail(dynamic detail, {String fallback = 'Gagal membuat pesanan'}) {
+  if (detail == null) return fallback;
+  if (detail is String) return detail;
+  if (detail is! Map) return detail.toString();
+
+  final code = detail['code']?.toString();
+  final mode = detail['mode']?.toString();
+  final message = detail['message']?.toString();
+  final items = (detail['items'] as List?) ?? const [];
+
+  if ((code == 'STOCK_INSUFFICIENT' || code == 'STOCK_RACE_CONDITION' || code == 'STOCK_NOT_INITIALIZED')
+      && items.isNotEmpty) {
+    final buf = StringBuffer();
+    buf.writeln(mode == 'recipe' ? 'Stok bahan tidak cukup:' : 'Stok produk tidak cukup:');
+    for (final it in items.take(5)) {
+      if (it is! Map) continue;
+      final name = it['name']?.toString() ?? '-';
+      final avail = it['available'];
+      final need = it['needed'];
+      final unit = it['unit']?.toString() ?? '';
+      final productName = it['product_name']?.toString();
+      final line = mode == 'recipe' && productName != null && productName.isNotEmpty
+          ? '• $name (untuk $productName): butuh $need $unit, sisa $avail'
+          : '• $name: butuh $need $unit, sisa $avail';
+      buf.writeln(line);
+    }
+    if (items.length > 5) buf.writeln('... dan ${items.length - 5} lainnya');
+    return buf.toString().trim();
+  }
+
+  return message ?? fallback;
+}
+
 // ─── Notifier ────────────────────────────────────────────────────────────────
 
 class CartNotifier extends StateNotifier<CartState> {
@@ -290,7 +327,7 @@ class CartNotifier extends StateNotifier<CartState> {
           final code = e.response?.statusCode;
           final msg = code == 403
               ? 'Fitur Tab memerlukan paket Pro'
-              : (e.response?.data?['detail']?.toString() ?? 'Gagal membuka tab');
+              : parseStockErrorDetail(e.response?.data?['detail'], fallback: 'Gagal membuka tab');
           state = state.copyWith(isSubmitting: false, error: msg);
           return null;
         }
@@ -336,7 +373,7 @@ class CartNotifier extends StateNotifier<CartState> {
         if (tabWasCreated) {
           try { await dio.post('/tabs/$tabId/cancel', options: Options(headers: headers)); } catch (_) {}
         }
-        final msg = e.response?.data?['detail']?.toString() ?? 'Gagal membuat pesanan';
+        final msg = parseStockErrorDetail(e.response?.data?['detail']);
         state = state.copyWith(isSubmitting: false, error: msg);
         return null;
       }
@@ -448,8 +485,8 @@ class CartNotifier extends StateNotifier<CartState> {
           isSubmitting: false, submittedOrderId: orderId, wasOffline: false);
       return orderId;
     } on DioException catch (e) {
-      final msg = e.response?.data['detail'] ?? 'Gagal membuat pesanan';
-      state = state.copyWith(isSubmitting: false, error: msg.toString());
+      final msg = parseStockErrorDetail(e.response?.data?['detail']);
+      state = state.copyWith(isSubmitting: false, error: msg);
       return null;
     }
   }
@@ -667,7 +704,11 @@ class CartNotifier extends StateNotifier<CartState> {
           final ing = await (_db.select(_db.ingredients)
                 ..where((i) => i.id.equals(entry.key)))
               .getSingleOrNull();
-          return 'Stok ${ing?.name ?? 'bahan'} tidak cukup';
+          final unit = ing?.baseUnit ?? '';
+          final name = ing?.name ?? 'bahan';
+          final needStr = entry.value % 1 == 0 ? entry.value.toInt().toString() : entry.value.toStringAsFixed(1);
+          final availStr = available % 1 == 0 ? available.toInt().toString() : available.toStringAsFixed(1);
+          return 'Stok $name tidak cukup — butuh $needStr $unit, sisa $availStr $unit';
         }
       }
     } else {

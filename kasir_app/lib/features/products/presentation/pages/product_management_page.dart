@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/products_provider.dart';
 import '../widgets/product_detail_sheet.dart';
+import 'restock_page.dart';
 
 class ProductManagementPage extends ConsumerStatefulWidget {
   const ProductManagementPage({super.key});
@@ -83,6 +84,25 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
                   ),
                 ),
                 const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const RestockPage()),
+                    );
+                  },
+                  icon: const Icon(LucideIcons.plus, size: 16),
+                  label: const Text('Restock'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 IconButton(
                   onPressed: () => ref.read(productsProvider.notifier).refresh(),
                   icon: const Icon(LucideIcons.refreshCw,
