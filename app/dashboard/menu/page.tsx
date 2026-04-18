@@ -292,8 +292,30 @@ export default function MenuPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Menu &amp; Kategori</h1>
-          <p className="text-gray-500">Kelola produk, stok, dan kategori outlet Anda.</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900">Menu &amp; Kategori</h1>
+            {isPro && (
+              <span
+                className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                  stockMode === 'recipe'
+                    ? 'bg-purple-50 text-purple-700 border-purple-200'
+                    : 'bg-gray-50 text-gray-600 border-gray-200'
+                }`}
+                title={
+                  stockMode === 'recipe'
+                    ? 'Stok dihitung otomatis dari bahan baku (resep). Field Stok di produk disembunyikan.'
+                    : 'Stok diisi manual per produk. Aktifkan mode Resep di Settings untuk hitung otomatis dari bahan baku.'
+                }
+              >
+                Mode: {stockMode === 'recipe' ? 'Resep' : 'Simple'}
+              </span>
+            )}
+          </div>
+          <p className="text-gray-500">
+            {stockMode === 'recipe'
+              ? 'Stok otomatis dari bahan baku. Field Stok di form produk disembunyikan.'
+              : 'Kelola produk, stok, dan kategori outlet Anda.'}
+          </p>
         </div>
         {activeTab === 'produk' ? (
           <button onClick={() => openProductModal()}
@@ -675,7 +697,7 @@ export default function MenuPage() {
                                     setRecipeIngredients(updated);
                                   }}
                                   className="w-20 px-2 py-1.5 border rounded-lg text-sm text-right" />
-                                <span className="text-xs text-gray-500 w-10">{ri.quantity_unit}</span>
+                                <span className="text-sm font-semibold text-gray-700 w-10">{ri.quantity_unit}</span>
                               </div>
                               <button type="button" onClick={() => {
                                 setRecipeIngredients(recipeIngredients.filter((_, i) => i !== idx));

@@ -375,18 +375,24 @@ export default function BahanBakuPage() {
                     <input type="radio" name="ingtype" value="overhead" checked={form.ingredient_type === 'overhead'}
                       onChange={() => setForm({ ...form, ingredient_type: 'overhead' })} className="sr-only" />
                     <span className={`text-sm font-medium ${form.ingredient_type === 'overhead' ? 'text-blue-700' : 'text-gray-900'}`}>Biaya Operasional</span>
-                    <span className="text-xs text-gray-400 mt-0.5">Susah dihitung pasti. Es batu, Air, Gas</span>
+                    <span className="text-xs text-gray-400 mt-0.5">Biaya tetap harian (es, gas, listrik). Tidak mengurangi stok per pesanan.</span>
                   </label>
                 </div>
               </div>
 
               {form.ingredient_type === 'overhead' && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-xs text-amber-700">Biaya operasional tidak dikurangi per pesanan, tapi dihitung sebagai biaya harian tetap.</p>
-                  <div className="mt-2">
-                    <label className="block text-xs text-amber-600 mb-1">Estimasi Biaya per Hari (Rp)</label>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    <strong>Biaya operasional tetap</strong> (es batu, air, gas, listrik) yang susah dihitung per porsi.
+                    Kasira <strong>tidak mengurangi stok</strong> bahan ini per pesanan — hanya dicatat sebagai biaya tetap harian untuk estimasi HPP kasar.
+                  </p>
+                  <div>
+                    <label className="block text-xs font-medium text-amber-700 mb-1">Estimasi Biaya per Hari (Rp)</label>
                     <input type="number" value={form.overhead_cost_per_day} onChange={e => setForm({ ...form, overhead_cost_per_day: e.target.value })}
                       className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm" placeholder="50000" />
+                    <p className="text-xs text-amber-600 mt-1">
+                      💡 Contoh: gas Rp50.000/hari. Kalau rata-rata 100 porsi/hari, alokasi ~Rp500/porsi.
+                    </p>
                   </div>
                 </div>
               )}

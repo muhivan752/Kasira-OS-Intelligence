@@ -287,6 +287,37 @@ String _rp(double amount) {
   return buf.toString();
 }
 
+List<String> _wrapWords(String text, int maxWidth) {
+  if (text.length <= maxWidth) return [text];
+  final words = text.split(' ');
+  final lines = <String>[];
+  var current = '';
+  for (final word in words) {
+    if (word.length > maxWidth) {
+      if (current.isNotEmpty) {
+        lines.add(current);
+        current = '';
+      }
+      var remaining = word;
+      while (remaining.length > maxWidth) {
+        lines.add(remaining.substring(0, maxWidth));
+        remaining = remaining.substring(maxWidth);
+      }
+      current = remaining;
+      continue;
+    }
+    final next = current.isEmpty ? word : '$current $word';
+    if (next.length > maxWidth) {
+      lines.add(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  if (current.isNotEmpty) lines.add(current);
+  return lines;
+}
+
 Uint8List buildReceipt(ReceiptData d) {
   final bytes = <int>[];
   const w = 32;
@@ -309,15 +340,18 @@ Uint8List buildReceipt(ReceiptData d) {
   bytes.addAll(EscPos.line('Tgl : ${d.dateTime}'));
   bytes.addAll(EscPos.divider(width: w));
 
-  // Items
+  // Items — wrap long names to multiple lines instead of truncating
   for (final item in d.items) {
-    final name = item.name.length > w ? item.name.substring(0, w) : item.name;
-    bytes.addAll(EscPos.line(name));
+    for (final nameLine in _wrapWords(item.name, w)) {
+      bytes.addAll(EscPos.line(nameLine));
+    }
     final detail = '  ${item.qty}x${_rp(item.price)}';
     final sub = _rp(item.subtotal);
     bytes.addAll(EscPos.rowLR(detail, sub, width: w));
-    if (item.notes != null) {
-      bytes.addAll(EscPos.line('  *${item.notes}'));
+    if (item.notes != null && item.notes!.trim().isNotEmpty) {
+      for (final noteLine in _wrapWords('* ${item.notes!.trim()}', w - 2)) {
+        bytes.addAll(EscPos.line('  $noteLine'));
+      }
     }
   }
 
