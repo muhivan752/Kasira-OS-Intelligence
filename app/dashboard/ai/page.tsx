@@ -27,9 +27,13 @@ interface Message {
   model?: string;
   tokens?: number;
   recipeProposal?: RecipeProposal;
+  editableProposal?: RecipeProposal;
+  applying?: boolean;
   proposalApplied?: boolean;
   proposalError?: string;
 }
+
+const UNIT_OPTIONS = ['gram', 'ml', 'pcs', 'bungkus'] as const;
 
 const SUGGESTIONS = [
   'Setup resep Kopi Susu Gula Aren',
@@ -180,6 +184,9 @@ export default function AIChatPage() {
                     model: event.model,
                     tokens: event.tokens_used,
                     recipeProposal: proposal || undefined,
+                    editableProposal: proposal
+                      ? (JSON.parse(JSON.stringify(proposal)) as RecipeProposal)
+                      : undefined,
                   };
                 })
               );
@@ -221,7 +228,32 @@ export default function AIChatPage() {
     setError('');
   };
 
+  const updateProposal = useCallback((messageId: string, updater: (p: RecipeProposal) => RecipeProposal) => {
+    setMessages(prev =>
+      prev.map(m => {
+        if (m.id !== messageId || !m.editableProposal) return m;
+        return { ...m, editableProposal: updater(m.editableProposal) };
+      })
+    );
+  }, []);
+
   const applyProposal = useCallback(async (messageId: string, proposal: RecipeProposal) => {
+    // Validate form before send
+    if (!proposal.product_name.trim()) {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, proposalError: 'Nama produk harus diisi.' } : m));
+      return;
+    }
+    if (proposal.ingredients.length === 0) {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, proposalError: 'Minimal 1 bahan harus ada.' } : m));
+      return;
+    }
+    for (const ing of proposal.ingredients) {
+      if (!ing.name.trim() || ing.qty <= 0 || ing.buy_price <= 0 || ing.buy_qty <= 0) {
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, proposalError: `Bahan "${ing.name || '(kosong)'}" belum lengkap — nama, qty, harga, isi wajib > 0.` } : m));
+        return;
+      }
+    }
+
     let effectiveOutletId = outletId;
     if (!effectiveOutletId) {
       effectiveOutletId = await loadOutlet();
@@ -229,7 +261,7 @@ export default function AIChatPage() {
     }
 
     setMessages(prev =>
-      prev.map(m => (m.id === messageId ? { ...m, proposalError: undefined } : m))
+      prev.map(m => (m.id === messageId ? { ...m, proposalError: undefined, applying: true } : m))
     );
 
     try {
@@ -238,9 +270,9 @@ export default function AIChatPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           outlet_id: effectiveOutletId,
-          product_name: proposal.product_name,
+          product_name: proposal.product_name.trim(),
           ingredients: proposal.ingredients.map(i => ({
-            name: i.name,
+            name: i.name.trim(),
             qty: i.qty,
             unit: i.unit,
             buy_price: i.buy_price,
@@ -253,7 +285,7 @@ export default function AIChatPage() {
       if (!res.ok) {
         const detail = data.detail || data.error || 'Gagal membuat resep.';
         setMessages(prev =>
-          prev.map(m => (m.id === messageId ? { ...m, proposalError: detail } : m))
+          prev.map(m => (m.id === messageId ? { ...m, proposalError: detail, applying: false } : m))
         );
         return;
       }
@@ -267,14 +299,14 @@ export default function AIChatPage() {
           (typeof d.margin_pct === 'number' ? ` · Margin: **${d.margin_pct}%**` : ''),
       ];
       if (d.created_ingredients?.length) {
-        lines.push('', `Bahan baru dibuat: ${d.created_ingredients.map((i: any) => i.name).join(', ')}`);
+        lines.push('', `Bahan baru: ${d.created_ingredients.map((i: any) => i.name).join(', ')}`);
       }
       if (d.reused_ingredients?.length) {
-        lines.push(`Bahan yang udah ada (dipakai ulang): ${d.reused_ingredients.map((i: any) => i.name).join(', ')}`);
+        lines.push(`Dipakai ulang: ${d.reused_ingredients.map((i: any) => i.name).join(', ')}`);
       }
 
       setMessages(prev => [
-        ...prev.map(m => (m.id === messageId ? { ...m, proposalApplied: true } : m)),
+        ...prev.map(m => (m.id === messageId ? { ...m, proposalApplied: true, applying: false } : m)),
         {
           id: (Date.now() + 10).toString(),
           role: 'system',
@@ -283,7 +315,7 @@ export default function AIChatPage() {
       ]);
     } catch {
       setMessages(prev =>
-        prev.map(m => (m.id === messageId ? { ...m, proposalError: 'Gagal terhubung ke server.' } : m))
+        prev.map(m => (m.id === messageId ? { ...m, proposalError: 'Gagal terhubung ke server.', applying: false } : m))
       );
     }
   }, [outletId, loadOutlet]);
@@ -371,59 +403,181 @@ export default function AIChatPage() {
               )}
               <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
 
-              {msg.recipeProposal && (
-                <div className="mt-3 rounded-xl border border-purple-200 bg-white p-3 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <FlaskConical className="w-4 h-4 text-purple-600" />
-                    <p className="text-sm font-semibold text-gray-900">
-                      {msg.recipeProposal.product_name}
-                    </p>
-                  </div>
-                  <div className="space-y-1 text-xs text-gray-700">
-                    {msg.recipeProposal.ingredients.map((ing, idx) => {
-                      const costPerPorsi = (ing.buy_price / ing.buy_qty) * ing.qty;
-                      return (
-                        <div key={idx} className="flex justify-between items-baseline gap-2">
-                          <span><span className="font-medium">{ing.name}</span> <span className="text-gray-500">{ing.qty}{ing.unit}</span></span>
-                          <span className="text-gray-500 whitespace-nowrap">≈ {rp(costPerPorsi)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {msg.recipeProposal.hpp_estimate && (
-                    <div className="flex justify-between text-xs pt-2 border-t border-gray-100">
-                      <span className="text-gray-500">HPP total</span>
-                      <span className="font-semibold text-gray-900">{rp(msg.recipeProposal.hpp_estimate)}</span>
+              {msg.editableProposal && (() => {
+                const ep = msg.editableProposal;
+                const hpp = ep.ingredients.reduce(
+                  (s, i) => s + (i.buy_qty > 0 ? (i.buy_price / i.buy_qty) * i.qty : 0),
+                  0,
+                );
+                const priceRange = ep.suggested_price_range;
+                const disabled = msg.proposalApplied || msg.applying;
+                return (
+                  <div className="mt-3 rounded-xl border border-purple-200 bg-white p-3 space-y-3">
+                    {/* Product name */}
+                    <div className="flex items-center gap-2">
+                      <FlaskConical className="w-4 h-4 text-purple-600 shrink-0" />
+                      <input
+                        type="text"
+                        value={ep.product_name}
+                        disabled={disabled}
+                        onChange={e => updateProposal(msg.id, p => ({ ...p, product_name: e.target.value }))}
+                        className="flex-1 px-2 py-1.5 text-sm font-semibold text-gray-900 bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-purple-400 focus:outline-none disabled:opacity-70"
+                        placeholder="Nama produk"
+                      />
                     </div>
-                  )}
-                  {msg.proposalError && (
-                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
-                      {msg.proposalError}
-                    </p>
-                  )}
-                  {msg.proposalApplied ? (
-                    <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 rounded-lg px-2 py-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Resep sudah dibuat</span>
+
+                    {/* Ingredients */}
+                    <div className="space-y-2">
+                      {ep.ingredients.map((ing, idx) => {
+                        const costPerPorsi = ing.buy_qty > 0 ? (ing.buy_price / ing.buy_qty) * ing.qty : 0;
+                        return (
+                          <div key={idx} className="rounded-lg bg-gray-50 border border-gray-200 p-2.5 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={ing.name}
+                                disabled={disabled}
+                                onChange={e => updateProposal(msg.id, p => ({
+                                  ...p,
+                                  ingredients: p.ingredients.map((x, i) => i === idx ? { ...x, name: e.target.value } : x),
+                                }))}
+                                placeholder="Nama bahan"
+                                className="flex-1 px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-300 rounded focus:outline-none focus:border-purple-400 disabled:opacity-70"
+                              />
+                              {!disabled && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateProposal(msg.id, p => ({
+                                    ...p,
+                                    ingredients: p.ingredients.filter((_, i) => i !== idx),
+                                  }))}
+                                  title="Hapus bahan"
+                                  className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-[1fr_auto] gap-1.5 text-xs">
+                              <label className="flex items-center gap-1 text-gray-500">
+                                <span className="whitespace-nowrap">Qty:</span>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  value={ing.qty || ''}
+                                  disabled={disabled}
+                                  onChange={e => updateProposal(msg.id, p => ({
+                                    ...p,
+                                    ingredients: p.ingredients.map((x, i) => i === idx ? { ...x, qty: parseFloat(e.target.value) || 0 } : x),
+                                  }))}
+                                  className="flex-1 min-w-0 px-1.5 py-1 bg-white border border-gray-300 rounded text-right focus:outline-none focus:border-purple-400 disabled:opacity-70"
+                                />
+                              </label>
+                              <select
+                                value={ing.unit}
+                                disabled={disabled}
+                                onChange={e => updateProposal(msg.id, p => ({
+                                  ...p,
+                                  ingredients: p.ingredients.map((x, i) => i === idx ? { ...x, unit: e.target.value } : x),
+                                }))}
+                                className="px-1.5 py-1 bg-white border border-gray-300 rounded focus:outline-none focus:border-purple-400 disabled:opacity-70"
+                              >
+                                {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                              </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1.5 text-xs">
+                              <label className="flex items-center gap-1 text-gray-500">
+                                <span className="whitespace-nowrap">Beli Rp:</span>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  value={ing.buy_price || ''}
+                                  disabled={disabled}
+                                  onChange={e => updateProposal(msg.id, p => ({
+                                    ...p,
+                                    ingredients: p.ingredients.map((x, i) => i === idx ? { ...x, buy_price: parseFloat(e.target.value) || 0 } : x),
+                                  }))}
+                                  className="flex-1 min-w-0 px-1.5 py-1 bg-white border border-gray-300 rounded text-right focus:outline-none focus:border-purple-400 disabled:opacity-70"
+                                  placeholder="120000"
+                                />
+                              </label>
+                              <label className="flex items-center gap-1 text-gray-500">
+                                <span className="whitespace-nowrap">per:</span>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  value={ing.buy_qty || ''}
+                                  disabled={disabled}
+                                  onChange={e => updateProposal(msg.id, p => ({
+                                    ...p,
+                                    ingredients: p.ingredients.map((x, i) => i === idx ? { ...x, buy_qty: parseFloat(e.target.value) || 0 } : x),
+                                  }))}
+                                  className="flex-1 min-w-0 px-1.5 py-1 bg-white border border-gray-300 rounded text-right focus:outline-none focus:border-purple-400 disabled:opacity-70"
+                                  placeholder="1000"
+                                />
+                                <span className="text-gray-400 whitespace-nowrap">{ing.unit}</span>
+                              </label>
+                            </div>
+                            <div className="text-[10px] text-gray-500 text-right">
+                              Cost per porsi ≈ {rp(costPerPorsi)}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {!disabled && (
+                        <button
+                          type="button"
+                          onClick={() => updateProposal(msg.id, p => ({
+                            ...p,
+                            ingredients: [
+                              ...p.ingredients,
+                              { name: '', qty: 0, unit: 'gram', buy_price: 0, buy_qty: 1 },
+                            ],
+                          }))}
+                          className="w-full flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg border border-dashed border-purple-300 transition-colors"
+                        >
+                          + Tambah Bahan
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <div className="flex gap-2">
+
+                    {/* HPP summary — live calculated */}
+                    <div className="flex justify-between items-baseline text-xs pt-2 border-t border-gray-100">
+                      <span className="text-gray-500">
+                        HPP total
+                        {priceRange && <span className="text-gray-400"> · Normal jual {rp(priceRange[0])}–{rp(priceRange[1])}</span>}
+                      </span>
+                      <span className="font-bold text-gray-900">{rp(hpp)}</span>
+                    </div>
+
+                    {msg.proposalError && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                        {msg.proposalError}
+                      </p>
+                    )}
+
+                    {msg.proposalApplied ? (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 rounded-lg px-2 py-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Resep sudah dibuat</span>
+                      </div>
+                    ) : (
                       <button
-                        onClick={() => applyProposal(msg.id, msg.recipeProposal!)}
-                        className="flex-1 px-3 py-2 text-xs font-medium bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                        onClick={() => applyProposal(msg.id, ep)}
+                        disabled={msg.applying}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-60 transition-colors"
                       >
-                        Buat Otomatis
+                        {msg.applying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {msg.applying ? 'Membuat...' : 'Buat Resep'}
                       </button>
-                      <button
-                        onClick={() => sendMessage(`Ubah resep ${msg.recipeProposal!.product_name} — `)}
-                        className="px-3 py-2 text-xs font-medium text-purple-700 bg-white border border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
-                      >
-                        Ubah Dulu
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                );
+              })()}
 
               {msg.role === 'assistant' && msg.content && !loading && msg.tokens !== undefined && (
                 <p className="text-[10px] text-gray-400 mt-2">

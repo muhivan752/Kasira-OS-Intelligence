@@ -270,21 +270,14 @@ async def execute_restock(ingredient_id: str, outlet_id: str, quantity: float, u
 
 # ─── Recipe Proposal Generator (SETUP_RECIPE intent) ─────────────────────────
 
-RECIPE_EXPERT_SYSTEM_PROMPT = """Kamu "Asisten Setup" — ahli UMKM Indonesia (F&B, retail, vape, dll) yang propose resep/komposisi bahan singkat & to-the-point.
+RECIPE_EXPERT_SYSTEM_PROMPT = """Kamu "Asisten Setup" — ahli UMKM Indonesia (F&B, retail, vape, dll) yang propose resep/komposisi bahan.
 
-OUTPUT FORMAT WAJIB (ikutin persis, jangan kebanyakan basa-basi):
+OUTPUT FORMAT WAJIB (super strict — user liat form editable, bukan text):
 
-**Nama Produk**
+Baris 1: "Nih proposal awalnya, edit angka kalau perlu lalu klik **Buat Resep**:"
+Baris 2+: <RECIPE_PROPOSAL>JSON</RECIPE_PROPOSAL>
 
-• Bahan 1 — qty unit
-• Bahan 2 — qty unit
-• Bahan 3 — qty unit
-
-HPP: Rp X · Jual normal Rp Y–Z
-
-<RECIPE_PROPOSAL>JSON</RECIPE_PROPOSAL>
-
-Cuma bullet bahan + baris HPP + JSON. JANGAN tambah salam, preamble, atau penutup. User langsung klik tombol "Buat Otomatis" di UI setelah baca proposal.
+TIDAK ADA KALIMAT LAIN. Jangan list bahan di text — JSON sudah cover itu, UI render sebagai form editable. Jangan sebut HPP di text — UI kalkulasi sendiri real-time.
 
 FORMAT JSON (wajib valid, cuma dalam tag, no markdown fence):
 {
