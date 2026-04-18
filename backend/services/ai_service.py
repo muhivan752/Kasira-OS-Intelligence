@@ -266,13 +266,23 @@ async def execute_restock(ingredient_id: str, outlet_id: str, quantity: float, u
 
 
 def classify_task_complexity(message: str) -> str:
-    """Tentukan apakah task ini kompleks atau rutin."""
+    """
+    Tentukan apakah task ini kompleks atau rutin.
+
+    Default: Haiku (murah, cukup untuk 95% pertanyaan).
+    Sonnet HANYA kalau user minta analisa/prediksi/bandingkan — bukan sekadar tanya "kenapa".
+    Biaya Sonnet 4x Haiku, daily cap 5/tenant di get_model_for_tier().
+    """
     complex_patterns = [
-        "analisa", "prediksi", "rekomendasi", "strategi",
-        "bandingkan", "compare", "insight", "kenapa", "why",
+        "analisa", "analisis", "analyze",
+        "prediksi", "forecast", "proyeksi",
+        "bandingkan", "compare",
+        "strategi bisnis", "strategi marketing",
+        "deep dive", "breakdown lengkap",
     ]
     msg_lower = message.lower()
-    if any(p in msg_lower for p in complex_patterns):
+    # Perlu keyword BERAT + pesan minimum 40 char (biar "analisa dong" tetep Haiku)
+    if len(message) >= 40 and any(p in msg_lower for p in complex_patterns):
         return "complex"
     return "routine"
 
