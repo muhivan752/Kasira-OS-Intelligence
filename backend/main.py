@@ -9,6 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +20,41 @@ from backend.api.api import api_router
 from backend.core.config import settings
 from backend.core.database import tenant_context
 from backend.services.xendit import xendit_service
+
+
+def _rate_limit_key(request: Request) -> str:
+    """
+    Rate limit key: pakai user_id kalau authenticated (pasang di request.state
+    via auth dep), fallback ke IP. Ini supaya user di belakang NAT/CGN gak
+    terkena limit gabungan.
+    """
+    user_id = getattr(request.state, "rate_limit_user_id", None)
+    if user_id:
+        return f"user:{user_id}"
+    return get_remote_address(request)
+
+
+# Skip rate limit untuk health check dan webhook eksternal (Xendit retry webhook bisa spike)
+_RATE_LIMIT_EXEMPT_PATHS = {"/health", "/", "/favicon.ico"}
+_RATE_LIMIT_EXEMPT_PREFIXES = ("/api/v1/webhooks/",)
+
+
+def _is_exempt(request: Request) -> bool:
+    path = request.url.path
+    if path in _RATE_LIMIT_EXEMPT_PATHS:
+        return True
+    return any(path.startswith(p) for p in _RATE_LIMIT_EXEMPT_PREFIXES)
+
+
+# Limiter: 200 req/min per key sebagai default — cukup generous untuk POS flow
+# (create order + payment + sync tiap beberapa detik), tapi auto-block bot flood.
+limiter = Limiter(
+    key_func=_rate_limit_key,
+    default_limits=["200/minute"],
+    storage_uri=settings.REDIS_URL,
+    strategy="fixed-window",
+    headers_enabled=True,
+)
 
 # ── Sentry (Rule #45 pre-pilot: monitoring wajib) ─────────────────────────────
 if settings.SENTRY_DSN and settings.SENTRY_DSN.strip().startswith('http'):
@@ -64,11 +103,30 @@ async def lifespan(app: FastAPI):
     insights_task.cancel()
     await xendit_service.close()
 
+_is_prod = settings.ENVIRONMENT == "production"
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    # Disable OpenAPI/docs di production — cegah endpoint enumeration + schema leak
+    openapi_url=None if _is_prod else f"{settings.API_V1_STR}/openapi.json",
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
     lifespan=lifespan,
 )
+
+# Global rate limiter (200/min per key). Health + webhook paths di-exempt via
+# subclass supaya gak kena flood dari uptime check / Xendit webhook retry.
+app.state.limiter = limiter
+
+
+class ConditionalSlowAPIMiddleware(SlowAPIMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if _is_exempt(request):
+            return await call_next(request)
+        return await super().dispatch(request, call_next)
+
+
+app.add_middleware(ConditionalSlowAPIMiddleware)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Set CORS enabled origins from env
 app.add_middleware(

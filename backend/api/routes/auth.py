@@ -54,18 +54,23 @@ async def send_otp(
     
     redis = await get_redis_client()
     
-    # Check rate limit: max 3x resend per 15 minutes
+    # Rate limit: max 3 OTP send per 30 menit (SMS bomb guard).
+    # Sebelumnya threshold 10 per 15 menit = attacker bisa kirim 40 OTP/jam ke nomor
+    # korban (SMS flood + cost Kasira via Fonnte). Lowering to 3 per 30 min.
     rate_limit_key = f"otp_count:{request.phone}"
     current_count = await redis.get(rate_limit_key)
-    if current_count and int(current_count) >= 10:
-        raise HTTPException(status_code=429, detail="Too many OTP requests. Please try again after 15 minutes.")
-    
+    if current_count and int(current_count) >= 3:
+        raise HTTPException(
+            status_code=429,
+            detail="Terlalu banyak permintaan OTP. Coba lagi dalam 30 menit.",
+        )
+
     # Save to Redis with 5 minutes TTL
     await redis.setex(f"otp:{request.phone}", 300, otp)
-    
-    # Increment rate limit counter
+
+    # Increment rate limit counter (30-minute window)
     if not current_count:
-        await redis.setex(rate_limit_key, 900, 1) # 15 minutes
+        await redis.setex(rate_limit_key, 1800, 1)
     else:
         await redis.incr(rate_limit_key)
     
