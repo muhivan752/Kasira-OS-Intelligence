@@ -98,12 +98,17 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
               tab: tab,
               currency: _currency,
               onAddOrder: () {
-                // Pre-set POS to dine-in ordering with this table
+                // Pre-set POS to dine-in ordering with this table + set context banner
                 ref.read(cartProvider.notifier).setOrderType('Dine In');
                 if (tab.tableId != null) {
                   ref.read(cartProvider.notifier).setTable(tab.tableId!, name: tab.tableName);
                 }
                 ref.read(posModeProvider.notifier).state = PosMode.dineInOrdering;
+                ref.read(addOrderContextProvider.notifier).state = AddOrderContext(
+                  tabId: tab.id,
+                  tabNumber: tab.tabNumber,
+                  tableName: tab.tableName,
+                );
                 context.go('/dashboard');
               },
               onMoveTable: () => _showMoveTableModal(tab),

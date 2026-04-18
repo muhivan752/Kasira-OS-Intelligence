@@ -29,6 +29,7 @@ from backend.models.tenant import Tenant
 from backend.models.product import Product
 from backend.models.category import Category
 from backend.models.ingredient import Ingredient
+from backend.models.brand import Brand
 from backend.models.recipe import Recipe, RecipeIngredient
 from backend.models.knowledge_graph import KnowledgeGraphEdge
 from backend.models.platform import (
@@ -403,15 +404,19 @@ async def aggregate_ingredient_prices(db: AsyncSession, target_date: Optional[da
 
     logger.info(f"Aggregating ingredient prices for {target_date}")
 
-    # Get all active ingredients with cost data
+    # Get all active ingredients with cost data (exclude demo tenants)
     ingredients = (await db.execute(
         select(
             func.lower(func.trim(Ingredient.name)).label("name"),
             Ingredient.base_unit,
             Ingredient.cost_per_base_unit,
-        ).where(
+        )
+        .join(Brand, Ingredient.brand_id == Brand.id)
+        .join(Tenant, Brand.tenant_id == Tenant.id)
+        .where(
             Ingredient.deleted_at.is_(None),
             Ingredient.cost_per_base_unit > 0,
+            Tenant.is_demo == False,
         )
     )).all()
 

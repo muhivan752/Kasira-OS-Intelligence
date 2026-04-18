@@ -15,6 +15,7 @@ Endpoints:
   POST   /tabs/{tab_id}/merge       → gabung tab lain ke tab ini
   POST   /tabs/{tab_id}/request-bill → minta bill (ubah status ke asking_bill)
   GET    /tabs/by-table/{table_id}  → get open tab for a table (for storefront)
+  GET    /tabs/{tab_id}/items       → list items in tab (for per-item split UI)
 """
 from typing import Any, List, Optional
 from uuid import UUID
@@ -908,3 +909,45 @@ async def get_tab_by_table(
         data=_tab_response(tab) if tab else None,
         request_id=request.state.request_id,
     )
+
+
+# ── GET TAB ITEMS (for per-item split UI) ──
+
+@router.get("/{tab_id}/items", response_model=StandardResponse[List[dict]])
+async def get_tab_items(
+    request: Request,
+    tab_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """List all order items across orders in this tab. Used for per-item split assignment."""
+    tab = await _get_tab_or_404(db, tab_id)
+    if not tab.orders:
+        return StandardResponse(success=True, data=[], request_id=request.state.request_id)
+
+    order_ids = [o.id for o in tab.orders]
+    items_q = (
+        select(OrderItem)
+        .options(selectinload(OrderItem.product))
+        .where(
+            OrderItem.order_id.in_(order_ids),
+            OrderItem.deleted_at.is_(None),
+        )
+        .order_by(OrderItem.created_at)
+    )
+    result = await db.execute(items_q)
+    items = result.scalars().all()
+
+    data = [
+        {
+            "id": str(i.id),
+            "order_id": str(i.order_id),
+            "product_id": str(i.product_id) if i.product_id else None,
+            "product_name": i.product.name if i.product else "Item",
+            "quantity": i.quantity,
+            "unit_price": float(i.unit_price),
+            "total_price": float(i.total_price),
+        }
+        for i in items
+    ]
+    return StandardResponse(success=True, data=data, request_id=request.state.request_id)

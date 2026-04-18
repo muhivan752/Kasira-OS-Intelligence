@@ -12,6 +12,7 @@ import '../../../products/presentation/pages/product_management_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
 import '../../../reservations/presentation/pages/reservation_list_page.dart';
 import '../../../tables/presentation/pages/table_grid_page.dart';
+import '../../../tabs/providers/tab_provider.dart';
 import '../../../ai/presentation/pages/ai_chat_page.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/dashboard_provider.dart';
@@ -428,31 +429,7 @@ class _DashboardContent extends ConsumerWidget {
               tooltip: 'Refresh',
             ),
             const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: () {
-                if (SessionCache.instance.isPro) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(title: const Text('Denah Meja')),
-                        body: const TableGridPage(),
-                      ),
-                    ),
-                  );
-                } else {
-                  _DashboardPageState._showUpgradeSheet(context, 'Denah Meja & Tab');
-                }
-              },
-              icon: const Icon(LucideIcons.layoutGrid, size: 16),
-              label: Text(isWide ? 'Denah Meja' : 'Meja'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.info,
-                padding: isWide
-                    ? const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
-                    : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-            ),
+            _ActiveTabsBadge(isWide: isWide),
             const SizedBox(width: 8),
             ElevatedButton.icon(
               onPressed: () {
@@ -630,6 +607,91 @@ class _DashboardContent extends ConsumerWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _ActiveTabsBadge extends ConsumerWidget {
+  final bool isWide;
+  const _ActiveTabsBadge({required this.isWide});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isPro = SessionCache.instance.isPro;
+    final countAsync = isPro ? ref.watch(activeTabsCountProvider) : const AsyncValue<int>.data(0);
+    final count = countAsync.maybeWhen(data: (c) => c, orElse: () => 0);
+    final hasActive = count > 0;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () {
+        if (!isPro) {
+          _DashboardPageState._showUpgradeSheet(context, 'Meja Aktif & Tab');
+          return;
+        }
+        context.push('/tabs');
+      },
+      child: Container(
+        padding: isWide
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
+            : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: hasActive ? AppColors.success.withOpacity(0.12) : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: hasActive ? AppColors.success : AppColors.border,
+            width: hasActive ? 1.2 : 0.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  LucideIcons.coffee,
+                  size: 16,
+                  color: hasActive ? AppColors.success : AppColors.textSecondary,
+                ),
+                if (hasActive)
+                  Positioned(
+                    right: -5,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      child: Text(
+                        count > 99 ? '99+' : '$count',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isWide
+                  ? (hasActive ? '$count Meja Aktif' : 'Meja Aktif')
+                  : (hasActive ? '$count' : 'Meja'),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: hasActive ? AppColors.success : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

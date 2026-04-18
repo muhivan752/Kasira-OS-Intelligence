@@ -125,6 +125,80 @@ class TabModel {
   bool get hasOrders => orderIds.isNotEmpty;
 }
 
+class TabItemModel {
+  final String id;
+  final String orderId;
+  final String? productId;
+  final String productName;
+  final int quantity;
+  final double unitPrice;
+  final double totalPrice;
+
+  const TabItemModel({
+    required this.id,
+    required this.orderId,
+    this.productId,
+    required this.productName,
+    required this.quantity,
+    required this.unitPrice,
+    required this.totalPrice,
+  });
+
+  factory TabItemModel.fromJson(Map<String, dynamic> j) => TabItemModel(
+        id: j['id'] as String,
+        orderId: j['order_id'] as String,
+        productId: j['product_id'] as String?,
+        productName: j['product_name'] as String? ?? 'Item',
+        quantity: (j['quantity'] as num?)?.toInt() ?? 1,
+        unitPrice: (j['unit_price'] as num?)?.toDouble() ?? 0,
+        totalPrice: (j['total_price'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+// ── Active Tabs Count (for dashboard badge) ──
+
+final activeTabsCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  final cache = SessionCache.instance;
+  final outletId = cache.outletId;
+  if (outletId == null) return 0;
+  final dio = Dio(BaseOptions(
+    baseUrl: AppConfig.apiV1,
+    connectTimeout: const Duration(seconds: 8),
+    receiveTimeout: const Duration(seconds: 8),
+  ));
+  try {
+    final res = await dio.get(
+      '/tabs/',
+      queryParameters: {'outlet_id': outletId, 'status': 'open'},
+      options: Options(headers: cache.authHeaders),
+    );
+    final list = (res.data['data'] as List?) ?? [];
+    int count = list.length;
+    try {
+      final res2 = await dio.get(
+        '/tabs/',
+        queryParameters: {'outlet_id': outletId, 'status': 'asking_bill'},
+        options: Options(headers: cache.authHeaders),
+      );
+      count += ((res2.data['data'] as List?) ?? []).length;
+    } catch (_) {}
+    return count;
+  } catch (_) {
+    return 0;
+  }
+});
+
+// ── Add Order Context (state for "tambah pesanan" flow) ──
+
+class AddOrderContext {
+  final String tabId;
+  final String tabNumber;
+  final String? tableName;
+  const AddOrderContext({required this.tabId, required this.tabNumber, this.tableName});
+}
+
+final addOrderContextProvider = StateProvider<AddOrderContext?>((ref) => null);
+
 // ── State ──
 
 class TabListState {
@@ -216,6 +290,21 @@ class TabNotifier extends StateNotifier<TabListState> {
       return TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<List<TabItemModel>> getTabItems(String tabId) async {
+    try {
+      final res = await _dio.get(
+        '/tabs/$tabId/items',
+        options: Options(headers: _headers),
+      );
+      final list = (res.data['data'] as List)
+          .map((i) => TabItemModel.fromJson(i as Map<String, dynamic>))
+          .toList();
+      return list;
+    } catch (_) {
+      return [];
     }
   }
 

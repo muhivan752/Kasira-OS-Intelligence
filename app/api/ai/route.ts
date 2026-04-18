@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
-const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://backend:8000/api/v1';
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   };
   if (tenantId) headers['X-Tenant-ID'] = tenantId;
 
-  const backendRes = await fetch(`${API_URL}/api/v1/ai/chat`, {
+  const backendRes = await fetch(`${API_URL}/ai/chat`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),

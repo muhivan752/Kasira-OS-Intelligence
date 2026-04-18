@@ -13,6 +13,7 @@ import '../../../customers/presentation/widgets/customer_selection_modal.dart';
 import '../../../dashboard/providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../../products/providers/products_provider.dart';
+import '../../../tabs/providers/tab_provider.dart';
 
 // Tier is now read from SessionCache (0ms, in-memory)
 
@@ -201,6 +202,7 @@ class CartPanel extends ConsumerWidget {
   /// Dine-in: kirim order ke dapur, link ke tab — bayar nanti
   Future<void> _handleDineIn(BuildContext context, WidgetRef ref, CartState cart) async {
     final tableName = cart.tableName ?? 'Meja';
+    final addOrderCtx = ref.read(addOrderContextProvider);
     final result = await ref.read(cartProvider.notifier).submitDineInOrder();
     if (result == null || !context.mounted) return;
 
@@ -212,6 +214,22 @@ class CartPanel extends ConsumerWidget {
     ref.invalidate(dashboardProvider);
     ref.invalidate(ordersProvider);
     ref.invalidate(productsProvider);
+    ref.invalidate(activeTabsCountProvider);
+
+    // If this was a "tambah pesanan" flow (coming from tab detail), auto-return
+    if (addOrderCtx != null && context.mounted) {
+      ref.read(addOrderContextProvider.notifier).state = null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Pesanan ditambahkan ke ${addOrderCtx.tabNumber}'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      context.go('/tabs/${addOrderCtx.tabId}');
+      return;
+    }
 
     if (context.mounted) {
       showDialog(

@@ -16,6 +16,7 @@ import '../widgets/pos_mode_selector.dart';
 import '../../../tables/presentation/pages/table_grid_page.dart';
 import '../../../products/presentation/widgets/product_detail_sheet.dart';
 import '../../providers/pos_mode_provider.dart';
+import '../../../tabs/providers/tab_provider.dart';
 
 class PosPage extends ConsumerStatefulWidget {
   const PosPage({super.key});
@@ -177,10 +178,14 @@ class _PosPageState extends ConsumerState<PosPage> {
     final itemCount = cart.items.fold<int>(0, (sum, item) => sum + item.qty);
     final showFab = !isWide && (posMode == PosMode.takeaway || posMode == PosMode.dineInOrdering);
 
+    final addOrderCtx = ref.watch(addOrderContextProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
         children: [
+          if (addOrderCtx != null)
+            _AddOrderBanner(context_: addOrderCtx),
           if (_isOffline)
             Container(
               width: double.infinity,
@@ -633,6 +638,50 @@ class _PosPageState extends ConsumerState<PosPage> {
           ),
         );
       },
+    );
+  }
+}
+
+class _AddOrderBanner extends ConsumerWidget {
+  final AddOrderContext context_;
+  const _AddOrderBanner({required this.context_});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      width: double.infinity,
+      color: AppColors.primary.withOpacity(0.12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(LucideIcons.plusCircle, size: 14, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Tambah Pesanan → ${context_.tabNumber}'
+              '${context_.tableName != null ? " · Meja ${context_.tableName}" : ""}',
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(addOrderContextProvider.notifier).state = null;
+              ref.read(cartProvider.notifier).clearCart();
+              ref.read(posModeProvider.notifier).state = PosMode.selection;
+            },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+              minimumSize: const Size(0, 28),
+              foregroundColor: AppColors.primary,
+            ),
+            child: const Text('Batal', style: TextStyle(fontSize: 12)),
+          ),
+        ],
+      ),
     );
   }
 }

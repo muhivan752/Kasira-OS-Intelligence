@@ -19,6 +19,7 @@ import 'features/tables/presentation/pages/table_grid_page.dart';
 import 'features/reservations/presentation/pages/reservation_list_page.dart';
 import 'features/reservations/presentation/pages/table_grid_page.dart';
 import 'features/tabs/presentation/pages/tab_detail_page.dart';
+import 'features/tabs/presentation/pages/active_tabs_list_page.dart';
 import 'features/auth/presentation/pages/register_page.dart';
 
 final _router = GoRouter(
@@ -102,6 +103,10 @@ final _router = GoRouter(
     GoRoute(
       path: '/stock/alerts',
       builder: (context, state) => const LowStockAlertPage(),
+    ),
+    GoRoute(
+      path: '/tabs',
+      builder: (context, state) => const ActiveTabsListPage(),
     ),
     GoRoute(
       path: '/tabs/:tabId',
