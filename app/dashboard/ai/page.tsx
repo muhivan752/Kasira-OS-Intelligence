@@ -10,6 +10,7 @@ interface ProposalIngredient {
   unit: string;
   buy_price: number;
   buy_qty: number;
+  initial_stock?: number;  // stok awal saat apply — biar bahan langsung ada stok, bukan null
 }
 
 interface RecipeProposal {
@@ -353,6 +354,7 @@ export default function AIChatPage() {
               unit: i.unit,
               buy_price: i.buy_price,
               buy_qty: i.buy_qty,
+              initial_stock: i.initial_stock ?? 0,
             })),
           })),
         }),
@@ -439,6 +441,7 @@ export default function AIChatPage() {
             unit: i.unit,
             buy_price: i.buy_price,
             buy_qty: i.buy_qty,
+            initial_stock: i.initial_stock ?? 0,
           })),
           replace,
         }),
@@ -700,6 +703,36 @@ export default function AIChatPage() {
                                 <span className="text-gray-400 whitespace-nowrap">{ing.unit}</span>
                               </label>
                             </div>
+                            {(() => {
+                              const initStock = ing.initial_stock ?? 0;
+                              const porsi = ing.qty > 0 ? Math.floor(initStock / ing.qty) : 0;
+                              return (
+                                <div className="grid grid-cols-[1fr_auto] gap-1.5 text-xs items-center bg-purple-50/50 rounded px-1.5 py-1">
+                                  <label className="flex items-center gap-1 text-purple-700">
+                                    <span className="whitespace-nowrap font-medium">Stok awal:</span>
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      step="any"
+                                      min="0"
+                                      value={initStock || ''}
+                                      disabled={disabled}
+                                      onFocus={e => e.currentTarget.select()}
+                                      onChange={e => updateProposal(msg.id, p => ({
+                                        ...p,
+                                        ingredients: p.ingredients.map((x, i) => i === idx ? { ...x, initial_stock: parseFloat(e.target.value) || 0 } : x),
+                                      }))}
+                                      className="flex-1 min-w-0 px-1.5 py-1 bg-white border border-purple-300 rounded text-right focus:outline-none focus:border-purple-500 disabled:opacity-70"
+                                      placeholder="0"
+                                    />
+                                    <span className="text-purple-600 whitespace-nowrap">{ing.unit}</span>
+                                  </label>
+                                  <span className="text-[10px] text-purple-600 whitespace-nowrap">
+                                    {porsi > 0 ? `cukup ~${porsi} porsi` : 'isi dulu'}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                             <div className="text-[10px] text-gray-500 text-right">
                               Modal 1 porsi ≈ {rp(costPerPorsi)}
                             </div>
@@ -714,7 +747,7 @@ export default function AIChatPage() {
                             ...p,
                             ingredients: [
                               ...p.ingredients,
-                              { name: '', qty: 0, unit: 'gram', buy_price: 0, buy_qty: 1 },
+                              { name: '', qty: 0, unit: 'gram', buy_price: 0, buy_qty: 1, initial_stock: 0 },
                             ],
                           }))}
                           className="w-full flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg border border-dashed border-purple-300 transition-colors"

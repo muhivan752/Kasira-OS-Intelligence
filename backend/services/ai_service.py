@@ -314,7 +314,7 @@ FORMAT JSON (wajib valid, cuma dalam tag, no markdown fence):
 {
   "product_name": "...",
   "ingredients": [
-    {"name": "Kopi Arabica Bubuk", "qty": 15, "unit": "gram", "buy_price": 120000, "buy_qty": 1000}
+    {"name": "Kopi Arabica Bubuk", "qty": 15, "unit": "gram", "buy_price": 120000, "buy_qty": 1000, "initial_stock": 1000}
   ],
   "hpp_estimate": 4550,
   "suggested_price_range": [20000, 28000]
@@ -322,9 +322,11 @@ FORMAT JSON (wajib valid, cuma dalam tag, no markdown fence):
 
 ATURAN JSON:
 - unit HANYA: "gram" | "ml" | "pcs" | "bungkus"
-- qty + buy_qty dalam base_unit (gram/ml/pcs). Jangan pake kg/liter di field ini.
+- qty + buy_qty + initial_stock dalam base_unit (gram/ml/pcs). Jangan pake kg/liter.
 - buy_price = integer IDR. hpp_estimate = integer. suggested_price_range = [min, max] integer.
 - name gunakan Title Case (contoh: "Susu UHT Full Cream").
+- initial_stock = ukuran package default di market Indonesia (contoh kopi/tepung 1000g, susu 1000ml, gula 500g,
+  matcha 100g, es batu 2000g, tea bag 25pcs, telur 10pcs, roti bun 10pcs). Set berdasarkan UMUM BELI cafe.
 
 HARGA MARKET INDONESIA (average 2025-2026, pakai sebagai default):
 F&B:
@@ -381,9 +383,9 @@ FORMAT JSON (wajib valid):
       "suggested_price": 25000,
       "category_name": "Kopi Susu",
       "ingredients": [
-        {"name": "Kopi Arabica Bubuk", "qty": 15, "unit": "gram", "buy_price": 120000, "buy_qty": 1000},
-        {"name": "Susu UHT Full Cream", "qty": 150, "unit": "ml", "buy_price": 15000, "buy_qty": 1000},
-        {"name": "Gula Aren Cair", "qty": 20, "unit": "gram", "buy_price": 25000, "buy_qty": 1000}
+        {"name": "Kopi Arabica Bubuk", "qty": 15, "unit": "gram", "buy_price": 120000, "buy_qty": 1000, "initial_stock": 1000},
+        {"name": "Susu UHT Full Cream", "qty": 150, "unit": "ml", "buy_price": 15000, "buy_qty": 1000, "initial_stock": 1000},
+        {"name": "Gula Aren Cair", "qty": 20, "unit": "gram", "buy_price": 25000, "buy_qty": 1000, "initial_stock": 500}
       ]
     }
     // ... total 5-10 produk
@@ -395,6 +397,8 @@ ATURAN:
 - unit HANYA: "gram" | "ml" | "pcs" | "bungkus"
 - suggested_price integer IDR, realistic sesuai tier usaha (warteg cheaper, coffee shop kekinian 20-35rb).
 - category_name: grouping logical (e.g., "Kopi", "Kopi Susu", "Tea & Matcha", "Makanan Berat").
+- initial_stock = ukuran package umum beli cafe (kopi 1000g, susu 1000ml, gula 500g, matcha 100g, es batu 2000g,
+  tea bag 25pcs, telur 10pcs, roti bun 10pcs). Merchant bisa edit — set yang realistic.
 
 HARGA MARKET INDONESIA (avg 2025-2026):
 F&B: Kopi Arabica 120k/kg | Robusta 80k/kg | Susu UHT 15k/L | Gula pasir 14k/kg | Gula aren 25k/kg |

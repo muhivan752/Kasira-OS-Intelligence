@@ -30,9 +30,10 @@ from backend.models.user import User
 from backend.models.outlet import Outlet
 from backend.models.tenant import Tenant
 from backend.models.ingredient import Ingredient
-from backend.models.product import Product
+from backend.models.product import Product, OutletStock
 from backend.models.category import Category
 from backend.models.recipe import Recipe, RecipeIngredient
+from backend.models.event import Event
 from backend.services.redis import get_redis_client
 from backend.services.audit import log_audit
 from backend.services.ai_service import stream_ai_response
@@ -175,6 +176,7 @@ class ProposalIngredient(BaseModel):
     unit: str = Field(..., min_length=1, max_length=20)
     buy_price: float = Field(..., gt=0)
     buy_qty: float = Field(..., gt=0)
+    initial_stock: float = Field(default=0, ge=0)  # 0 = belum ada stok, user restock nanti
 
     @field_validator("unit")
     @classmethod
@@ -301,7 +303,7 @@ async def apply_recipe_proposal(
             recipe_ing_refs.append((by_name[key], pi))
             continue
 
-        # Create ingredient baru
+        # Create ingredient baru + companion OutletStock dengan initial_stock
         cost_per_unit = Decimal(str(pi.buy_price)) / Decimal(str(pi.buy_qty))
         new_ing = Ingredient(
             id=uuid_mod.uuid4(),
@@ -320,12 +322,41 @@ async def apply_recipe_proposal(
         )
         db.add(new_ing)
         await db.flush()
+
+        # Companion OutletStock row biar bahan baru langsung muncul di /bahan-baku
+        # dengan stok awal (bukan null/"-"). Merchant bisa langsung liat + restock.
+        initial_stock_val = float(pi.initial_stock or 0)
+        db.add(OutletStock(
+            id=uuid_mod.uuid4(),
+            outlet_id=outlet.id,
+            ingredient_id=new_ing.id,
+            computed_stock=initial_stock_val,
+            min_stock_base=0.0,
+            row_version=0,
+        ))
+        # Audit trail — event per ingredient kalau stok awal > 0
+        if initial_stock_val > 0:
+            db.add(Event(
+                outlet_id=outlet.id,
+                stream_id=f"ingredient:{new_ing.id}",
+                event_type="stock.ai_initial_setup",
+                event_data={
+                    "ingredient_id": str(new_ing.id),
+                    "outlet_id": str(outlet.id),
+                    "initial_stock": initial_stock_val,
+                    "unit": new_ing.base_unit,
+                    "source": "ai_apply_recipe",
+                    "user_id": str(current_user.id),
+                },
+            ))
+
         by_name[key] = new_ing
         created_ingredients.append({
             "name": new_ing.name,
             "id": str(new_ing.id),
             "unit": new_ing.base_unit,
             "cost_per_unit": float(cost_per_unit),
+            "initial_stock": initial_stock_val,
         })
         recipe_ing_refs.append((new_ing, pi))
 
@@ -554,6 +585,32 @@ async def apply_menu_batch(
                 )
                 db.add(ing_obj)
                 await db.flush()
+
+                # Companion OutletStock + audit event untuk ingredient baru
+                initial_stock_val = float(ing_prop.initial_stock or 0)
+                db.add(OutletStock(
+                    id=uuid_mod.uuid4(),
+                    outlet_id=outlet.id,
+                    ingredient_id=ing_obj.id,
+                    computed_stock=initial_stock_val,
+                    min_stock_base=0.0,
+                    row_version=0,
+                ))
+                if initial_stock_val > 0:
+                    db.add(Event(
+                        outlet_id=outlet.id,
+                        stream_id=f"ingredient:{ing_obj.id}",
+                        event_type="stock.ai_initial_setup",
+                        event_data={
+                            "ingredient_id": str(ing_obj.id),
+                            "outlet_id": str(outlet.id),
+                            "initial_stock": initial_stock_val,
+                            "unit": ing_obj.base_unit,
+                            "source": "ai_apply_menu_batch",
+                            "user_id": str(current_user.id),
+                        },
+                    ))
+
                 ing_by_name[ikey] = ing_obj
                 ings_created_names.add(ing_obj.name)
             recipe_ing_refs.append((ing_obj, ing_prop))
