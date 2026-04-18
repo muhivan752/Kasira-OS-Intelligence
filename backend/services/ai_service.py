@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 INTENT_CHAT = "CHAT"
 INTENT_RESTOCK = "RESTOCK"
+INTENT_SETUP_RECIPE = "SETUP_RECIPE"
 
 # Keyword detection hanya untuk RESTOCK (actionable — langsung update DB).
 # Selain itu semua pertanyaan → CHAT → Claude yang jawab via system prompt.
@@ -39,6 +40,16 @@ RESTOCK_KEYWORDS = [
     "update stok", "nambah stok", "restok",
     "tambah bahan", "tambahin bahan", "nambah bahan", "tambahkan bahan",
     "stok bahan", "isi bahan", "masukin bahan", "masukkan bahan",
+]
+
+# Keyword detection untuk SETUP_RECIPE — AI generate proposal bahan + qty,
+# user confirm via tombol di dashboard lalu execute via /ai/apply-recipe.
+SETUP_RECIPE_KEYWORDS = [
+    "setup resep", "bikin resep", "buat resep", "bikinin resep",
+    "atur resep", "tambah resep", "tambahin resep", "tambahkan resep",
+    "susun resep", "resep untuk", "resep buat", "isi resep",
+    "setup isi", "bikin isi", "atur isi per porsi",
+    "setup komposisi", "bikin komposisi",
 ]
 
 
@@ -62,13 +73,18 @@ async def get_model_for_tier(tier: str, task: str = "routine", tenant_id: str = 
 def classify_intent(message: str) -> str:
     """
     Klasifikasi intent pesan owner.
-    Returns: RESTOCK (actionable — update DB langsung) | CHAT (default — Claude jawab)
+    Returns:
+      - SETUP_RECIPE (AI propose recipe, user confirm → apply)
+      - RESTOCK (actionable — update DB langsung)
+      - CHAT (default — Claude jawab)
 
     Scope filtering dilakukan di system prompt, bukan di classifier.
-    Ini supaya AI bisa bantu common sense question (takaran, tips operasional, dll)
-    tanpa keblock keyword matching yang terlalu strict.
+    SETUP_RECIPE di-check duluan supaya "tambah bahan untuk resep kopi susu"
+    masuk ke SETUP_RECIPE, bukan RESTOCK.
     """
     msg_lower = message.lower()
+    if any(kw in msg_lower for kw in SETUP_RECIPE_KEYWORDS):
+        return INTENT_SETUP_RECIPE
     if any(kw in msg_lower for kw in RESTOCK_KEYWORDS):
         return INTENT_RESTOCK
     return INTENT_CHAT
@@ -250,6 +266,120 @@ async def execute_restock(ingredient_id: str, outlet_id: str, quantity: float, u
     db.add(event)
     await db.commit()
     return True
+
+
+# ─── Recipe Proposal Generator (SETUP_RECIPE intent) ─────────────────────────
+
+RECIPE_EXPERT_SYSTEM_PROMPT = """Kamu adalah "Kopi Asisten" — ahli F&B Indonesia yang bantu pemilik kafe setup resep dengan bahasa casual.
+
+TUGAS: dari pesan user, identify produk yang mau di-setup, lalu propose resep standar cafe Indonesia.
+
+OUTPUT WAJIB 2 BAGIAN:
+1. Penjelasan ramah casual (max 4 kalimat) — list bahan + estimasi HPP
+2. Blok JSON structured — dipakai sistem untuk eksekusi, TIDAK ditampilkan ke user
+
+KNOWLEDGE BASE harga market Indonesia (average 2025-2026):
+- Kopi Arabica bubuk: Rp 120.000/kg | Kopi Robusta bubuk: Rp 80.000/kg
+- Susu UHT Full Cream: Rp 15.000/liter | Susu Evaporasi: Rp 18.000/liter
+- Gula pasir: Rp 14.000/kg | Gula aren cair: Rp 25.000/kg | Gula aren bubuk: Rp 45.000/kg
+- Bubuk Matcha: Rp 180.000/kg | Bubuk Coklat: Rp 80.000/kg | Bubuk Red Velvet: Rp 120.000/kg
+- Bubuk Taro: Rp 90.000/kg | Bubuk Caramel: Rp 100.000/kg
+- Es batu: Rp 2.000/kg | Air mineral: Rp 3.000/liter
+- Tea bag (grosir): Rp 500/pcs | Daun teh: Rp 40.000/kg
+- Sirup rasa (vanilla/hazelnut/caramel): Rp 35.000/liter
+- Whipping cream: Rp 60.000/liter | Butter: Rp 80.000/kg
+- Telur ayam: Rp 28.000/kg (Rp 1.800/butir)
+- Roti burger bun / croissant: Rp 5.000/pcs
+- Keju mozzarella: Rp 90.000/kg | Keju parmesan: Rp 120.000/kg
+
+RESEP STANDAR CAFE INDONESIA (per 1 porsi):
+- Kopi Susu Gula Aren: 15g kopi arabica + 150ml susu UHT + 20g gula aren cair
+- Kopi Hitam / Americano: 18g kopi + 200ml air
+- Es Kopi Susu: 15g kopi + 120ml susu UHT + 15g gula pasir + 30g es batu
+- Cappuccino: 18g kopi + 150ml susu UHT
+- Latte: 18g kopi + 200ml susu UHT
+- Matcha Latte: 3g bubuk matcha + 200ml susu UHT + 15g gula pasir
+- Es Matcha Latte: 3g matcha + 150ml susu + 15g gula + 30g es batu
+- Red Velvet Latte: 15g bubuk red velvet + 200ml susu UHT + 10g gula
+- Taro Latte: 20g bubuk taro + 200ml susu UHT + 10g gula
+- Es Teh Manis: 1 tea bag + 200ml air + 20g gula pasir
+- Teh Tawar: 1 tea bag + 250ml air
+- Teh Tarik: 1 tea bag + 100ml susu UHT + 100ml air + 15g gula
+- Kopi Vietnam Drip: 20g kopi robusta + 150ml air + 40ml susu kental
+
+FORMAT JSON (exactly between <RECIPE_PROPOSAL> tags, no markdown fences inside):
+<RECIPE_PROPOSAL>
+{
+  "product_name": "Kopi Susu Gula Aren",
+  "ingredients": [
+    {"name": "Kopi Arabica Bubuk", "qty": 15, "unit": "gram", "buy_price": 120000, "buy_qty": 1000},
+    {"name": "Susu UHT Full Cream", "qty": 150, "unit": "ml", "buy_price": 15000, "buy_qty": 1000},
+    {"name": "Gula Aren Cair", "qty": 20, "unit": "gram", "buy_price": 25000, "buy_qty": 1000}
+  ],
+  "hpp_estimate": 4550,
+  "suggested_price_range": [20000, 28000]
+}
+</RECIPE_PROPOSAL>
+
+ATURAN JSON:
+- unit HANYA: "gram" | "ml" | "pcs" | "bungkus"
+- qty + buy_qty dalam base_unit (gram/ml/pcs). Jangan pake kg/liter di field ini.
+- buy_price = harga beli dalam Rupiah (integer).
+- hpp_estimate = integer total modal per 1 porsi.
+- suggested_price_range = [min, max] integer.
+
+ATURAN RESPONSE TEXT:
+- Bahasa Indonesia casual (pake "gue" atau "kamu" fleksibel). Hangat dan supportive.
+- Tampilkan bahan dengan bullet **tebal** nama bahan + qty + estimasi harga per porsi.
+- Sebut HPP total + range harga jual umum.
+- Akhir: "Mau gue bikinin otomatis? Klik tombol di bawah."
+- JANGAN pake tabel, JANGAN pake emoji berlebihan (max 1-2 emoji subtle).
+
+KALAU PRODUK GAK JELAS dari pesan user (contoh: cuma bilang "setup resep"), JANGAN generate JSON. Balas: "Produk apa yang mau kamu set resepnya? Contoh: 'setup resep kopi susu gula aren'."
+
+KALAU PRODUK di luar knowledge base (misalnya menu unik cafe), tetap propose berdasarkan perkiraan bahan umum Indonesia yang masuk akal.
+"""
+
+
+async def generate_recipe_proposal(
+    message: str,
+    outlet_id: str,
+    tenant_id: str,
+    outlet_name: str,
+    db: AsyncSession,
+) -> AsyncGenerator[str, None]:
+    """
+    Generate recipe proposal via Haiku.
+    Yields SSE-ready text chunks dengan embedded <RECIPE_PROPOSAL> block.
+    Caller handle 'done' event setelah generator selesai.
+    """
+    if not settings.ANTHROPIC_API_KEY:
+        yield "Maaf, fitur AI belum dikonfigurasi. Hubungi admin."
+        return
+
+    try:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+        async with client.messages.stream(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=800,  # proposal text + JSON block
+            system=RECIPE_EXPERT_SYSTEM_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": f"Outlet: {outlet_name}\n\nPermintaan user: {message}",
+            }],
+        ) as stream:
+            async for text_chunk in stream.text_stream:
+                yield text_chunk
+
+            final_msg = await stream.get_final_message()
+            # Tokens usage diserap caller via separate channel
+            yield f"\n\n[__TOKENS__:{final_msg.usage.input_tokens + final_msg.usage.output_tokens}]"
+
+    except Exception as e:
+        logger.error(f"Recipe proposal generation error: {e}")
+        yield "Maaf, terjadi gangguan saat generate resep. Coba lagi dalam beberapa saat."
 
 
 def classify_task_complexity(message: str) -> str:
@@ -912,8 +1042,35 @@ async def stream_ai_response(
     def sse(payload: dict) -> str:
         return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
-    # 1. Classify intent — RESTOCK = actionable, selain itu langsung ke Claude
+    # 1. Classify intent — SETUP_RECIPE / RESTOCK = actionable, selain itu langsung ke Claude
     intent = classify_intent(message)
+
+    if intent == INTENT_SETUP_RECIPE:
+        # AI propose resep via Haiku — user confirm di dashboard lalu apply
+        tokens_used = 0
+        async for chunk in generate_recipe_proposal(
+            message=message,
+            outlet_id=outlet_id,
+            tenant_id=tenant_id,
+            outlet_name=outlet_name,
+            db=db,
+        ):
+            # Tokens info di-strip dari chunk, propagate ke done event
+            if chunk.startswith("\n\n[__TOKENS__:"):
+                try:
+                    tokens_used = int(chunk.split(":")[1].rstrip("]\n "))
+                except Exception:
+                    pass
+                continue
+            yield sse({"type": "chunk", "content": chunk})
+
+        yield sse({
+            "type": "done",
+            "intent": INTENT_SETUP_RECIPE,
+            "tokens_used": tokens_used,
+            "model": "claude-haiku-4-5-20251001",
+        })
+        return
 
     if intent == INTENT_RESTOCK:
         # Parse and execute restock

@@ -1,24 +1,58 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, Send, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { Bot, Send, Trash2, Loader2, AlertCircle, CheckCircle2, FlaskConical } from 'lucide-react';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
+
+interface ProposalIngredient {
+  name: string;
+  qty: number;
+  unit: string;
+  buy_price: number;
+  buy_qty: number;
+}
+
+interface RecipeProposal {
+  product_name: string;
+  ingredients: ProposalIngredient[];
+  hpp_estimate?: number;
+  suggested_price_range?: [number, number];
+}
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant' | 'error';
+  role: 'user' | 'assistant' | 'error' | 'system';
   content: string;
   intent?: string;
   model?: string;
   tokens?: number;
+  recipeProposal?: RecipeProposal;
+  proposalApplied?: boolean;
+  proposalError?: string;
 }
 
 const SUGGESTIONS = [
+  'Setup resep Kopi Susu Gula Aren',
+  'Bikin resep Es Matcha Latte',
   'Berapa omzet hari ini?',
-  'Produk terlaris minggu ini?',
   'Stok apa yang perlu diisi?',
-  'Rata-rata transaksi per hari?',
 ];
+
+const RECIPE_PROPOSAL_REGEX = /<RECIPE_PROPOSAL>([\s\S]*?)<\/RECIPE_PROPOSAL>/;
+
+function parseRecipeProposal(content: string): { proposal: RecipeProposal | null; cleaned: string } {
+  const match = content.match(RECIPE_PROPOSAL_REGEX);
+  if (!match) return { proposal: null, cleaned: content };
+  try {
+    const proposal = JSON.parse(match[1].trim()) as RecipeProposal;
+    const cleaned = content.replace(RECIPE_PROPOSAL_REGEX, '').trim();
+    return { proposal, cleaned };
+  } catch {
+    return { proposal: null, cleaned: content };
+  }
+}
+
+const rp = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
 
 export default function AIChatPage() {
   const allowed = useProGuard('AI Asisten');
@@ -136,11 +170,18 @@ export default function AIChatPage() {
               );
             } else if (event.type === 'done') {
               setMessages(prev =>
-                prev.map(m =>
-                  m.id === assistantId
-                    ? { ...m, intent: event.intent, model: event.model, tokens: event.tokens_used }
-                    : m
-                )
+                prev.map(m => {
+                  if (m.id !== assistantId) return m;
+                  const { proposal, cleaned } = parseRecipeProposal(m.content);
+                  return {
+                    ...m,
+                    content: proposal ? cleaned : m.content,
+                    intent: event.intent,
+                    model: event.model,
+                    tokens: event.tokens_used,
+                    recipeProposal: proposal || undefined,
+                  };
+                })
               );
             } else if (event.type === 'error') {
               setMessages(prev =>
@@ -179,6 +220,73 @@ export default function AIChatPage() {
     setMessages([]);
     setError('');
   };
+
+  const applyProposal = useCallback(async (messageId: string, proposal: RecipeProposal) => {
+    let effectiveOutletId = outletId;
+    if (!effectiveOutletId) {
+      effectiveOutletId = await loadOutlet();
+      if (!effectiveOutletId) return;
+    }
+
+    setMessages(prev =>
+      prev.map(m => (m.id === messageId ? { ...m, proposalError: undefined } : m))
+    );
+
+    try {
+      const res = await fetch('/api/ai/apply-recipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          outlet_id: effectiveOutletId,
+          product_name: proposal.product_name,
+          ingredients: proposal.ingredients.map(i => ({
+            name: i.name,
+            qty: i.qty,
+            unit: i.unit,
+            buy_price: i.buy_price,
+            buy_qty: i.buy_qty,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        const detail = data.detail || data.error || 'Gagal membuat resep.';
+        setMessages(prev =>
+          prev.map(m => (m.id === messageId ? { ...m, proposalError: detail } : m))
+        );
+        return;
+      }
+
+      const d = data.data || {};
+      const lines = [
+        `✅ Resep **${d.product_name}** berhasil dibuat.`,
+        '',
+        `HPP: **${rp(d.hpp)}**` +
+          (d.product_base_price ? ` · Harga jual: ${rp(d.product_base_price)}` : '') +
+          (typeof d.margin_pct === 'number' ? ` · Margin: **${d.margin_pct}%**` : ''),
+      ];
+      if (d.created_ingredients?.length) {
+        lines.push('', `Bahan baru dibuat: ${d.created_ingredients.map((i: any) => i.name).join(', ')}`);
+      }
+      if (d.reused_ingredients?.length) {
+        lines.push(`Bahan yang udah ada (dipakai ulang): ${d.reused_ingredients.map((i: any) => i.name).join(', ')}`);
+      }
+
+      setMessages(prev => [
+        ...prev.map(m => (m.id === messageId ? { ...m, proposalApplied: true } : m)),
+        {
+          id: (Date.now() + 10).toString(),
+          role: 'system',
+          content: lines.join('\n'),
+        },
+      ]);
+    } catch {
+      setMessages(prev =>
+        prev.map(m => (m.id === messageId ? { ...m, proposalError: 'Gagal terhubung ke server.' } : m))
+      );
+    }
+  }, [outletId, loadOutlet]);
 
   if (!allowed) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
@@ -244,6 +352,8 @@ export default function AIChatPage() {
                   ? 'bg-purple-600 text-white'
                   : msg.role === 'error'
                   ? 'bg-red-50 text-red-700 border border-red-200'
+                  : msg.role === 'system'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                   : 'bg-gray-100 text-gray-800'
               }`}
             >
@@ -253,7 +363,68 @@ export default function AIChatPage() {
                   <span className="text-xs font-medium">Error</span>
                 </div>
               )}
+              {msg.role === 'system' && (
+                <div className="flex items-center gap-1.5 mb-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium">Berhasil</span>
+                </div>
+              )}
               <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+
+              {msg.recipeProposal && (
+                <div className="mt-3 rounded-xl border border-purple-200 bg-white p-3 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FlaskConical className="w-4 h-4 text-purple-600" />
+                    <p className="text-sm font-semibold text-gray-900">
+                      {msg.recipeProposal.product_name}
+                    </p>
+                  </div>
+                  <div className="space-y-1 text-xs text-gray-700">
+                    {msg.recipeProposal.ingredients.map((ing, idx) => {
+                      const costPerPorsi = (ing.buy_price / ing.buy_qty) * ing.qty;
+                      return (
+                        <div key={idx} className="flex justify-between items-baseline gap-2">
+                          <span><span className="font-medium">{ing.name}</span> <span className="text-gray-500">{ing.qty}{ing.unit}</span></span>
+                          <span className="text-gray-500 whitespace-nowrap">≈ {rp(costPerPorsi)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {msg.recipeProposal.hpp_estimate && (
+                    <div className="flex justify-between text-xs pt-2 border-t border-gray-100">
+                      <span className="text-gray-500">HPP total</span>
+                      <span className="font-semibold text-gray-900">{rp(msg.recipeProposal.hpp_estimate)}</span>
+                    </div>
+                  )}
+                  {msg.proposalError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                      {msg.proposalError}
+                    </p>
+                  )}
+                  {msg.proposalApplied ? (
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 rounded-lg px-2 py-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Resep sudah dibuat</span>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => applyProposal(msg.id, msg.recipeProposal!)}
+                        className="flex-1 px-3 py-2 text-xs font-medium bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        Buat Otomatis
+                      </button>
+                      <button
+                        onClick={() => sendMessage(`Ubah resep ${msg.recipeProposal!.product_name} — `)}
+                        className="px-3 py-2 text-xs font-medium text-purple-700 bg-white border border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
+                      >
+                        Ubah Dulu
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {msg.role === 'assistant' && msg.content && !loading && msg.tokens !== undefined && (
                 <p className="text-[10px] text-gray-400 mt-2">
                   {msg.model?.includes('haiku') ? 'Haiku' : 'Sonnet'} &middot; {msg.tokens} tokens
