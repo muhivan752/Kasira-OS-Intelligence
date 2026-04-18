@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, Send, Trash2, Loader2, AlertCircle, CheckCircle2, FlaskConical } from 'lucide-react';
+import { Bot, Send, Trash2, Loader2, AlertCircle, CheckCircle2, FlaskConical, ChevronDown, ChevronUp, Utensils } from 'lucide-react';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
 
 interface ProposalIngredient {
@@ -19,6 +19,19 @@ interface RecipeProposal {
   suggested_price_range?: [number, number];
 }
 
+interface BulkProduct {
+  name: string;
+  suggested_price: number;
+  category_name?: string;
+  ingredients: ProposalIngredient[];
+  _expanded?: boolean;  // UI state — accordion open/close
+}
+
+interface MenuProposal {
+  business_type?: string;
+  products: BulkProduct[];
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant' | 'error' | 'system';
@@ -32,15 +45,33 @@ interface Message {
   proposalApplied?: boolean;
   proposalError?: string;
   recipeExists?: boolean;  // set kalau backend return code=recipe_exists
+  editableMenu?: MenuProposal;
+  menuApplying?: boolean;
+  menuApplied?: boolean;
+  menuError?: string;
 }
 
 const UNIT_OPTIONS = ['gram', 'ml', 'pcs', 'bungkus'] as const;
 
+const MENU_PROPOSAL_REGEX = /<MENU_PROPOSAL>([\s\S]*?)<\/MENU_PROPOSAL>/;
+
+function parseMenuProposal(content: string): { menu: MenuProposal | null; cleaned: string } {
+  const match = content.match(MENU_PROPOSAL_REGEX);
+  if (!match) return { menu: null, cleaned: content };
+  try {
+    const menu = JSON.parse(match[1].trim()) as MenuProposal;
+    const cleaned = content.replace(MENU_PROPOSAL_REGEX, '').trim();
+    return { menu, cleaned };
+  } catch {
+    return { menu: null, cleaned: content };
+  }
+}
+
 const SUGGESTIONS = [
   'Buatkan resep Kopi Susu Gula Aren',
-  'Bikinin resep Es Matcha Latte',
+  'Bikinin 8 menu kopi kekinian',
+  'Rekomendasi menu warteg populer',
   'Berapa omzet hari ini?',
-  'Stok apa yang perlu diisi?',
 ];
 
 const RECIPE_PROPOSAL_REGEX = /<RECIPE_PROPOSAL>([\s\S]*?)<\/RECIPE_PROPOSAL>/;
@@ -203,16 +234,23 @@ export default function AIChatPage() {
               setMessages(prev =>
                 prev.map(m => {
                   if (m.id !== assistantId) return m;
-                  const { proposal, cleaned } = parseRecipeProposal(m.content);
+                  const { proposal, cleaned: afterRecipe } = parseRecipeProposal(m.content);
+                  const { menu, cleaned: afterMenu } = parseMenuProposal(afterRecipe);
                   return {
                     ...m,
-                    content: proposal ? cleaned : m.content,
+                    content: (proposal || menu) ? afterMenu : m.content,
                     intent: event.intent,
                     model: event.model,
                     tokens: event.tokens_used,
                     recipeProposal: proposal || undefined,
                     editableProposal: proposal
                       ? (JSON.parse(JSON.stringify(proposal)) as RecipeProposal)
+                      : undefined,
+                    editableMenu: menu
+                      ? (JSON.parse(JSON.stringify({
+                          ...menu,
+                          products: (menu.products || []).map(p => ({ ...p, _expanded: false })),
+                        })) as MenuProposal)
                       : undefined,
                   };
                 })
@@ -267,6 +305,99 @@ export default function AIChatPage() {
       })
     );
   }, []);
+
+  const updateMenu = useCallback((messageId: string, updater: (m: MenuProposal) => MenuProposal) => {
+    setMessages(prev =>
+      prev.map(m => {
+        if (m.id !== messageId || !m.editableMenu) return m;
+        return { ...m, editableMenu: updater(m.editableMenu) };
+      })
+    );
+  }, []);
+
+  const applyMenu = useCallback(async (messageId: string, menu: MenuProposal) => {
+    if (menu.products.length === 0) {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, menuError: 'Minimal 1 produk harus ada.' } : m));
+      return;
+    }
+    for (const prod of menu.products) {
+      if (!prod.name.trim() || prod.suggested_price <= 0 || prod.ingredients.length === 0) {
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, menuError: `Produk "${prod.name || '(kosong)'}" tidak lengkap — nama, harga, bahan wajib diisi.` } : m));
+        return;
+      }
+    }
+
+    let effectiveOutletId = outletId;
+    if (!effectiveOutletId) {
+      effectiveOutletId = await loadOutlet();
+      if (!effectiveOutletId) return;
+    }
+
+    setMessages(prev =>
+      prev.map(m => (m.id === messageId ? { ...m, menuError: undefined, menuApplying: true } : m))
+    );
+
+    try {
+      const res = await fetch('/api/ai/apply-menu-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          outlet_id: effectiveOutletId,
+          products: menu.products.map(p => ({
+            name: p.name.trim(),
+            suggested_price: p.suggested_price,
+            category_name: p.category_name?.trim() || null,
+            ingredients: p.ingredients.map(i => ({
+              name: i.name.trim(),
+              qty: i.qty,
+              unit: i.unit,
+              buy_price: i.buy_price,
+              buy_qty: i.buy_qty,
+            })),
+          })),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        const detail = typeof data.detail === 'string' ? data.detail : (data.detail?.message || data.error || 'Gagal apply menu.');
+        setMessages(prev =>
+          prev.map(m => (m.id === messageId ? { ...m, menuError: detail, menuApplying: false } : m))
+        );
+        return;
+      }
+
+      const d = data.data || {};
+      const lines: string[] = [];
+      if (d.created_products?.length) {
+        lines.push(`${d.created_products.length} menu berhasil dibuat:`);
+        d.created_products.forEach((p: any) => {
+          const marginTxt = typeof p.margin_pct === 'number' ? ` · Untung ${p.margin_pct}%` : '';
+          lines.push(`  • **${p.name}** — ${rp(p.base_price)} (Modal ${rp(p.hpp)}${marginTxt})`);
+        });
+      }
+      if (d.skipped_products?.length) {
+        lines.push('', `Dilewati (${d.skipped_products.length}):`);
+        d.skipped_products.forEach((p: any) => lines.push(`  • ${p.name} — ${p.reason}`));
+      }
+      if (d.ingredients_created?.length) {
+        lines.push('', `Bahan baru ditambah: ${d.ingredients_created.join(', ')}`);
+      }
+
+      setMessages(prev => [
+        ...prev.map(m => (m.id === messageId ? { ...m, menuApplied: true, menuApplying: false } : m)),
+        {
+          id: (Date.now() + 10).toString(),
+          role: 'system',
+          content: lines.join('\n'),
+        },
+      ]);
+    } catch {
+      setMessages(prev =>
+        prev.map(m => (m.id === messageId ? { ...m, menuError: 'Gagal terhubung ke server.', menuApplying: false } : m))
+      );
+    }
+  }, [outletId, loadOutlet]);
 
   const applyProposal = useCallback(async (messageId: string, proposal: RecipeProposal, replace = false) => {
     // Validate form before send
@@ -643,6 +774,153 @@ export default function AIChatPage() {
                       >
                         {msg.applying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                         {msg.applying ? 'Membuat...' : 'Buat Resep'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {msg.editableMenu && (() => {
+                const em = msg.editableMenu;
+                const disabled = msg.menuApplied || msg.menuApplying;
+                return (
+                  <div className="mt-3 rounded-xl border border-purple-200 bg-white p-3 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Utensils className="w-4 h-4 text-purple-600 shrink-0" />
+                      <p className="text-sm font-semibold text-gray-900">
+                        {em.products.length} menu untuk{' '}
+                        <span className="text-purple-700">{em.business_type || 'bisnis kamu'}</span>
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {em.products.map((prod, pIdx) => {
+                        const hpp = prod.ingredients.reduce(
+                          (s, i) => s + (i.buy_qty > 0 ? (i.buy_price / i.buy_qty) * i.qty : 0),
+                          0,
+                        );
+                        const margin = prod.suggested_price > 0
+                          ? Math.round(((prod.suggested_price - hpp) / prod.suggested_price) * 100)
+                          : 0;
+                        const marginColor = margin < 20 ? 'text-red-600' : margin < 40 ? 'text-amber-600' : 'text-emerald-600';
+                        return (
+                          <div key={pIdx} className="rounded-lg bg-gray-50 border border-gray-200 overflow-hidden">
+                            <div className="flex items-start gap-2 p-2.5">
+                              <div className="flex-1 min-w-0 space-y-1.5">
+                                <input
+                                  type="text"
+                                  value={prod.name}
+                                  disabled={disabled}
+                                  onChange={e => updateMenu(msg.id, m => ({
+                                    ...m,
+                                    products: m.products.map((x, i) => i === pIdx ? { ...x, name: e.target.value } : x),
+                                  }))}
+                                  className="w-full px-1.5 py-1 text-xs font-semibold text-gray-900 bg-white border border-gray-300 rounded focus:outline-none focus:border-purple-400 disabled:opacity-70"
+                                />
+                                <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                                  <label className="flex items-center gap-0.5 text-gray-500">
+                                    <span>Jual Rp</span>
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      step="any"
+                                      min="0"
+                                      value={prod.suggested_price || ''}
+                                      disabled={disabled}
+                                      onFocus={e => e.currentTarget.select()}
+                                      onChange={e => updateMenu(msg.id, m => ({
+                                        ...m,
+                                        products: m.products.map((x, i) => i === pIdx ? { ...x, suggested_price: parseFloat(e.target.value) || 0 } : x),
+                                      }))}
+                                      className="w-20 px-1 py-0.5 bg-white border border-gray-300 rounded text-right text-[11px] focus:outline-none focus:border-purple-400 disabled:opacity-70"
+                                    />
+                                  </label>
+                                  <label className="flex items-center gap-0.5 text-gray-500">
+                                    <span>Kat:</span>
+                                    <input
+                                      type="text"
+                                      value={prod.category_name || ''}
+                                      disabled={disabled}
+                                      onChange={e => updateMenu(msg.id, m => ({
+                                        ...m,
+                                        products: m.products.map((x, i) => i === pIdx ? { ...x, category_name: e.target.value } : x),
+                                      }))}
+                                      placeholder="Kopi"
+                                      className="w-24 px-1 py-0.5 bg-white border border-gray-300 rounded text-[11px] focus:outline-none focus:border-purple-400 disabled:opacity-70"
+                                    />
+                                  </label>
+                                  <span className="text-gray-400">·</span>
+                                  <span className="text-gray-500">Modal {rp(hpp)}</span>
+                                  <span className={`font-semibold ${marginColor}`}>({margin}%)</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => updateMenu(msg.id, m => ({
+                                    ...m,
+                                    products: m.products.map((x, i) => i === pIdx ? { ...x, _expanded: !x._expanded } : x),
+                                  }))}
+                                  className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                                  title={prod._expanded ? 'Tutup bahan' : 'Lihat bahan'}
+                                >
+                                  {prod._expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                </button>
+                                {!disabled && (
+                                  <button
+                                    type="button"
+                                    onClick={() => updateMenu(msg.id, m => ({
+                                      ...m,
+                                      products: m.products.filter((_, i) => i !== pIdx),
+                                    }))}
+                                    className="p-1 text-gray-400 hover:text-red-500 rounded"
+                                    title="Buang dari list"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            {prod._expanded && (
+                              <div className="px-2.5 pb-2.5 pt-0 border-t border-gray-200 bg-white/50">
+                                <p className="text-[10px] font-medium text-gray-500 mt-2 mb-1">Bahan-bahan:</p>
+                                <div className="space-y-0.5 text-[10px] text-gray-700">
+                                  {prod.ingredients.map((ing, iIdx) => (
+                                    <div key={iIdx} className="flex justify-between">
+                                      <span>{ing.name} — {ing.qty}{ing.unit}</span>
+                                      <span className="text-gray-400">Rp {Math.round(ing.buy_price / ing.buy_qty).toLocaleString('id-ID')}/{ing.unit}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-[9px] text-gray-400 mt-1.5">
+                                  Edit bahan per produk di halaman Menu setelah di-buat.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {msg.menuError && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                        {msg.menuError}
+                      </p>
+                    )}
+
+                    {msg.menuApplied ? (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 rounded-lg px-2 py-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Semua menu sudah dibuat</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => applyMenu(msg.id, em)}
+                        disabled={msg.menuApplying || em.products.length === 0}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-60 transition-colors"
+                      >
+                        {msg.menuApplying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {msg.menuApplying ? `Membuat ${em.products.length} menu...` : `Buat Semua (${em.products.length} menu)`}
                       </button>
                     )}
                   </div>

@@ -31,6 +31,7 @@ from backend.models.outlet import Outlet
 from backend.models.tenant import Tenant
 from backend.models.ingredient import Ingredient
 from backend.models.product import Product
+from backend.models.category import Category
 from backend.models.recipe import Recipe, RecipeIngredient
 from backend.services.redis import get_redis_client
 from backend.services.audit import log_audit
@@ -399,6 +400,237 @@ async def apply_recipe_proposal(
             "margin_pct": margin_pct,
             "created_ingredients": created_ingredients,
             "reused_ingredients": reused_ingredients,
+        },
+    }
+
+
+class BulkProductProposal(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    suggested_price: float = Field(..., gt=0)
+    category_name: Optional[str] = Field(None, max_length=80)
+    ingredients: List[ProposalIngredient] = Field(..., min_length=1, max_length=15)
+
+
+class ApplyMenuBatchRequest(BaseModel):
+    outlet_id: str
+    products: List[BulkProductProposal] = Field(..., min_length=1, max_length=15)
+
+
+@router.post("/apply-menu-batch")
+async def apply_menu_batch(
+    request: Request,
+    body: ApplyMenuBatchRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+    tenant: Tenant = Depends(deps.require_pro_tier),
+) -> Any:
+    """
+    Bulk create products + categories + ingredients + recipes dari proposal AI.
+    Skip produk yang sudah exist (nama sama di brand). Atomic per batch.
+    """
+    outlet = (await db.execute(
+        select(Outlet).where(
+            Outlet.id == body.outlet_id,
+            Outlet.tenant_id == current_user.tenant_id,
+            Outlet.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+    brand_id = outlet.brand_id
+
+    # Load existing ingredients + categories + products dalam brand (dedup lookup)
+    existing_ings = (await db.execute(
+        select(Ingredient).where(
+            Ingredient.brand_id == brand_id,
+            Ingredient.deleted_at.is_(None),
+        )
+    )).scalars().all()
+    ing_by_name = {i.name.strip().lower(): i for i in existing_ings}
+
+    existing_cats = (await db.execute(
+        select(Category).where(
+            Category.brand_id == brand_id,
+            Category.deleted_at.is_(None),
+        )
+    )).scalars().all()
+    cat_by_name = {c.name.strip().lower(): c for c in existing_cats}
+
+    existing_prods = (await db.execute(
+        select(Product).where(
+            Product.brand_id == brand_id,
+            Product.deleted_at.is_(None),
+        )
+    )).scalars().all()
+    prod_by_name = {p.name.strip().lower(): p for p in existing_prods}
+
+    UNIT_TYPE_MAP = {"gram": "WEIGHT", "ml": "VOLUME", "pcs": "COUNT", "bungkus": "COUNT"}
+
+    created_products: list[dict] = []
+    skipped_products: list[dict] = []
+    ings_created_names: set[str] = set()
+    ings_reused_names: set[str] = set()
+
+    for pprop in body.products:
+        pname = pprop.name.strip()
+        pkey = pname.lower()
+
+        # Resolve / create category
+        cat_id = None
+        if pprop.category_name:
+            ckey = pprop.category_name.strip().lower()
+            cat = cat_by_name.get(ckey)
+            if not cat:
+                cat = Category(
+                    id=uuid_mod.uuid4(),
+                    brand_id=brand_id,
+                    name=pprop.category_name.strip(),
+                    is_active=True,
+                    row_version=0,
+                )
+                db.add(cat)
+                await db.flush()
+                cat_by_name[ckey] = cat
+            cat_id = cat.id
+
+        # Resolve product
+        product = prod_by_name.get(pkey)
+        if product:
+            # Produk sudah ada — cek apakah sudah punya recipe
+            existing_recipe = (await db.execute(
+                select(Recipe).where(
+                    Recipe.product_id == product.id,
+                    Recipe.is_active == True,
+                    Recipe.deleted_at.is_(None),
+                )
+            )).scalar_one_or_none()
+            if existing_recipe:
+                skipped_products.append({
+                    "name": product.name,
+                    "reason": "Sudah punya resep aktif",
+                })
+                continue
+            # Pakai product existing, lanjut bikin recipe
+        else:
+            # Create product baru
+            product = Product(
+                id=uuid_mod.uuid4(),
+                brand_id=brand_id,
+                name=pname,
+                base_price=Decimal(str(pprop.suggested_price)),
+                category_id=cat_id,
+                is_active=True,
+                stock_enabled=False,  # recipe mode
+                stock_qty=0,
+                row_version=0,
+            )
+            db.add(product)
+            await db.flush()
+            prod_by_name[pkey] = product
+
+        # Resolve / create ingredients untuk recipe
+        recipe_ing_refs: list[tuple[Ingredient, ProposalIngredient]] = []
+        for ing_prop in pprop.ingredients:
+            ikey = ing_prop.name.strip().lower()
+            ing_obj = ing_by_name.get(ikey)
+            if ing_obj:
+                ings_reused_names.add(ing_obj.name)
+            else:
+                cost_per_unit = Decimal(str(ing_prop.buy_price)) / Decimal(str(ing_prop.buy_qty))
+                ing_obj = Ingredient(
+                    id=uuid_mod.uuid4(),
+                    brand_id=brand_id,
+                    name=ing_prop.name.strip(),
+                    tracking_mode="simple",
+                    base_unit=ing_prop.unit,
+                    unit_type=UNIT_TYPE_MAP.get(ing_prop.unit, "CUSTOM"),
+                    buy_price=Decimal(str(ing_prop.buy_price)),
+                    buy_qty=float(ing_prop.buy_qty),
+                    cost_per_base_unit=cost_per_unit,
+                    ai_setup_complete=True,
+                    needs_review=True,
+                    ingredient_type="recipe",
+                    row_version=0,
+                )
+                db.add(ing_obj)
+                await db.flush()
+                ing_by_name[ikey] = ing_obj
+                ings_created_names.add(ing_obj.name)
+            recipe_ing_refs.append((ing_obj, ing_prop))
+
+        # Create Recipe
+        recipe = Recipe(
+            id=uuid_mod.uuid4(),
+            product_id=product.id,
+            version=1,
+            is_active=True,
+            ai_assisted=True,
+            created_by=current_user.id,
+            row_version=0,
+        )
+        db.add(recipe)
+        await db.flush()
+
+        hpp = Decimal("0")
+        for ing_obj, ing_prop in recipe_ing_refs:
+            line_cost = Decimal(str(ing_prop.qty)) * ing_obj.cost_per_base_unit
+            hpp += line_cost
+            db.add(RecipeIngredient(
+                id=uuid_mod.uuid4(),
+                recipe_id=recipe.id,
+                ingredient_id=ing_obj.id,
+                quantity=float(ing_prop.qty),
+                quantity_unit=ing_prop.unit,
+                is_optional=False,
+                row_version=0,
+            ))
+
+        margin_pct = None
+        if product.base_price and float(product.base_price) > 0:
+            margin_pct = round((float(product.base_price) - float(hpp)) / float(product.base_price) * 100, 1)
+
+        created_products.append({
+            "name": product.name,
+            "product_id": str(product.id),
+            "recipe_id": str(recipe.id),
+            "base_price": float(product.base_price or 0),
+            "hpp": float(hpp),
+            "margin_pct": margin_pct,
+        })
+
+    # Audit log
+    await log_audit(
+        db=db,
+        action="ai_apply_menu_batch",
+        entity="menu_batch",
+        entity_id=str(body.outlet_id),
+        after_state={
+            "requested_count": len(body.products),
+            "created_count": len(created_products),
+            "skipped_count": len(skipped_products),
+            "ingredients_created": len(ings_created_names),
+            "ingredients_reused": len(ings_reused_names),
+        },
+        user_id=str(current_user.id),
+        tenant_id=str(current_user.tenant_id),
+    )
+
+    await db.commit()
+
+    # Invalidate context cache
+    try:
+        redis = await get_redis_client()
+        await redis.delete(f"ai:context:{body.outlet_id}")
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "data": {
+            "created_products": created_products,
+            "skipped_products": skipped_products,
+            "ingredients_created": sorted(ings_created_names),
+            "ingredients_reused": sorted(ings_reused_names),
         },
     }
 

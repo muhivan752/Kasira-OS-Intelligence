@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 INTENT_CHAT = "CHAT"
 INTENT_RESTOCK = "RESTOCK"
 INTENT_SETUP_RECIPE = "SETUP_RECIPE"
+INTENT_MENU_BULK = "MENU_BULK"
 
 # Keyword detection hanya untuk RESTOCK (actionable — langsung update DB).
 # Selain itu semua pertanyaan → CHAT → Claude yang jawab via system prompt.
@@ -55,6 +56,16 @@ SETUP_RECIPE_TARGET_WORDS = [
     "resep", "komposisi", "recipe", "isi per porsi", "racikan",
 ]
 
+# MENU_BULK — user minta AI susun daftar menu (multi-product).
+# Detect kalau "menu" muncul bareng indikator bulk (angka, quantifier,
+# atau phrase khas).
+MENU_BULK_PHRASE_INDICATORS = [
+    "paket menu", "daftar menu", "rekomendasi menu", "usulan menu",
+    "saran menu", "ide menu", "suggest menu", "menu populer",
+    "menu kekinian", "menu laris", "menu andalan", "menu lengkap",
+    "banyak menu", "beberapa menu",
+]
+
 
 # ─── Model Selector (Rule #25, #26) ───────────────────────────────────────────
 
@@ -77,20 +88,34 @@ def classify_intent(message: str) -> str:
     """
     Klasifikasi intent pesan owner.
     Returns:
-      - SETUP_RECIPE (AI propose recipe, user confirm → apply)
+      - MENU_BULK (AI propose N products + recipes)
+      - SETUP_RECIPE (AI propose single recipe)
       - RESTOCK (actionable — update DB langsung)
       - CHAT (default — Claude jawab)
 
-    SETUP_RECIPE pakai action+target word pair (flexible) supaya variasi
-    ejaan casual ("buatkan resep", "bikinin resep", "mau resep") tetap
-    ke-match. SETUP_RECIPE di-check duluan supaya "tambah bahan untuk
-    resep kopi susu" masuk ke SETUP_RECIPE, bukan RESTOCK.
+    Order matters: MENU_BULK > SETUP_RECIPE > RESTOCK > CHAT.
+    Sebab "bikinin 10 menu kopi" punya action + "menu" tapi bukan
+    target "resep" — harus ke MENU_BULK, bukan CHAT.
     """
+    import re as _re
     msg_lower = message.lower()
+
     has_action = any(aw in msg_lower for aw in SETUP_RECIPE_ACTION_WORDS)
+
+    # MENU_BULK detection — "menu" + (action OR count OR phrase indicator)
+    if "menu" in msg_lower:
+        has_phrase = any(p in msg_lower for p in MENU_BULK_PHRASE_INDICATORS)
+        has_count = bool(_re.search(r'\b\d+\s+menu\b', msg_lower))
+        if has_phrase or (has_action and has_count) or (has_action and "menu" in msg_lower and "resep" not in msg_lower and "komposisi" not in msg_lower):
+            # Last condition: user bilang "bikin menu kopi" tanpa spesifik
+            # jumlah — tetap ke MENU_BULK, AI nanti propose default 5-8 item.
+            return INTENT_MENU_BULK
+
+    # SETUP_RECIPE (single)
     has_target = any(tw in msg_lower for tw in SETUP_RECIPE_TARGET_WORDS)
     if has_action and has_target:
         return INTENT_SETUP_RECIPE
+
     if any(kw in msg_lower for kw in RESTOCK_KEYWORDS):
         return INTENT_RESTOCK
     return INTENT_CHAT
@@ -334,6 +359,99 @@ KALAU PESAN USER GAK SEBUT PRODUK (misal cuma "setup resep"), TANPA JSON, balas 
 
 KALAU PRODUK di luar knowledge, tetap propose perkiraan masuk akal berdasarkan kategori (F&B/vape/retail).
 """
+
+
+MENU_BULK_SYSTEM_PROMPT = """Kamu "Asisten Setup" — ahli UMKM Indonesia (F&B, retail, vape) yang bantu susun **daftar menu** lengkap untuk usaha.
+
+TUGAS: propose 5-10 produk sesuai kategori bisnis user. Tiap produk ada: nama, harga jual estimasi, kategori, resep (bahan + qty).
+
+OUTPUT FORMAT WAJIB (super strict):
+
+Baris 1: "Nih proposal [N] menu untuk [kategori]. Edit dulu kalau ada yang kurang pas, terus klik **Buat Semua**:"
+Baris 2+: <MENU_PROPOSAL>JSON</MENU_PROPOSAL>
+
+TIDAK ADA KALIMAT LAIN. JANGAN list menu di text — JSON cover itu, UI render form editable.
+
+FORMAT JSON (wajib valid):
+{
+  "business_type": "Coffee Shop Kekinian",
+  "products": [
+    {
+      "name": "Kopi Susu Gula Aren",
+      "suggested_price": 25000,
+      "category_name": "Kopi Susu",
+      "ingredients": [
+        {"name": "Kopi Arabica Bubuk", "qty": 15, "unit": "gram", "buy_price": 120000, "buy_qty": 1000},
+        {"name": "Susu UHT Full Cream", "qty": 150, "unit": "ml", "buy_price": 15000, "buy_qty": 1000},
+        {"name": "Gula Aren Cair", "qty": 20, "unit": "gram", "buy_price": 25000, "buy_qty": 1000}
+      ]
+    }
+    // ... total 5-10 produk
+  ]
+}
+
+ATURAN:
+- Jumlah produk: 5-10 (default 8 kalau user gak sebut angka). Kalau user minta "10 menu" → kasih tepat 10.
+- unit HANYA: "gram" | "ml" | "pcs" | "bungkus"
+- suggested_price integer IDR, realistic sesuai tier usaha (warteg cheaper, coffee shop kekinian 20-35rb).
+- category_name: grouping logical (e.g., "Kopi", "Kopi Susu", "Tea & Matcha", "Makanan Berat").
+
+HARGA MARKET INDONESIA (avg 2025-2026):
+F&B: Kopi Arabica 120k/kg | Robusta 80k/kg | Susu UHT 15k/L | Gula pasir 14k/kg | Gula aren 25k/kg |
+Matcha 180k/kg | Tea bag 500/pcs | Air 3k/L | Es batu 2k/kg | Sirup 35k/L | Whip cream 60k/L |
+Nasi 10k/kg | Ayam 45k/kg | Telur 1800/butir | Sosis 30k/kg | Bumbu 30k/kg | Mie 15k/kg |
+Tepung 12k/kg | Minyak 18k/L | Keju moz 90k/kg | Roti/bun 5k/pcs
+Retail: E-liquid base 60k/L | Coil 8k/pcs | Detergen 25k/L
+
+TEMPLATE MENU POPULER (sebagai dasar, adjust sesuai request):
+- **Coffee Shop Kekinian**: Americano, Kopi Susu Gula Aren, Es Kopi Susu, Cappuccino, Latte, Matcha Latte, Red Velvet Latte, Es Teh Tawar, Croissant, Sandwich
+- **Warung Kopi Klasik**: Kopi Hitam, Kopi Susu, Kopi Tubruk, Teh Manis, Teh Tawar, Es Teh, Indomie Rebus, Nasi Goreng, Mie Goreng, Roti Bakar
+- **Warteg / Rumah Makan**: Nasi Putih, Ayam Goreng, Telur Dadar, Sayur Asem, Tahu Tempe, Sambal, Teh Manis, Es Jeruk
+- **Dessert Cafe**: Es Campur, Puding Coklat, Gelato Vanilla, Smoothie Buah, Teh Tarik, Matcha Latte
+- **Vape Shop**: E-liquid Mangga, E-liquid Strawberry, E-liquid Mint, Coil Kanthal, Battery 18650
+
+KALAU USER GAK SEBUT KATEGORI BISNIS: default "Coffee Shop Kekinian" 8 menu.
+KALAU USER SEBUT KATEGORI: pilih template yang cocok atau adjust.
+"""
+
+
+async def generate_menu_proposal(
+    message: str,
+    outlet_id: str,
+    tenant_id: str,
+    outlet_name: str,
+    db: AsyncSession,
+) -> AsyncGenerator[str, None]:
+    """
+    Generate multi-product menu proposal via Haiku.
+    Yields SSE-ready text chunks dengan embedded <MENU_PROPOSAL> block.
+    """
+    if not settings.ANTHROPIC_API_KEY:
+        yield "Maaf, fitur AI belum dikonfigurasi. Hubungi admin."
+        return
+
+    try:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+        async with client.messages.stream(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=3500,  # 10 produk × 3-5 ingredient = butuh banyak token
+            system=MENU_BULK_SYSTEM_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": f"Outlet: {outlet_name}\n\nPermintaan user: {message}",
+            }],
+        ) as stream:
+            async for text_chunk in stream.text_stream:
+                yield text_chunk
+
+            final_msg = await stream.get_final_message()
+            yield f"\n\n[__TOKENS__:{final_msg.usage.input_tokens + final_msg.usage.output_tokens}]"
+
+    except Exception as e:
+        logger.error(f"Menu proposal generation error: {e}")
+        yield "Maaf, terjadi gangguan saat generate menu. Coba lagi dalam beberapa saat."
 
 
 async def generate_recipe_proposal(
@@ -1040,17 +1158,20 @@ async def stream_ai_response(
     # 1. Classify intent — SETUP_RECIPE / RESTOCK = actionable, selain itu langsung ke Claude
     intent = classify_intent(message)
 
-    if intent == INTENT_SETUP_RECIPE:
-        # AI propose resep via Haiku — user confirm di dashboard lalu apply
+    if intent in (INTENT_SETUP_RECIPE, INTENT_MENU_BULK):
+        # AI propose resep/menu via Haiku — user confirm di dashboard lalu apply
+        generator = (
+            generate_menu_proposal if intent == INTENT_MENU_BULK
+            else generate_recipe_proposal
+        )
         tokens_used = 0
-        async for chunk in generate_recipe_proposal(
+        async for chunk in generator(
             message=message,
             outlet_id=outlet_id,
             tenant_id=tenant_id,
             outlet_name=outlet_name,
             db=db,
         ):
-            # Tokens info di-strip dari chunk, propagate ke done event
             if chunk.startswith("\n\n[__TOKENS__:"):
                 try:
                     tokens_used = int(chunk.split(":")[1].rstrip("]\n "))
@@ -1061,7 +1182,7 @@ async def stream_ai_response(
 
         yield sse({
             "type": "done",
-            "intent": INTENT_SETUP_RECIPE,
+            "intent": intent,
             "tokens_used": tokens_used,
             "model": "claude-haiku-4-5-20251001",
         })
