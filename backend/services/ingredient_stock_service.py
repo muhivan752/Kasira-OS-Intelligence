@@ -42,6 +42,22 @@ async def deduct_ingredients_for_product(
     Deduct ingredient stock based on active recipe for a product.
     Called from create_order when outlet.stock_mode == 'recipe'.
     """
+    # 0. Idempotency guard — skip kalau event stock.ingredient_sale untuk order+product ini
+    #    sudah pernah dicatat (mis. retry karena offline sync atau optimistic lock).
+    existing = (await db.execute(
+        select(Event.id).where(
+            Event.event_type == "stock.ingredient_sale",
+            Event.event_data["order_id"].astext == str(order_id),
+            Event.event_data["product_id"].astext == str(product_id),
+        ).limit(1)
+    )).scalar_one_or_none()
+    if existing:
+        logger.info(
+            "stock.ingredient_sale already recorded for order %s product %s, skipping",
+            order_id, product_id,
+        )
+        return
+
     # 1. Load active recipe with ingredients
     recipe = (await db.execute(
         select(Recipe)
@@ -56,10 +72,13 @@ async def deduct_ingredients_for_product(
     if not recipe:
         raise HTTPException(status_code=400, detail="Produk belum memiliki resep aktif. Tambahkan resep terlebih dahulu.")
 
-    # Filter active, non-optional ingredients
+    # Filter active, non-optional ingredients (ghost stock guard: skip soft-deleted ingredient)
     active_ingredients = [
         ri for ri in recipe.ingredients
-        if ri.deleted_at is None and not ri.is_optional
+        if ri.deleted_at is None
+        and not ri.is_optional
+        and ri.ingredient is not None
+        and ri.ingredient.deleted_at is None
     ]
 
     if not active_ingredients:
@@ -196,7 +215,11 @@ async def restore_ingredients_on_cancel(
 
     active_ingredients = [
         ri for ri in recipe.ingredients
-        if ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
+        if ri.deleted_at is None
+        and not ri.is_optional
+        and ri.quantity > 0
+        and ri.ingredient is not None
+        and ri.ingredient.deleted_at is None
     ]
 
     now = datetime.now(timezone.utc)

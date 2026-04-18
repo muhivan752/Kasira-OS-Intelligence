@@ -20,6 +20,7 @@ from backend.models.connect import ConnectOutlet, ConnectOrder
 from backend.models.customer import Customer
 from backend.services.audit import log_audit
 from backend.services.stock_service import deduct_stock
+from backend.services.ingredient_stock_service import deduct_ingredients_for_product
 from backend.api.routes.products import compute_recipe_stock
 from backend.models.event import Event
 import datetime
@@ -336,6 +337,24 @@ async def create_connect_order(
         db.add(customer)
         await db.flush()
 
+    # Fetch stock_mode + tenant tier upfront (dipakai buat pre-check + deduct)
+    sm = getattr(outlet, 'stock_mode', 'simple')
+    stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
+
+    from backend.models.tenant import Tenant
+    tenant_obj = (await db.execute(
+        select(Tenant).where(Tenant.id == outlet.tenant_id)
+    )).scalar_one_or_none()
+    raw_tier = getattr(tenant_obj, 'subscription_tier', 'starter') or 'starter'
+    outlet_tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
+
+    # Recipe mode: prefetch available portions per product untuk pre-check
+    recipe_stock_map = {}
+    if stock_mode == 'recipe':
+        recipe_stock_map = await compute_recipe_stock(
+            db, outlet.id, [it.product_id for it in input_data.items]
+        )
+
     # Calculate totals and validate stock
     subtotal = 0
     order_items = []
@@ -354,8 +373,13 @@ async def create_connect_order(
             raise HTTPException(status_code=400, detail="Produk tidak tersedia")
 
         if product.stock_enabled:
-            if product.stock_qty < item_input.qty:
-                raise HTTPException(status_code=400, detail=f"Stok habis untuk produk {product.name}")
+            if stock_mode == 'recipe':
+                available = recipe_stock_map.get(product.id, 0)
+                if available < item_input.qty:
+                    raise HTTPException(status_code=400, detail=f"Stok habis untuk produk {product.name}")
+            else:
+                if product.stock_qty < item_input.qty:
+                    raise HTTPException(status_code=400, detail=f"Stok habis untuk produk {product.name}")
             stock_deductions.append((product, item_input.qty))
 
         item_total = product.base_price * item_input.qty
@@ -416,24 +440,31 @@ async def create_connect_order(
         db.add(item)
 
     # Deduct stock via event-sourced service (Golden Rule #8)
+    # Branch by stock_mode — recipe outlet deduct ingredients, bukan product.stock_qty
     for product, qty in stock_deductions:
-        await deduct_stock(
-            db,
-            product=product,
-            quantity=qty,
-            outlet_id=outlet.id,
-            order_id=order.id,
-            user_id=None,
-            tier="starter",
-        )
+        if stock_mode == 'recipe':
+            await deduct_ingredients_for_product(
+                db,
+                product_id=product.id,
+                quantity=qty,
+                outlet_id=outlet.id,
+                order_id=order.id,
+                user_id=None,
+                tier=outlet_tier,
+            )
+        else:
+            await deduct_stock(
+                db,
+                product=product,
+                quantity=qty,
+                outlet_id=outlet.id,
+                order_id=order.id,
+                user_id=None,
+                tier=outlet_tier,
+            )
 
     # Auto-link dine_in order to open tab — PRO ONLY (tabs are Pro feature)
     linked_tab_number = None
-    from backend.models.tenant import Tenant
-    tenant_result = await db.execute(select(Tenant).where(Tenant.id == outlet.tenant_id))
-    tenant_obj = tenant_result.scalar_one_or_none()
-    raw_tier = getattr(tenant_obj, 'subscription_tier', 'starter') or 'starter'
-    outlet_tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
     is_pro = outlet_tier.lower() in {'pro', 'business', 'enterprise'}
 
     if resolved_table_id and is_pro:

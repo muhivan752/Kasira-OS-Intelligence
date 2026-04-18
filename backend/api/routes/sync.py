@@ -76,7 +76,8 @@ async def sync_data(
             # Idempotent — skip kalau stock.sale event sudah ada untuk order ini
             tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
             tenant = tenant_res.scalar_one_or_none()
-            tier = getattr(getattr(tenant, "subscription_tier", None), "value", "starter")
+            raw_tier = getattr(tenant, "subscription_tier", "starter") or "starter" if tenant else "starter"
+            tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
 
             sm = getattr(outlet, 'stock_mode', 'simple')
             stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')

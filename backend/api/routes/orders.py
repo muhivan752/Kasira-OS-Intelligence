@@ -182,11 +182,9 @@ async def create_order(
     db.add(order)
     await db.flush() # To get order.id
 
-    # 2. Process Order Items and Deduct Stock
-    # Fetch tenant once (bukan per item)
-    tenant_stmt = select(Tenant).where(Tenant.id == current_user.tenant_id)
-    tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
-    tier = getattr(getattr(tenant_check, "subscription_tier", None), "value", "starter")
+    # 2. Process Order Items and Deduct Stock — reuse tenant_check dari guard di atas
+    raw_tier = getattr(tenant_check, "subscription_tier", "starter") or "starter" if tenant_check else "starter"
+    tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
 
     sm = getattr(outlet, 'stock_mode', 'simple')
     stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
