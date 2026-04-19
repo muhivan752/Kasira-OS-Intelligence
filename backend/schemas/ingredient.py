@@ -46,6 +46,8 @@ class IngredientResponse(BaseModel):
     cost_per_base_unit: Decimal  # auto-calculated: buy_price / buy_qty
     ingredient_type: str
     overhead_cost_per_day: Optional[Decimal] = None
+    ai_setup_complete: bool = False
+    needs_review: bool = False
     row_version: int
     created_at: datetime
     updated_at: datetime

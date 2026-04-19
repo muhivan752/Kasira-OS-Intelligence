@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Package, Plus, RefreshCw, Pencil, Trash2, AlertTriangle, Droplet, Scale, Boxes, ArrowLeft, CheckCircle2, Sparkles } from 'lucide-react';
+import { Package, Plus, RefreshCw, Pencil, Trash2, AlertTriangle, Droplet, Scale, Boxes, ArrowLeft, CheckCircle2, Sparkles, Search, X } from 'lucide-react';
 import { getIngredients, createIngredient, updateIngredient, deleteIngredient, restockIngredient, getOutlets, getCurrentUser } from '@/app/actions/api';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
 
@@ -23,11 +23,33 @@ interface Ingredient {
   cost_per_base_unit: number;
   ingredient_type: string;
   overhead_cost_per_day?: number;
+  ai_setup_complete?: boolean;
+  needs_review?: boolean;
   row_version: number;
   current_stock?: number;
   min_stock?: number;
   used_in?: UsedIn[];
   created_at: string;
+}
+
+type FilterKey = 'all' | 'restock' | 'ai-new' | 'review' | 'orphan';
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: 'all', label: 'Semua' },
+  { key: 'restock', label: 'Perlu Restock' },
+  { key: 'ai-new', label: '✨ Baru (AI)' },
+  { key: 'review', label: '⚠ Perlu Review' },
+  { key: 'orphan', label: 'Belum Terhubung' },
+];
+
+function isAiNew(ing: Ingredient): boolean {
+  if (!ing.ai_setup_complete || !ing.created_at) return false;
+  const createdMs = new Date(ing.created_at).getTime();
+  return Date.now() - createdMs < 24 * 60 * 60 * 1000;
+}
+
+function isLowStock(ing: Ingredient): boolean {
+  return ing.current_stock !== undefined && ing.min_stock !== undefined && ing.current_stock <= ing.min_stock;
 }
 
 const UNIT_OPTIONS = [
@@ -115,6 +137,8 @@ export default function BahanBakuPage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [modalStep, setModalStep] = useState<'preset' | 'form'>('preset');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
   const [form, setForm] = useState({
     name: '', base_unit: '', unit_type: 'WEIGHT', buy_price: '', buy_qty: '',
     ingredient_type: 'recipe', overhead_cost_per_day: '', row_version: 0,
@@ -278,6 +302,35 @@ export default function BahanBakuPage() {
 
   const formatCurrency = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
 
+  // Compute counts for filter chips (from unfiltered list)
+  const counts = {
+    all: ingredients.length,
+    restock: ingredients.filter(isLowStock).length,
+    'ai-new': ingredients.filter(isAiNew).length,
+    review: ingredients.filter(i => i.needs_review).length,
+    orphan: ingredients.filter(i => !i.used_in || i.used_in.length === 0).length,
+  };
+
+  // Filter + sort
+  const q = searchQuery.trim().toLowerCase();
+  const filteredIngredients = ingredients
+    .filter(i => !q || i.name.toLowerCase().includes(q))
+    .filter(i => {
+      if (activeFilter === 'all') return true;
+      if (activeFilter === 'restock') return isLowStock(i);
+      if (activeFilter === 'ai-new') return isAiNew(i);
+      if (activeFilter === 'review') return !!i.needs_review;
+      if (activeFilter === 'orphan') return !i.used_in || i.used_in.length === 0;
+      return true;
+    })
+    .sort((a, b) => {
+      // Low stock first (most urgent), then alphabetical
+      const aLow = isLowStock(a) ? 0 : 1;
+      const bLow = isLowStock(b) ? 0 : 1;
+      if (aLow !== bLow) return aLow - bLow;
+      return a.name.localeCompare(b.name, 'id');
+    });
+
   if (!allowed || loading) return <div className="flex items-center justify-center h-64">Memuat...</div>;
 
   return (
@@ -303,20 +356,47 @@ export default function BahanBakuPage() {
         </div>
       )}
 
-      {/* Summary */}
+      {/* Search + Filter */}
       {ingredients.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="bg-white p-4 rounded-xl border border-gray-200">
-            <p className="text-xs text-gray-500">Total Bahan</p>
-            <p className="text-xl font-bold mt-1">{ingredients.length}</p>
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Cari bahan..."
+              className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-lg text-base focus:border-blue-400 focus:ring-2 focus:ring-blue-100 focus:outline-none"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded text-gray-400">
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-          <div className="bg-white p-4 rounded-xl border border-gray-200">
-            <p className="text-xs text-gray-500">Terhubung ke Menu</p>
-            <p className="text-xl font-bold text-green-600 mt-1">{ingredients.filter(i => i.used_in && i.used_in.length > 0).length}</p>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-gray-200">
-            <p className="text-xs text-gray-500">Belum Terhubung</p>
-            <p className="text-xl font-bold text-amber-500 mt-1">{ingredients.filter(i => !i.used_in || i.used_in.length === 0).length}</p>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {FILTERS.map(f => {
+              const count = counts[f.key];
+              const isActive = activeFilter === f.key;
+              const disabled = f.key !== 'all' && count === 0;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => !disabled && setActiveFilter(f.key)}
+                  disabled={disabled}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                    isActive
+                      ? 'bg-blue-600 text-white'
+                      : disabled
+                        ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
+                        : 'bg-white border border-gray-200 text-gray-700 hover:border-blue-300'
+                  }`}
+                >
+                  {f.label} <span className={isActive ? 'opacity-80' : 'text-gray-400'}>({count})</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -372,29 +452,43 @@ export default function BahanBakuPage() {
             </div>
           </div>
         </div>
+      ) : filteredIngredients.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+          <Search className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">Gak ada bahan yang cocok.</p>
+          <button onClick={() => { setSearchQuery(''); setActiveFilter('all'); }} className="mt-3 text-sm text-blue-600 hover:underline">Reset filter</button>
+        </div>
       ) : (
         <div className="space-y-3">
-          {ingredients.map((ing) => {
-            const isLow = ing.current_stock !== undefined && ing.min_stock !== undefined && ing.current_stock <= ing.min_stock;
+          {filteredIngredients.map((ing) => {
+            const isLow = isLowStock(ing);
+            const isNew = isAiNew(ing);
+            const needsReview = !!ing.needs_review;
+            // Visual border based on priority: low stock (red) > ai-new (blue) > default
+            const borderAccent = isLow ? 'border-l-4 border-l-red-400' : isNew ? 'border-l-4 border-l-blue-400' : '';
             return (
-              <div key={ing.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-                {/* Header: name + badge + actions */}
+              <div key={ing.id} className={`bg-white rounded-xl border border-gray-200 ${borderAccent} p-4 space-y-3`}>
+                {/* Header: name + badges + Edit/Delete */}
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-gray-900">{ing.name}</h3>
-                      {isLow && <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />}
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        ing.ingredient_type === 'recipe' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {ing.ingredient_type === 'recipe' ? 'Resep' : 'Overhead'}
-                      </span>
+                      {ing.ingredient_type === 'overhead' && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Overhead</span>
+                      )}
+                      {isNew && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                          <Sparkles className="w-3 h-3" /> Baru
+                        </span>
+                      )}
+                      {needsReview && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700" title="Harga ini diisi AI — cek dulu sesuai harga beli asli lo">
+                          <AlertTriangle className="w-3 h-3" /> Harga perkiraan AI
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => openRestock(ing)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg" title="Restock">
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
                     <button onClick={() => openEdit(ing)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit">
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -410,6 +504,7 @@ export default function BahanBakuPage() {
                     <p className="text-xs text-gray-400">Stok</p>
                     <p className={`font-semibold ${isLow ? 'text-red-600' : 'text-gray-900'}`}>
                       {ing.current_stock !== undefined ? `${ing.current_stock} ${ing.base_unit}` : '-'}
+                      {isLow && <span className="ml-1 text-[10px] font-medium text-red-500">RENDAH</span>}
                     </p>
                   </div>
                   <div>
@@ -424,29 +519,46 @@ export default function BahanBakuPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-400">Satuan</p>
-                    <p className="text-gray-600">{ing.base_unit} ({ing.unit_type})</p>
+                    <p className="text-gray-600">{ing.base_unit}</p>
                   </div>
                 </div>
 
-                {/* Pemakaian per menu — SOURCE OF TRUTH */}
-                <div className="border-t border-gray-100 pt-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Pemakaian per Porsi</p>
-                  {ing.used_in && ing.used_in.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {ing.used_in.map((u, idx) => (
-                        <a key={idx} href="/dashboard/menu" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition">
-                          <span className="font-medium">{u.product_name}</span>
-                          <span className="text-blue-500">{u.qty_per_serving} {u.unit}</span>
-                        </a>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      <span>Belum terhubung ke menu. <a href="/dashboard/menu" className="underline font-medium">Buat resep di halaman Menu</a></span>
-                    </div>
-                  )}
-                </div>
+                {/* Pemakaian per menu */}
+                {ing.ingredient_type !== 'overhead' && (
+                  <div className="border-t border-gray-100 pt-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Pemakaian per Porsi</p>
+                    {ing.used_in && ing.used_in.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {ing.used_in.map((u, idx) => (
+                          <a key={idx} href="/dashboard/menu" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition">
+                            <span className="font-medium">{u.product_name}</span>
+                            <span className="text-blue-500">{u.qty_per_serving} {u.unit}</span>
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>Belum terhubung ke menu. <a href="/dashboard/menu" className="underline font-medium">Buat resep di halaman Menu</a></span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Hero CTA: Restock */}
+                {ing.ingredient_type !== 'overhead' && (
+                  <button
+                    onClick={() => openRestock(ing)}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium transition ${
+                      isLow
+                        ? 'bg-red-600 text-white hover:bg-red-700'
+                        : 'bg-green-600 text-white hover:bg-green-700'
+                    }`}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    {isLow ? 'Restock Sekarang' : 'Restock'}
+                  </button>
+                )}
               </div>
             );
           })}

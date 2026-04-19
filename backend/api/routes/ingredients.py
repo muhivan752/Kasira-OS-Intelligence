@@ -216,6 +216,10 @@ async def update_ingredient(
     if "buy_price" in update_data or "buy_qty" in update_data:
         update_data["cost_per_base_unit"] = _calc_cost(new_buy_price, new_buy_qty)
 
+    # Auto-clear needs_review: user just edited = reviewed
+    if ingredient.needs_review:
+        update_data["needs_review"] = False
+
     old_cost = float(ingredient.cost_per_base_unit)
     # Convert Decimal/float for JSON serialization in audit log
     def _jsonable(v):
