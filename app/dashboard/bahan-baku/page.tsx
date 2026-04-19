@@ -142,7 +142,7 @@ export default function BahanBakuPage() {
   const [form, setForm] = useState({
     name: '', base_unit: '', unit_type: 'WEIGHT', buy_price: '', buy_qty: '',
     ingredient_type: 'recipe', overhead_cost_per_day: '', row_version: 0,
-    initial_stock: '',
+    initial_stock: '', needs_review: false,
   });
   const [restockForm, setRestockForm] = useState({ quantity: '', notes: '' });
 
@@ -258,9 +258,25 @@ export default function BahanBakuPage() {
       overhead_cost_per_day: ing.overhead_cost_per_day ? String(ing.overhead_cost_per_day) : '',
       row_version: ing.row_version,
       initial_stock: '',
+      needs_review: !!ing.needs_review,
     });
     setModalStep('form');
     setShowModal(true);
+  }
+
+  async function handleConfirmPrice() {
+    if (!editingId) return;
+    setError('');
+    try {
+      await updateIngredient(editingId, { row_version: form.row_version });
+      setShowModal(false);
+      resetForm();
+      setSuccessMsg('✅ Harga dikonfirmasi — badge perkiraan AI dihapus');
+      setTimeout(() => setSuccessMsg(''), 4000);
+      await loadData();
+    } catch (e: any) {
+      setError(e.message);
+    }
   }
 
   function openCreate(type: 'recipe' | 'overhead' = 'recipe') {
@@ -295,7 +311,7 @@ export default function BahanBakuPage() {
 
   function resetForm() {
     setEditingId(null);
-    setForm({ name: '', base_unit: '', unit_type: 'WEIGHT', buy_price: '', buy_qty: '', ingredient_type: 'recipe', overhead_cost_per_day: '', row_version: 0, initial_stock: '' });
+    setForm({ name: '', base_unit: '', unit_type: 'WEIGHT', buy_price: '', buy_qty: '', ingredient_type: 'recipe', overhead_cost_per_day: '', row_version: 0, initial_stock: '', needs_review: false });
     setError('');
     setModalStep('preset');
   }
@@ -482,9 +498,13 @@ export default function BahanBakuPage() {
                         </span>
                       )}
                       {needsReview && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700" title="Harga ini diisi AI — cek dulu sesuai harga beli asli lo">
-                          <AlertTriangle className="w-3 h-3" /> Harga perkiraan AI
-                        </span>
+                        <button
+                          onClick={() => openEdit(ing)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 transition cursor-pointer"
+                          title="Klik untuk cek & konfirmasi harga"
+                        >
+                          <AlertTriangle className="w-3 h-3" /> Harga perkiraan AI — klik buat cek
+                        </button>
                       )}
                     </div>
                   </div>
@@ -627,6 +647,28 @@ export default function BahanBakuPage() {
             {/* STEP: Form */}
             {modalStep === 'form' && (
               <div className="space-y-4">
+                {/* AI price review banner */}
+                {editingId && form.needs_review && (
+                  <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-3 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-amber-900">Harga ini dari AI (perkiraan)</p>
+                        <p className="text-xs text-amber-700 mt-0.5">
+                          Cek sesuai <strong>nota belanja asli</strong> lo. Kalau sama, klik <strong>"Harga udah benar"</strong> di bawah.
+                          Kalau beda, edit angka "Total Harga" + "Dapat" terus klik <strong>Simpan</strong>.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleConfirmPrice}
+                      className="w-full flex items-center justify-center gap-2 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition text-sm font-medium"
+                    >
+                      <CheckCircle2 className="w-4 h-4" /> Harga udah benar, konfirmasi aja
+                    </button>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nama Bahan *</label>
                   <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
@@ -696,8 +738,10 @@ export default function BahanBakuPage() {
 
                 {/* Harga Beli */}
                 {form.ingredient_type !== 'overhead' && (
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                    <p className="text-sm font-medium text-gray-700">💰 Harga Beli</p>
+                  <div className={`rounded-lg p-4 space-y-3 ${
+                    editingId && form.needs_review ? 'bg-amber-50 border-2 border-amber-200' : 'bg-gray-50'
+                  }`}>
+                    <p className="text-sm font-medium text-gray-700">💰 Harga Beli {editingId && form.needs_review && <span className="text-xs text-amber-700 ml-1">(cek dulu — ini perkiraan AI)</span>}</p>
                     <p className="text-xs text-gray-500">Isi sesuai nota belanja. Contoh: beli 1 kg gula seharga Rp14.000.</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
