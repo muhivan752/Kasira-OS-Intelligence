@@ -32,6 +32,38 @@ INTENT_CHAT = "CHAT"
 INTENT_RESTOCK = "RESTOCK"
 INTENT_SETUP_RECIPE = "SETUP_RECIPE"
 INTENT_MENU_BULK = "MENU_BULK"
+INTENT_PRICING_COACH = "PRICING_COACH"
+
+# Pricing coach — pakai Sonnet karena butuh reasoning multi-faktor
+# (HPP vs benchmark, margin target, positioning, elasticity).
+PRICING_COACH_KEYWORDS = [
+    "hpp",
+    "margin",
+    "profit",
+    "laba bersih",
+    "harga jual",
+    "jual berapa",
+    "wajar harga",
+    "harga wajar",
+    "wajar jual",
+    "kemahalan",
+    "kemurahan",
+    "overprice",
+    "underprice",
+    "pricing",
+    "cost produk",
+    "naikin harga",
+    "turunin harga",
+    "harga kompetitor",
+    "cek margin",
+    "analisa harga",
+    "rekomendasi harga",
+]
+
+# Batas Sonnet per tenant/hari (mahal — limit agresif)
+SONNET_PER_TENANT_DAILY = 5
+SONNET_MODEL_ID = "claude-sonnet-4-5-20250929"
+HAIKU_MODEL_ID = "claude-haiku-4-5-20251001"
 
 # Keyword detection hanya untuk RESTOCK (actionable — langsung update DB).
 # Selain itu semua pertanyaan → CHAT → Claude yang jawab via system prompt.
@@ -69,17 +101,20 @@ MENU_BULK_PHRASE_INDICATORS = [
 
 # ─── Model Selector (Rule #25, #26) ───────────────────────────────────────────
 
-async def get_model_for_tier(tier: str, task: str = "routine", tenant_id: str = None) -> str:
+async def get_model_for_tier(tier: str, task: str = "routine", tenant_id: str = None, intent: str = INTENT_CHAT) -> str:
     """
-    Pilih Claude model — SELALU Haiku 4.5.
+    Pilih Claude model berdasarkan intent.
 
-    Reasoning: Kasira AI tasks = analisa bisnis UMKM dengan context yang udah dipre-build
-    (omzet, stok, HPP, KG, menu engineering). Itu bukan task yang butuh reasoning mendalam
-    kayak coding/math proof. Haiku 4.5 fully capable untuk business analytics.
+    - PRICING_COACH → Sonnet 4.5 (reasoning multi-faktor: HPP vs benchmark,
+      margin target, positioning, elasticity) — max 5x/tenant/hari.
+    - Selain itu → Haiku 4.5 (business analytics standard, context pre-built).
 
-    Sonnet ~4x biaya Haiku. Overkill untuk use case ini. Biaya matters.
+    Sonnet ~4x biaya Haiku. Dipakai sparingly untuk task yang genuinely butuh
+    reasoning mendalam.
     """
-    return "claude-haiku-4-5-20251001"
+    if intent == INTENT_PRICING_COACH:
+        return SONNET_MODEL_ID
+    return HAIKU_MODEL_ID
 
 
 # ─── Intent Classifier (Rule #54, #56) ────────────────────────────────────────
@@ -118,6 +153,11 @@ def classify_intent(message: str) -> str:
 
     if any(kw in msg_lower for kw in RESTOCK_KEYWORDS):
         return INTENT_RESTOCK
+
+    # PRICING_COACH — check last (karena keywords bisa overlap dengan CHAT biasa)
+    if any(kw in msg_lower for kw in PRICING_COACH_KEYWORDS):
+        return INTENT_PRICING_COACH
+
     return INTENT_CHAT
 
 
@@ -1139,6 +1179,146 @@ BATASAN:
     return context
 
 
+# ─── Pricing Coach Helpers ────────────────────────────────────────────────────
+
+async def build_pricing_context(outlet_id: str, db: AsyncSession) -> str:
+    """
+    Hitung HPP + margin per produk outlet ini (yang punya active recipe).
+    Return markdown table. Kalau tenant simple stock (gak ada recipe), return
+    notice supaya AI kasih guidance umum tanpa data resep.
+    """
+    from backend.models.recipe import Recipe, RecipeIngredient
+    from backend.models.ingredient import Ingredient
+    from backend.models.product import Product
+    from backend.models.outlet import Outlet
+    from sqlalchemy.orm import selectinload
+
+    outlet = (await db.execute(
+        select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    if not outlet:
+        return ""
+
+    # Load semua recipe aktif untuk brand ini, beserta ingredients + product
+    recipes = (await db.execute(
+        select(Recipe)
+        .options(
+            selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient),
+            selectinload(Recipe.product),
+        )
+        .join(Product, Product.id == Recipe.product_id)
+        .where(
+            Product.brand_id == outlet.brand_id,
+            Recipe.is_active == True,
+            Recipe.deleted_at.is_(None),
+            Product.deleted_at.is_(None),
+        )
+    )).scalars().all()
+
+    if not recipes:
+        return (
+            "\n\n## Catatan Pricing Coach\n"
+            "Outlet ini belum punya resep aktif — HPP per produk tidak bisa "
+            "dihitung otomatis. Kasih advice berdasarkan harga jual + rata-rata "
+            "margin cafe Indonesia (60-75%). Kalau user mau analisa akurat, "
+            "minta dia setup resep dulu via AI Asisten Setup Resep.\n"
+        )
+
+    rows = []
+    for r in recipes:
+        # Skip kalau ingredient sudah soft-deleted (pattern dari CLAUDE.md)
+        active_ingredients = [
+            ri for ri in r.ingredients
+            if ri.ingredient is not None and ri.ingredient.deleted_at is None
+        ]
+        if not active_ingredients:
+            continue
+
+        hpp = 0.0
+        for ri in active_ingredients:
+            cost_per_unit = float(ri.ingredient.cost_per_base_unit or 0)
+            qty = float(ri.quantity or 0)
+            hpp += qty * cost_per_unit
+
+        product = r.product
+        if product is None:
+            continue
+        base_price = float(product.base_price or 0)
+        if base_price <= 0:
+            continue
+
+        margin_rp = base_price - hpp
+        margin_pct = (margin_rp / base_price * 100) if base_price > 0 else 0
+        rows.append({
+            "name": product.name,
+            "hpp": hpp,
+            "price": base_price,
+            "margin_pct": margin_pct,
+        })
+
+    if not rows:
+        return (
+            "\n\n## Catatan Pricing Coach\n"
+            "Resep ada tapi semua ingredient belum diisi harga (cost_per_base_unit=0). "
+            "Minta user update harga beli bahan di halaman Bahan Baku dulu.\n"
+        )
+
+    # Sort: margin terendah di atas (prioritas review)
+    rows.sort(key=lambda x: x["margin_pct"])
+
+    lines = [
+        "\n\n## HPP & Margin Produk Outlet Ini",
+        "(Diurut margin terendah → tertinggi)",
+        "",
+        "| Produk | HPP | Harga Jual | Margin |",
+        "|---|---|---|---|",
+    ]
+    for r in rows[:15]:  # Cap 15 biar prompt gak bengkak
+        lines.append(
+            f"| {r['name']} | Rp {r['hpp']:,.0f} | Rp {r['price']:,.0f} | {r['margin_pct']:.1f}% |"
+        )
+    if len(rows) > 15:
+        lines.append(f"| _(+{len(rows)-15} produk lain)_ | | | |")
+
+    return "\n".join(lines)
+
+
+PRICING_COACH_SYSTEM_APPEND = """
+
+## MODE: PRICING COACH
+
+User sedang minta analisa harga/HPP/margin. Fokus jawab seperti ini:
+
+1. **Data-driven**: rujuk angka HPP + margin dari tabel di atas. Kalau user
+   nanya produk spesifik, jawab per produk. Kalau umum, pilih 2-3 produk
+   paling bermasalah (margin rendah <50% atau sangat tinggi >85%).
+
+2. **Bandingkan dengan benchmark cafe Indonesia**:
+   - Kopi/minuman: margin wajar 60-80% (HPP 20-40% dari harga jual)
+   - Makanan: 50-65% (HPP lebih tinggi karena bahan mentah)
+   - Paket/combo: 55-70%
+   Kalau ada data cross-tenant benchmark di context, pake itu juga.
+
+3. **Rekomendasi konkret**:
+   - Margin <50% → usul naikin harga Rp X atau turunin HPP (ganti supplier,
+     kurangi porsi bahan mahal).
+   - Margin >85% → mungkin underprice — ada ruang naikin harga untuk
+     kualitas/positioning. Atau HPP underestimate (kelupaan overhead?).
+   - Margin 60-75% → aman. Tunjukin produk lain yang perlu perhatian.
+
+4. **Psikologi harga Indonesia**: rekomendasi naikin harga usulkan angka bulat
+   (2.000/5.000 kelipatan), atau ke bawah (18rb → 19rb lebih smooth dari
+   18rb → 20rb dalam 1x). Atau strategi bundling.
+
+5. **Action step**: tutup dengan 1-2 langkah konkret ("coba naikin X jadi Y
+   selama 2 minggu, monitor penjualan").
+
+Format markdown: **bold** untuk angka penting, bullet list untuk rekomendasi.
+Jawab ringkas — max 300 kata. Bahasa Indonesia casual (pake 'kamu'), jangan
+formal. Jangan pake emoji.
+"""
+
+
 # ─── SSE Generator (Rule #9 async) ────────────────────────────────────────────
 
 async def stream_ai_response(
@@ -1265,9 +1445,43 @@ async def stream_ai_response(
     except Exception as e:
         logger.debug(f"RAG enrichment skipped: {e}")
 
-    # 4. Pilih model (Rule #25/#26)
+    # 3c. Pricing coach — inject HPP + margin data + coach system prompt
+    if intent == INTENT_PRICING_COACH:
+        # Cek quota Sonnet per tenant (Sonnet 4x biaya Haiku)
+        try:
+            from datetime import date as dt_date
+            today = dt_date.today().isoformat()
+            sonnet_key = f"ai_sonnet:{tenant_id}:{today}"
+            sonnet_count = await redis_client.incr(sonnet_key)
+            if sonnet_count == 1:
+                await redis_client.expire(sonnet_key, 86400)
+            if sonnet_count > SONNET_PER_TENANT_DAILY:
+                yield sse({
+                    "type": "chunk",
+                    "content": (
+                        f"Analisa pricing (Sonnet) udah dipakai **{SONNET_PER_TENANT_DAILY}x** hari ini. "
+                        "Coba lagi besok — atau tanya biasa (pake Haiku) untuk info harga saja."
+                    ),
+                })
+                yield sse({"type": "done", "intent": INTENT_PRICING_COACH, "tokens_used": 0})
+                return
+        except Exception:
+            pass
+
+        # Track extra spend (Sonnet ~2 cents vs Haiku 1 cent)
+        try:
+            from datetime import date as dt_date
+            spend_key = f"ai_spend:{dt_date.today().isoformat()}"
+            await redis_client.incrby(spend_key, 1)  # tambah 1 lagi (total 2)
+        except Exception:
+            pass
+
+        pricing_ctx = await build_pricing_context(outlet_id, db)
+        system_prompt += pricing_ctx + PRICING_COACH_SYSTEM_APPEND
+
+    # 4. Pilih model (intent-aware — PRICING_COACH → Sonnet)
     task_complexity = classify_task_complexity(message)
-    model = await get_model_for_tier(tier, task_complexity, tenant_id=tenant_id)
+    model = await get_model_for_tier(tier, task_complexity, tenant_id=tenant_id, intent=intent)
 
     # 5. Stream dari Claude API
     try:
@@ -1275,9 +1489,11 @@ async def stream_ai_response(
         client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
         tokens_used = 0
+        # Pricing coach perlu ruang lebih besar untuk reasoning multi-produk
+        max_tok = 1500 if intent == INTENT_PRICING_COACH else 512
         async with client.messages.stream(
             model=model,
-            max_tokens=512,  # Hemat token — jawaban ringkas
+            max_tokens=max_tok,
             system=system_prompt,
             messages=[{"role": "user", "content": message}],
         ) as stream:
