@@ -345,26 +345,43 @@ async def _get_popularity(
 
 
 async def _get_hpp_map(db: AsyncSession, brand_id: UUID) -> Dict[UUID, Decimal]:
-    """Get HPP (cost) per product from active recipes."""
-    query = (
-        select(
-            Recipe.product_id,
-            func.sum(
-                RecipeIngredient.quantity * Ingredient.cost_per_base_unit
-            ).label("hpp"),
-        )
-        .join(RecipeIngredient, Recipe.id == RecipeIngredient.recipe_id)
-        .join(Ingredient, RecipeIngredient.ingredient_id == Ingredient.id)
-        .join(Product, Recipe.product_id == Product.id)
+    """
+    Get HPP (cost) per product from active recipes.
+    Python-side compute pakai unit_utils.ingredient_cost_contribution biar
+    handle unit mismatch (ri.quantity_unit != ingredient.base_unit).
+    Product yang punya unresolvable mismatch → excluded dari map (HPP unknown).
+    """
+    from backend.services.unit_utils import ingredient_cost_contribution
+
+    recipes = (await db.execute(
+        select(Recipe)
+        .options(selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient))
+        .join(Product, Product.id == Recipe.product_id)
         .where(
             Product.brand_id == brand_id,
             Recipe.is_active.is_(True),
             Recipe.deleted_at.is_(None),
-            RecipeIngredient.deleted_at.is_(None),
-            RecipeIngredient.is_optional.is_(False),
         )
-        .group_by(Recipe.product_id)
-    )
+    )).scalars().all()
 
-    result = await db.execute(query)
-    return {row.product_id: row.hpp or Decimal("0") for row in result.all()}
+    hpp_map: Dict[UUID, Decimal] = {}
+    for r in recipes:
+        total = Decimal("0")
+        had_mismatch = False
+        for ri in r.ingredients:
+            if (ri.deleted_at is not None or ri.is_optional or (ri.quantity or 0) <= 0
+                    or ri.ingredient is None or ri.ingredient.deleted_at is not None):
+                continue
+            contrib = ingredient_cost_contribution(ri)
+            if contrib is None:
+                had_mismatch = True
+                continue
+            total += Decimal(str(contrib))
+
+        # Kalau ada mismatch unresolvable, HPP under-estimate — skip entry
+        # (better hilang dari menu engineering daripada salah klasifikasi)
+        if had_mismatch and total == Decimal("0"):
+            continue
+        hpp_map[r.product_id] = total
+
+    return hpp_map

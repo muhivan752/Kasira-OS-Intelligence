@@ -371,15 +371,8 @@ def classify_intent(message: str) -> str:
 
 # ─── Restock via AI ──────────────────────────────────────────────────────────
 
-UNIT_ALIASES = {
-    "kg": ("gram", 1000), "kilo": ("gram", 1000), "kilogram": ("gram", 1000),
-    "g": ("gram", 1), "gram": ("gram", 1), "gr": ("gram", 1),
-    "l": ("ml", 1000), "liter": ("ml", 1000),
-    "ml": ("ml", 1), "mililiter": ("ml", 1),
-    "pcs": ("pcs", 1), "butir": ("pcs", 1), "buah": ("pcs", 1), "biji": ("pcs", 1),
-    "tray": ("pcs", 30), "dus": ("pcs", 12), "lusin": ("pcs", 12),
-    "bungkus": ("bungkus", 1), "bks": ("bungkus", 1), "pack": ("bungkus", 1),
-}
+# UNIT_ALIASES di-share dari unit_utils.py (single source of truth)
+from backend.services.unit_utils import UNIT_ALIASES
 
 
 async def parse_restock_intent(message: str, outlet_id: str, tenant_id: str, db: AsyncSession) -> dict:
@@ -1531,45 +1524,9 @@ async def build_pricing_context(outlet_id: str, db: AsyncSession) -> str:
     return "\n".join(lines)
 
 
-def _ingredient_cost_contribution(ri) -> "float | None":
-    """
-    Compute cost contribution 1 recipe_ingredient row = quantity * cost_per_base_unit.
-    Handle unit conversion: ri.quantity dalam ri.quantity_unit, ingredient cost per
-    ingredient.base_unit. Return None kalau unit mismatch yang gak bisa di-resolve.
-
-    Examples:
-      - ri.quantity=1, ri.quantity_unit='kg', base_unit='gram' → qty_in_base = 1000
-      - ri.quantity=150, ri.quantity_unit='ml', base_unit='ml' → qty_in_base = 150
-      - ri.quantity=2, ri.quantity_unit='sdm' (unknown), base_unit='gram' → None (mismatch)
-    """
-    try:
-        raw_qty = float(ri.quantity or 0)
-        cost_per_base = float(ri.ingredient.cost_per_base_unit or 0)
-    except (TypeError, ValueError):
-        return None
-
-    if raw_qty <= 0 or cost_per_base <= 0:
-        return 0.0
-
-    q_unit = (ri.quantity_unit or "").lower().strip()
-    base_unit = (ri.ingredient.base_unit or "").lower().strip()
-
-    # Same unit — no conversion
-    if q_unit == base_unit or not q_unit:
-        return raw_qty * cost_per_base
-
-    # Lookup conversion via UNIT_ALIASES
-    alias = UNIT_ALIASES.get(q_unit)
-    if alias is None:
-        # Unknown quantity_unit — kalau base_unit juga dikenal, tandai mismatch
-        return None
-
-    mapped_base, multiplier = alias
-    if mapped_base != base_unit:
-        # Cross-family (misal quantity kg→gram tapi ingredient base_unit='ml')
-        return None
-
-    return raw_qty * multiplier * cost_per_base
+# Helper moved to unit_utils.py — shared antara ai_service, menu_engineering,
+# knowledge_graph service. Alias lokal supaya gak break callers.
+from backend.services.unit_utils import ingredient_cost_contribution as _ingredient_cost_contribution
 
 
 PRICING_COACH_SYSTEM_APPEND = """

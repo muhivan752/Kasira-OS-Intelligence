@@ -362,6 +362,8 @@ async def compute_hpp_for_products(
     for e in edges:
         product_edges.setdefault(e.source_node_id, []).append(e)
 
+    from backend.services.unit_utils import cost_from_qty_unit
+
     result = []
     for pid, pedges in product_edges.items():
         prod = products.get(pid)
@@ -370,19 +372,32 @@ async def compute_hpp_for_products(
 
         hpp = Decimal("0")
         ing_list = []
+        has_mismatch = False
         for e in pedges:
             ing = ingredients.get(e.target_node_id)
             if not ing:
                 continue
             meta = e.metadata_payload or {}
-            qty = Decimal(str(meta.get("quantity", 0)))
-            cost = qty * (ing.cost_per_base_unit or Decimal("0"))
-            hpp += cost
+            qty_raw = meta.get("quantity", 0)
+            unit_raw = meta.get("unit") or ing.base_unit
+            try:
+                qty_float = float(qty_raw or 0)
+            except (TypeError, ValueError):
+                qty_float = 0.0
+
+            # Unit-aware cost (handle kg→gram, flag cross-family mismatch)
+            cost_float = cost_from_qty_unit(qty_raw, str(unit_raw), ing)
+            if cost_float is None:
+                has_mismatch = True
+                cost_float = 0.0  # exclude dari HPP sum, flag item
+
+            hpp += Decimal(str(cost_float))
             ing_list.append({
                 "name": ing.name,
-                "qty": float(qty),
-                "unit": meta.get("unit", ing.base_unit),
-                "cost": float(cost),
+                "qty": qty_float,
+                "unit": str(unit_raw),
+                "cost": cost_float,
+                "unit_mismatch": cost_from_qty_unit(qty_raw, str(unit_raw), ing) is None,
             })
 
         price = float(prod.base_price or 0)
@@ -393,6 +408,7 @@ async def compute_hpp_for_products(
             "price": price,
             "hpp": float(hpp),
             "margin_pct": round(margin_pct, 1),
+            "has_unit_mismatch": has_mismatch,
             "ingredients": ing_list,
         })
 
