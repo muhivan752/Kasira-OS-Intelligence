@@ -136,12 +136,15 @@ async def send_whatsapp_message(phone: str, message: str) -> bool:
         logger.warning("FONNTE_TOKEN not set. Simulating WA to %s", phone)
         return True
 
+    from backend.core.metrics import track_fonnte_outcome
+
     # Circuit breaker — fail-fast kalau provider lagi mati total
     if _circuit_is_open():
         logger.warning(
             "Fonnte circuit OPEN — skip send to %s (cooldown %.0fs)",
             phone, _CIRCUIT_COOLDOWN_SEC,
         )
+        track_fonnte_outcome("circuit_open")
         return False
 
     headers = {"Authorization": settings.FONNTE_TOKEN}
@@ -157,6 +160,7 @@ async def send_whatsapp_message(phone: str, message: str) -> bool:
             result = response.json()
             if result.get("status"):
                 _record_success()
+                track_fonnte_outcome("ok")
                 return True
             # API responded 200 tapi logical error (invalid target, quota habis, dll)
             # — don't retry, won't recover dgn retry semata
@@ -165,6 +169,7 @@ async def send_whatsapp_message(phone: str, message: str) -> bool:
                 "Fonnte logical error (no retry) phone=%s: %s", phone, result,
             )
             _record_failure(last_reason)
+            track_fonnte_outcome("fail")
             return False
 
         except httpx.TimeoutException as e:
@@ -182,6 +187,7 @@ async def send_whatsapp_message(phone: str, message: str) -> bool:
                 last_reason = f"http_{status} (no retry, permanent)"
                 logger.error("Fonnte %s phone=%s", last_reason, phone)
                 _record_failure(last_reason)
+                track_fonnte_outcome("fail")
                 return False
 
         except (httpx.ConnectError, httpx.NetworkError) as e:
@@ -203,4 +209,5 @@ async def send_whatsapp_message(phone: str, message: str) -> bool:
         _RETRY_ATTEMPTS, phone, last_reason,
     )
     _record_failure(last_reason)
+    track_fonnte_outcome("fail")
     return False

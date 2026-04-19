@@ -17,3 +17,4 @@ anthropic>=0.40.0
 sentry-sdk[fastapi]>=2.0.0
 pgvector>=0.3.0
 slowapi>=0.1.9
+prometheus_client>=0.20.0

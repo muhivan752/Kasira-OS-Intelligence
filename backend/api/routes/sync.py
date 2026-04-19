@@ -460,6 +460,40 @@ async def sync_data(
             next_cursor_hlc_str = best_record[2]
             next_cursor_last_id_str = best_record[1]
 
+    # Observability #10: emit sync volume metrics per-table.
+    try:
+        from backend.core.metrics import observe_sync_volume
+        for table_name, records in (
+            ("categories", pull_changes.categories),
+            ("products", pull_changes.products),
+            ("orders", pull_changes.orders),
+            ("order_items", pull_changes.order_items),
+            ("payments", pull_changes.payments),
+            ("shifts", pull_changes.shifts),
+            ("cash_activities", pull_changes.cash_activities),
+            ("outlet_stock", pull_changes.outlet_stock),
+            ("ingredients", pull_changes.ingredients),
+            ("recipes", pull_changes.recipes),
+            ("recipe_ingredients", pull_changes.recipe_ingredients),
+        ):
+            observe_sync_volume(table_name, "pull", len(records))
+        # Push volume (client → server changes count)
+        if request.changes:
+            for table_name, records in (
+                ("categories", request.changes.categories),
+                ("products", request.changes.products),
+                ("orders", request.changes.orders),
+                ("order_items", request.changes.order_items),
+                ("payments", request.changes.payments),
+                ("shifts", request.changes.shifts),
+                ("cash_activities", request.changes.cash_activities),
+                ("outlet_stock", request.changes.outlet_stock),
+            ):
+                observe_sync_volume(table_name, "push", len(records))
+    except Exception:
+        # Metrics tidak boleh break business logic
+        pass
+
     return SyncResponse(
         last_sync_hlc=server_hlc.to_string(),
         changes=pull_changes,

@@ -98,7 +98,7 @@ class XenditService:
         op_label: str = "xendit_request",
     ) -> Dict[str, Any]:
         """
-        Core HTTP wrapper dgn exponential backoff.
+        Core HTTP wrapper dgn exponential backoff + Prometheus outcome metric.
 
         Retry semantics:
           - TimeoutException / ConnectError / NetworkError → retry
@@ -109,6 +109,9 @@ class XenditService:
         Raise XenditTransientError kalau semua attempt exhausted (biar caller
         bisa set payment ke pending_manual_check — bukan failed terminal).
         """
+        # Lazy import — cegah circular dep saat metrics module re-imports
+        from backend.core.metrics import track_xendit_outcome
+
         last_err: Optional[BaseException] = None
         last_status: Optional[int] = None
 
@@ -123,6 +126,7 @@ class XenditService:
                         "xendit %s succeeded on attempt %d/%d path=%s",
                         op_label, attempt, _RETRY_ATTEMPTS, path,
                     )
+                track_xendit_outcome(op_label, "ok")
                 return response.json()
 
             except httpx.HTTPStatusError as e:
@@ -143,6 +147,7 @@ class XenditService:
                         "xendit %s PERMANENT %dxx path=%s response=%s",
                         op_label, last_status // 100, path, err_body,
                     )
+                    track_xendit_outcome(op_label, "permanent_fail")
                     raise XenditPermanentError(
                         f"Xendit {op_label} permanent error {last_status}: {err_body}"
                     ) from e
@@ -178,6 +183,7 @@ class XenditService:
             "xendit %s FAILED after %d attempts path=%s last_err=%r last_status=%s",
             op_label, _RETRY_ATTEMPTS, path, last_err, last_status,
         )
+        track_xendit_outcome(op_label, "transient_fail")
         raise XenditTransientError(
             f"Xendit {op_label} exhausted {_RETRY_ATTEMPTS} attempts: {last_err!r}"
         ) from last_err

@@ -53,7 +53,7 @@ def _rate_limit_key(request: Request) -> str:
 
 
 # Skip rate limit untuk health check dan webhook eksternal (Xendit retry webhook bisa spike)
-_RATE_LIMIT_EXEMPT_PATHS = {"/health", "/health/background", "/", "/favicon.ico"}
+_RATE_LIMIT_EXEMPT_PATHS = {"/health", "/health/background", "/metrics", "/", "/favicon.ico"}
 _RATE_LIMIT_EXEMPT_PREFIXES = ("/api/v1/webhooks/",)
 
 
@@ -131,6 +131,11 @@ async def lifespan(app: FastAPI):
     await xendit_service.close()
 
 _is_prod = settings.ENVIRONMENT == "production"
+
+# Setup structured logging (JSON prod, plain text dev) — harus sebelum app init
+# supaya semua logger pake format sama + PII redactor aktif.
+from backend.core.logging_config import setup_logging
+setup_logging(env=settings.ENVIRONMENT)
 
 # Defense-in-depth: SafeJSONResponse handles numpy.ndarray + numpy scalars
 # yang bisa leak dari pgvector/embedding column. Route dgn response_model=...
@@ -235,6 +240,11 @@ class ResponseFormatMiddleware(BaseHTTPMiddleware):
 app.add_middleware(ResponseFormatMiddleware)
 app.add_middleware(TenantMiddleware)
 
+# Prometheus metrics middleware — lightweight (<1µs overhead per request).
+# Install AFTER other middlewares agar path_template resolved benar via scope["route"].
+from backend.core.metrics import PrometheusMetricsMiddleware, metrics_endpoint_response
+app.add_middleware(PrometheusMetricsMiddleware)
+
 from backend.schemas.response import StandardResponse
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
@@ -250,16 +260,62 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """Health check endpoint for uptime monitoring."""
+    """
+    Unified health check — aggregate DB + background tasks + rate limiter.
+    HTTP 200 kalau semua OK, 503 kalau ada komponen kritikal down.
+    Uptime monitor (Vultr/UptimeRobot) poll endpoint ini.
+    """
     from backend.core.database import engine
+    from backend.core.task_supervisor import task_supervisor
     from sqlalchemy import text
+    from fastapi import Response
+    import json as _json
+
+    checks = {
+        "db": "unknown",
+        "bg_tasks": "unknown",
+        "bg_tasks_dead": [],
+    }
+    overall_ok = True
+
+    # DB check
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
-        return {"status": "ok", "db": "ok"}
-    except Exception:
-        from fastapi import Response
-        return Response(status_code=503, content='{"status":"error","db":"unreachable"}')
+        checks["db"] = "ok"
+    except Exception as e:
+        checks["db"] = f"error: {type(e).__name__}"
+        overall_ok = False
+
+    # Background tasks aggregate (CRITICAL #11)
+    try:
+        bg_snap = task_supervisor.health_snapshot()
+        dead = [n for n, t in bg_snap.get("tasks", {}).items() if t.get("state") == "dead"]
+        checks["bg_tasks"] = bg_snap.get("overall", "unknown")
+        checks["bg_tasks_dead"] = dead
+        if dead:
+            overall_ok = False
+    except Exception as e:
+        checks["bg_tasks"] = f"error: {type(e).__name__}"
+
+    status_code = 200 if overall_ok else 503
+    return Response(
+        status_code=status_code,
+        content=_json.dumps({"status": "ok" if overall_ok else "degraded", **checks}),
+        media_type="application/json",
+    )
+
+
+@app.get("/metrics")
+async def metrics():
+    """
+    Prometheus metrics endpoint (observability #10).
+    Scrape oleh Prometheus server via HTTP GET — text exposition format.
+    Metrics include: HTTP latency histogram, request count per endpoint,
+    in-progress gauge, sync volume, Xendit outcomes, Fonnte outcomes,
+    background task alive state + restarts.
+    """
+    return metrics_endpoint_response()
 
 
 @app.get("/health/background")
