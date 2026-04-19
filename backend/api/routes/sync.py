@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, and_
+from sqlalchemy import select, or_, and_, text
 from datetime import datetime, timezone
 from typing import Any, List, Dict
 import uuid
@@ -72,20 +72,51 @@ async def sync_data(
 
     brand_id = outlet.brand_id
     outlet_id = outlet.id
-    
+
     # Validate and enforce node_id format
     if not request.node_id or ":" not in request.node_id:
         # If client didn't send proper node_id, we enforce a default one for this session
         client_node_id = f"{outlet_id}:unknown_device"
     else:
         client_node_id = request.node_id
-        
+
     # Initialize Server HLC
     server_node_id = f"server:{outlet_id}"
     server_hlc = HLC.generate(node_id=server_node_id)
-    
-    # 1. PUSH (Apply changes from client to server)
-    if request.changes:
+
+    # ─── Idempotency claim (CRITICAL #6 fix) ──────────────────────────────
+    # Atomic INSERT ON CONFLICT — race-safe. Kalau RETURNING kosong = key udah
+    # ada (claim by earlier/concurrent request) → skip push, biarin pull jalan
+    # normal (stateless by last_sync_hlc). Kalau push nanti fail, TX rollback
+    # = key hilang bareng push changes = retry boleh ulang. Zero ghost state.
+    push_claimed = True
+    if request.idempotency_key:
+        try:
+            claim_result = await db.execute(
+                text(
+                    "INSERT INTO sync_idempotency_keys (key, tenant_id, outlet_id) "
+                    "VALUES (:key, :tid, :oid) ON CONFLICT DO NOTHING RETURNING key"
+                ),
+                {
+                    "key": request.idempotency_key,
+                    "tid": str(current_user.tenant_id),
+                    "oid": str(outlet_id),
+                },
+            )
+            push_claimed = claim_result.first() is not None
+            if not push_claimed:
+                logger.info(
+                    "sync idempotency hit: tenant=%s outlet=%s key=%s — skipping push",
+                    current_user.tenant_id, outlet_id, request.idempotency_key,
+                )
+        except Exception as e:
+            # Fail-open: log + proses tetap (kalau table belum migrasi atau DB hiccup)
+            logger.warning(
+                "sync idempotency claim failed, proceeding without dedup: %s", e
+            )
+
+    # 1. PUSH (Apply changes from client to server) — skip kalau dedup hit
+    if request.changes and push_claimed:
         if request.changes.categories:
             await process_table_sync(db, Category, request.changes.categories, {"brand_id": brand_id}, server_hlc)
         if request.changes.products:

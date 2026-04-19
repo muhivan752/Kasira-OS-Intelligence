@@ -21,6 +21,10 @@ class SyncRequest(BaseModel):
     # Backward compat: single-outlet tenant boleh None → server auto-pick.
     # Multi-outlet tenant tanpa outlet_id → 400 (cegah cross-outlet leak).
     outlet_id: Optional[str] = None
+    # idempotency_key: client-generated (UUID) per batch push. Kalau retry
+    # karena network flaky, kirim key yang sama → server skip push (dedup),
+    # pull tetap jalan. Cegah double stock deduct offline order.
+    idempotency_key: Optional[str] = None
     changes: SyncPayload
 
 class SyncResponse(BaseModel):
