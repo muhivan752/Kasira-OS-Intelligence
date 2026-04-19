@@ -37,17 +37,39 @@ async def sync_data(
     """
     Pure CRDT Sync Engine Endpoint (Pull & Push)
     """
-    # Get user's outlet via tenant_id (User model has no outlet_id column)
-    result = await db.execute(
+    # Resolve outlet dengan tenant-scoping validation (CRITICAL #3 fix).
+    # Multi-outlet tenant tanpa outlet_id explicit = cross-outlet data leak risk.
+    all_outlets = (await db.execute(
         select(Outlet).filter(
             Outlet.tenant_id == current_user.tenant_id,
             Outlet.deleted_at.is_(None),
-        ).limit(1)
-    )
-    outlet = result.scalar_one_or_none()
-    if not outlet:
+        )
+    )).scalars().all()
+    if not all_outlets:
         raise HTTPException(status_code=400, detail="User is not assigned to an outlet")
-        
+
+    if request.outlet_id:
+        # Explicit outlet_id di request — validate belongs to user's tenant
+        outlet = next((o for o in all_outlets if str(o.id) == str(request.outlet_id)), None)
+        if not outlet:
+            raise HTTPException(
+                status_code=403,
+                detail="outlet_id tidak ditemukan atau bukan milik tenant Anda",
+            )
+    else:
+        # Backward compat: auto-pick untuk single-outlet tenant saja.
+        # Multi-outlet tenant WAJIB kirim outlet_id (cegah arbitrary .limit(1) leak).
+        if len(all_outlets) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Tenant punya multiple outlet — outlet_id wajib di-set di "
+                    "request body. Update Flutter client untuk kirim "
+                    "SessionCache.outletId di payload."
+                ),
+            )
+        outlet = all_outlets[0]
+
     brand_id = outlet.brand_id
     outlet_id = outlet.id
     

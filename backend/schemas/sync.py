@@ -17,6 +17,10 @@ class SyncPayload(BaseModel):
 class SyncRequest(BaseModel):
     last_sync_hlc: Optional[str] = None
     node_id: str
+    # outlet_id: wajib untuk multi-outlet tenant (Pro+ yang punya >1 outlet).
+    # Backward compat: single-outlet tenant boleh None → server auto-pick.
+    # Multi-outlet tenant tanpa outlet_id → 400 (cegah cross-outlet leak).
+    outlet_id: Optional[str] = None
     changes: SyncPayload
 
 class SyncResponse(BaseModel):
