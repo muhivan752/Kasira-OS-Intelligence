@@ -131,6 +131,12 @@ async def lifespan(app: FastAPI):
     await xendit_service.close()
 
 _is_prod = settings.ENVIRONMENT == "production"
+
+# Defense-in-depth: SafeJSONResponse handles numpy.ndarray + numpy scalars
+# yang bisa leak dari pgvector/embedding column. Route dgn response_model=...
+# tetap via Pydantic (ini cuma affect route yang return dict/list langsung).
+from backend.core.json_safe import SafeJSONResponse
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     # Disable OpenAPI/docs di production — cegah endpoint enumeration + schema leak
@@ -138,6 +144,7 @@ app = FastAPI(
     docs_url=None if _is_prod else "/docs",
     redoc_url=None if _is_prod else "/redoc",
     lifespan=lifespan,
+    default_response_class=SafeJSONResponse,
 )
 
 # Global rate limiter (200/min per key). Health + webhook paths di-exempt via
@@ -146,10 +153,33 @@ app.state.limiter = limiter
 
 
 class ConditionalSlowAPIMiddleware(SlowAPIMiddleware):
+    """
+    Middleware wrapper dgn FAIL-OPEN semantic untuk Redis backend.
+
+    Pre-existing bug: saat Redis down, slowapi internal propagate
+    redis.ConnectionError ke `_rate_limit_exceeded_handler` yg expect
+    `RateLimitExceeded` (punya .detail) → AttributeError → 500.
+    Seluruh request chain break gara-gara rate limiter backend.
+
+    Fix: catch Exception di dispatch, kalau NOT RateLimitExceeded = Redis
+    issue → log + bypass rate limit (fail-open). Request user TETAP jalan.
+    """
     async def dispatch(self, request: Request, call_next):
         if _is_exempt(request):
             return await call_next(request)
-        return await super().dispatch(request, call_next)
+        try:
+            return await super().dispatch(request, call_next)
+        except RateLimitExceeded:
+            # Legit rate limit hit — biarin slowapi handler handle (429)
+            raise
+        except Exception as e:
+            # Redis down atau internal slowapi error → fail OPEN
+            # Log sbg warning (bukan error) karena auto-recover saat Redis balik
+            logger.warning(
+                "slowapi backend error (rate limit bypassed for %s %s): %s: %s",
+                request.method, request.url.path, type(e).__name__, e,
+            )
+            return await call_next(request)
 
 
 app.add_middleware(ConditionalSlowAPIMiddleware)

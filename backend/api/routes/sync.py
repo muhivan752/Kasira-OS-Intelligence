@@ -301,14 +301,21 @@ async def sync_data(
     # paginated queries di bawah (order_items, outlet_stock, recipes,
     # recipe_ingredients, cash_activities) yang pake JOIN jadi gak fit
     # get_table_changes generic helper.
+    from backend.services.sync import _SYNC_SKIP_COLUMNS
     def _row_to_dict(r, has_row_version: bool = True):
         d = {}
         for c in r.__table__.columns:
+            if c.name in _SYNC_SKIP_COLUMNS:
+                continue
             val = getattr(r, c.name)
             if isinstance(val, datetime):
                 d[c.name] = val.isoformat()
             elif isinstance(val, uuid.UUID):
                 d[c.name] = str(val)
+            elif hasattr(val, "tolist") and callable(val.tolist):
+                d[c.name] = val.tolist()
+            elif hasattr(val, "item") and callable(val.item) and type(val).__module__ == "numpy":
+                d[c.name] = val.item()
             else:
                 d[c.name] = val
         d["is_deleted"] = getattr(r, "deleted_at", None) is not None

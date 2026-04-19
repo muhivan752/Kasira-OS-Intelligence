@@ -4,6 +4,13 @@ from datetime import datetime, timezone
 from typing import Any, List, Dict, Optional
 import uuid
 
+# Kolom yang di-skip dari sync response — numpy/pgvector atau data sensitive
+# yang gak relevan untuk Flutter client.
+_SYNC_SKIP_COLUMNS: frozenset = frozenset({
+    "embedding",        # Product.embedding (pgvector numpy.ndarray — AI only)
+    "embedding_model",  # metadata field untuk embedding
+})
+
 from backend.models.category import Category
 from backend.models.product import Product
 from backend.models.order import Order, OrderItem
@@ -292,11 +299,22 @@ async def get_table_changes(
     for r in records:
         record_dict = {}
         for c in r.__table__.columns:
+            # Skip kolom yang gak relevan untuk Flutter + bikin serialization
+            # error (pgvector embedding = numpy.ndarray). Flutter POS gak butuh
+            # embedding — dipakai AI backend-side only.
+            if c.name in _SYNC_SKIP_COLUMNS:
+                continue
             val = getattr(r, c.name)
             if isinstance(val, datetime):
                 record_dict[c.name] = val.isoformat()
             elif isinstance(val, uuid.UUID):
                 record_dict[c.name] = str(val)
+            elif hasattr(val, "tolist") and callable(val.tolist):
+                # Defense-in-depth: numpy.ndarray (pgvector) / list-like
+                record_dict[c.name] = val.tolist()
+            elif hasattr(val, "item") and callable(val.item) and type(val).__module__ == "numpy":
+                # numpy scalar (int64, float64) → Python primitive
+                record_dict[c.name] = val.item()
             else:
                 record_dict[c.name] = val
 
