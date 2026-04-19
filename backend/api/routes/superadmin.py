@@ -284,7 +284,18 @@ async def update_tier(
     db: AsyncSession = Depends(deps.get_db),
     admin: User = Depends(deps.get_platform_admin),
 ) -> Any:
-    """Upgrade or downgrade a tenant's subscription tier."""
+    """
+    Upgrade/downgrade tenant subscription tier.
+    Downgrade cascade (fix CRITICAL #16):
+      - Reset outlet.stock_mode='simple' untuk semua outlet kalau ke starter
+      - Flag kalau outlet count > tier limit (preserve data, cuma warn)
+    Tenant cache di-invalidate post-commit supaya tier change langsung terasa.
+    Zero silent failure: cascade error → rollback + raise.
+    """
+    from backend.services.subscription import (
+        PRO_TIERS, apply_tier_downgrade_cascade, invalidate_tenant_cache,
+    )
+
     valid_tiers = {"starter", "pro", "business", "enterprise"}
     if payload.tier not in valid_tiers:
         raise HTTPException(status_code=400, detail=f"Tier harus salah satu dari: {', '.join(valid_tiers)}")
@@ -295,17 +306,57 @@ async def update_tier(
         raise HTTPException(status_code=404, detail="Tenant tidak ditemukan")
 
     old_tier = tenant.subscription_tier.value if hasattr(tenant.subscription_tier, 'value') else str(tenant.subscription_tier)
-    tenant.subscription_tier = payload.tier
+    new_tier = payload.tier
+
+    # Detect downgrade: Pro+ → Starter (atau Pro+ ke tier lebih rendah).
+    is_downgrade = (
+        old_tier.lower() in PRO_TIERS and new_tier.lower() not in PRO_TIERS
+    ) or (
+        # Within Pro+: business→pro, enterprise→business juga hitung downgrade
+        # tapi tidak trigger cascade stock_mode (stock_mode cuma hilang di starter)
+        False
+    )
+
+    cascade_report = None
+    if is_downgrade:
+        # Cascade DULU (sebelum tier flip) supaya kalau fail, rollback tier
+        # change bareng cascade effects. Atomic — satu transaksi.
+        try:
+            cascade_report = await apply_tier_downgrade_cascade(
+                db=db, tenant=tenant,
+                old_tier=old_tier, new_tier=new_tier,
+                user_id=admin.id,
+            )
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Downgrade cascade gagal, tier tidak diubah: {e}",
+            )
+
+    tenant.subscription_tier = new_tier
     tenant.row_version += 1
 
     await log_audit(
         db=db, action="UPDATE_TIER", entity="tenants", entity_id=tenant.id,
         before_state={"tier": old_tier},
-        after_state={"tier": payload.tier},
+        after_state={"tier": new_tier, "cascade_report": cascade_report},
         user_id=admin.id, tenant_id=tenant.id,
     )
     await db.commit()
-    return StandardResponse(data={"id": str(tenant.id), "tier": payload.tier}, message=f"Tier diubah ke {payload.tier}")
+
+    # Invalidate cache post-commit (tier change langsung terasa di next request)
+    from backend.services.redis import get_redis_client
+    redis = await get_redis_client()
+    await invalidate_tenant_cache(redis, tenant.id)
+
+    response_data = {"id": str(tenant.id), "tier": new_tier}
+    if cascade_report:
+        response_data["cascade"] = cascade_report
+    return StandardResponse(
+        data=response_data,
+        message=f"Tier diubah ke {new_tier}" + (" (dengan cascade)" if is_downgrade else ""),
+    )
 
 
 @router.put("/tenants/{tenant_id}/status", response_model=StandardResponse[dict])
@@ -332,6 +383,12 @@ async def update_status(
         user_id=admin.id, tenant_id=tenant.id,
     )
     await db.commit()
+
+    # Invalidate tenant cache — status/active change harus langsung terasa
+    from backend.services.subscription import invalidate_tenant_cache
+    from backend.services.redis import get_redis_client
+    redis = await get_redis_client()
+    await invalidate_tenant_cache(redis, tenant.id)
 
     status_label = "diaktifkan" if payload.is_active else "dinonaktifkan"
     return StandardResponse(

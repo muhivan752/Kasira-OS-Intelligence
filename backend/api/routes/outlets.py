@@ -46,12 +46,58 @@ async def create_outlet(
     current_user: Any = Depends(deps.get_current_active_superuser),
 ) -> Any:
     """
-    Create new outlet.
+    Create new outlet. Enforces tier-based outlet limit (fix CRITICAL #16):
+      - Starter: 1 outlet
+      - Pro: 5 outlets
+      - Business: 20 outlets
+      - Enterprise: unlimited
+    Over-limit = 403 clear error, zero silent failure.
     """
+    from backend.services.subscription import get_tier_name, get_outlet_limit
+    from backend.models.tenant import Tenant
+
+    # Resolve tenant tier untuk limit check. `outlet_in` payload pakai
+    # tenant_id eksplisit (admin-level create — non user-scoped endpoint).
+    payload_tenant_id = outlet_in.tenant_id
+    tenant = (await db.execute(
+        select(Tenant).where(Tenant.id == payload_tenant_id, Tenant.deleted_at == None)
+    )).scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant tidak ditemukan")
+
+    tier = get_tier_name(tenant)
+    limit = get_outlet_limit(tier)
+    if limit is not None:
+        current_count = len((await db.execute(
+            select(Outlet.id).where(
+                Outlet.tenant_id == payload_tenant_id,
+                Outlet.deleted_at.is_(None),
+            )
+        )).scalars().all())
+        if current_count >= limit:
+            import logging
+            logging.getLogger(__name__).warning(
+                "outlet create blocked: tenant=%s tier=%s has=%d limit=%d",
+                payload_tenant_id, tier, current_count, limit,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "OUTLET_LIMIT_EXCEEDED",
+                    "message": (
+                        f"Tier '{tier}' maksimal {limit} outlet. "
+                        f"Saat ini sudah ada {current_count}. Upgrade tier untuk menambah outlet."
+                    ),
+                    "current_tier": tier,
+                    "current_outlet_count": current_count,
+                    "tier_limit": limit,
+                },
+            )
+
     db_outlet = Outlet(**outlet_in.model_dump())
     db.add(db_outlet)
     await db.flush()
-    
+
     after_state = json.loads(outlet_in.model_dump_json())
     await log_audit(
         db=db,
@@ -62,7 +108,7 @@ async def create_outlet(
         user_id=current_user.id,
         tenant_id=db_outlet.tenant_id
     )
-    
+
     await db.commit()
     await db.refresh(db_outlet)
     return StandardResponse(data=db_outlet, message="Outlet created successfully")
@@ -311,16 +357,11 @@ async def update_stock_mode(
     mode_in: OutletStockModeUpdate,
     db: AsyncSession = Depends(deps.get_db),
     current_user: Any = Depends(deps.get_current_user),
+    # Replace inline PRO check dgn single source of truth — fix CRITICAL #15
+    # (gate sekarang juga cek is_active + subscription_status, bukan cuma enum tier).
+    _pro_tenant: Any = Depends(deps.require_pro_tier),
 ) -> Any:
-    """Switch stock mode between 'simple' and 'recipe' (Pro only)."""
-    from backend.models.tenant import Tenant
-    from backend.api.deps import PRO_TIERS
-    tenant = (await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))).scalar_one_or_none()
-    raw_tier = getattr(tenant, "subscription_tier", "starter") or "starter"
-    tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
-    if tier.lower() not in PRO_TIERS:
-        raise HTTPException(status_code=403, detail="Fitur ini hanya tersedia untuk paket Pro")
-
+    """Switch stock mode between 'simple' and 'recipe' (Pro only, active subscription)."""
     stmt = select(Outlet).where(
         Outlet.id == outlet_id, Outlet.deleted_at == None,
         Outlet.tenant_id == current_user.tenant_id,

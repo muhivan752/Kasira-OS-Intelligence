@@ -70,31 +70,70 @@ async def get_current_tenant(
     request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> Tenant:
+    """
+    Resolve tenant dari X-Tenant-ID header.
+    Efficient: try Redis cache first (30s TTL), fallback DB. Cache di-invalidate
+    otomatis oleh tenant writes (update_tier, update_status, grace period).
+    RLS `SET LOCAL` tetap eksekusi per request — tidak di-cache (per-TX state).
+    """
     tenant_id = request.headers.get("X-Tenant-ID")
     if not tenant_id or tenant_id == "public":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Header X-Tenant-ID wajib diisi"
         )
-        
-    # Try UUID first (frontend sends tenant UUID), fallback to schema_name
+
+    from backend.services.subscription import (
+        get_cached_tenant_snapshot,
+        cache_tenant_snapshot,
+        TenantSnapshot,
+    )
+    from uuid import UUID as UUID_type
     from sqlalchemy import or_
+
+    # Fast path: UUID cache lookup
+    tenant: Optional[Tenant] = None
     try:
-        from uuid import UUID as UUID_type
         tid = UUID_type(tenant_id)
+        # Try Redis cache first
+        redis = await get_redis_client()
+        snapshot = await get_cached_tenant_snapshot(redis, str(tid))
+        if snapshot is not None:
+            if not snapshot.is_active:
+                raise HTTPException(status_code=400, detail="Tenant tidak aktif")
+            # Activate RLS (always per-request — not cached)
+            await db.execute(text(f"SET LOCAL app.current_tenant_id = '{snapshot.id}'"))
+            # Fetch real Tenant ORM object (lightweight — PK lookup) untuk backward
+            # compat dgn caller yang butuh ORM relationships. Cache saved the
+            # check-and-authz roundtrip, ORM fetch tetep berlaku.
+            tenant = (await db.execute(
+                select(Tenant).where(Tenant.id == tid, Tenant.deleted_at == None)
+            )).scalar_one_or_none()
+            if tenant:
+                return tenant
+            # Cache was stale (tenant deleted) — fall through to DB path
+
+        # Cache miss — DB lookup
         stmt = select(Tenant).where(Tenant.id == tid, Tenant.deleted_at == None)
     except (ValueError, AttributeError):
+        # Non-UUID — fallback schema_name/name (rare legacy path, no cache)
         stmt = select(Tenant).where(
             or_(Tenant.schema_name == tenant_id, Tenant.name == tenant_id),
             Tenant.deleted_at == None,
         )
+        redis = None
+
     result = await db.execute(stmt)
     tenant = result.scalar_one_or_none()
-    
+
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant tidak ditemukan")
     if not tenant.is_active:
         raise HTTPException(status_code=400, detail="Tenant tidak aktif")
+
+    # Populate cache post-fetch (fire-and-forget — errors logged but non-blocking)
+    if redis is not None:
+        await cache_tenant_snapshot(redis, TenantSnapshot.from_tenant(tenant))
 
     # Activate RLS for this session
     await db.execute(text(f"SET LOCAL app.current_tenant_id = '{tenant.id}'"))
@@ -176,17 +215,61 @@ async def get_platform_admin(
     return current_user
 
 
-PRO_TIERS = {"pro", "business", "enterprise"}
+# Re-export untuk backward compat — single source of truth di
+# services/subscription.py (PRO_TIERS = frozenset).
+from backend.services.subscription import PRO_TIERS  # noqa: E402
 
 async def require_pro_tier(
     tenant: Tenant = Depends(get_current_tenant),
 ) -> Tenant:
-    """Blokir akses fitur Pro+ untuk tenant Starter."""
-    raw_tier = getattr(tenant, "subscription_tier", "starter") or "starter"
-    tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
-    if tier.lower() not in PRO_TIERS:
+    """
+    Blokir fitur Pro+ untuk tenant yang:
+      1. Tier = starter (upgrade-needed), atau
+      2. Subscription tidak aktif (suspended/expired/cancelled) walau tier = pro+.
+         Fix CRITICAL #15 — dulu cuma check enum tier, lolos untuk tenant
+         expired yang masih bertier "pro".
+
+    Setiap reject di-log untuk observability (alert di grep/Sentry).
+    """
+    from backend.services.subscription import (
+        get_tier_name, get_status_name, is_pro_tier, is_subscription_active,
+    )
+    import logging
+    logger_tier = logging.getLogger("backend.api.deps.tier")
+
+    tier = get_tier_name(tenant)
+    status_name = get_status_name(tenant)
+
+    if not is_pro_tier(tenant):
+        logger_tier.info(
+            "tier gate reject: tenant=%s reason=insufficient_tier tier=%s",
+            tenant.id, tier,
+        )
         raise HTTPException(
             status_code=403,
-            detail="Fitur ini hanya tersedia untuk paket Pro. Upgrade untuk mengakses."
+            detail={
+                "code": "INSUFFICIENT_TIER",
+                "message": "Fitur ini hanya tersedia untuk paket Pro. Upgrade untuk mengakses.",
+                "current_tier": tier,
+            },
         )
+
+    if not is_subscription_active(tenant):
+        logger_tier.warning(
+            "tier gate reject: tenant=%s reason=subscription_inactive "
+            "tier=%s status=%s is_active=%s",
+            tenant.id, tier, status_name, tenant.is_active,
+        )
+        raise HTTPException(
+            status_code=402,  # Payment Required — semantic for subscription issue
+            detail={
+                "code": "SUBSCRIPTION_INACTIVE",
+                "message": (
+                    "Langganan Pro Anda tidak aktif (suspended/expired). "
+                    "Bayar invoice terakhir atau hubungi admin untuk re-aktivasi."
+                ),
+                "status": status_name,
+            },
+        )
+
     return tenant

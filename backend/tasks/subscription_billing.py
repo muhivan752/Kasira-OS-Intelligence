@@ -283,6 +283,21 @@ async def enforce_grace_period():
                         user_id=None, tenant_id=tenant.id,
                     )
 
+                    # Invalidate tenant cache — suspended tenant TIDAK BOLEH lolos
+                    # gate pake cached snapshot stale. Fix CRITICAL #15.
+                    try:
+                        from backend.services.subscription import invalidate_tenant_cache
+                        from backend.services.redis import get_redis_client
+                        redis = await get_redis_client()
+                        await invalidate_tenant_cache(redis, tenant.id)
+                    except Exception as e:
+                        # Log tapi jangan fail task — TTL 30s akan clean up auto
+                        logger.warning(
+                            "auto-suspend cache invalidate failed tenant=%s: %s "
+                            "(next read stale until TTL)",
+                            tenant.id, e,
+                        )
+
                     # Notify via WA
                     owner_phone = await _get_owner_phone(db, inv.tenant_id)
                     if owner_phone:
