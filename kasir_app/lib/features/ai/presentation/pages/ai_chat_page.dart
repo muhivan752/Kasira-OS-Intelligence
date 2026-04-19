@@ -270,13 +270,9 @@ class _MessageBubble extends StatelessWidget {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
                         )
-                      : Text(
-                          message.content,
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            color: isError ? AppColors.error : AppColors.textPrimary,
-                            height: 1.4,
-                          ),
+                      : _MarkdownText(
+                          content: message.content,
+                          color: isError ? AppColors.error : AppColors.textPrimary,
                         ),
                 ),
                 if (message.model != null) ...[
@@ -293,5 +289,95 @@ class _MessageBubble extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Simple markdown render untuk AI response:
+/// - `**text**` → bold
+/// - `` `code` `` → monospace
+/// - Lines starting with `- ` atau `* ` atau `• ` → bullet indent
+/// - Preserve blank lines as spacing
+class _MarkdownText extends StatelessWidget {
+  final String content;
+  final Color color;
+  const _MarkdownText({required this.content, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final baseStyle = TextStyle(fontSize: 13.5, color: color, height: 1.4);
+    final lines = content.split('\n');
+    final widgets = <Widget>[];
+
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      final trimmed = line.trimLeft();
+      final isBullet = trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ');
+
+      if (line.trim().isEmpty) {
+        widgets.add(const SizedBox(height: 6));
+        continue;
+      }
+
+      if (isBullet) {
+        final bulletContent = trimmed.substring(2).trimLeft();
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(left: 4, top: 1, bottom: 1),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('•  ', style: baseStyle),
+              Expanded(child: Text.rich(_parseInline(bulletContent, baseStyle))),
+            ],
+          ),
+        ));
+      } else {
+        widgets.add(Text.rich(_parseInline(line, baseStyle)));
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: widgets,
+    );
+  }
+
+  /// Parse `**bold**` dan `` `code` `` jadi TextSpan list.
+  InlineSpan _parseInline(String text, TextStyle base) {
+    final spans = <TextSpan>[];
+    final pattern = RegExp(r'(\*\*([^*]+)\*\*|`([^`]+)`)');
+    var cursor = 0;
+
+    for (final match in pattern.allMatches(text)) {
+      if (match.start > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, match.start), style: base));
+      }
+      final boldContent = match.group(2);
+      final codeContent = match.group(3);
+      if (boldContent != null) {
+        spans.add(TextSpan(
+          text: boldContent,
+          style: base.copyWith(fontWeight: FontWeight.bold),
+        ));
+      } else if (codeContent != null) {
+        spans.add(TextSpan(
+          text: codeContent,
+          style: base.copyWith(
+            fontFamily: 'monospace',
+            backgroundColor: AppColors.surfaceVariant,
+            fontSize: (base.fontSize ?? 13.5) - 0.5,
+          ),
+        ));
+      }
+      cursor = match.end;
+    }
+
+    if (cursor < text.length) {
+      spans.add(TextSpan(text: text.substring(cursor), style: base));
+    }
+    if (spans.isEmpty) {
+      spans.add(TextSpan(text: text, style: base));
+    }
+    return TextSpan(children: spans);
   }
 }
