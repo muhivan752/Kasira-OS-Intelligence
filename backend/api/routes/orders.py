@@ -13,6 +13,7 @@ from backend.models.order import Order, OrderItem
 from backend.models.payment import Payment
 from backend.models.product import Product
 from backend.models.outlet import Outlet
+from backend.models.outlet_tax_config import OutletTaxConfig
 from backend.models.shift import Shift, ShiftStatus
 from backend.models.tenant import Tenant
 from backend.schemas.order import OrderCreate, OrderUpdateStatus, OrderResponse, OrderStatus, OrderType
@@ -582,4 +583,89 @@ async def update_order_status(
         data=OrderResponse.model_validate(updated_order_loaded),
         request_id=request.state.request_id,
         message="Order status updated successfully"
+    )
+
+
+@router.get("/{order_id}/receipt", response_model=StandardResponse[dict])
+async def get_order_receipt(
+    request: Request,
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Return structured receipt data untuk reprint di mobile/POS.
+    Flutter konsumsi JSON ini lalu rebuild ESC/POS bytes via buildReceipt().
+    Offline fallback: Flutter bisa rebuild dari drift DB lokal.
+    """
+    # Load order + items (+ product untuk fallback nama item)
+    query = select(Order).options(
+        selectinload(Order.items).selectinload(OrderItem.product)
+    ).where(Order.id == order_id, Order.deleted_at.is_(None))
+    order = (await db.execute(query)).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order tidak ditemukan")
+
+    # Tenant scoping via outlet
+    outlet = await db.get(Outlet, order.outlet_id)
+    if not outlet or outlet.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Order bukan milik tenant Anda")
+
+    # Latest payment untuk method, amount_paid, change
+    payment = (await db.execute(
+        select(Payment)
+        .where(Payment.order_id == order.id, Payment.deleted_at.is_(None))
+        .order_by(Payment.created_at.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+
+    # Tax config (NPWP + custom receipt footer)
+    tax_cfg = (await db.execute(
+        select(OutletTaxConfig).where(OutletTaxConfig.outlet_id == outlet.id)
+    )).scalar_one_or_none()
+
+    # Format tanggal WIB (sama seperti WhatsApp receipt)
+    from datetime import timezone as tz, timedelta
+    wib = tz(timedelta(hours=7))
+    date_time = order.created_at.astimezone(wib).strftime("%d/%m/%Y %H:%M") if order.created_at else "-"
+
+    # Payment method label human-readable (match WA receipt labels)
+    method_label_map = {"cash": "Tunai", "qris": "QRIS", "card": "Kartu", "transfer": "Transfer"}
+    payment_method_raw = payment.payment_method if payment else "cash"
+    payment_method_label = method_label_map.get(payment_method_raw, payment_method_raw.upper())
+
+    items = [
+        {
+            "name": item.product_name or (item.product.name if item.product else "Item"),
+            "qty": item.quantity,
+            "price": float(item.unit_price or 0),
+            "notes": item.notes,
+        }
+        for item in order.items
+    ]
+
+    total_val = float(order.total_amount or 0)
+
+    data = {
+        "outlet_name": outlet.name or "Kasira",
+        "outlet_address": outlet.address or "",
+        "order_number": str(order.display_number),
+        "date_time": date_time,
+        "items": items,
+        "subtotal": float(order.subtotal or 0),
+        "service_charge": float(order.service_charge_amount or 0),
+        "tax": float(order.tax_amount or 0),
+        "discount": float(order.discount_amount or 0),
+        "total": total_val,
+        "payment_method": payment_method_label,
+        "amount_paid": float(payment.amount_paid or total_val) if payment else total_val,
+        "change_amount": float(payment.change_amount or 0) if payment else 0.0,
+        "tax_number": tax_cfg.tax_number if tax_cfg else None,
+        "custom_footer": tax_cfg.receipt_footer if tax_cfg else None,
+    }
+
+    return StandardResponse(
+        success=True,
+        data=data,
+        request_id=request.state.request_id,
     )

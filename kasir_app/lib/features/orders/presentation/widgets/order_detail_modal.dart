@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -5,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
+import '../../../../core/services/printer_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/orders_provider.dart';
 
@@ -204,7 +206,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
           if (_updating)
             const Center(child: CircularProgressIndicator())
           else if (order.status == 'completed')
-            _buildRefundButton(order)
+            _buildCompletedActions(order)
           else
             _buildActionButtons(order),
         ],
@@ -290,20 +292,119 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
     }
   }
 
-  Widget _buildRefundButton(OrderModel order) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: () => _showRefundDialog(order),
-        icon: const Icon(LucideIcons.rotateCcw, size: 18),
-        label: const Text('Ajukan Refund'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.warning,
-          side: const BorderSide(color: AppColors.warning),
-          padding: const EdgeInsets.symmetric(vertical: 14),
+  Widget _buildCompletedActions(OrderModel order) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _reprintReceipt(order),
+                icon: const Icon(LucideIcons.printer, size: 18),
+                label: const Text('Cetak Ulang'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _showRefundDialog(order),
+                icon: const Icon(LucideIcons.rotateCcw, size: 18),
+                label: const Text('Refund'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.warning,
+                  side: const BorderSide(color: AppColors.warning),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ],
         ),
-      ),
+      ],
     );
+  }
+
+  Future<void> _reprintReceipt(OrderModel order) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final cache = SessionCache.instance;
+      final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1, connectTimeout: const Duration(seconds: 10)));
+      final resp = await dio.get(
+        '/orders/${order.id}/receipt',
+        options: Options(headers: cache.authHeaders),
+      );
+      final data = resp.data['data'] as Map<String, dynamic>;
+      final receiptData = ReceiptDataJson.fromJson(data);
+      final bytes = buildReprintReceipt(receiptData);
+
+      final notifier = ref.read(printerProvider.notifier);
+      final ok = await notifier.printBytes(bytes);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(ok ? 'Struk dicetak ulang' : 'Gagal cetak — cek printer'),
+          backgroundColor: ok ? AppColors.success : AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final detail = e.response?.data?['detail'] ?? 'Tidak ada koneksi — cek internet';
+      messenger.showSnackBar(
+        SnackBar(content: Text(detail.toString()), backgroundColor: AppColors.error),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Gagal cetak ulang: $e'), backgroundColor: AppColors.error),
+      );
+    }
+  }
+
+  Future<void> _printRefundReceipt(OrderModel order, double amount, String reason) async {
+    try {
+      final cache = SessionCache.instance;
+      final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1, connectTimeout: const Duration(seconds: 10)));
+
+      String outletName = 'Kasira';
+      String outletAddress = '';
+      String? taxNumber;
+      String? customFooter;
+      try {
+        final recRes = await dio.get(
+          '/orders/${order.id}/receipt',
+          options: Options(headers: cache.authHeaders),
+        );
+        final d = recRes.data['data'] as Map<String, dynamic>;
+        outletName = (d['outlet_name'] ?? 'Kasira').toString();
+        outletAddress = (d['outlet_address'] ?? '').toString();
+        taxNumber = d['tax_number']?.toString();
+        customFooter = d['custom_footer']?.toString();
+      } catch (_) {
+        // fallback: outlet info tidak tersedia, tetap cetak
+      }
+
+      final now = DateTime.now();
+      final dt = DateFormat('dd/MM/yyyy HH:mm').format(now);
+      final refundData = RefundReceiptData(
+        outletName: outletName,
+        outletAddress: outletAddress,
+        originalOrderNumber: order.displayNumber.toString(),
+        dateTime: dt,
+        refundAmount: amount,
+        reason: reason,
+        taxNumber: taxNumber,
+        customFooter: customFooter,
+      );
+      final bytes = buildRefundReceipt(refundData);
+      await ref.read(printerProvider.notifier).printBytes(bytes);
+    } catch (_) {
+      // print failure jangan block flow refund — sudah ada snackbar success refund
+    }
   }
 
   void _showRefundDialog(OrderModel order) {
@@ -389,6 +490,8 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text(msg), backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating),
                     );
+                    // Auto-print struk refund (best-effort, jangan block)
+                    unawaited(_printRefundReceipt(order, amount, reason));
                   }
                 } on DioException catch (e) {
                   setDialogState(() => isSubmitting = false);

@@ -280,6 +280,61 @@ class ReceiptLineItem {
   double get subtotal => qty * price;
 }
 
+extension ReceiptDataJson on ReceiptData {
+  static ReceiptData fromJson(Map<String, dynamic> j) {
+    final itemsRaw = (j['items'] as List?) ?? const [];
+    final items = itemsRaw.map((e) {
+      final m = Map<String, dynamic>.from(e as Map);
+      return ReceiptLineItem(
+        name: (m['name'] ?? 'Item').toString(),
+        qty: (m['qty'] as num?)?.toInt() ?? 1,
+        price: (m['price'] as num?)?.toDouble() ?? 0,
+        notes: m['notes']?.toString(),
+      );
+    }).toList();
+    return ReceiptData(
+      outletName: (j['outlet_name'] ?? 'Kasira').toString(),
+      outletAddress: (j['outlet_address'] ?? '').toString(),
+      orderNumber: (j['order_number'] ?? '').toString(),
+      dateTime: (j['date_time'] ?? '').toString(),
+      items: items,
+      subtotal: (j['subtotal'] as num?)?.toDouble() ?? 0,
+      serviceCharge: (j['service_charge'] as num?)?.toDouble(),
+      tax: (j['tax'] as num?)?.toDouble(),
+      total: (j['total'] as num?)?.toDouble() ?? 0,
+      paymentMethod: (j['payment_method'] ?? 'Tunai').toString(),
+      amountPaid: (j['amount_paid'] as num?)?.toDouble() ?? 0,
+      changeAmount: (j['change_amount'] as num?)?.toDouble() ?? 0,
+      taxNumber: j['tax_number']?.toString(),
+      customFooter: j['custom_footer']?.toString(),
+    );
+  }
+}
+
+class RefundReceiptData {
+  final String outletName;
+  final String outletAddress;
+  final String originalOrderNumber;
+  final String dateTime;
+  final double refundAmount;
+  final String reason;
+  final String? cashierName;
+  final String? taxNumber;
+  final String? customFooter;
+
+  const RefundReceiptData({
+    required this.outletName,
+    required this.outletAddress,
+    required this.originalOrderNumber,
+    required this.dateTime,
+    required this.refundAmount,
+    required this.reason,
+    this.cashierName,
+    this.taxNumber,
+    this.customFooter,
+  });
+}
+
 String _rp(double amount) {
   final n = amount.toInt();
   final s = n.toString();
@@ -381,6 +436,91 @@ Uint8List buildReceipt(ReceiptData d) {
   bytes.addAll(EscPos.divider(width: w));
   bytes.addAll(EscPos.alignCenter);
   bytes.addAll(EscPos.line('Terima kasih!'));
+  if (d.customFooter != null && d.customFooter!.trim().isNotEmpty) {
+    for (final l in _wrapWords(d.customFooter!.trim(), w)) {
+      bytes.addAll(EscPos.line(l));
+    }
+  } else {
+    bytes.addAll(EscPos.line('Powered by Kasira'));
+  }
+  bytes.addAll(EscPos.feedLines3);
+  bytes.addAll(EscPos.cut);
+
+  return Uint8List.fromList(bytes);
+}
+
+/// Reprint marker — dipanggil buildReceipt dari data backend/drift untuk cetak ulang.
+/// Nambahin flag "CETAK ULANG" di header biar kasir/customer tau ini bukan struk asli.
+Uint8List buildReprintReceipt(ReceiptData d) {
+  final bytes = <int>[];
+  bytes.addAll(EscPos.init);
+  bytes.addAll(EscPos.alignCenter);
+  bytes.addAll(EscPos.boldOn);
+  bytes.addAll(EscPos.line('*** CETAK ULANG ***'));
+  bytes.addAll(EscPos.boldOff);
+  bytes.addAll([0x0A]);
+  bytes.addAll(buildReceipt(d));
+  return Uint8List.fromList(bytes);
+}
+
+/// Refund receipt — struk bukti refund untuk customer.
+Uint8List buildRefundReceipt(RefundReceiptData d) {
+  final bytes = <int>[];
+  const w = 32;
+
+  bytes.addAll(EscPos.init);
+
+  // Header
+  bytes.addAll(EscPos.alignCenter);
+  bytes.addAll(EscPos.boldOn);
+  bytes.addAll(EscPos.fontBig);
+  bytes.addAll(EscPos.line(d.outletName.toUpperCase()));
+  bytes.addAll(EscPos.fontNormal);
+  bytes.addAll(EscPos.boldOff);
+  if (d.outletAddress.isNotEmpty) {
+    bytes.addAll(EscPos.line(d.outletAddress));
+  }
+  if (d.taxNumber != null && d.taxNumber!.isNotEmpty) {
+    bytes.addAll(EscPos.line('NPWP: ${d.taxNumber}'));
+  }
+  bytes.addAll([0x0A]);
+
+  // REFUND banner
+  bytes.addAll(EscPos.boldOn);
+  bytes.addAll(EscPos.fontBig);
+  bytes.addAll(EscPos.line('*** REFUND ***'));
+  bytes.addAll(EscPos.fontNormal);
+  bytes.addAll(EscPos.boldOff);
+  bytes.addAll([0x0A]);
+
+  // Info
+  bytes.addAll(EscPos.alignLeft);
+  bytes.addAll(EscPos.divider(width: w));
+  bytes.addAll(EscPos.line('Order: #${d.originalOrderNumber}'));
+  bytes.addAll(EscPos.line('Tgl  : ${d.dateTime}'));
+  if (d.cashierName != null && d.cashierName!.isNotEmpty) {
+    bytes.addAll(EscPos.line('Kasir: ${d.cashierName}'));
+  }
+  bytes.addAll(EscPos.divider(width: w));
+
+  // Alasan refund — wrap kalau panjang
+  bytes.addAll(EscPos.line('Alasan:'));
+  for (final l in _wrapWords(d.reason, w)) {
+    bytes.addAll(EscPos.line(l));
+  }
+  bytes.addAll(EscPos.divider(width: w));
+
+  // Jumlah refund
+  bytes.addAll(EscPos.boldOn);
+  bytes.addAll(EscPos.rowLR('REFUND', _rp(d.refundAmount), width: w));
+  bytes.addAll(EscPos.boldOff);
+  bytes.addAll(EscPos.divider(width: w));
+
+  // Footer
+  bytes.addAll(EscPos.alignCenter);
+  bytes.addAll(EscPos.line('Simpan struk ini'));
+  bytes.addAll(EscPos.line('sebagai bukti refund'));
+  bytes.addAll([0x0A]);
   if (d.customFooter != null && d.customFooter!.trim().isNotEmpty) {
     for (final l in _wrapWords(d.customFooter!.trim(), w)) {
       bytes.addAll(EscPos.line(l));
