@@ -1692,8 +1692,16 @@ async def stream_ai_response(
         logger.debug(f"RAG enrichment skipped: {e}")
 
     # 3c. Pricing coach — inject HPP + margin data + coach system prompt
+    # Fail-CLOSED semantics: Redis down → fallback ke Haiku (bukan silent
+    # unlimited Sonnet spend). Single source of truth untuk model selection
+    # di handler ini, override ke get_model_for_tier().
+    pricing_coach_model_override = None
+    pricing_coach_degraded_reason = None
     if intent == INTENT_PRICING_COACH:
-        # Cek quota Sonnet per tenant (Sonnet 4x biaya Haiku)
+        # Quota check — kalau Redis unavailable, DOWNGRADE ke Haiku instead of
+        # falling through to unchecked Sonnet call. Better degraded UX daripada
+        # risiko tagihan Anthropic meledak saat Redis sirna.
+        quota_check_ok = False
         try:
             from datetime import date as dt_date
             today = dt_date.today().isoformat()
@@ -1711,32 +1719,138 @@ async def stream_ai_response(
                 })
                 yield sse({"type": "done", "intent": INTENT_PRICING_COACH, "tokens_used": 0})
                 return
-        except Exception:
-            pass
+            quota_check_ok = True
+        except Exception as e:
+            # Redis down / timeout — fail-CLOSED ke Haiku, bukan fall through
+            logger.warning(
+                "PRICING_COACH quota check failed (Redis issue?) — downgrading "
+                "model ke Haiku untuk safety. tenant=%s error=%s",
+                tenant_id, e,
+            )
+            pricing_coach_model_override = HAIKU_MODEL_ID
+            pricing_coach_degraded_reason = "redis_down"
 
-        # Track extra spend (Sonnet ~2 cents vs Haiku 1 cent)
-        try:
-            from datetime import date as dt_date
-            spend_key = f"ai_spend:{dt_date.today().isoformat()}"
-            await redis_client.incrby(spend_key, 1)  # tambah 1 lagi (total 2)
-        except Exception:
-            pass
+        # Track extra spend (Sonnet +1 extra cent vs Haiku 1 cent) — skip
+        # kalau udah degraded ke Haiku.
+        if quota_check_ok:
+            try:
+                from datetime import date as dt_date
+                spend_key = f"ai_spend:{dt_date.today().isoformat()}"
+                await redis_client.incrby(spend_key, 1)
+            except Exception:
+                pass
 
         pricing_ctx = await build_pricing_context(outlet_id, db)
         system_prompt += pricing_ctx + PRICING_COACH_SYSTEM_APPEND
 
-    # 4. Pilih model (intent-aware — PRICING_COACH → Sonnet)
+    # 4. Pilih model. PRICING_COACH override (Redis-down degraded) takes
+    # precedence atas get_model_for_tier().
     task_complexity = classify_task_complexity(message)
-    model = await get_model_for_tier(tier, task_complexity, tenant_id=tenant_id, intent=intent)
+    if pricing_coach_model_override:
+        model = pricing_coach_model_override
+    else:
+        model = await get_model_for_tier(tier, task_complexity, tenant_id=tenant_id, intent=intent)
 
     # 5. Stream dari Claude API
     try:
         import anthropic
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        # Timeout 30s pricing coach, 25s untuk lainnya — bikin failover cepat
+        # daripada default 10 menit SDK.
+        client_timeout = 30.0 if intent == INTENT_PRICING_COACH else 25.0
+        client = anthropic.AsyncAnthropic(
+            api_key=settings.ANTHROPIC_API_KEY,
+            timeout=client_timeout,
+        )
 
         tokens_used = 0
         # Pricing coach perlu ruang lebih besar untuk reasoning multi-produk
         max_tok = 1500 if intent == INTENT_PRICING_COACH else 512
+
+        # Fallback chain untuk PRICING_COACH: Sonnet gagal → retry 1x Haiku.
+        # Buffer output agar kalau Sonnet fail mid-stream, kita gak yield
+        # partial garbage — discard buffer + retry Haiku fresh.
+        # Untuk intent lain: direct stream tanpa fallback (tidak perlu untuk
+        # CHAT/RESTOCK/SETUP_RECIPE yang sudah di Haiku).
+        if intent == INTENT_PRICING_COACH:
+            # Model chain: primary model dulu, lalu Haiku kalau primary = Sonnet
+            models_to_try = [model]
+            if model == SONNET_MODEL_ID:
+                models_to_try.append(HAIKU_MODEL_ID)
+
+            last_error = None
+            for attempt_idx, try_model in enumerate(models_to_try):
+                try:
+                    buffer = []
+                    tokens_used = 0
+                    async with client.messages.stream(
+                        model=try_model,
+                        max_tokens=max_tok,
+                        system=system_prompt,
+                        messages=[{"role": "user", "content": message}],
+                    ) as stream:
+                        async for text_chunk in stream.text_stream:
+                            buffer.append(text_chunk)
+                        final_msg = await stream.get_final_message()
+                        tokens_used = (
+                            final_msg.usage.input_tokens + final_msg.usage.output_tokens
+                        )
+
+                    is_fallback = attempt_idx > 0
+                    if is_fallback:
+                        logger.warning(
+                            "PRICING_COACH fallback sukses: primary=%s gagal, "
+                            "retry dgn %s OK. reason=%s tenant=%s",
+                            models_to_try[0], try_model, last_error, tenant_id,
+                        )
+                    elif pricing_coach_degraded_reason:
+                        logger.info(
+                            "PRICING_COACH degraded path (model=%s, reason=%s, tenant=%s)",
+                            try_model, pricing_coach_degraded_reason, tenant_id,
+                        )
+
+                    # Stream sukses — emit buffered output
+                    for chunk in buffer:
+                        yield sse({"type": "chunk", "content": chunk})
+                    done_payload = {
+                        "type": "done",
+                        "intent": intent,
+                        "tokens_used": tokens_used,
+                        "model": try_model,
+                    }
+                    if is_fallback or pricing_coach_degraded_reason:
+                        done_payload["degraded"] = True
+                        done_payload["fallback_reason"] = (
+                            pricing_coach_degraded_reason
+                            if pricing_coach_degraded_reason and not is_fallback
+                            else "sonnet_api_error"
+                        )
+                    yield sse(done_payload)
+                    return  # sukses — exit handler
+
+                except Exception as e:
+                    last_error = str(e)
+                    logger.warning(
+                        "PRICING_COACH model=%s attempt=%d failed: %s",
+                        try_model, attempt_idx + 1, e,
+                    )
+                    continue  # coba model berikutnya (kalau ada)
+
+            # Semua model di chain gagal
+            logger.error(
+                "PRICING_COACH all models failed after %d attempts. "
+                "Last error: %s. tenant=%s",
+                len(models_to_try), last_error, tenant_id,
+            )
+            yield sse({
+                "type": "error",
+                "message": (
+                    "Layanan analisa harga lagi gangguan (Sonnet + Haiku keduanya "
+                    "tidak respons). Coba lagi 5 menit, atau hubungi support."
+                ),
+            })
+            return
+
+        # Non-pricing intent: direct stream, no fallback
         async with client.messages.stream(
             model=model,
             max_tokens=max_tok,
@@ -1746,7 +1860,6 @@ async def stream_ai_response(
             async for text_chunk in stream.text_stream:
                 yield sse({"type": "chunk", "content": text_chunk})
 
-            # Usage dari final message
             final_msg = await stream.get_final_message()
             tokens_used = (
                 final_msg.usage.input_tokens + final_msg.usage.output_tokens
