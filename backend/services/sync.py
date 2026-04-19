@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
 from datetime import datetime, timezone
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Optional
 import uuid
 
 from backend.models.category import Category
@@ -202,32 +202,92 @@ async def process_stock_sync(db: AsyncSession, client_records: List[Dict[str, An
             
     await db.flush()
 
-async def get_table_changes(db: AsyncSession, model_class, filter_kwargs: dict, last_sync_hlc: HLC, server_node_id: str) -> List[Dict[str, Any]]:
+async def get_table_changes(
+    db: AsyncSession,
+    model_class,
+    filter_kwargs: dict,
+    last_sync_hlc: HLC,
+    server_node_id: str,
+    limit: int = 500,
+    cursor_last_id: Optional[str] = None,
+) -> tuple[List[Dict[str, Any]], bool]:
+    """
+    Pull delta changes untuk 1 table — cursor pagination (CRITICAL #7).
+
+    Filter composite:
+      1. updated_at > ms_end (strict next-millisecond)
+      2. same-ms + row_version > cursor.counter
+      3. same-ms + row_version == cursor.counter + id > cursor.id (tie-break
+         utk duplikat tuple — client kirim cursor_last_id)
+
+    ORDER BY: updated_at ASC, row_version ASC, id ASC — strictly deterministic.
+    LIMIT limit+1 — detect has_more tanpa COUNT query.
+
+    Zero regression on CRDT: (1) sort deterministic via id tie-break,
+    (2) filter exhaustive — no missing + no duplicate across pages.
+    """
     stmt = select(model_class)
     for k, v in filter_kwargs.items():
         stmt = stmt.filter(getattr(model_class, k) == v)
-        
+
     if last_sync_hlc and last_sync_hlc.timestamp > 0:
-        # Convert HLC timestamp back to datetime for querying
+        # HLC.timestamp (ms) < DB TIMESTAMPTZ (µs) precision. Range-bound by
+        # millisecond + row_version tie-break + id tie-break untuk duplicate
+        # (updated_at, row_version) rows.
+        from datetime import timedelta
         last_sync_dt = datetime.fromtimestamp(last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
+        ms_end = last_sync_dt + timedelta(microseconds=999)
         last_counter = last_sync_hlc.counter
-        
+
         if hasattr(model_class, "row_version"):
-            stmt = stmt.filter(
-                or_(
-                    model_class.updated_at > last_sync_dt,
+            tie_break_conditions = [
+                # Lebih baru dari last ms ter-cursor
+                model_class.updated_at > ms_end,
+                # Same ms + higher row_version
+                and_(
+                    model_class.updated_at >= last_sync_dt,
+                    model_class.updated_at <= ms_end,
+                    model_class.row_version > last_counter,
+                ),
+            ]
+            if cursor_last_id and hasattr(model_class, "id"):
+                # Same (ms, row_version) + id > last_id (UUID lex compare)
+                tie_break_conditions.append(
                     and_(
-                        model_class.updated_at == last_sync_dt,
-                        model_class.row_version > last_counter
+                        model_class.updated_at >= last_sync_dt,
+                        model_class.updated_at <= ms_end,
+                        model_class.row_version == last_counter,
+                        model_class.id > uuid.UUID(cursor_last_id),
                     )
                 )
-            )
+            stmt = stmt.filter(or_(*tie_break_conditions))
         else:
+            # No row_version — tolerate ms-precision edge (recipes,
+            # recipe_ingredients tables; biasanya data kecil).
             stmt = stmt.filter(model_class.updated_at >= last_sync_dt)
-        
+
+    # ORDER BY + LIMIT untuk pagination. ASC + id tie-break = fully
+    # deterministic across queries (Postgres gak jamin order kalau ORDER BY
+    # gak unique). LIMIT+1 = detect has_more tanpa COUNT query.
+    if hasattr(model_class, "row_version") and hasattr(model_class, "id"):
+        stmt = stmt.order_by(
+            model_class.updated_at.asc(),
+            model_class.row_version.asc(),
+            model_class.id.asc(),
+        )
+    elif hasattr(model_class, "id"):
+        stmt = stmt.order_by(model_class.updated_at.asc(), model_class.id.asc())
+    else:
+        stmt = stmt.order_by(model_class.updated_at.asc())
+    stmt = stmt.limit(limit + 1)
+
     result = await db.execute(stmt)
     records = result.scalars().all()
-    
+
+    had_more = len(records) > limit
+    if had_more:
+        records = records[:limit]  # discard sentinel row
+
     result_list = []
     for r in records:
         record_dict = {}
@@ -239,11 +299,9 @@ async def get_table_changes(db: AsyncSession, model_class, filter_kwargs: dict, 
                 record_dict[c.name] = str(val)
             else:
                 record_dict[c.name] = val
-                
-        # Map deleted_at to is_deleted for client
+
         record_dict["is_deleted"] = getattr(r, "deleted_at", None) is not None
-                
-        # Attach HLC to the outgoing record
+
         r_updated_at = getattr(r, "updated_at")
         if r_updated_at.tzinfo is None:
             r_updated_at = r_updated_at.replace(tzinfo=timezone.utc)
@@ -251,7 +309,7 @@ async def get_table_changes(db: AsyncSession, model_class, filter_kwargs: dict, 
         r_counter = getattr(r, "row_version", 0)
         r_hlc = HLC(timestamp=r_timestamp, counter=r_counter, node_id=server_node_id)
         record_dict["hlc"] = r_hlc.to_string()
-        
+
         result_list.append(record_dict)
-        
-    return result_list
+
+    return result_list, had_more

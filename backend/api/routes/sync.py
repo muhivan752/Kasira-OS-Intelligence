@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_, text
 from datetime import datetime, timezone
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Optional
 import uuid
 
 from backend.api import deps
@@ -115,8 +115,16 @@ async def sync_data(
                 "sync idempotency claim failed, proceeding without dedup: %s", e
             )
 
-    # 1. PUSH (Apply changes from client to server) — skip kalau dedup hit
-    if request.changes and push_claimed:
+    # 1. PUSH (Apply changes from client to server) — skip kalau:
+    #    (a) idempotency dedup hit, atau
+    #    (b) cursor_hlc set = pagination continuation (push udah di first page)
+    is_pagination_continuation = bool(request.cursor_hlc)
+    if is_pagination_continuation:
+        logger.info(
+            "sync pagination continuation (cursor=%s) — skip push, pull only",
+            request.cursor_hlc[:30] if len(request.cursor_hlc) > 30 else request.cursor_hlc,
+        )
+    if request.changes and push_claimed and not is_pagination_continuation:
         if request.changes.categories:
             await process_table_sync(db, Category, request.changes.categories, {"brand_id": brand_id}, server_hlc)
         if request.changes.products:
@@ -243,217 +251,166 @@ async def sync_data(
             await process_table_sync(db, CashActivity, trusted_ca, {}, server_hlc, conflict_strategy="financial_strict")
         if request.changes.outlet_stock:
             await process_stock_sync(db, request.changes.outlet_stock, outlet_id, server_hlc)
-            
+
         # Commit all pushed changes in a single transaction
         await db.commit()
-            
-    # 2. PULL (Get changes from server to client since last_sync_hlc)
+
+    # 2. PULL with CURSOR PAGINATION (CRITICAL #7).
+    # Effective cursor priority: cursor_hlc (intra-session pagination) >
+    # last_sync_hlc (first page marker). Zero data loss: filter > cursor
+    # ASC sorted, limit+1 detect has_more.
+    effective_hlc_str = request.cursor_hlc or request.last_sync_hlc
     client_last_sync_hlc = None
-    if request.last_sync_hlc:
+    if effective_hlc_str:
         try:
-            client_last_sync_hlc = HLC.from_string(request.last_sync_hlc)
+            client_last_sync_hlc = HLC.from_string(effective_hlc_str)
         except ValueError:
-            pass # Invalid HLC string, pull everything
-            
+            pass  # Invalid HLC → pull dari awal
+
+    page_limit = request.limit  # validated by schema (10-2000)
+    cursor_last_id = request.cursor_last_id  # tie-break untuk duplicate tuples
+
+    # Collect per-table (records, had_more) dari get_table_changes helper.
+    # Non-helper tables (order_items, outlet_stock, recipes, recipe_ingredients,
+    # cash_activities) akan di-handle dgn inline paginated query di bawah.
+    cat_records, cat_more = await get_table_changes(db, Category, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
+    prod_records, prod_more = await get_table_changes(db, Product, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
+    ord_records, ord_more = await get_table_changes(db, Order, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
+    pay_records, pay_more = await get_table_changes(db, Payment, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
+    shift_records, shift_more = await get_table_changes(db, Shift, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
+    ing_records, ing_more = await get_table_changes(db, Ingredient, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
+
     pull_changes = SyncPayload(
-        categories=await get_table_changes(db, Category, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id),
-        products=await get_table_changes(db, Product, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id),
-        orders=await get_table_changes(db, Order, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id),
+        categories=cat_records,
+        products=prod_records,
+        orders=ord_records,
         order_items=[],
-        payments=await get_table_changes(db, Payment, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id),
-        shifts=await get_table_changes(db, Shift, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id),
+        payments=pay_records,
+        shifts=shift_records,
         cash_activities=[],
         outlet_stock=[],
-        ingredients=await get_table_changes(db, Ingredient, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id),
+        ingredients=ing_records,
         recipes=[],
         recipe_ingredients=[]
     )
+
+    # Aggregate has_more tracker — any table filled limit = page berikutnya ada
+    has_more_any = cat_more or prod_more or ord_more or pay_more or shift_more or ing_more
     
-    # Custom pull for order_items
-    stmt = select(OrderItem).join(Order).filter(Order.outlet_id == outlet_id)
-    if client_last_sync_hlc and client_last_sync_hlc.timestamp > 0:
-        last_sync_dt = datetime.fromtimestamp(client_last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
-        last_counter = client_last_sync_hlc.counter
-        stmt = stmt.filter(
-            or_(
-                OrderItem.updated_at > last_sync_dt,
-                and_(
-                    OrderItem.updated_at == last_sync_dt,
-                    OrderItem.row_version > last_counter
-                )
-            )
-        )
-        
-    result = await db.execute(stmt)
-    order_items_records = result.scalars().all()
-    
-    oi_result = []
-    for r in order_items_records:
-        record_dict = {}
+    # Helper inline — build record dict + attach HLC. Dipakai oleh custom
+    # paginated queries di bawah (order_items, outlet_stock, recipes,
+    # recipe_ingredients, cash_activities) yang pake JOIN jadi gak fit
+    # get_table_changes generic helper.
+    def _row_to_dict(r, has_row_version: bool = True):
+        d = {}
         for c in r.__table__.columns:
             val = getattr(r, c.name)
             if isinstance(val, datetime):
-                record_dict[c.name] = val.isoformat()
+                d[c.name] = val.isoformat()
             elif isinstance(val, uuid.UUID):
-                record_dict[c.name] = str(val)
+                d[c.name] = str(val)
             else:
-                record_dict[c.name] = val
-                
-        record_dict["is_deleted"] = getattr(r, "deleted_at", None) is not None
-                
+                d[c.name] = val
+        d["is_deleted"] = getattr(r, "deleted_at", None) is not None
         r_updated_at = getattr(r, "updated_at")
         if r_updated_at.tzinfo is None:
             r_updated_at = r_updated_at.replace(tzinfo=timezone.utc)
         r_timestamp = int(r_updated_at.timestamp() * 1000)
-        r_counter = getattr(r, "row_version", 0)
-        r_hlc = HLC(timestamp=r_timestamp, counter=r_counter, node_id=server_node_id)
-        record_dict["hlc"] = r_hlc.to_string()
-        oi_result.append(record_dict)
-        
-    pull_changes.order_items = oi_result
-    
+        r_counter = getattr(r, "row_version", 0) if has_row_version else 0
+        d["hlc"] = HLC(timestamp=r_timestamp, counter=r_counter, node_id=server_node_id).to_string()
+        return d
+
+    def _apply_delta_filter(stmt_in, model_class):
+        """Apply (updated_at, row_version, id) > cursor — identical semantic
+        dgn get_table_changes helper. Range boundary utk HLC ms vs DB µs
+        precision + id tie-break utk duplicate (ts, rv) rows."""
+        if not (client_last_sync_hlc and client_last_sync_hlc.timestamp > 0):
+            return stmt_in
+        from datetime import timedelta
+        last_sync_dt = datetime.fromtimestamp(client_last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
+        ms_end = last_sync_dt + timedelta(microseconds=999)
+        last_counter = client_last_sync_hlc.counter
+        if hasattr(model_class, "row_version"):
+            conds = [
+                model_class.updated_at > ms_end,
+                and_(
+                    model_class.updated_at >= last_sync_dt,
+                    model_class.updated_at <= ms_end,
+                    model_class.row_version > last_counter,
+                ),
+            ]
+            if cursor_last_id and hasattr(model_class, "id"):
+                conds.append(
+                    and_(
+                        model_class.updated_at >= last_sync_dt,
+                        model_class.updated_at <= ms_end,
+                        model_class.row_version == last_counter,
+                        model_class.id > uuid.UUID(cursor_last_id),
+                    )
+                )
+            return stmt_in.filter(or_(*conds))
+        return stmt_in.filter(model_class.updated_at >= last_sync_dt)
+
+    # Custom pull for order_items — JOIN Order untuk outlet scoping.
+    # Pagination: ORDER BY + LIMIT+1 pattern.
+    stmt = select(OrderItem).join(Order).filter(Order.outlet_id == outlet_id)
+    stmt = _apply_delta_filter(stmt, OrderItem)
+    stmt = stmt.order_by(OrderItem.updated_at.asc(), OrderItem.row_version.asc(), OrderItem.id.asc()).limit(page_limit + 1)
+    order_items_records = (await db.execute(stmt)).scalars().all()
+    oi_more = len(order_items_records) > page_limit
+    if oi_more:
+        order_items_records = order_items_records[:page_limit]
+    pull_changes.order_items = [_row_to_dict(r) for r in order_items_records]
+    has_more_any = has_more_any or oi_more
+
     # Custom pull for outlet_stock
     from backend.models.product import OutletStock
     stmt = select(OutletStock).filter(OutletStock.outlet_id == outlet_id)
-    if client_last_sync_hlc and client_last_sync_hlc.timestamp > 0:
-        last_sync_dt = datetime.fromtimestamp(client_last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
-        last_counter = client_last_sync_hlc.counter
-        stmt = stmt.filter(
-            or_(
-                OutletStock.updated_at > last_sync_dt,
-                and_(
-                    OutletStock.updated_at == last_sync_dt,
-                    OutletStock.row_version > last_counter
-                )
-            )
-        )
-        
-    result = await db.execute(stmt)
-    stock_records = result.scalars().all()
+    stmt = _apply_delta_filter(stmt, OutletStock)
+    stmt = stmt.order_by(OutletStock.updated_at.asc(), OutletStock.row_version.asc(), OutletStock.id.asc()).limit(page_limit + 1)
+    stock_records = (await db.execute(stmt)).scalars().all()
+    stock_more = len(stock_records) > page_limit
+    if stock_more:
+        stock_records = stock_records[:page_limit]
+    pull_changes.outlet_stock = [_row_to_dict(r) for r in stock_records]
+    has_more_any = has_more_any or stock_more
     
-    stock_result = []
-    for r in stock_records:
-        record_dict = {}
-        for c in r.__table__.columns:
-            val = getattr(r, c.name)
-            if isinstance(val, datetime):
-                record_dict[c.name] = val.isoformat()
-            elif isinstance(val, uuid.UUID):
-                record_dict[c.name] = str(val)
-            else:
-                record_dict[c.name] = val
-                
-        record_dict["is_deleted"] = getattr(r, "deleted_at", None) is not None
-                
-        r_updated_at = getattr(r, "updated_at")
-        if r_updated_at.tzinfo is None:
-            r_updated_at = r_updated_at.replace(tzinfo=timezone.utc)
-        r_timestamp = int(r_updated_at.timestamp() * 1000)
-        r_counter = getattr(r, "row_version", 0)
-        r_hlc = HLC(timestamp=r_timestamp, counter=r_counter, node_id=server_node_id)
-        record_dict["hlc"] = r_hlc.to_string()
-        stock_result.append(record_dict)
-        
-    pull_changes.outlet_stock = stock_result
-    
-    # Custom pull for recipes (read-only, no row_version — filter via product.brand_id)
+    # Custom pull for recipes (no row_version — filter via product.brand_id)
     stmt_recipe = select(Recipe).join(Product).filter(Product.brand_id == brand_id)
     if client_last_sync_hlc and client_last_sync_hlc.timestamp > 0:
         last_sync_dt = datetime.fromtimestamp(client_last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
         stmt_recipe = stmt_recipe.filter(Recipe.updated_at >= last_sync_dt)
-    result = await db.execute(stmt_recipe)
-    recipe_records = result.scalars().all()
-    recipe_result = []
-    for r in recipe_records:
-        record_dict = {}
-        for c in r.__table__.columns:
-            val = getattr(r, c.name)
-            if isinstance(val, datetime):
-                record_dict[c.name] = val.isoformat()
-            elif isinstance(val, uuid.UUID):
-                record_dict[c.name] = str(val)
-            else:
-                record_dict[c.name] = val
-        record_dict["is_deleted"] = getattr(r, "deleted_at", None) is not None
-        r_updated_at = getattr(r, "updated_at")
-        if r_updated_at.tzinfo is None:
-            r_updated_at = r_updated_at.replace(tzinfo=timezone.utc)
-        r_timestamp = int(r_updated_at.timestamp() * 1000)
-        r_hlc = HLC(timestamp=r_timestamp, counter=0, node_id=server_node_id)
-        record_dict["hlc"] = r_hlc.to_string()
-        recipe_result.append(record_dict)
-    pull_changes.recipes = recipe_result
+    stmt_recipe = stmt_recipe.order_by(Recipe.updated_at.asc()).limit(page_limit + 1)
+    recipe_records = (await db.execute(stmt_recipe)).scalars().all()
+    recipe_more = len(recipe_records) > page_limit
+    if recipe_more:
+        recipe_records = recipe_records[:page_limit]
+    pull_changes.recipes = [_row_to_dict(r, has_row_version=False) for r in recipe_records]
+    has_more_any = has_more_any or recipe_more
 
     # Custom pull for recipe_ingredients (join via recipe→product.brand_id)
     stmt_ri = select(RecipeIngredient).join(Recipe).join(Product).filter(Product.brand_id == brand_id)
     if client_last_sync_hlc and client_last_sync_hlc.timestamp > 0:
         last_sync_dt = datetime.fromtimestamp(client_last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
         stmt_ri = stmt_ri.filter(RecipeIngredient.updated_at >= last_sync_dt)
-    result = await db.execute(stmt_ri)
-    ri_records = result.scalars().all()
-    ri_result = []
-    for r in ri_records:
-        record_dict = {}
-        for c in r.__table__.columns:
-            val = getattr(r, c.name)
-            if isinstance(val, datetime):
-                record_dict[c.name] = val.isoformat()
-            elif isinstance(val, uuid.UUID):
-                record_dict[c.name] = str(val)
-            else:
-                record_dict[c.name] = val
-        record_dict["is_deleted"] = getattr(r, "deleted_at", None) is not None
-        r_updated_at = getattr(r, "updated_at")
-        if r_updated_at.tzinfo is None:
-            r_updated_at = r_updated_at.replace(tzinfo=timezone.utc)
-        r_timestamp = int(r_updated_at.timestamp() * 1000)
-        r_hlc = HLC(timestamp=r_timestamp, counter=0, node_id=server_node_id)
-        record_dict["hlc"] = r_hlc.to_string()
-        ri_result.append(record_dict)
-    pull_changes.recipe_ingredients = ri_result
+    stmt_ri = stmt_ri.order_by(RecipeIngredient.updated_at.asc()).limit(page_limit + 1)
+    ri_records = (await db.execute(stmt_ri)).scalars().all()
+    ri_more = len(ri_records) > page_limit
+    if ri_more:
+        ri_records = ri_records[:page_limit]
+    pull_changes.recipe_ingredients = [_row_to_dict(r, has_row_version=False) for r in ri_records]
+    has_more_any = has_more_any or ri_more
 
-    # Custom pull for cash_activities
+    # Custom pull for cash_activities (join Shift untuk outlet scoping)
     stmt = select(CashActivity).join(Shift).filter(Shift.outlet_id == outlet_id)
-    if client_last_sync_hlc and client_last_sync_hlc.timestamp > 0:
-        last_sync_dt = datetime.fromtimestamp(client_last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
-        last_counter = client_last_sync_hlc.counter
-        stmt = stmt.filter(
-            or_(
-                CashActivity.updated_at > last_sync_dt,
-                and_(
-                    CashActivity.updated_at == last_sync_dt,
-                    CashActivity.row_version > last_counter
-                )
-            )
-        )
-        
-    result = await db.execute(stmt)
-    ca_records = result.scalars().all()
-    
-    ca_result = []
-    for r in ca_records:
-        record_dict = {}
-        for c in r.__table__.columns:
-            val = getattr(r, c.name)
-            if isinstance(val, datetime):
-                record_dict[c.name] = val.isoformat()
-            elif isinstance(val, uuid.UUID):
-                record_dict[c.name] = str(val)
-            else:
-                record_dict[c.name] = val
-                
-        record_dict["is_deleted"] = getattr(r, "deleted_at", None) is not None
-                
-        r_updated_at = getattr(r, "updated_at")
-        if r_updated_at.tzinfo is None:
-            r_updated_at = r_updated_at.replace(tzinfo=timezone.utc)
-        r_timestamp = int(r_updated_at.timestamp() * 1000)
-        r_counter = getattr(r, "row_version", 0)
-        r_hlc = HLC(timestamp=r_timestamp, counter=r_counter, node_id=server_node_id)
-        record_dict["hlc"] = r_hlc.to_string()
-        ca_result.append(record_dict)
-        
-    pull_changes.cash_activities = ca_result
+    stmt = _apply_delta_filter(stmt, CashActivity)
+    stmt = stmt.order_by(CashActivity.updated_at.asc(), CashActivity.row_version.asc(), CashActivity.id.asc()).limit(page_limit + 1)
+    ca_records = (await db.execute(stmt)).scalars().all()
+    ca_more = len(ca_records) > page_limit
+    if ca_more:
+        ca_records = ca_records[:page_limit]
+    pull_changes.cash_activities = [_row_to_dict(r) for r in ca_records]
+    has_more_any = has_more_any or ca_more
     
     # Include stock_mode + subscription_tier so Flutter stays in sync
     sm = getattr(outlet, 'stock_mode', 'simple')
@@ -467,9 +424,41 @@ async def sync_data(
         st = getattr(sync_tenant, 'subscription_tier', 'starter')
         sub_tier = st.value if hasattr(st, 'value') else str(st or 'starter')
 
+    # Compute next_cursor_hlc + next_cursor_last_id = record dgn HLC tertinggi
+    # di batch. Client kirim balik duanya untuk next page (unique tie-break).
+    next_cursor_hlc_str: Optional[str] = None
+    next_cursor_last_id_str: Optional[str] = None
+    if has_more_any:
+        best_record = None  # (hlc_tuple, id, hlc_str)
+        for records_list in (
+            pull_changes.categories, pull_changes.products, pull_changes.orders,
+            pull_changes.order_items, pull_changes.payments, pull_changes.shifts,
+            pull_changes.cash_activities, pull_changes.outlet_stock,
+            pull_changes.ingredients, pull_changes.recipes,
+            pull_changes.recipe_ingredients,
+        ):
+            for rec in records_list:
+                hlc_v = rec.get("hlc")
+                rec_id = rec.get("id")
+                if not hlc_v:
+                    continue
+                try:
+                    h = HLC.from_string(hlc_v)
+                except Exception:
+                    continue
+                key = (h.timestamp, h.counter, rec_id or "")
+                if best_record is None or key > best_record[0]:
+                    best_record = (key, rec_id, hlc_v)
+        if best_record is not None:
+            next_cursor_hlc_str = best_record[2]
+            next_cursor_last_id_str = best_record[1]
+
     return SyncResponse(
         last_sync_hlc=server_hlc.to_string(),
         changes=pull_changes,
         stock_mode=sm_str,
         subscription_tier=sub_tier,
+        has_more=has_more_any,
+        next_cursor_hlc=next_cursor_hlc_str,
+        next_cursor_last_id=next_cursor_last_id_str,
     )
