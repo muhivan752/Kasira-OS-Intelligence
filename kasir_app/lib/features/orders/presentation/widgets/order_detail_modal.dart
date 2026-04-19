@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/database/app_database.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/services/printer_service.dart';
+import '../../../../core/sync/sync_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/orders_provider.dart';
 
@@ -330,62 +334,178 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
 
   Future<void> _reprintReceipt(OrderModel order) async {
     final messenger = ScaffoldMessenger.of(context);
+    ReceiptData? receiptData;
+    bool offline = false;
+
     try {
       final cache = SessionCache.instance;
-      final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1, connectTimeout: const Duration(seconds: 10)));
+      final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1, connectTimeout: const Duration(seconds: 5)));
       final resp = await dio.get(
         '/orders/${order.id}/receipt',
         options: Options(headers: cache.authHeaders),
       );
       final data = resp.data['data'] as Map<String, dynamic>;
-      final receiptData = ReceiptDataJson.fromJson(data);
-      final bytes = buildReprintReceipt(receiptData);
-
-      final notifier = ref.read(printerProvider.notifier);
-      final ok = await notifier.printBytes(bytes);
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(ok ? 'Struk dicetak ulang' : 'Gagal cetak — cek printer'),
-          backgroundColor: ok ? AppColors.success : AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
+      receiptData = ReceiptDataJson.fromJson(data);
+      // Cache outlet info untuk offline fallback next time
+      await _cacheOutletInfo(
+        name: receiptData.outletName,
+        address: receiptData.outletAddress,
+        taxNumber: receiptData.taxNumber,
+        customFooter: receiptData.customFooter,
       );
-    } on DioException catch (e) {
-      if (!mounted) return;
-      final detail = e.response?.data?['detail'] ?? 'Tidak ada koneksi — cek internet';
-      messenger.showSnackBar(
-        SnackBar(content: Text(detail.toString()), backgroundColor: AppColors.error),
-      );
+    } on DioException catch (_) {
+      // Offline / backend unreachable → fallback ke drift DB
+      offline = true;
+      try {
+        receiptData = await _buildReceiptFromDrift(order);
+      } catch (dbErr) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(content: Text('Offline + data lokal tidak lengkap: $dbErr'), backgroundColor: AppColors.error),
+        );
+        return;
+      }
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal cetak ulang: $e'), backgroundColor: AppColors.error),
+        SnackBar(content: Text('Gagal ambil data struk: $e'), backgroundColor: AppColors.error),
       );
+      return;
+    }
+
+    if (receiptData == null) return;
+
+    final bytes = buildReprintReceipt(receiptData);
+    final ok = await ref.read(printerProvider.notifier).printBytes(bytes);
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? (offline ? 'Struk dicetak ulang (offline)' : 'Struk dicetak ulang')
+            : 'Gagal cetak — cek printer'),
+        backgroundColor: ok ? AppColors.success : AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<ReceiptData> _buildReceiptFromDrift(OrderModel order) async {
+    final db = ref.read(databaseProvider);
+
+    // Order local (pake data dari OrderModel yang udah di-pass, tapi refresh items dari drift biar update)
+    final orderItemRows = await (db.select(db.orderItems)..where((t) => t.orderId.equals(order.id))).get();
+    if (orderItemRows.isEmpty) {
+      throw Exception('Item pesanan tidak ada di DB lokal');
+    }
+
+    // Ambil nama produk dari Products table (drift gak simpan product_name di OrderItemLocal)
+    final productIds = orderItemRows.map((e) => e.productId).toSet().toList();
+    final productRows = await (db.select(db.products)..where((t) => t.id.isIn(productIds))).get();
+    final productNameById = {for (final p in productRows) p.id: p.name};
+
+    final items = orderItemRows.map((oi) {
+      return ReceiptLineItem(
+        name: productNameById[oi.productId] ?? 'Item',
+        qty: oi.quantity,
+        price: oi.unitPrice,
+        notes: oi.notes,
+      );
+    }).toList();
+
+    // Payment terakhir
+    final paymentRows = await (db.select(db.payments)
+          ..where((t) => t.orderId.equals(order.id))
+          ..orderBy([(t) => drift.OrderingTerm.desc(t.paidAt)]))
+        .get();
+    final payment = paymentRows.isNotEmpty ? paymentRows.first : null;
+    final methodLabel = switch (payment?.paymentMethod ?? 'cash') {
+      'cash' => 'Tunai',
+      'qris' => 'QRIS',
+      'card' => 'Kartu',
+      'transfer' => 'Transfer',
+      final x => x.toUpperCase(),
+    };
+    final amountPaid = payment?.amountPaid ?? order.totalAmount;
+    // Change: amountPaid - totalAmount (kalau cash overpay)
+    final changeAmount = amountPaid > order.totalAmount ? amountPaid - order.totalAmount : 0.0;
+
+    // Outlet info dari SharedPreferences cache (terisi pas online)
+    final prefs = await SharedPreferences.getInstance();
+    final outletName = prefs.getString('c_outlet_name') ?? 'Kasira';
+    final outletAddress = prefs.getString('c_outlet_address') ?? '';
+    final taxNumber = prefs.getString('c_outlet_tax_number');
+    final customFooter = prefs.getString('c_outlet_custom_footer');
+
+    final dt = order.createdAt.toLocal();
+    final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(dt);
+
+    return ReceiptData(
+      outletName: outletName,
+      outletAddress: outletAddress,
+      orderNumber: order.displayNumber.toString(),
+      dateTime: dateStr,
+      items: items,
+      subtotal: order.subtotal,
+      serviceCharge: order.serviceChargeAmount > 0 ? order.serviceChargeAmount : null,
+      tax: order.taxAmount > 0 ? order.taxAmount : null,
+      total: order.totalAmount,
+      paymentMethod: methodLabel,
+      amountPaid: amountPaid,
+      changeAmount: changeAmount,
+      taxNumber: (taxNumber != null && taxNumber.isNotEmpty) ? taxNumber : null,
+      customFooter: (customFooter != null && customFooter.isNotEmpty) ? customFooter : null,
+    );
+  }
+
+  Future<void> _cacheOutletInfo({
+    required String name,
+    required String address,
+    String? taxNumber,
+    String? customFooter,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('c_outlet_name', name);
+    await prefs.setString('c_outlet_address', address);
+    if (taxNumber != null) {
+      await prefs.setString('c_outlet_tax_number', taxNumber);
+    } else {
+      await prefs.remove('c_outlet_tax_number');
+    }
+    if (customFooter != null) {
+      await prefs.setString('c_outlet_custom_footer', customFooter);
+    } else {
+      await prefs.remove('c_outlet_custom_footer');
     }
   }
 
   Future<void> _printRefundReceipt(OrderModel order, double amount, String reason) async {
     try {
-      final cache = SessionCache.instance;
-      final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1, connectTimeout: const Duration(seconds: 10)));
+      // Ambil outlet info dari cache (diisi saat reprint/receipt online) — offline-first
+      final prefs = await SharedPreferences.getInstance();
+      String outletName = prefs.getString('c_outlet_name') ?? 'Kasira';
+      String outletAddress = prefs.getString('c_outlet_address') ?? '';
+      String? taxNumber = prefs.getString('c_outlet_tax_number');
+      String? customFooter = prefs.getString('c_outlet_custom_footer');
 
-      String outletName = 'Kasira';
-      String outletAddress = '';
-      String? taxNumber;
-      String? customFooter;
+      // Best-effort refresh outlet info kalau online (non-blocking pada offline)
       try {
+        final cache = SessionCache.instance;
+        final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1, connectTimeout: const Duration(seconds: 3)));
         final recRes = await dio.get(
           '/orders/${order.id}/receipt',
           options: Options(headers: cache.authHeaders),
         );
         final d = recRes.data['data'] as Map<String, dynamic>;
-        outletName = (d['outlet_name'] ?? 'Kasira').toString();
-        outletAddress = (d['outlet_address'] ?? '').toString();
-        taxNumber = d['tax_number']?.toString();
-        customFooter = d['custom_footer']?.toString();
+        outletName = (d['outlet_name'] ?? outletName).toString();
+        outletAddress = (d['outlet_address'] ?? outletAddress).toString();
+        taxNumber = d['tax_number']?.toString() ?? taxNumber;
+        customFooter = d['custom_footer']?.toString() ?? customFooter;
+        await _cacheOutletInfo(
+          name: outletName, address: outletAddress,
+          taxNumber: taxNumber, customFooter: customFooter,
+        );
       } catch (_) {
-        // fallback: outlet info tidak tersedia, tetap cetak
+        // offline — pakai cache yang udah di-set di atas
       }
 
       final now = DateTime.now();

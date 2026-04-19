@@ -101,6 +101,11 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
         return;
       }
 
+      if (response.statusCode == 429) {
+        _setError(assistantMsg.id, 'Quota AI harian habis. Coba lagi besok atau upgrade ke Business.');
+        return;
+      }
+
       if (response.statusCode != 200) {
         _setError(assistantMsg.id, 'Gagal terhubung ke AI (${response.statusCode})');
         return;
