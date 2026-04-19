@@ -53,7 +53,7 @@ def _rate_limit_key(request: Request) -> str:
 
 
 # Skip rate limit untuk health check dan webhook eksternal (Xendit retry webhook bisa spike)
-_RATE_LIMIT_EXEMPT_PATHS = {"/health", "/", "/favicon.ico"}
+_RATE_LIMIT_EXEMPT_PATHS = {"/health", "/health/background", "/", "/favicon.ico"}
 _RATE_LIMIT_EXEMPT_PREFIXES = ("/api/v1/webhooks/",)
 
 
@@ -95,30 +95,39 @@ if settings.SENTRY_DSN and settings.SENTRY_DSN.strip().startswith('http'):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup & shutdown lifecycle."""
+    """
+    Startup & shutdown lifecycle.
+
+    CRITICAL #11 fix: dulu pake raw `asyncio.create_task` — kalau loop crash
+    = silent gone (payment reconciliation loop mati = pending payments lolos
+    reconcile). Sekarang pake TaskSupervisor — auto-restart + traceback
+    logging + graceful cancel + health tracking.
+    """
     # ── Startup ──────────────────────────────────────────────────────────────
     from backend.tasks.payment_reconciliation import payment_reconciliation_loop
     from backend.tasks.subscription_billing import generate_invoices_loop, grace_period_loop
     from backend.tasks.platform_aggregation import (
         daily_stats_loop, hpp_benchmark_loop, ingredient_price_loop, insights_loop,
     )
-    reconciliation_task = asyncio.create_task(payment_reconciliation_loop())
-    billing_task = asyncio.create_task(generate_invoices_loop())
-    grace_task = asyncio.create_task(grace_period_loop())
-    # Platform intelligence (silent aggregation)
-    daily_stats_task = asyncio.create_task(daily_stats_loop())
-    hpp_task = asyncio.create_task(hpp_benchmark_loop())
-    ingredient_task = asyncio.create_task(ingredient_price_loop())
-    insights_task = asyncio.create_task(insights_loop())
+    from backend.core.task_supervisor import task_supervisor
+
+    # Register semua background loop via factory (bukan panggil langsung).
+    # Factory dipanggil ulang tiap restart — koroutine baru setiap kali.
+    task_supervisor.register("payment_reconciliation", lambda: payment_reconciliation_loop())
+    task_supervisor.register("subscription_billing", lambda: generate_invoices_loop())
+    task_supervisor.register("grace_period", lambda: grace_period_loop())
+    task_supervisor.register("daily_stats", lambda: daily_stats_loop())
+    task_supervisor.register("hpp_benchmark", lambda: hpp_benchmark_loop())
+    task_supervisor.register("ingredient_price", lambda: ingredient_price_loop())
+    task_supervisor.register("insights", lambda: insights_loop())
+
     yield
+
     # ── Shutdown ─────────────────────────────────────────────────────────────
-    reconciliation_task.cancel()
-    billing_task.cancel()
-    grace_task.cancel()
-    daily_stats_task.cancel()
-    hpp_task.cancel()
-    ingredient_task.cancel()
-    insights_task.cancel()
+    # Graceful: supervisor cancel semua task + await 10s max. Task yang
+    # responsive ke CancelledError (pattern `await asyncio.sleep(...)`) akan
+    # stop clean. Kalau ada yang stuck, force-cancel via process exit.
+    await task_supervisor.stop(timeout=10.0)
     await xendit_service.close()
 
 _is_prod = settings.ENVIRONMENT == "production"
@@ -221,3 +230,24 @@ async def health():
     except Exception:
         from fastapi import Response
         return Response(status_code=503, content='{"status":"error","db":"unreachable"}')
+
+
+@app.get("/health/background")
+async def health_background_tasks():
+    """
+    Background task supervisor health snapshot (CRITICAL #11).
+    Include state per-task + restart count + last crash reason. Return 503
+    kalau ada task yang udah DEAD (supervisor give up restart).
+
+    Usage: internal monitoring / Sentry check / cron alert script.
+    """
+    from backend.core.task_supervisor import task_supervisor
+    from fastapi import Response
+    import json as _json
+    snapshot = task_supervisor.health_snapshot()
+    status_code = 200 if task_supervisor.is_healthy() else 503
+    return Response(
+        status_code=status_code,
+        content=_json.dumps(snapshot, default=str),
+        media_type="application/json",
+    )
