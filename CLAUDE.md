@@ -33,8 +33,9 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 
 **Recipe / Ingredient:**
 → Ingredient yang sudah `deleted_at IS NOT NULL` TETAP bisa di-reference oleh recipe lama
-→ Filter recipe ingredients WAJIB cek `ri.ingredient.deleted_at is None`
+→ Filter recipe ingredients WAJIB 5 kondisi: `ri.deleted_at is None AND not ri.is_optional AND ri.quantity > 0 AND ri.ingredient is not None AND ri.ingredient.deleted_at is None`
 → `compute_recipe_stock` ada di 2 tempat — edit dua-duanya
+→ **Unit mismatch gotcha**: `ri.quantity_unit` (misal 'kg') bisa beda dari `ri.ingredient.base_unit` (misal 'gram'). Untuk HPP compute WAJIB pake helper di `backend/services/unit_utils.py` (`normalize_recipe_qty`, `ingredient_cost_contribution`, `cost_from_qty_unit`). Untuk stock deduct/display: pake raw qty (internally consistent antara deduct + compute_recipe_stock, jangan diubah).
 
 **Storefront:**
 → Redis cache `connect:storefront:{slug}` expire 60 detik
@@ -53,8 +54,12 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 6. **Jangan kirim `quantity` ke storefront order** — field-nya `qty`
 7. **Jangan assume `row_version` selalu milik parent** — di split bill, row_version milik TabSplit bukan Tab
 8. **Jangan lupa clear Redis cache setelah edit storefront data** — `DEL connect:storefront:{slug}`
-9. **Jangan `docker compose up -d`** tanpa re-copy semua docker cp files — container recreate = files hilang
+9. **Jangan `docker compose up -d`** tanpa re-copy semua docker cp files — container recreate = files hilang. Pakai `docker compose up -d --no-deps frontend` kalau cuma mau recreate frontend.
 10. **Jangan edit `compute_recipe_stock` di products.py tanpa edit yang di connect.py** — logic harus identik
+11. **Jangan compute HPP pake `ri.quantity * cost_per_base_unit` langsung** — unit mismatch bikin salah 1000x. Pake helper `backend/services/unit_utils.py`. 3 tempat kena bug ini historically: pricing coach, menu_engineering, knowledge_graph.
+12. **Jangan query drift di Flutter tanpa scope `SessionCache.instance.outletId`** — multi-outlet switch bisa bikin data leak cross-outlet. Verify `OrderLocal.outletId == SessionCache.outletId` sebelum proceed.
+13. **Jangan trigger APK build GitHub Actions sebelum push commit terakhir** — `workflow_dispatch` fire on main HEAD di dispatch time. Kalau ada commit lokal belum push → build jalan di commit lama. Fix: push dulu, verify `git log origin/main` match lokal, baru dispatch. Kalau terlanjur: cancel run + redispatch.
+14. **Jangan rebuild frontend tanpa cek image Created time vs commit time** — `docker inspect kasira-frontend-1 --format '{{.Created}}'` harus LEBIH BARU dari commit terakhir yg mau di-deploy. Gap → fitur belum aktif di prod.
 
 ---
 
@@ -81,6 +86,14 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 - [ ] `kasir_app/lib/features/pos/providers/cart_provider.dart` — offline deduction
 - [ ] `kasir_app/lib/features/products/providers/products_provider.dart` — offline display
 
+### Edit HPP compute logic:
+Tiga tempat pake helper dari `backend/services/unit_utils.py` — kalau edit salah satu, verify konsisten:
+- [ ] `backend/services/ai_service.py` — `build_pricing_context()` untuk Pricing Coach
+- [ ] `backend/services/menu_engineering_service.py` — `_get_hpp_map()` untuk BCG Matrix
+- [ ] `backend/services/knowledge_graph_service.py` — `compute_hpp_for_products()` untuk KG queries
+- [ ] Helper API: `normalize_recipe_qty(ri)` → qty in base_unit, `ingredient_cost_contribution(ri)` → cost Rp, `cost_from_qty_unit(qty, unit, ing)` → variant untuk non-RI callers (KG metadata)
+- [ ] Semua helper return `None` kalau unresolvable mismatch → caller flag `⚠` / exclude dari sum
+
 ### Edit product/recipe data:
 - [ ] Backend API returns correct data
 - [ ] Dashboard fetches + displays correctly
@@ -103,13 +116,47 @@ sudo docker restart kasira-backend-1
 # Verify: sudo docker logs kasira-backend-1 --tail 10
 ```
 
+### Deploy frontend (Next.js dashboard) change:
+```bash
+# File source di /var/www/kasira/app/dashboard/... udah ke-edit.
+# Next.js pakai .next/standalone/server.js — WAJIB rebuild image.
+sudo docker compose build frontend
+sudo docker compose up -d --no-deps frontend  # --no-deps biar backend gak recreate (gotcha #9)
+# Verify: image Created time > commit time
+sudo docker inspect kasira-frontend-1 --format '{{.Created}}'
+# Verify feature text embedded di .next bundle
+sudo docker exec kasira-frontend-1 grep -c "NEW_FEATURE_STRING" /app/.next/server/app/<route>/page.js
+```
+
 ### Deploy Flutter change:
 ```bash
+# 1. Commit + push dulu — pastikan origin/main match HEAD
 git add <files> && git commit && git push origin main
-# Trigger GitHub Actions: Build & Release Kasira Flutter APK
+git log origin/main --oneline | head -1  # verify latest commit
+
+# 2. Trigger GitHub Actions workflow_dispatch
 curl -X POST -H "Authorization: token <PAT>" \
   "https://api.github.com/repos/muhivan752/Kasira-OS-Intelligence/actions/workflows/build-apk.yml/dispatches" \
   -d '{"ref":"main","inputs":{"version":"X.Y.Z"}}'
+
+# 3. Verify build jalan di commit yang bener
+curl -H "Authorization: token <PAT>" \
+  "https://api.github.com/repos/muhivan752/Kasira-OS-Intelligence/actions/workflows/build-apk.yml/runs?per_page=1" \
+  | python3 -c "import sys,json; r=json.load(sys.stdin)['workflow_runs'][0]; print(r['status'], r['head_sha'][:7])"
+# Kalau head_sha != latest push → cancel + redispatch (gotcha #13)
+```
+
+**Auto-bump by CI**: Setelah APK build sukses, GitHub Actions auto-commit `chore: update version.json → vX.Y.Z`. Sebelum push lokal berikutnya, ALWAYS `git pull --rebase origin main` dulu.
+
+### Run standalone Python script (non-HTTP, e.g., unit test atau debug query):
+RLS (Row Level Security) aktif di 40+ table. Query tanpa `app.current_tenant_id` → `NoResultFound`. Middleware set context saat HTTP request masuk, tapi standalone script harus manual:
+```python
+async with AsyncSessionLocal() as db:
+    await db.execute(text(
+        "SELECT set_config('app.current_tenant_id', '<tenant_uuid>', true)"
+    ))
+    # Now query works — RLS sees correct tenant
+    result = await db.execute(select(Product).where(...))
 ```
 
 ---
@@ -241,7 +288,10 @@ curl -X POST -H "Authorization: token <PAT>" \
 | # | Rule |
 |---|------|
 | 25 | AI chat (`/ai/chat`) = **Pro+ only**. Starter TIDAK punya akses AI chatbot (gated via `require_pro_tier`). |
-| 26 | Di dalam tier Pro+: model dipilih via `get_model_for_tier(tier, task)` — default Haiku, Sonnet cuma untuk task berat (analisa mendalam). |
+| 26 | Model routing via `get_model_for_tier(tier, task, tenant_id, intent)` di `ai_service.py`. **Intent-aware**: PRICING_COACH → Sonnet 4.5 (`claude-sonnet-4-5-20250929`), lainnya → Haiku 4.5 (`claude-haiku-4-5-20251001`). Model ID constants: `SONNET_MODEL_ID`, `HAIKU_MODEL_ID`. |
+| 26a | Sonnet quota: **5x/hari/tenant** via redis key `ai_sonnet:{tenant_id}:{date}`. Exceeded = return chunk "Analisa pricing udah dipakai 5x hari ini" + done event. Increment `ai_spend` +1 (total 2 cent per Sonnet call). |
+| 26b | Intent classifier di `classify_intent()` urutan: MENU_BULK > SETUP_RECIPE > RESTOCK > **PRICING_COACH** > CHAT. PRICING_COACH keyword fokus DIFFERENTIATING: "hpp", "margin", "wajar harga", "rekomendasi harga", bukan ambigu kayak "untung" sendiri. |
+| 27 | Domain detection via `detect_domain(outlet_id, db)` — 10 bucket UMKM (kopi_cafe, resto_makanan, warteg, bakery, vape_liquid, laundry, salon_barber, minimarket, pet_shop, apotik_herbal). Signal priority: product names ×3 > category names ×2 > outlet name ×1. Fallback ke Brand.type → "generic". Result inject ke MENU_BULK + SETUP_RECIPE prompts. |
 | 55 | System prompt max 800 token, di-cache Redis 5 menit |
 
 ### 📱 MOBILE (Flutter)
@@ -250,6 +300,9 @@ curl -X POST -H "Authorization: token <PAT>" \
 | 14 | APK hosted di GitHub Releases, cek versi setiap app dibuka |
 | 15 | `is_mandatory=true` → force update, block app sampai update |
 | 49 | Printer disconnect TIDAK BOLEH block transaksi |
+| 50 | Query drift WAJIB scope ke `SessionCache.instance.outletId` — multi-outlet switch bisa leak data. Pattern: load `OrderLocal` dulu, verify `outletId == SessionCache.outletId`, baru proceed. |
+| 53 | Receipt bytes ESC/POS di-build DI FLUTTER, bukan backend. Backend `GET /orders/{id}/receipt` return **structured JSON** (outlet, items, totals, NPWP, footer). Flutter parse + `buildReceipt(ReceiptData)` → ESC/POS bytes. Ini bikin offline reprint bisa rebuild dari drift DB pake data yang sama. |
+| 54 | Auto-print sampingan (refund receipt setelah POST success) WAJIB `unawaited()` — jangan block snackbar success user. Print gagal = silent, bukan block flow. |
 
 ### 🛒 CONNECT / STOREFRONT
 | # | Rule |
