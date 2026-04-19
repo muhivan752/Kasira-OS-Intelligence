@@ -373,11 +373,38 @@ async def apply_recipe_proposal(
     db.add(recipe)
     await db.flush()
 
-    # Create RecipeIngredient + hitung HPP
+    # Create RecipeIngredient + hitung HPP via unit_utils helper.
+    # Fix CRITICAL #2 + #8: unit conversion (pi.unit != ing_obj.base_unit)
+    # + defensive skip ghost ingredient (ing_obj.deleted_at soft-deleted).
+    from backend.services.unit_utils import cost_from_qty_unit
+
     hpp = Decimal("0")
+    hpp_unit_mismatch = []  # collect untuk observability
     for ing_obj, pi in recipe_ing_refs:
-        line_cost = Decimal(str(pi.qty)) * ing_obj.cost_per_base_unit
+        # Defensive: ghost ingredient (ing_obj seharusnya dari match path yg
+        # sudah filter deleted_at, tapi defensive untuk race condition)
+        if ing_obj.deleted_at is not None:
+            logger.warning(
+                "ai_apply_recipe: skip soft-deleted ingredient %s (id=%s)",
+                ing_obj.name, ing_obj.id,
+            )
+            continue
+
+        # Unit-aware cost. None = unresolvable mismatch → log + skip HPP sum,
+        # RecipeIngredient tetap ter-insert (data preserved, user bisa edit).
+        contrib = cost_from_qty_unit(pi.qty, pi.unit, ing_obj)
+        if contrib is None:
+            hpp_unit_mismatch.append(f"{ing_obj.name} ({pi.unit} vs {ing_obj.base_unit})")
+            logger.warning(
+                "ai_apply_recipe: unit mismatch %s qty=%s unit=%s vs base_unit=%s "
+                "— HPP sum skip, row tetap di-insert",
+                ing_obj.name, pi.qty, pi.unit, ing_obj.base_unit,
+            )
+            line_cost = Decimal("0")
+        else:
+            line_cost = Decimal(str(contrib))
         hpp += line_cost
+
         db.add(RecipeIngredient(
             id=uuid_mod.uuid4(),
             recipe_id=recipe.id,
@@ -401,6 +428,7 @@ async def apply_recipe_proposal(
             "created_ingredients": len(created_ingredients),
             "reused_ingredients": len(reused_ingredients),
             "hpp_estimate": float(hpp),
+            "hpp_unit_mismatch": hpp_unit_mismatch,  # observability flag
         },
         user_id=str(current_user.id),
         tenant_id=str(current_user.tenant_id),
@@ -628,9 +656,32 @@ async def apply_menu_batch(
         db.add(recipe)
         await db.flush()
 
+        # HPP via unit_utils helper (fix CRITICAL #2 + #8).
+        from backend.services.unit_utils import cost_from_qty_unit as _cost
+
         hpp = Decimal("0")
+        product_hpp_mismatch = []
         for ing_obj, ing_prop in recipe_ing_refs:
-            line_cost = Decimal(str(ing_prop.qty)) * ing_obj.cost_per_base_unit
+            if ing_obj.deleted_at is not None:
+                logger.warning(
+                    "menu_apply_batch: skip soft-deleted ingredient %s",
+                    ing_obj.name,
+                )
+                continue
+            contrib = _cost(ing_prop.qty, ing_prop.unit, ing_obj)
+            if contrib is None:
+                product_hpp_mismatch.append(
+                    f"{ing_obj.name} ({ing_prop.unit} vs {ing_obj.base_unit})"
+                )
+                logger.warning(
+                    "menu_apply_batch: unit mismatch product=%s ingredient=%s "
+                    "qty=%s unit=%s vs base_unit=%s — HPP skip",
+                    product.name, ing_obj.name, ing_prop.qty,
+                    ing_prop.unit, ing_obj.base_unit,
+                )
+                line_cost = Decimal("0")
+            else:
+                line_cost = Decimal(str(contrib))
             hpp += line_cost
             db.add(RecipeIngredient(
                 id=uuid_mod.uuid4(),
@@ -653,6 +704,7 @@ async def apply_menu_batch(
             "base_price": float(product.base_price or 0),
             "hpp": float(hpp),
             "margin_pct": margin_pct,
+            "hpp_unit_mismatch": product_hpp_mismatch,  # observability
         })
 
     # Audit log

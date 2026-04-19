@@ -25,23 +25,53 @@ router = APIRouter(dependencies=[Depends(deps.require_pro_tier)])
 
 
 def _build_recipe_response(recipe: Recipe) -> RecipeResponse:
-    """Build RecipeResponse with ingredient details and HPP calculation."""
+    """
+    Build RecipeResponse dgn HPP unified via unit_utils helper.
+
+    Fix CRITICAL #2 + #8:
+      - Use `ingredient_cost_contribution(ri)` — handle unit mismatch
+        (ri.quantity_unit != ingredient.base_unit), konversi via UNIT_ALIASES.
+      - Full 5-field filter (pattern compute_recipe_stock products.py:71-75):
+        ri.deleted_at / not is_optional / quantity>0 / ingredient exists /
+        ingredient.deleted_at. Ghost ingredient (soft-deleted) excluded dari
+        HPP sum + response list.
+    """
+    from backend.services.unit_utils import ingredient_cost_contribution
+
     total_cost = Decimal("0")
     ing_responses = []
 
     for ri in recipe.ingredients:
+        # Filter 1: soft-deleted recipe_ingredient row
         if ri.deleted_at is not None:
             continue
         ing = ri.ingredient
-        line_cost = Decimal(str(ri.quantity)) * (ing.cost_per_base_unit if ing else Decimal("0"))
-        total_cost += line_cost
+        # Filter 2: ghost ingredient (soft-deleted) — skip sum + response
+        if ing is None or ing.deleted_at is not None:
+            continue
+
+        # HPP sum — skip optional + zero qty (consistent dgn compute_recipe_stock).
+        # Display TETAP include ingredient biar user tau ada optional items.
+        contributes_to_hpp = (not ri.is_optional) and (float(ri.quantity or 0) > 0)
+
+        if contributes_to_hpp:
+            contrib = ingredient_cost_contribution(ri)
+            if contrib is None:
+                # Unit mismatch — don't include dalam HPP sum (avoid under/over-estimate)
+                line_cost = Decimal("0")
+            else:
+                line_cost = Decimal(str(contrib))
+            total_cost += line_cost
+        else:
+            # Optional atau zero qty — tampilkan di response tapi line_cost=0
+            line_cost = Decimal("0")
 
         ing_responses.append(RecipeIngredientResponse(
             id=ri.id,
             ingredient_id=ri.ingredient_id,
-            ingredient_name=ing.name if ing else None,
-            ingredient_unit=ing.base_unit if ing else None,
-            ingredient_cost=ing.cost_per_base_unit if ing else None,
+            ingredient_name=ing.name,
+            ingredient_unit=ing.base_unit,
+            ingredient_cost=ing.cost_per_base_unit,
             quantity=ri.quantity,
             quantity_unit=ri.quantity_unit,
             is_optional=ri.is_optional,
@@ -348,6 +378,9 @@ async def get_hpp_report(
 
     recipe_map = {r.product_id: r for r in recipes}
 
+    # Unified HPP helper — fix CRITICAL #2 + #8
+    from backend.services.unit_utils import ingredient_cost_contribution
+
     responses = []
     for product in products:
         recipe = recipe_map.get(product.id)
@@ -355,18 +388,29 @@ async def get_hpp_report(
         if recipe:
             recipe_cost = Decimal("0")
             for ri in recipe.ingredients:
+                # Full 5-field filter (compute_recipe_stock pattern)
                 if ri.deleted_at is not None:
                     continue
                 ing = ri.ingredient
-                cost_per_unit = ing.cost_per_base_unit if ing else Decimal("0")
-                line_cost = Decimal(str(ri.quantity)) * cost_per_unit
-                recipe_cost += line_cost
+                if ing is None or ing.deleted_at is not None:
+                    continue
+
+                cost_per_unit = ing.cost_per_base_unit or Decimal("0")
+                contributes = (not ri.is_optional) and (float(ri.quantity or 0) > 0)
+
+                if contributes:
+                    contrib = ingredient_cost_contribution(ri)
+                    line_cost = Decimal(str(contrib)) if contrib is not None else Decimal("0")
+                    recipe_cost += line_cost
+                else:
+                    line_cost = Decimal("0")
+
                 ingredient_details.append(HPPIngredientDetail(
-                    name=ing.name if ing else "?",
+                    name=ing.name,
                     quantity=ri.quantity,
-                    unit=ri.quantity_unit or (ing.base_unit if ing else ""),
-                    buy_price=ing.buy_price if ing and ing.buy_price else Decimal("0"),
-                    buy_qty=ing.buy_qty if ing and ing.buy_qty else 1,
+                    unit=ri.quantity_unit or ing.base_unit,
+                    buy_price=ing.buy_price or Decimal("0"),
+                    buy_qty=ing.buy_qty or 1,
                     cost_per_unit=cost_per_unit,
                     line_cost=line_cost,
                 ))
