@@ -4,8 +4,11 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 import json
+import logging
 import uuid
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from backend.core.database import get_db
 from backend.utils.phone import mask_phone
@@ -523,6 +526,9 @@ async def create_connect_order(
 
         if pay_method == PaymentMethod.qris:
             if outlet.xendit_api_key or outlet.xendit_business_id:
+                # CRITICAL #12 fail-safe: distinguish permanent (4xx) vs
+                # transient (retry exhausted) error.
+                from backend.services.xendit import XenditTransientError, XenditPermanentError
                 try:
                     xendit_res = await xendit_service.create_qris_transaction(
                         reference_id=f"{outlet.tenant_id}::{payment.id}",
@@ -537,9 +543,25 @@ async def create_connect_order(
                     qris_expired_at = (
                         datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15)
                     ).isoformat()
-                except Exception as e:
+                except XenditPermanentError as e:
+                    logger.error("connect xendit permanent payment=%s: %s", payment.id, e)
                     payment.status = PaymentStatus.failed
-                    payment.xendit_raw = {"error": str(e)}
+                    payment.xendit_raw = {"error": str(e), "error_type": "permanent"}
+                except XenditTransientError as e:
+                    logger.error(
+                        "connect xendit transient retry exhausted payment=%s: %s",
+                        payment.id, e,
+                    )
+                    payment.status = PaymentStatus.pending_manual_check
+                    payment.xendit_raw = {
+                        "error": str(e),
+                        "error_type": "transient_exhausted",
+                        "admin_action": "Verify via Xendit dashboard — QRIS mungkin ter-create tapi response drop.",
+                    }
+                except Exception as e:
+                    logger.exception("connect xendit unexpected payment=%s", payment.id)
+                    payment.status = PaymentStatus.pending_manual_check
+                    payment.xendit_raw = {"error": str(e), "error_type": "unexpected"}
             else:
                 payment.status = PaymentStatus.failed
                 payment.xendit_raw = {"error": "Outlet belum terhubung Xendit"}

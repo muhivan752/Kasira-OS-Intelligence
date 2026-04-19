@@ -19,6 +19,10 @@ class PaymentStatus(str, Enum):
     cancelled = 'cancelled'
     refunded = 'refunded'
     failed = 'failed'
+    # Fail-safe (CRITICAL #12): Xendit retry exhausted saat CREATE — kita
+    # gak tau pasti Xendit accept atau gak (network dropout). Admin harus
+    # verify via Xendit dashboard atau cron reconcile dgn get_qr_code_status.
+    pending_manual_check = 'pending_manual_check'
 
 class PaymentBase(BaseModel):
     order_id: Optional[UUID] = None

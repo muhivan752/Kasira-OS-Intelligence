@@ -1,7 +1,10 @@
 import asyncio
+import logging
 from typing import Any, List, Optional, Dict
 from uuid import UUID
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -217,33 +220,64 @@ async def create_payment(
     db.add(payment)
     await db.flush() # Get payment.id for Midtrans order_id
     
-    # Generate QRIS via Xendit if method is qris
+    # Generate QRIS via Xendit if method is qris.
+    # Fail-safe (CRITICAL #12): distinguishing configuration error vs transient
+    # Xendit API failure. Retry exhausted = pending_manual_check (admin verify),
+    # bukan failed terminal.
     if payment_in.payment_method == PaymentMethod.qris:
         outlet = await db.get(Outlet, payment_in.outlet_id)
         if not outlet or not outlet.xendit_business_id:
             payment.status = PaymentStatus.failed
             payment.xendit_raw = {"error": "Outlet not configured for Xendit QRIS (Missing Sub-Account ID)"}
         else:
+            from backend.services.xendit import XenditTransientError, XenditPermanentError
             try:
                 xendit_res = await xendit_service.create_qris_transaction(
                     reference_id=f"{current_user.tenant_id}::{payment.id}",
                     amount=float(payment.amount_due),
                     for_user_id=outlet.xendit_business_id
                 )
-                        
                 payment.qris_url = xendit_res.get("qr_string")
                 payment.xendit_raw = xendit_res
-                # Track QRIS expiry
                 expires_at = xendit_res.get("expires_at")
                 if expires_at:
                     try:
                         payment.qris_expired_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
                     except (ValueError, AttributeError):
                         pass
-                
-            except Exception as e:
+
+            except XenditPermanentError as e:
+                # 4xx — clear config error, langsung failed (gak akan recover)
+                logger.error(
+                    "xendit permanent error payment=%s: %s", payment.id, e,
+                )
                 payment.status = PaymentStatus.failed
-                payment.xendit_raw = {"error": str(e)}
+                payment.xendit_raw = {"error": str(e), "error_type": "permanent"}
+
+            except XenditTransientError as e:
+                # Retry habis — uncertain state. Xendit MIGHT have accepted the
+                # request. Admin perlu cek manual via dashboard Xendit.
+                logger.error(
+                    "xendit transient retry exhausted payment=%s: %s — "
+                    "set ke pending_manual_check untuk admin review",
+                    payment.id, e,
+                )
+                payment.status = PaymentStatus.pending_manual_check
+                payment.xendit_raw = {
+                    "error": str(e),
+                    "error_type": "transient_exhausted",
+                    "admin_action": "Verify manually via Xendit dashboard — "
+                                    "transaction might have been created.",
+                }
+
+            except Exception as e:
+                # Defensive — unexpected error. Set pending_manual_check (safer
+                # than failed — preserve investigation path).
+                logger.exception(
+                    "xendit unexpected error payment=%s", payment.id,
+                )
+                payment.status = PaymentStatus.pending_manual_check
+                payment.xendit_raw = {"error": str(e), "error_type": "unexpected"}
     
     # If cash payment is successful, check if order is fully paid
     if initial_status == PaymentStatus.paid and payment_in.order_id:
@@ -440,6 +474,10 @@ async def xendit_webhook(
 ) -> Any:
     """
     Handle Xendit webhook notifications.
+
+    CRITICAL #12 fix: idempotent via xendit_webhook_events dedup table +
+    hmac.compare_digest constant-time verification. Xendit kirim callback
+    berulang (retry policy mereka) = kita process sekali.
     """
     xendit_callback_token = request.headers.get("x-callback-token")
     if not xendit_callback_token or not xendit_service.verify_webhook(xendit_callback_token):
@@ -456,6 +494,45 @@ async def xendit_webhook(
     data = payload.get("data", payload)
     if not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Invalid data field in payload")
+
+    # ─── Idempotency claim (CRITICAL #12 webhook dedup) ───────────────────────
+    # Atomic INSERT ON CONFLICT. Kalau RETURNING kosong = callback sudah di-
+    # process (Xendit retry duplicate) → return OK early, no re-process.
+    # Callback ID priority: payload["id"] > data["id"] > SHA256(payload).
+    import hashlib, json as _json
+    callback_id = (
+        payload.get("id")
+        or data.get("id")
+        or hashlib.sha256(_json.dumps(payload, sort_keys=True).encode()).hexdigest()[:64]
+    )
+    event_type = payload.get("event") or data.get("event_type") or "unknown"
+    payload_str = _json.dumps(payload, sort_keys=True)
+    payload_hash = hashlib.sha256(payload_str.encode()).hexdigest()
+
+    from sqlalchemy import text as _sql_text
+    claim = await db.execute(
+        _sql_text(
+            "INSERT INTO xendit_webhook_events "
+            "(id, callback_id, external_id, event_type, payload_hash, processed_at) "
+            "VALUES (gen_random_uuid(), :cid, :eid, :ev, :hash, now()) "
+            "ON CONFLICT (callback_id) DO NOTHING RETURNING id"
+        ),
+        {
+            "cid": str(callback_id)[:128],
+            "eid": str(data.get("external_id") or data.get("reference_id") or "")[:255],
+            "ev": str(event_type)[:64],
+            "hash": payload_hash,
+        },
+    )
+    claimed = claim.first() is not None
+    if not claimed:
+        logger.info(
+            "xendit webhook dedup hit: callback_id=%s event=%s — already processed",
+            callback_id, event_type,
+        )
+        await db.commit()  # commit the no-op attempt
+        return {"status": "ok", "dedup": True}
+    await db.commit()  # commit the dedup row; downstream process uses fresh TX
 
     # Check for subscription invoice webhook (external_id starts with "sub::")
     external_id = data.get("external_id", "") or data.get("reference_id", "")

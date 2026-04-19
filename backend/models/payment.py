@@ -19,7 +19,7 @@ class Payment(BaseModel):
     amount_paid = Column(Numeric(12, 2), nullable=False)
     change_amount = Column(Numeric(12, 2), server_default='0', nullable=False)
     
-    status = Column(ENUM('pending', 'paid', 'partial', 'expired', 'cancelled', 'refunded', 'failed', name='payment_status', create_type=False), server_default='pending', nullable=False)
+    status = Column(ENUM('pending', 'paid', 'partial', 'expired', 'cancelled', 'refunded', 'failed', 'pending_manual_check', name='payment_status', create_type=False), server_default='pending', nullable=False)
     
     reference_id = Column(String, nullable=True)
     idempotency_key = Column(String, nullable=True)
