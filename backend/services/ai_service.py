@@ -1451,24 +1451,36 @@ async def build_pricing_context(outlet_id: str, db: AsyncSession) -> str:
         )
 
     rows = []
+    unit_warnings = []
     for r in recipes:
-        # Skip kalau ingredient sudah soft-deleted (pattern dari CLAUDE.md)
+        # Filter consistent dengan compute_recipe_stock (products.py:71-75) —
+        # skip optional, zero qty, soft-deleted row/ingredient (pattern CLAUDE.md)
         active_ingredients = [
             ri for ri in r.ingredients
-            if ri.ingredient is not None and ri.ingredient.deleted_at is None
+            if ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
+            and ri.ingredient is not None and ri.ingredient.deleted_at is None
         ]
         if not active_ingredients:
             continue
 
-        hpp = 0.0
-        for ri in active_ingredients:
-            cost_per_unit = float(ri.ingredient.cost_per_base_unit or 0)
-            qty = float(ri.quantity or 0)
-            hpp += qty * cost_per_unit
-
         product = r.product
         if product is None:
             continue
+
+        hpp = 0.0
+        has_unit_mismatch = False
+        for ri in active_ingredients:
+            cost_contribution = _ingredient_cost_contribution(ri)
+            if cost_contribution is None:
+                # Unit mismatch yang gak bisa di-resolve — skip + warn di output
+                has_unit_mismatch = True
+                unit_warnings.append(
+                    f"{product.name}: '{ri.ingredient.name}' unit mismatch "
+                    f"(resep='{ri.quantity_unit}', bahan base='{ri.ingredient.base_unit}')"
+                )
+                continue
+            hpp += cost_contribution
+
         base_price = float(product.base_price or 0)
         if base_price <= 0:
             continue
@@ -1480,6 +1492,7 @@ async def build_pricing_context(outlet_id: str, db: AsyncSession) -> str:
             "hpp": hpp,
             "price": base_price,
             "margin_pct": margin_pct,
+            "has_unit_mismatch": has_unit_mismatch,
         })
 
     if not rows:
@@ -1500,13 +1513,63 @@ async def build_pricing_context(outlet_id: str, db: AsyncSession) -> str:
         "|---|---|---|---|",
     ]
     for r in rows[:15]:  # Cap 15 biar prompt gak bengkak
+        warn_flag = " ⚠" if r["has_unit_mismatch"] else ""
         lines.append(
-            f"| {r['name']} | Rp {r['hpp']:,.0f} | Rp {r['price']:,.0f} | {r['margin_pct']:.1f}% |"
+            f"| {r['name']}{warn_flag} | Rp {r['hpp']:,.0f} | Rp {r['price']:,.0f} | {r['margin_pct']:.1f}% |"
         )
     if len(rows) > 15:
         lines.append(f"| _(+{len(rows)-15} produk lain)_ | | | |")
 
+    if unit_warnings:
+        lines.append("")
+        lines.append("**⚠ Unit mismatch di resep (HPP kemungkinan under-estimate):**")
+        for w in unit_warnings[:5]:
+            lines.append(f"- {w}")
+        if len(unit_warnings) > 5:
+            lines.append(f"- _(+{len(unit_warnings)-5} lagi)_")
+
     return "\n".join(lines)
+
+
+def _ingredient_cost_contribution(ri) -> "float | None":
+    """
+    Compute cost contribution 1 recipe_ingredient row = quantity * cost_per_base_unit.
+    Handle unit conversion: ri.quantity dalam ri.quantity_unit, ingredient cost per
+    ingredient.base_unit. Return None kalau unit mismatch yang gak bisa di-resolve.
+
+    Examples:
+      - ri.quantity=1, ri.quantity_unit='kg', base_unit='gram' → qty_in_base = 1000
+      - ri.quantity=150, ri.quantity_unit='ml', base_unit='ml' → qty_in_base = 150
+      - ri.quantity=2, ri.quantity_unit='sdm' (unknown), base_unit='gram' → None (mismatch)
+    """
+    try:
+        raw_qty = float(ri.quantity or 0)
+        cost_per_base = float(ri.ingredient.cost_per_base_unit or 0)
+    except (TypeError, ValueError):
+        return None
+
+    if raw_qty <= 0 or cost_per_base <= 0:
+        return 0.0
+
+    q_unit = (ri.quantity_unit or "").lower().strip()
+    base_unit = (ri.ingredient.base_unit or "").lower().strip()
+
+    # Same unit — no conversion
+    if q_unit == base_unit or not q_unit:
+        return raw_qty * cost_per_base
+
+    # Lookup conversion via UNIT_ALIASES
+    alias = UNIT_ALIASES.get(q_unit)
+    if alias is None:
+        # Unknown quantity_unit — kalau base_unit juga dikenal, tandai mismatch
+        return None
+
+    mapped_base, multiplier = alias
+    if mapped_base != base_unit:
+        # Cross-family (misal quantity kg→gram tapi ingredient base_unit='ml')
+        return None
+
+    return raw_qty * multiplier * cost_per_base
 
 
 PRICING_COACH_SYSTEM_APPEND = """

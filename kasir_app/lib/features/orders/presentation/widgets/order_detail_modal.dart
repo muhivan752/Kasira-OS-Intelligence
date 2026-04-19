@@ -391,8 +391,18 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
 
   Future<ReceiptData> _buildReceiptFromDrift(OrderModel order) async {
     final db = ref.read(databaseProvider);
+    final currentOutletId = SessionCache.instance.outletId;
 
-    // Order local (pake data dari OrderModel yang udah di-pass, tapi refresh items dari drift biar update)
+    // Outlet scoping — verify order milik outlet aktif. Defense-in-depth
+    // seandainya drift masih nyimpen data outlet lama setelah user switch.
+    final orderRow = await (db.select(db.orders)..where((t) => t.id.equals(order.id))).getSingleOrNull();
+    if (orderRow == null) {
+      throw Exception('Order tidak ditemukan di DB lokal');
+    }
+    if (currentOutletId != null && orderRow.outletId != currentOutletId) {
+      throw Exception('Order ini bukan milik outlet aktif');
+    }
+
     final orderItemRows = await (db.select(db.orderItems)..where((t) => t.orderId.equals(order.id))).get();
     if (orderItemRows.isEmpty) {
       throw Exception('Item pesanan tidak ada di DB lokal');
