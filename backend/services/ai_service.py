@@ -65,6 +65,214 @@ SONNET_PER_TENANT_DAILY = 5
 SONNET_MODEL_ID = "claude-sonnet-4-5-20250929"
 HAIKU_MODEL_ID = "claude-haiku-4-5-20251001"
 
+
+# ─── Domain Detection (Smart Suggest) ─────────────────────────────────────────
+# Signal priority: product names (x3) > category names (x2) > outlet name (x1).
+# Keywords fokus ke yang DIFFERENTIATING (bukan overlap antar domain).
+
+DOMAIN_KEYWORDS = {
+    "kopi_cafe": [
+        "kopi", "espresso", "latte", "cappuccino", "americano", "macchiato",
+        "mocha", "matcha", "barista", "aren", "arabica", "robusta", "manual brew",
+        "v60", "cold brew", "frappe", "affogato",
+    ],
+    "resto_makanan": [
+        "nasi", "ayam", "mie", "bakso", "soto", "sate", "rendang", "gado",
+        "pecel", "gulai", "bebek", "ikan bakar", "steak", "ramen", "udon",
+        "pizza", "burger", "pasta", "risotto", "dimsum",
+    ],
+    "warteg": [
+        "sayur asem", "sayur lodeh", "tahu bacem", "tempe orek", "tempe goreng",
+        "oseng", "capcay", "kangkung", "sambal", "ikan asin", "telur dadar",
+        "prasmanan", "nasi putih", "urap",
+    ],
+    "bakery": [
+        "roti", "kue", "pastry", "croissant", "donat", "brownies", "cake",
+        "tart", "muffin", "cookies", "cupcake", "bolu", "lapis legit",
+        "dessert box", "macaron", "eclair", "choux",
+    ],
+    "vape_liquid": [
+        "liquid", "e-liquid", "eliquid", "vape", "vapor", "coil", "pod",
+        "salt nic", "freebase", "nikotin", "atomizer", "rda", "rta",
+        "kanthal", "cotton bacon", "battery 18650", "squonk",
+    ],
+    "laundry": [
+        "cuci", "detergen", "pewangi", "setrika", "dry clean", "kiloan",
+        "laundry", "ekspres", "satuan", "premium wash", "bed cover", "karpet",
+        "sepatu cuci", "tas cuci",
+    ],
+    "salon_barber": [
+        "potong rambut", "styling", "cukur", "creambath", "keriting", "smoothing",
+        "hair color", "cat rambut", "facial", "waxing", "pedicure", "manicure",
+        "massage", "refleksi", "spa rambut",
+    ],
+    "minimarket": [
+        "rokok", "pulsa", "token listrik", "sampo", "sabun batang",
+        "sabun cuci", "pasta gigi", "sikat gigi", "pembalut", "popok",
+        "tissue", "beras kiloan",
+    ],
+    "pet_shop": [
+        "makanan kucing", "makanan anjing", "dry food", "wet food", "royal canin",
+        "whiskas", "pedigree", "vitamin hewan", "obat kutu", "pasir kucing",
+        "grooming", "kandang", "leash",
+    ],
+    "apotik_herbal": [
+        "paracetamol", "amoxicillin", "vitamin c", "vitamin d", "multivitamin",
+        "obat batuk", "obat flu", "antasida", "betadine", "termometer",
+        "jamu", "jahe merah", "kunyit", "temulawak",
+    ],
+}
+
+DOMAIN_PROMPT_HINTS = {
+    "kopi_cafe": (
+        "Coffee Shop / Kedai Kopi. Focus: drinks (espresso-based, manual brew, "
+        "non-coffee), sides/cemilan. Price: kopi hitam 12-18rb, kopi susu gula "
+        "aren 18-25rb, specialty 28-35rb. Ingredients: kopi arabica/robusta, "
+        "susu UHT, gula aren, matcha, sirup, es batu."
+    ),
+    "resto_makanan": (
+        "Resto / Rumah Makan. Focus: hidangan utama (nasi+lauk), lauk terpisah, "
+        "minuman pelengkap, paket combo. Price: hidangan utama 25-60rb, lauk "
+        "10-25rb. Ingredients: beras, ayam, ikan, bumbu, sayuran, bumbu dapur."
+    ),
+    "warteg": (
+        "Warteg / Warung Makan. Focus: prasmanan nasi campur, lauk harian, sayur, "
+        "sambal, minuman tradisional. Price: nasi+lauk 10-18rb, sayur 3-7rb, "
+        "teh/es jeruk 3-5rb. Ingredients: beras, tempe, tahu, sayuran, bumbu."
+    ),
+    "bakery": (
+        "Bakery / Toko Kue. Focus: roti (manis/tawar), kue ultah, pastry, dessert "
+        "box, brownies, cookies. Price: roti 5-15rb, kue potong 20-35rb, whole "
+        "cake 150-400rb. Ingredients: tepung terigu, butter, telur, gula, coklat, "
+        "susu, cream cheese, baking powder."
+    ),
+    "vape_liquid": (
+        "Vape Shop / Toko Liquid. Focus: e-liquid (freebase/salt nic dalam varian "
+        "rasa), hardware (coil, pod, battery, kanthal, cotton). Price: liquid 60ml "
+        "80-180rb, coil 15-50rb, battery 18650 80-150rb. Gak perlu recipe/ingredient "
+        "F&B — skip atau cantumin minimal (liquid base + flavor concentrate)."
+    ),
+    "laundry": (
+        "Laundry / Cuci Pakaian. Focus: jasa (cuci kering, cuci setrika, ekspres, "
+        "premium), per item khusus (bed cover, karpet, sepatu). Price: kiloan 6-12rb/kg, "
+        "ekspres 15-20rb/kg, bed cover 30-50rb/item. Ingredients: detergen, pewangi, "
+        "pemutih (per kg output), listrik/air (overhead)."
+    ),
+    "salon_barber": (
+        "Salon / Barbershop. Focus: jasa (potong, styling, creambath, hair color, "
+        "facial, spa). Price: potong pria 20-50rb, styling wanita 80-200rb, "
+        "creambath 60-120rb. Ingredients: shampoo, conditioner, cream, cat rambut, "
+        "alat sekali pakai."
+    ),
+    "minimarket": (
+        "Minimarket / Toko Kelontong. Focus: barang retail siap jual (rokok, snack, "
+        "minuman kemasan, kebutuhan harian). Gak butuh recipe — cuma harga jual vs "
+        "harga beli. Kalau user minta menu, arahkan ke tambah produk manual."
+    ),
+    "pet_shop": (
+        "Pet Shop. Focus: makanan hewan (dry/wet), aksesoris (kalung, mainan), "
+        "obat/vitamin, jasa grooming. Price: dry food 1kg 40-120rb, vitamin "
+        "30-80rb, grooming 80-200rb."
+    ),
+    "apotik_herbal": (
+        "Apotek / Toko Herbal. Focus: obat OTC, vitamin, suplemen, herbal kemasan. "
+        "Price: OTC 5-25rb, vitamin 30-150rb, herbal jar 50-120rb."
+    ),
+    "generic": (
+        "Domain belum bisa dipastikan dari data outlet (produk belum banyak). "
+        "Tanya balik ke user jenis usahanya apa (cafe/warteg/laundry/vape/dll), "
+        "atau default ke kategori umum (makanan-minuman) kalau ada indikasi F&B."
+    ),
+}
+
+_DOMAIN_FROM_BRAND_TYPE = {
+    "cafe": "kopi_cafe",
+    "resto": "resto_makanan",
+    "warung": "warteg",
+    "other": "generic",
+}
+
+
+async def detect_domain(outlet_id: str, db: AsyncSession) -> dict:
+    """
+    Detect merchant domain dari existing products + categories + outlet name.
+    Return: {"domain": str, "confidence": float, "hint": str, "signals": [str]}.
+
+    Algorithm: weighted keyword scoring (product x3, category x2, outlet name x1).
+    Fallback ke Brand.type kalau signal lemah. Ke "generic" kalau semua kosong.
+    """
+    from backend.models.product import Product
+    from backend.models.category import Category
+    from backend.models.outlet import Outlet
+    from backend.models.brand import Brand
+
+    outlet = (await db.execute(
+        select(Outlet).where(Outlet.id == outlet_id, Outlet.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    if not outlet:
+        return {"domain": "generic", "confidence": 0.0, "hint": DOMAIN_PROMPT_HINTS["generic"], "signals": []}
+
+    brand = await db.get(Brand, outlet.brand_id)
+    brand_type = getattr(getattr(brand, "type", None), "value", None) if brand else None
+
+    # Query text sources (cap jumlah biar gak bengkak)
+    product_rows = (await db.execute(
+        select(Product.name)
+        .where(Product.brand_id == outlet.brand_id, Product.deleted_at.is_(None))
+        .limit(100)
+    )).scalars().all()
+
+    category_rows = (await db.execute(
+        select(Category.name)
+        .where(Category.brand_id == outlet.brand_id, Category.deleted_at.is_(None))
+        .limit(30)
+    )).scalars().all()
+
+    scores = {d: 0 for d in DOMAIN_KEYWORDS}
+    signals_hit = []
+
+    def _score_text(text: str, weight: int):
+        tl = text.lower()
+        for domain, kws in DOMAIN_KEYWORDS.items():
+            hits = sum(1 for kw in kws if kw in tl)
+            if hits:
+                scores[domain] += weight * min(hits, 2)  # cap per-text = 2 kw
+
+    for name in product_rows:
+        if name:
+            _score_text(name, 3)
+            signals_hit.append(name[:40])
+    for name in category_rows:
+        if name:
+            _score_text(name, 2)
+    if outlet.name:
+        _score_text(outlet.name, 1)
+
+    top_domain = max(scores, key=scores.get)
+    top_score = scores[top_domain]
+    total = sum(scores.values())
+
+    # Confidence: top score / total matches (kalau 0, berarti gak ada signal)
+    if top_score == 0:
+        # Fallback ke brand.type
+        fallback = _DOMAIN_FROM_BRAND_TYPE.get(brand_type, "generic")
+        return {
+            "domain": fallback,
+            "confidence": 0.0 if fallback == "generic" else 0.3,
+            "hint": DOMAIN_PROMPT_HINTS[fallback],
+            "signals": [f"brand.type={brand_type}"] if brand_type else [],
+        }
+
+    confidence = top_score / total if total > 0 else 0
+
+    # Low confidence (signal ada tapi ambigu) → masih return top domain tapi flag
+    return {
+        "domain": top_domain,
+        "confidence": round(confidence, 2),
+        "hint": DOMAIN_PROMPT_HINTS[top_domain],
+        "signals": signals_hit[:5],
+    }
+
 # Keyword detection hanya untuk RESTOCK (actionable — langsung update DB).
 # Selain itu semua pertanyaan → CHAT → Claude yang jawab via system prompt.
 RESTOCK_KEYWORDS = [
@@ -478,13 +686,22 @@ async def generate_menu_proposal(
         import anthropic
         client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
+        # Smart suggest: detect merchant domain dari existing products/categories
+        domain_info = await detect_domain(outlet_id, db)
+        domain_hint = (
+            f"Business domain terdeteksi: **{domain_info['domain']}** "
+            f"(confidence {domain_info['confidence']})\n"
+            f"Context: {domain_info['hint']}\n"
+            f"Signal produk: {', '.join(domain_info['signals'][:3]) or 'tidak ada'}"
+        )
+
         async with client.messages.stream(
             model="claude-haiku-4-5-20251001",
             max_tokens=3500,  # 10 produk × 3-5 ingredient = butuh banyak token
             system=MENU_BULK_SYSTEM_PROMPT,
             messages=[{
                 "role": "user",
-                "content": f"Outlet: {outlet_name}\n\nPermintaan user: {message}",
+                "content": f"Outlet: {outlet_name}\n{domain_hint}\n\nPermintaan user: {message}",
             }],
         ) as stream:
             async for text_chunk in stream.text_stream:
@@ -518,13 +735,22 @@ async def generate_recipe_proposal(
         import anthropic
         client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
+        # Smart suggest: detect domain biar ingredient typical-nya match
+        # (jangan kasih resep F&B untuk vape shop)
+        domain_info = await detect_domain(outlet_id, db)
+        domain_hint = (
+            f"Business domain terdeteksi: **{domain_info['domain']}** "
+            f"(confidence {domain_info['confidence']})\n"
+            f"Context: {domain_info['hint']}"
+        )
+
         async with client.messages.stream(
             model="claude-haiku-4-5-20251001",
             max_tokens=1200,  # proposal text pendek + JSON block — buffer aman
             system=RECIPE_EXPERT_SYSTEM_PROMPT,
             messages=[{
                 "role": "user",
-                "content": f"Outlet: {outlet_name}\n\nPermintaan user: {message}",
+                "content": f"Outlet: {outlet_name}\n{domain_hint}\n\nPermintaan user: {message}",
             }],
         ) as stream:
             async for text_chunk in stream.text_stream:
