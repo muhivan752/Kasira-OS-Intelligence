@@ -1,5 +1,8 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/app_config.dart';
+import '../../features/pos/providers/tax_config_provider.dart';
 
 /// In-memory credential cache — read storage ONCE at login, then 0ms everywhere.
 ///
@@ -14,6 +17,8 @@ class SessionCache {
   String? accessToken;
   String? tenantId;
   String? outletId;
+  String? outletName;
+  String? outletAddress;
   String? stockMode;
   String? subscriptionTier;
   String? shiftSessionId;
@@ -57,7 +62,18 @@ class SessionCache {
     if (stockMode != null) prefs.setString('c_stock_mode', stockMode!);
     if (subscriptionTier != null) prefs.setString('c_subscription_tier', subscriptionTier!);
 
+    // Prime outlet name/address dari SharedPreferences cache (populated via
+    // order_detail_modal saat user buka receipt, atau via fetchOutletInfo).
+    outletName = prefs.getString('c_outlet_name');
+    outletAddress = prefs.getString('c_outlet_address');
+
     _initialized = true;
+
+    // Fire-and-forget fetch outlet info kalau belum ada cached name.
+    // Saat pertama login → prime cache biar receipt next transaksi bener.
+    if (outletName == null && outletId != null && accessToken != null) {
+      fetchAndCacheOutletInfo();
+    }
   }
 
   /// Fast init from SharedPreferences cache (for cold start before login)
@@ -66,6 +82,8 @@ class SessionCache {
     final prefs = await SharedPreferences.getInstance();
     tenantId = prefs.getString('c_tenant_id');
     outletId = prefs.getString('c_outlet_id');
+    outletName = prefs.getString('c_outlet_name');
+    outletAddress = prefs.getString('c_outlet_address');
     stockMode = prefs.getString('c_stock_mode');
     subscriptionTier = prefs.getString('c_subscription_tier');
     // Token still needs SecureStorage — read in parallel
@@ -94,11 +112,18 @@ class SessionCache {
   }
 
   Future<void> setOutletId(String value) async {
+    final changed = outletId != null && outletId != value;
     outletId = value;
     Future.wait([
       const FlutterSecureStorage().write(key: 'outlet_id', value: value),
       SharedPreferences.getInstance().then((p) => p.setString('c_outlet_id', value)),
     ]);
+    // Rule #50: saat outlet ganti, tax config outlet lama gak valid lagi.
+    // Clear cache → fetch ulang saat provider dibaca di context outlet baru.
+    if (changed) {
+      invalidateTaxConfigCache();
+      outletName = null; // force re-fetch dari /outlets/{id}
+    }
   }
 
   Future<void> setStockMode(String value) async {
@@ -149,6 +174,40 @@ class SessionCache {
     if (tenantId != null) 'X-Tenant-ID': tenantId!,
   };
 
+  /// Fetch outlet info dari GET /outlets/{outletId} — prime cache biar
+  /// receipt/print gak pake fallback 'Kasira Outlet' di first transaction.
+  /// Fire-and-forget, silent on error (graceful degrade).
+  Future<void> fetchAndCacheOutletInfo() async {
+    if (outletId == null || accessToken == null) return;
+    try {
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ));
+      final response = await dio.get(
+        '/outlets/$outletId',
+        options: Options(headers: authHeaders),
+      );
+      final data = response.data['data'] as Map<String, dynamic>?;
+      if (data == null) return;
+      final name = data['name'] as String?;
+      final address = data['address'] as String?;
+      if (name != null && name.isNotEmpty) {
+        outletName = name;
+        final prefs = await SharedPreferences.getInstance();
+        prefs.setString('c_outlet_name', name);
+      }
+      if (address != null && address.isNotEmpty) {
+        outletAddress = address;
+        final prefs = await SharedPreferences.getInstance();
+        prefs.setString('c_outlet_address', address);
+      }
+    } catch (_) {
+      // Silent — fallback chain (SessionCache → SharedPreferences → 'Kasira Outlet') tetap works
+    }
+  }
+
   // ── Tier check (convenience) ───────────────────────────────────────────────
   bool get isPro => const {'pro', 'business', 'enterprise'}
       .contains((subscriptionTier ?? 'starter').toLowerCase());
@@ -158,15 +217,25 @@ class SessionCache {
     accessToken = null;
     tenantId = null;
     outletId = null;
+    outletName = null;
+    outletAddress = null;
     stockMode = null;
     subscriptionTier = null;
     shiftSessionId = null;
     phone = null;
     userId = null;
     _initialized = false;
+    invalidateTaxConfigCache();
     await const FlutterSecureStorage().deleteAll();
     final prefs = await SharedPreferences.getInstance();
-    for (final key in ['c_tenant_id', 'c_outlet_id', 'c_stock_mode', 'c_subscription_tier']) {
+    for (final key in [
+      'c_tenant_id',
+      'c_outlet_id',
+      'c_outlet_name',
+      'c_outlet_address',
+      'c_stock_mode',
+      'c_subscription_tier',
+    ]) {
       prefs.remove(key);
     }
   }

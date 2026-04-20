@@ -36,15 +36,23 @@ class SyncService {
   Future<void> sync() async {
     try {
       // debugPrint('Starting sync process...');
-      
+
+      // Rule #50: scope unsynced reads ke outletId aktif — jangan push data
+      // outlet lain saat user switch. Kalau outletId null = session belum
+      // lengkap, bail out biar sync berikutnya re-run dengan context bener.
+      final currentOutletId = SessionCache.instance.outletId;
+      if (currentOutletId == null || currentOutletId.isEmpty) {
+        return;
+      }
+
       // 1. Gather unsynced local changes — parallel
       final futures = await Future.wait([
         db.getUnsyncedProducts(),
-        db.getUnsyncedOrders(),
-        db.getUnsyncedOrderItems(),
-        db.getUnsyncedPayments(),
-        db.getUnsyncedShifts(),
-        db.getUnsyncedCashActivities(),
+        db.getUnsyncedOrders(currentOutletId),
+        db.getUnsyncedOrderItems(currentOutletId),
+        db.getUnsyncedPayments(currentOutletId),
+        db.getUnsyncedShifts(currentOutletId),
+        db.getUnsyncedCashActivities(currentOutletId),
       ]);
       final unsyncedProducts = futures[0] as List<ProductLocal>;
       final unsyncedOrders = futures[1] as List<OrderLocal>;

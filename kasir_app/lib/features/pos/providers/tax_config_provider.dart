@@ -57,20 +57,24 @@ class TaxConfig {
   }
 }
 
-/// Cached tax config — survives provider rebuilds within same session.
-/// Invalidate explicitly when settings change.
+/// Cached tax config — keyed by outletId biar auto-invalidate saat user
+/// switch outlet (Rule #50 scope). Kalau outletId baru != cached outlet,
+/// cache di-discard dan re-fetch otomatis.
 TaxConfig? _cachedTaxConfig;
+String? _cachedForOutletId;
 
 final taxConfigProvider = FutureProvider<TaxConfig>((ref) async {
-  // Return cache if available — avoids redundant API call
-  if (_cachedTaxConfig != null) return _cachedTaxConfig!;
-
   final c = SessionCache.instance;
   final token = c.accessToken;
   final outletId = c.outletId;
   final tenantId = c.tenantId;
 
   if (outletId == null || outletId.isEmpty) return const TaxConfig();
+
+  // Return cache HANYA kalau outlet belum ganti
+  if (_cachedTaxConfig != null && _cachedForOutletId == outletId) {
+    return _cachedTaxConfig!;
+  }
 
   try {
     final dio = Dio(BaseOptions(
@@ -90,6 +94,7 @@ final taxConfigProvider = FutureProvider<TaxConfig>((ref) async {
     final data = response.data['data'] as Map<String, dynamic>?;
     if (data == null) return const TaxConfig();
     _cachedTaxConfig = TaxConfig.fromJson(data);
+    _cachedForOutletId = outletId;
     return _cachedTaxConfig!;
   } catch (_) {
     // Graceful degrade — no tax config = no charges
@@ -100,4 +105,5 @@ final taxConfigProvider = FutureProvider<TaxConfig>((ref) async {
 /// Call this to force re-fetch tax config (e.g. after settings change)
 void invalidateTaxConfigCache() {
   _cachedTaxConfig = null;
+  _cachedForOutletId = null;
 }

@@ -34,23 +34,51 @@ class AppDatabase extends _$AppDatabase {
       );
 
   // Helper method to get unsynced records
-  Future<List<ProductLocal>> getUnsyncedProducts() => 
+  // NOTE: Products = tenant-level (no outletId column) — tidak di-scope per outlet.
+  // Rule #50: Orders/Payments/Shifts/OrderItems/CashActivities WAJIB scope ke
+  // SessionCache.outletId biar data belum-sync gak bocor antar-outlet saat
+  // multi-outlet switch di same device.
+  Future<List<ProductLocal>> getUnsyncedProducts() =>
       (select(products)..where((t) => t.isSynced.equals(false))).get();
-      
-  Future<List<OrderLocal>> getUnsyncedOrders() => 
-      (select(orders)..where((t) => t.isSynced.equals(false))).get();
-      
-  Future<List<OrderItemLocal>> getUnsyncedOrderItems() => 
-      (select(orderItems)..where((t) => t.isSynced.equals(false))).get();
-      
-  Future<List<PaymentLocal>> getUnsyncedPayments() => 
-      (select(payments)..where((t) => t.isSynced.equals(false))).get();
-      
-  Future<List<ShiftLocal>> getUnsyncedShifts() => 
-      (select(shifts)..where((t) => t.isSynced.equals(false))).get();
-      
-  Future<List<CashActivityLocal>> getUnsyncedCashActivities() => 
-      (select(cashActivities)..where((t) => t.isSynced.equals(false))).get();
+
+  Future<List<OrderLocal>> getUnsyncedOrders(String outletId) => (select(orders)
+        ..where((t) => t.isSynced.equals(false))
+        ..where((t) => t.outletId.equals(outletId)))
+      .get();
+
+  /// OrderItems tidak punya outletId column langsung — scope via parent Order.
+  Future<List<OrderItemLocal>> getUnsyncedOrderItems(String outletId) {
+    final scopedOrderIds = selectOnly(orders)
+      ..addColumns([orders.id])
+      ..where(orders.outletId.equals(outletId));
+    return (select(orderItems)
+          ..where((t) => t.isSynced.equals(false))
+          ..where((t) => t.orderId.isInQuery(scopedOrderIds)))
+        .get();
+  }
+
+  Future<List<PaymentLocal>> getUnsyncedPayments(String outletId) =>
+      (select(payments)
+            ..where((t) => t.isSynced.equals(false))
+            ..where((t) => t.outletId.equals(outletId)))
+          .get();
+
+  Future<List<ShiftLocal>> getUnsyncedShifts(String outletId) =>
+      (select(shifts)
+            ..where((t) => t.isSynced.equals(false))
+            ..where((t) => t.outletId.equals(outletId)))
+          .get();
+
+  /// CashActivities tidak punya outletId column — scope via parent Shift.
+  Future<List<CashActivityLocal>> getUnsyncedCashActivities(String outletId) {
+    final scopedShiftIds = selectOnly(shifts)
+      ..addColumns([shifts.id])
+      ..where(shifts.outletId.equals(outletId));
+    return (select(cashActivities)
+          ..where((t) => t.isSynced.equals(false))
+          ..where((t) => t.shiftId.isInQuery(scopedShiftIds)))
+        .get();
+  }
 }
 
 LazyDatabase _openConnection() {

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../dashboard/providers/dashboard_provider.dart';
@@ -74,12 +75,24 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
   }
 
   Future<void> _loadOutletInfoAndMaybeAutoPrint() async {
+    // Fallback chain: SessionCache (in-memory) → SharedPreferences → 'Kasira Outlet'
+    final cache = SessionCache.instance;
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
-      _outletName = prefs.getString('c_outlet_name') ?? 'Kasira Outlet';
-      _outletAddress = prefs.getString('c_outlet_address') ?? '';
+      _outletName = cache.outletName
+          ?? prefs.getString('c_outlet_name')
+          ?? 'Kasira Outlet';
+      _outletAddress = cache.outletAddress
+          ?? prefs.getString('c_outlet_address')
+          ?? '';
     });
+
+    // Kalau outlet name masih default → trigger fetch background biar
+    // transaksi berikutnya (atau reprint) pake nama outlet yang bener.
+    if (cache.outletName == null || cache.outletName!.isEmpty) {
+      cache.fetchAndCacheOutletInfo();
+    }
 
     // Auto-print setelah animasi selesai, kalau printer connected
     await Future.delayed(const Duration(milliseconds: 600));
@@ -88,7 +101,9 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
 
     final printerState = ref.read(printerProvider);
     if (printerState.isConnected) {
-      _printReceipt(silent: true);
+      // Auto-print: SELALU show snackbar hasil (sukses/gagal) biar user gak
+      // mikir struk kecetak padahal gagal. Prefix "(otomatis)" di success message.
+      _printReceipt(isAutoPrint: true);
     }
   }
 
@@ -100,17 +115,20 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
 
   double get _change => widget.amountPaid - widget.totalAmount;
 
-  Future<void> _printReceipt({bool silent = false}) async {
+  Future<void> _printReceipt({bool isAutoPrint = false}) async {
     final notifier = ref.read(printerProvider.notifier);
     final state = ref.read(printerProvider);
 
     if (!state.isConnected) {
-      if (!silent && mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Printer belum terhubung. Hubungkan di Pengaturan > Printer.'),
+          SnackBar(
+            content: Text(isAutoPrint
+                ? 'Auto-print batal: printer belum terhubung. Hubungkan di Pengaturan > Printer.'
+                : 'Printer belum terhubung. Hubungkan di Pengaturan > Printer.'),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -151,13 +169,18 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
     final ok = await notifier.printBytes(bytes);
 
     if (!mounted) return;
+    final successMsg = isAutoPrint
+        ? 'Struk otomatis dicetak'
+        : 'Struk dikirim ke printer';
+    final failMsg = isAutoPrint
+        ? 'Auto-print gagal. Tap "CETAK STRUK" untuk coba ulang.'
+        : 'Gagal mencetak, coba lagi';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok
-            ? (silent ? 'Struk otomatis dicetak' : 'Struk dikirim ke printer')
-            : 'Gagal mencetak, coba lagi'),
+        content: Text(ok ? successMsg : failMsg),
         backgroundColor: ok ? AppColors.success : AppColors.error,
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: ok ? 2 : 5),
       ),
     );
   }
