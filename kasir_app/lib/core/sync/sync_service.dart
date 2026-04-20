@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/app_database.dart';
@@ -31,7 +33,10 @@ class SyncService {
   final SharedPreferences prefs;
 
   static const String _lastSyncKey = 'last_sync_hlc';
-  static const String _nodeIdKey = 'device_node_id';
+  // Raw device installation ID — UUID random di-generate sekali saat first
+  // launch, survive logout (identity device fisik). Key legacy-compat pake
+  // nama lama `device_node_id` biar user existing gak reset.
+  static const String _deviceIdKey = 'device_node_id';
 
   /// Set to true after sync if stock_mode changed on server
   bool _stockModeChanged = false;
@@ -50,13 +55,48 @@ class SyncService {
 
   SyncService(this.db, this.dio, this.prefs);
 
-  String get nodeId {
-    String? id = prefs.getString(_nodeIdKey);
+  /// Persistent device installation ID — dibuat sekali saat first launch,
+  /// survive logout. Bukan identitas user, tapi identitas fisik device.
+  String get deviceId {
+    String? id = prefs.getString(_deviceIdKey);
     if (id == null) {
       id = 'device_${DateTime.now().millisecondsSinceEpoch}';
-      prefs.setString(_nodeIdKey, id);
+      prefs.setString(_deviceIdKey, id);
     }
     return id;
+  }
+
+  /// CRDT node ID — Batch #17 Rule #9: unik per pasangan (device, user).
+  ///
+  /// WHY: Sebelumnya nodeId cuma `device_{ts}` — kalau User A dan User B
+  /// login di device yang sama, mereka share nodeId → tabrakan PNCounter
+  /// dan HLC di merge server (inkrement A dan B jatuh di slot yang sama).
+  ///
+  /// Sekarang: `sha256(deviceId|userId)` dipotong 16 hex char, prefix `u`.
+  /// Deterministic — user yang sama di device yang sama → nodeId tetap
+  /// (penting biar inkrement lama ke-merge dengan inkrement baru).
+  ///
+  /// Pre-login fallback: return raw deviceId. Sync gak jalan tanpa userId
+  /// anyway (di sync() kita bail out kalau `outletId` null).
+  String get nodeId {
+    final device = deviceId;
+    final userId = SessionCache.instance.userId;
+    if (userId == null || userId.isEmpty) {
+      return device;
+    }
+    final digest = sha256.convert(utf8.encode('$device|$userId')).toString();
+    return 'u${digest.substring(0, 16)}';
+  }
+
+  /// Reset in-memory state flags — dipanggil saat logout biar sync cycle
+  /// lama (kalau ada) gak leak status stale ke session user baru.
+  /// NOTE: Tidak nyentuh SQLite — data offline (orders, payments) tetap
+  /// tersimpan untuk re-login atau user kedua di device yang sama.
+  void resetState() {
+    _status = SyncStatus.idle;
+    _lastError = null;
+    _stockModeChanged = false;
+    _newStockMode = '';
   }
 
   Future<void> sync() async {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/services/session_cache.dart';
+import '../../../../core/auth/logout_service.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -9,11 +10,11 @@ import 'sync_settings_page.dart';
 import 'profile_page.dart';
 import 'staff_page.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
@@ -117,7 +118,7 @@ class SettingsPage extends StatelessWidget {
                   icon: LucideIcons.logOut,
                   title: 'Keluar (Logout)',
                   subtitle: 'Keluar dari akun dan hapus sesi',
-                  onTap: () => _confirmLogout(context),
+                  onTap: () => _confirmLogout(context, ref),
                 ),
               ],
             ),
@@ -127,12 +128,16 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  void _confirmLogout(BuildContext context) {
+  void _confirmLogout(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Konfirmasi Logout'),
-        content: const Text('Anda yakin ingin keluar? Semua data sesi akan dihapus.'),
+        content: const Text(
+          'Anda yakin ingin keluar? Data sesi (token, outlet, tier) akan '
+          'dihapus dari memori. Data transaksi offline tetap tersimpan di '
+          'perangkat untuk sinkron berikutnya.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -141,7 +146,12 @@ class SettingsPage extends StatelessWidget {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await SessionCache.instance.clear();
+              // Hardened logout (Batch #17 Rule #10 + #11):
+              // - reset sync state biar orphan cycle gak leak ke user berikut
+              // - wipe credential RAM + SecureStorage + SharedPreferences
+              // - invalidate syncServiceProvider → nodeId re-eval saat login
+              // - SQLite data TIDAK dihapus (offline-first)
+              await performLogout(ref);
               if (context.mounted) {
                 context.go('/login');
               }

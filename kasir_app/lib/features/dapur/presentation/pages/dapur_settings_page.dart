@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/services/session_cache.dart';
+import '../../../../core/auth/logout_service.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 
-class DapurSettingsPage extends StatefulWidget {
+class DapurSettingsPage extends ConsumerStatefulWidget {
   const DapurSettingsPage({super.key});
 
   @override
-  State<DapurSettingsPage> createState() => _DapurSettingsPageState();
+  ConsumerState<DapurSettingsPage> createState() => _DapurSettingsPageState();
 }
 
-class _DapurSettingsPageState extends State<DapurSettingsPage> {
+class _DapurSettingsPageState extends ConsumerState<DapurSettingsPage> {
   bool _soundEnabled = true;
   int _pollInterval = 8; // seconds
   Future<void> _logout() async {
@@ -41,7 +42,10 @@ class _DapurSettingsPageState extends State<DapurSettingsPage> {
     );
 
     if (confirm == true && mounted) {
-      await SessionCache.instance.clear();
+      // Hardened logout — Batch #17 Rule #10 + #11.
+      // Reset sync state + wipe session + invalidate providers.
+      // SQLite data tetap aman (offline-first).
+      await performLogout(ref);
       if (mounted) context.go('/dapur/login');
     }
   }
