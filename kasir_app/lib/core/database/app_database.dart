@@ -38,8 +38,31 @@ class AppDatabase extends _$AppDatabase {
   // Rule #50: Orders/Payments/Shifts/OrderItems/CashActivities WAJIB scope ke
   // SessionCache.outletId biar data belum-sync gak bocor antar-outlet saat
   // multi-outlet switch di same device.
-  Future<List<ProductLocal>> getUnsyncedProducts() =>
-      (select(products)..where((t) => t.isSynced.equals(false))).get();
+  //
+  // Batch #18 Rule #4: optional `brandId` filter untuk cegah tenant bleed.
+  // Kalau User A (tenant X) offline edit produk lalu User B (tenant Y) login
+  // di device sama, tanpa filter ini SyncService-nya B bakal push produk
+  // milik A. Dengan filter brandId → B cuma push produk tenant-nya sendiri.
+  // brandId null = no filter (first-install atau tenant belum ke-determine).
+  Future<List<ProductLocal>> getUnsyncedProducts({String? brandId}) {
+    final query = select(products)..where((t) => t.isSynced.equals(false));
+    if (brandId != null && brandId.isNotEmpty) {
+      query.where((t) => t.brandId.equals(brandId));
+    }
+    return query.get();
+  }
+
+  /// Derive brandId tenant-aktif dari salah satu produk yang sudah synced
+  /// (mereka semua share brand_id karena datang dari server yg sudah
+  /// scope by tenant). Return null kalau DB belum ada produk synced sama
+  /// sekali (first-install scenario).
+  Future<String?> getCurrentBrandId() async {
+    final row = await (select(products)
+          ..where((t) => t.isSynced.equals(true))
+          ..limit(1))
+        .getSingleOrNull();
+    return row?.brandId;
+  }
 
   Future<List<OrderLocal>> getUnsyncedOrders(String outletId) => (select(orders)
         ..where((t) => t.isSynced.equals(false))

@@ -221,7 +221,21 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
           return PrintOutcome.notConnected;
         }
       }
-      final result = await PrintBluetoothThermal.writeBytes(bytes);
+      // Batch #18 Rule #2: hard timeout 15 detik. Printer hardware hang
+      // (firmware bug + paper jam) bisa bikin writeBytes Future never resolve
+      // → isPrinting stuck true seumur app lifecycle. Dengan timeout,
+      // `TimeoutException` jatuh ke outer catch → finally release lock,
+      // user bisa retry atau disconnect manual.
+      final result = await PrintBluetoothThermal.writeBytes(bytes)
+          .timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          state = state.copyWith(
+            error: 'Printer tidak merespons (>15 detik). Cek kabel/paper.',
+          );
+          return false;
+        },
+      );
       return result ? PrintOutcome.success : PrintOutcome.failed;
     } catch (e) {
       state = state.copyWith(error: 'Gagal cetak: $e');

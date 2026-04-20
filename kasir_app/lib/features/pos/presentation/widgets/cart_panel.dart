@@ -347,14 +347,16 @@ class CartPanel extends ConsumerWidget {
       return;
     }
 
-    // 2. Buka payment modal
+    // 2. Buka payment modal — capture orderId ke non-null local biar
+    // Dart flow analysis gak kehilangan non-null promotion di dalam closure.
+    final confirmedOrderId = orderId;
     if (context.mounted) {
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (_) => PaymentModal(
           totalAmount: cart.total,
-          orderId: orderId,
+          orderId: confirmedOrderId,
           onPaymentSuccess: (String paymentMethod, double amountPaid) {
             final receiptItems = cart.items.map((i) => ReceiptItem(
               name: i.name,
@@ -380,8 +382,8 @@ class CartPanel extends ConsumerWidget {
                 'amountPaid': amountPaid,
                 'changeAmount': amountPaid - totalAmount,
                 'paymentMethod': paymentMethod,
-                'orderId': orderId,
-                'displayNumber': orderId.substring(0, 8).toUpperCase(),
+                'orderId': confirmedOrderId,
+                'displayNumber': confirmedOrderId.substring(0, 8).toUpperCase(),
                 'items': receiptItems,
                 'tax': taxAmount,
                 'serviceCharge': serviceChargeAmount,

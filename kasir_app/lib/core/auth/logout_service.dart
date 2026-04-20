@@ -3,39 +3,45 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/session_cache.dart';
 import '../sync/sync_provider.dart';
 
-/// Centralized logout flow — Batch #17 Rule #10 (orphan cleanup) & Rule #11
-/// (hardened logout).
+/// Centralized logout flow — Batch #17 Rule #10/#11 + Batch #18 Rule #4b.
 ///
 /// Kontrak:
-/// 1. **Reset in-memory sync state** — biar sync cycle yang sedang/barusan
-///    jalan gak leak status stale ke session user baru. Tidak cancel future
-///    yang sedang in-flight (Dart gak ngasih cancellation token), tapi flag
-///    status + lastError di-reset.
-/// 2. **Clear SessionCache** — wipe semua credential di RAM, SecureStorage,
+/// 1. **Cancel in-flight sync** (Batch #18) — via Dio CancelToken biar
+///    request POST /sync yang sedang menunggu response gak complete dengan
+///    auth header yang udah gak berhak, dan gak nyampah `_markAsSynced`
+///    setelah SessionCache.clear() jalan.
+/// 2. **Reset in-memory sync state** — flag status + lastError + stock
+///    mode change ke default biar gak leak ke session user baru.
+/// 3. **Clear SessionCache** — wipe semua credential di RAM, SecureStorage,
 ///    dan SharedPreferences mirror (tenant/outlet/stock_mode/tier).
-/// 3. **Invalidate Riverpod providers** yang hold stale session refs
+/// 4. **Invalidate Riverpod providers** yang hold stale session refs
 ///    (syncServiceProvider) — force re-create saat user berikut login,
 ///    biar nodeId getter eval ulang dengan userId baru.
-/// 4. **JANGAN drop SQLite** — data offline (orders, payments, products,
+/// 5. **JANGAN drop SQLite** — data offline (orders, payments, products,
 ///    ingredients) tetap hidup. User yang sama login lagi → lanjut dari
 ///    mana berhenti. User lain di device yang sama → nodeId beda (Rule #9),
 ///    jadi CRDT tetap konsisten walaupun pake DB yang sama.
-/// 5. **JANGAN hapus `device_node_id`** di SharedPreferences — itu identitas
+/// 6. **JANGAN hapus `device_node_id`** di SharedPreferences — itu identitas
 ///    fisik device, harus survive logout. `SessionCache.clear()` cuma hapus
 ///    key `c_*` prefix, jadi aman.
 Future<void> performLogout(WidgetRef ref) async {
-  // 1. Reset sync in-memory state (orphan cleanup)
+  // 1 & 2. Cancel in-flight request + reset state — dipanggil SEBELUM
+  //        SessionCache.clear() biar kalau request udah terkirim tapi belum
+  //        ke-cancel, header-nya masih valid (graceful). Token lama aman
+  //        karena logout adalah intent user sendiri.
   try {
-    ref.read(syncServiceProvider).resetState();
+    final syncService = ref.read(syncServiceProvider);
+    syncService.cancelInFlight();
+    syncService.resetState();
   } catch (e) {
     // Provider belum pernah di-initialize — abaikan
-    debugPrint('performLogout: resetState skip — $e');
+    debugPrint('performLogout: sync cleanup skip — $e');
   }
 
-  // 2. Clear credential di RAM + SecureStorage + SharedPreferences mirror
+  // 3. Clear credential di RAM + SecureStorage + SharedPreferences mirror
   await SessionCache.instance.clear();
 
-  // 3. Invalidate providers yang hold stale refs
+  // 4. Invalidate providers yang hold stale refs
   //    syncServiceProvider akan re-create next read → nodeId re-eval dengan
   //    userId baru (atau null kalau pre-login).
   ref.invalidate(syncServiceProvider);

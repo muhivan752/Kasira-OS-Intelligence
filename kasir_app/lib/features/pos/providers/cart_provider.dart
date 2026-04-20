@@ -2,11 +2,11 @@ import 'package:drift/drift.dart' as drift;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/sync/sync_provider.dart';
+import '../../../core/sync/sync_service.dart';
 import '../../../core/utils/pn_counter.dart';
 import '../../../core/services/session_cache.dart';
 import 'tax_config_provider.dart';
@@ -163,8 +163,13 @@ String parseStockErrorDetail(dynamic detail, {String fallback = 'Gagal membuat p
 
 class CartNotifier extends StateNotifier<CartState> {
   final AppDatabase _db;
+  final SyncService _syncService;
   TaxConfig? _taxConfig;
-  CartNotifier(this._db) : super(const CartState());
+  // Batch #18 Rule #1: CartNotifier dapet injection SyncService biar offline
+  // PNCounter increment pake composite nodeId (sha256(device|user)) — bukan
+  // raw device_node_id yang bikin collision kalau user shift-switch cepat di
+  // device yang sama.
+  CartNotifier(this._db, this._syncService) : super(const CartState());
 
   void setTaxConfig(TaxConfig config) {
     _taxConfig = config;
@@ -556,10 +561,12 @@ class CartNotifier extends StateNotifier<CartState> {
               // Recipe mode: deduct ingredient stocks
               await _deductIngredientStockOffline(item.productId, item.qty, outletId);
             } else {
-              // Simple mode: Pure CRDT stock deduct — PNCounter
-              final prefs = await SharedPreferences.getInstance();
-              final nodeId = prefs.getString('device_node_id') ??
-                  'device_${DateTime.now().millisecondsSinceEpoch}';
+              // Simple mode: Pure CRDT stock deduct — PNCounter.
+              // Batch #18: pake composite nodeId dari SyncService (sha256 per
+              // user-device pair). Gak lagi baca raw 'device_node_id' key —
+              // biar shift-switch User A → User B di device sama jatuh di
+              // slot PNCounter yang beda, merge server penjumlahan bukan max.
+              final nodeId = _syncService.nodeId;
 
               final product = await (_db.select(_db.products)
                     ..where((p) => p.id.equals(item.productId)))
@@ -736,7 +743,8 @@ class CartNotifier extends StateNotifier<CartState> {
 
 final cartProvider = StateNotifierProvider<CartNotifier, CartState>((ref) {
   final db = ref.watch(databaseProvider);
-  final notifier = CartNotifier(db);
+  final syncService = ref.watch(syncServiceProvider);
+  final notifier = CartNotifier(db, syncService);
 
   // Inject tax config when available
   ref.listen(taxConfigProvider, (_, next) {

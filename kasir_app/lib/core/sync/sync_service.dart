@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:drift/drift.dart' as drift;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/app_database.dart';
 import '../utils/hlc.dart';
@@ -99,6 +100,25 @@ class SyncService {
     _newStockMode = '';
   }
 
+  // Batch #18 Rule #4b: CancelToken untuk cancel in-flight POST saat logout.
+  // Dio CancelToken one-shot — setelah cancel() dipanggil, token gak bisa
+  // dipake ulang. Makanya kita re-init di [cancelInFlight] biar sync cycle
+  // berikutnya start fresh.
+  CancelToken _syncCancelToken = CancelToken();
+
+  /// Batalin request POST /sync yang sedang in-flight (kalau ada). Dipanggil
+  /// dari `performLogout()` biar gak ada request "gentayangan" yang complete
+  /// dengan header auth lama setelah user logout.
+  ///
+  /// Setelah cancel, token di-reset ke instance baru biar sync berikut
+  /// (e.g. dari user baru yang login) punya CancelToken segar.
+  void cancelInFlight() {
+    if (!_syncCancelToken.isCancelled) {
+      _syncCancelToken.cancel('logout');
+    }
+    _syncCancelToken = CancelToken();
+  }
+
   Future<void> sync() async {
     // Concurrent sync guard — kalau udah ada yang jalan, skip (bukan error)
     if (_status == SyncStatus.syncing) {
@@ -118,9 +138,14 @@ class SyncService {
         return;
       }
 
+      // Batch #18 Rule #4: scope unsynced products by current tenant's brand
+      // biar gak leak produk dari session tenant lama (kalau pernah login
+      // beda tenant di device sama). Null = first-install, no filter.
+      final currentBrandId = await db.getCurrentBrandId();
+
       // 1. Gather unsynced local changes — parallel
       final futures = await Future.wait([
-        db.getUnsyncedProducts(),
+        db.getUnsyncedProducts(brandId: currentBrandId),
         db.getUnsyncedOrders(currentOutletId),
         db.getUnsyncedOrderItems(currentOutletId),
         db.getUnsyncedPayments(currentOutletId),
@@ -157,8 +182,13 @@ class SyncService {
         'changes': changes,
       };
 
-      // 2. Send to server
-      final response = await dio.post('/sync/', data: payload);
+      // 2. Send to server — pass cancel token biar logout bisa batalin
+      //    in-flight request (Batch #18 Rule #4b).
+      final response = await dio.post(
+        '/sync/',
+        data: payload,
+        cancelToken: _syncCancelToken,
+      );
 
       if (response.statusCode == 200) {
         final data = response.data;
@@ -214,6 +244,15 @@ class SyncService {
       _lastError = 'Jaringan timeout';
       debugPrint('sync() TimeoutException: $e');
     } on DioException catch (e) {
+      // Cancel = request dibatalin via CancelToken (Batch #18 Rule #4b —
+      // biasanya dari performLogout). Silent, treat as idle exit — jangan
+      // rethrow biar logout flow gak ganggu UI dengan error dialog.
+      if (e.type == DioExceptionType.cancel) {
+        _status = SyncStatus.idle;
+        _lastError = null;
+        debugPrint('sync() cancelled (logout or manual)');
+        return;
+      }
       final isNetworkFailure = e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
@@ -517,24 +556,57 @@ class SyncService {
     required List<ShiftLocal> shifts,
     required List<CashActivityLocal> cashActivities,
   }) async {
+    // Batch #18 Rule #3: Atomic UPDATE kolom `isSynced` saja — jangan
+    // `batch.replace(table, snapshot)` yang overwrite seluruh row. Kalau
+    // pake replace, mutation lokal yang terjadi saat sync window berjalan
+    // (misal: PNCounter decrement stok dari sale baru, status update dari
+    // _applyServerChanges di dalam sync yang sama) bakal di-CLOBBER kembali
+    // ke snapshot pre-sync → data loss.
+    //
+    // `batch.update(table, Companion(isSynced: Value(true)), where: id=...)`
+    // cuma nyentuh 1 kolom, preserve kolom lain apa adanya saat query dibuat.
     await db.batch((batch) {
       for (var p in products) {
-        batch.replace(db.products, p.copyWith(isSynced: true));
+        batch.update(
+          db.products,
+          const ProductsCompanion(isSynced: drift.Value(true)),
+          where: (t) => t.id.equals(p.id),
+        );
       }
       for (var o in orders) {
-        batch.replace(db.orders, o.copyWith(isSynced: true));
+        batch.update(
+          db.orders,
+          const OrdersCompanion(isSynced: drift.Value(true)),
+          where: (t) => t.id.equals(o.id),
+        );
       }
       for (var oi in orderItems) {
-        batch.replace(db.orderItems, oi.copyWith(isSynced: true));
+        batch.update(
+          db.orderItems,
+          const OrderItemsCompanion(isSynced: drift.Value(true)),
+          where: (t) => t.id.equals(oi.id),
+        );
       }
       for (var p in payments) {
-        batch.replace(db.payments, p.copyWith(isSynced: true));
+        batch.update(
+          db.payments,
+          const PaymentsCompanion(isSynced: drift.Value(true)),
+          where: (t) => t.id.equals(p.id),
+        );
       }
       for (var s in shifts) {
-        batch.replace(db.shifts, s.copyWith(isSynced: true));
+        batch.update(
+          db.shifts,
+          const ShiftsCompanion(isSynced: drift.Value(true)),
+          where: (t) => t.id.equals(s.id),
+        );
       }
       for (var ca in cashActivities) {
-        batch.replace(db.cashActivities, ca.copyWith(isSynced: true));
+        batch.update(
+          db.cashActivities,
+          const CashActivitiesCompanion(isSynced: drift.Value(true)),
+          where: (t) => t.id.equals(ca.id),
+        );
       }
     });
   }
