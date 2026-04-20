@@ -74,8 +74,12 @@ class SyncService {
 
       final lastSyncHlc = prefs.getString(_lastSyncKey);
 
+      // Multi-outlet tenant WAJIB kirim outlet_id — backend reject (400) kalau
+      // tenant punya >1 outlet dan outlet_id kosong. Single-outlet backward
+      // compat masih jalan karena backend auto-pick satu-satunya outlet.
       final payload = {
         'node_id': nodeId,
+        'outlet_id': currentOutletId,
         'last_sync_hlc': lastSyncHlc,
         'changes': changes,
       };

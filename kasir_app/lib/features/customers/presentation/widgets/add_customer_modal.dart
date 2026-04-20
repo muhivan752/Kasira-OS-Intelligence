@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/phone_normalize.dart';
 
 class AddCustomerModal extends StatefulWidget {
   const AddCustomerModal({super.key});
@@ -44,12 +45,17 @@ class _AddCustomerModalState extends State<AddCustomerModal> {
         receiveTimeout: const Duration(seconds: 15),
       ));
 
+      // Normalize phone ke 628xxx biar konsisten dengan customer record lain
+      // dan prevent duplicate (user ketik 08xxx vs 628xxx).
+      final rawPhone = _phoneController.text.trim();
+      final normalizedPhone = rawPhone.isNotEmpty ? normalizeIndoPhone(rawPhone) : null;
+
       final response = await dio.post(
         '/customers/',
         options: Options(headers: SessionCache.instance.authHeaders),
         data: {
           'name': name,
-          if (_phoneController.text.trim().isNotEmpty) 'phone': _phoneController.text.trim(),
+          if (normalizedPhone != null) 'phone': normalizedPhone,
           if (_emailController.text.trim().isNotEmpty) 'email': _emailController.text.trim(),
         },
       );

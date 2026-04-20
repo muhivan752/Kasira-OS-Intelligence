@@ -217,12 +217,35 @@ class _PaymentModalState extends State<PaymentModal> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isNarrow = screenWidth < 600;
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      insetPadding: isNarrow
-          ? const EdgeInsets.symmetric(horizontal: 12, vertical: 24)
-          : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-      child: isNarrow ? _buildNarrowLayout(context) : _buildWideLayout(context),
+    // Rule #43: payment immutable. Block device back button biar user gak
+    // tidak sengaja batalin pembayaran yang sedang in-flight (cash typed,
+    // QRIS polling, dll). Cancel resmi via tombol X di header atau ganti
+    // metode pembayaran di chip.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        // QRIS in-flight? Peringatkan user — jangan dismiss diam-diam.
+        if (_isLoadingQris || (_qrisPaymentId != null && !_isQrisPaid)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Pembayaran sedang diproses. Tap tombol X di atas kalau mau batal.',
+              ),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      },
+      child: Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        insetPadding: isNarrow
+            ? const EdgeInsets.symmetric(horizontal: 12, vertical: 24)
+            : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+        child: isNarrow ? _buildNarrowLayout(context) : _buildWideLayout(context),
+      ),
     );
   }
 

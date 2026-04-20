@@ -9,6 +9,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/services/printer_service.dart';
+import '../../../../core/utils/phone_normalize.dart';
 import '../../providers/tax_config_provider.dart';
 
 class ReceiptItem {
@@ -486,9 +487,16 @@ class _SendReceiptWaDialogState extends State<SendReceiptWaDialog> {
   }
 
   Future<void> _send() async {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
+    final rawPhone = _phoneController.text.trim();
+    if (rawPhone.isEmpty) {
       setState(() => _error = 'Masukkan nomor HP');
+      return;
+    }
+    // Normalize ke 628xxx sebelum kirim — prevent duplicate customer record
+    // kalau user next time ketik format beda (08xxx vs 628xxx).
+    final phone = normalizeIndoPhone(rawPhone);
+    if (phone == null) {
+      setState(() => _error = 'Nomor HP tidak valid (minimal 8 digit)');
       return;
     }
     setState(() { _isLoading = true; _error = null; });
@@ -501,7 +509,8 @@ class _SendReceiptWaDialogState extends State<SendReceiptWaDialog> {
       ));
       final headers = SessionCache.instance.authHeaders;
 
-      // 1. Kirim struk via WA
+      // 1. Kirim struk via WA (backend juga normalize, tapi kirim sudah
+      //    normalized biar konsisten dengan customer record yang di-save)
       final response = await dio.post(
         '/payments/send-receipt',
         options: Options(headers: headers),
