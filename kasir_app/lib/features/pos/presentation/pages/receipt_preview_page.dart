@@ -41,6 +41,8 @@ class ReceiptPreviewPage extends ConsumerWidget {
   final double? serviceCharge;
   final double? discount;
   final bool taxInclusive;
+  final String? customerId;
+  final String? customerName;
 
   const ReceiptPreviewPage({
     super.key,
@@ -57,6 +59,8 @@ class ReceiptPreviewPage extends ConsumerWidget {
     this.serviceCharge,
     this.discount,
     this.taxInclusive = false,
+    this.customerId,
+    this.customerName,
   });
 
   // Demo constructor for preview
@@ -429,27 +433,55 @@ class ReceiptPreviewPage extends ConsumerWidget {
   void _shareViaWa(BuildContext context) {
     showDialog(
       context: context,
-      builder: (_) => _SendWaDialog(orderId: orderId),
+      builder: (_) => SendReceiptWaDialog(
+        orderId: orderId,
+        customerId: customerId,
+        customerName: customerName,
+      ),
     );
   }
 }
 
-class _SendWaDialog extends StatefulWidget {
+/// Dialog untuk kirim struk via WhatsApp.
+/// Kalau `customerId` null DAN phone berhasil kirim → auto-create customer record
+/// (best-effort, silent on duplicate). Biar nomor WA ke-save untuk transaksi berikutnya.
+class SendReceiptWaDialog extends StatefulWidget {
   final String orderId;
-  const _SendWaDialog({required this.orderId});
+  final String? customerId;
+  final String? customerName;
+
+  const SendReceiptWaDialog({
+    super.key,
+    required this.orderId,
+    this.customerId,
+    this.customerName,
+  });
 
   @override
-  State<_SendWaDialog> createState() => _SendWaDialogState();
+  State<SendReceiptWaDialog> createState() => _SendReceiptWaDialogState();
 }
 
-class _SendWaDialogState extends State<_SendWaDialog> {
+class _SendReceiptWaDialogState extends State<SendReceiptWaDialog> {
   final _phoneController = TextEditingController();
+  final _nameController = TextEditingController();
   bool _isLoading = false;
+  bool _saveAsCustomer = true;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.customerName != null) {
+      _nameController.text = widget.customerName!;
+    }
+    // Kalau customer udah kepilih di cart, gak perlu save lagi (sudah di DB)
+    _saveAsCustomer = widget.customerId == null;
+  }
 
   @override
   void dispose() {
     _phoneController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -467,19 +499,47 @@ class _SendWaDialogState extends State<_SendWaDialog> {
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 15),
       ));
+      final headers = SessionCache.instance.authHeaders;
 
+      // 1. Kirim struk via WA
       final response = await dio.post(
         '/payments/send-receipt',
-        options: Options(headers: SessionCache.instance.authHeaders),
+        options: Options(headers: headers),
         data: {'order_id': widget.orderId, 'phone': phone},
       );
 
       final sent = response.data['data']?['sent'] == true;
+
+      // 2. Best-effort: save as customer kalau user opt-in & belum linked
+      bool customerSaved = false;
+      if (sent && _saveAsCustomer && widget.customerId == null) {
+        final name = _nameController.text.trim().isNotEmpty
+            ? _nameController.text.trim()
+            : 'Pelanggan $phone';
+        try {
+          await dio.post(
+            '/customers/',
+            options: Options(headers: headers),
+            data: {'name': name, 'phone': phone},
+          );
+          customerSaved = true;
+        } on DioException catch (e) {
+          // 400 = phone sudah terdaftar — anggap "saved" karena tujuan tercapai
+          if (e.response?.statusCode == 400) customerSaved = true;
+          // error lain: silent, jangan block success flow
+        } catch (_) {}
+      }
+
       if (mounted) {
         Navigator.pop(context);
+        final msg = sent
+            ? (customerSaved
+                ? 'Struk dikirim ke $phone & pelanggan tersimpan'
+                : 'Struk dikirim ke $phone')
+            : 'Gagal mengirim struk';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(sent ? 'Struk dikirim ke $phone' : 'Gagal mengirim struk'),
+            content: Text(msg),
             backgroundColor: sent ? AppColors.success : AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
@@ -504,38 +564,74 @@ class _SendWaDialogState extends State<_SendWaDialog> {
           Text('Kirim Struk via WA'),
         ],
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Masukkan nomor WhatsApp customer',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _phoneController,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: '08xxxxxxxxxx',
-              prefixIcon: const Icon(LucideIcons.smartphone, size: 18),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.primary, width: 2),
-              ),
-              errorText: _error,
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Masukkan nomor WhatsApp customer',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
-            onSubmitted: (_) => _send(),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Format: 08xxx atau 628xxx',
-            style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
-          ),
-        ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: '08xxxxxxxxxx',
+                prefixIcon: const Icon(LucideIcons.smartphone, size: 18),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                ),
+                errorText: _error,
+              ),
+              onSubmitted: (_) => _send(),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Format: 08xxx atau 628xxx',
+              style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+            ),
+            // Save as customer opt-in — hanya kalau cart belum link ke customer
+            if (widget.customerId == null) ...[
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                value: _saveAsCustomer,
+                onChanged: (v) => setState(() => _saveAsCustomer = v ?? false),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text(
+                  'Simpan sebagai pelanggan',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Nomor WA disimpan biar gak perlu input ulang next order',
+                  style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                ),
+              ),
+              if (_saveAsCustomer) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    hintText: 'Nama pelanggan (opsional)',
+                    prefixIcon: const Icon(LucideIcons.user, size: 18),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    isDense: true,
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
       ),
       actions: [
         TextButton(

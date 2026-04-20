@@ -76,6 +76,8 @@ final _router = GoRouter(
           serviceCharge: (extra['serviceCharge'] as num?)?.toDouble(),
           discount: (extra['discount'] as num?)?.toDouble(),
           taxInclusive: extra['taxInclusive'] as bool? ?? false,
+          customerId: extra['customerId'] as String?,
+          customerName: extra['customerName'] as String?,
         );
       },
     ),
@@ -97,6 +99,8 @@ final _router = GoRouter(
           serviceCharge: (extra['serviceCharge'] as num?)?.toDouble(),
           discount: (extra['discount'] as num?)?.toDouble(),
           taxInclusive: extra['taxInclusive'] as bool? ?? false,
+          customerId: extra['customerId'] as String?,
+          customerName: extra['customerName'] as String?,
         );
       },
     ),

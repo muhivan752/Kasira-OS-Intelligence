@@ -296,6 +296,8 @@ class CartPanel extends ConsumerWidget {
             final discountAmount = cart.discountAmount;
             final taxInclusive = cart.taxInclusive;
             final totalAmount = cart.total;
+            final customerId = cart.customerId;
+            final customerName = cart.customerName;
             ref.read(cartProvider.notifier).clearCart();
             ref.read(posModeProvider.notifier).state = PosMode.selection;
             // Invalidate providers supaya dashboard & order list langsung update
@@ -315,6 +317,8 @@ class CartPanel extends ConsumerWidget {
                 'serviceCharge': serviceChargeAmount,
                 'discount': discountAmount,
                 'taxInclusive': taxInclusive,
+                'customerId': customerId,
+                'customerName': customerName,
               });
             }
           },

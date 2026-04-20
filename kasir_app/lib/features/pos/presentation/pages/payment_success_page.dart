@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/services/printer_service.dart';
 import '../../../dashboard/providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../../products/providers/products_provider.dart';
+import '../../providers/tax_config_provider.dart';
 import 'receipt_preview_page.dart';
 
 class PaymentSuccessPage extends ConsumerStatefulWidget {
@@ -20,6 +23,8 @@ class PaymentSuccessPage extends ConsumerStatefulWidget {
   final double? serviceCharge;
   final double? discount;
   final bool taxInclusive;
+  final String? customerId;
+  final String? customerName;
 
   const PaymentSuccessPage({
     super.key,
@@ -33,6 +38,8 @@ class PaymentSuccessPage extends ConsumerStatefulWidget {
     this.serviceCharge,
     this.discount,
     this.taxInclusive = false,
+    this.customerId,
+    this.customerName,
   });
 
   @override
@@ -47,6 +54,10 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
 
   final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
+  String _outletName = 'Kasira Outlet';
+  String _outletAddress = '';
+  bool _autoPrintAttempted = false;
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +70,26 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
     );
     _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
     _controller.forward();
+    _loadOutletInfoAndMaybeAutoPrint();
+  }
+
+  Future<void> _loadOutletInfoAndMaybeAutoPrint() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _outletName = prefs.getString('c_outlet_name') ?? 'Kasira Outlet';
+      _outletAddress = prefs.getString('c_outlet_address') ?? '';
+    });
+
+    // Auto-print setelah animasi selesai, kalau printer connected
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted || _autoPrintAttempted) return;
+    _autoPrintAttempted = true;
+
+    final printerState = ref.read(printerProvider);
+    if (printerState.isConnected) {
+      _printReceipt(silent: true);
+    }
   }
 
   @override
@@ -69,139 +100,254 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
 
   double get _change => widget.amountPaid - widget.totalAmount;
 
+  Future<void> _printReceipt({bool silent = false}) async {
+    final notifier = ref.read(printerProvider.notifier);
+    final state = ref.read(printerProvider);
+
+    if (!state.isConnected) {
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Printer belum terhubung. Hubungkan di Pengaturan > Printer.'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    final taxConfig = ref.read(taxConfigProvider).valueOrNull;
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final dateFormat = DateFormat('dd/MM/yy HH:mm', 'id_ID');
+    final subtotal = widget.items.fold(0.0, (s, i) => s + i.subtotal);
+
+    final data = ReceiptData(
+      outletName: _outletName,
+      outletAddress: _outletAddress,
+      orderNumber: widget.displayNumber,
+      dateTime: dateFormat.format(now),
+      items: widget.items
+          .map((i) => ReceiptLineItem(
+                name: i.name,
+                qty: i.qty,
+                price: i.price,
+                notes: i.notes,
+              ))
+          .toList(),
+      subtotal: subtotal,
+      tax: widget.tax,
+      serviceCharge: widget.serviceCharge,
+      total: widget.totalAmount,
+      paymentMethod: widget.paymentMethod,
+      amountPaid: widget.amountPaid,
+      changeAmount: widget.amountPaid - widget.totalAmount,
+      taxNumber: taxConfig?.taxNumber ?? prefs.getString('c_outlet_tax_number'),
+      customFooter: taxConfig?.receiptFooter ?? prefs.getString('c_outlet_custom_footer'),
+    );
+
+    final bytes = buildReceipt(data);
+    final ok = await notifier.printBytes(bytes);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? (silent ? 'Struk otomatis dicetak' : 'Struk dikirim ke printer')
+            : 'Gagal mencetak, coba lagi'),
+        backgroundColor: ok ? AppColors.success : AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _sendWa() {
+    showDialog(
+      context: context,
+      builder: (_) => SendReceiptWaDialog(
+        orderId: widget.orderId,
+        customerId: widget.customerId,
+        customerName: widget.customerName,
+      ),
+    );
+  }
+
+  void _viewReceipt() {
+    context.push('/receipt', extra: {
+      'orderId': widget.orderId,
+      'displayNumber': widget.displayNumber,
+      'totalAmount': widget.totalAmount,
+      'amountPaid': widget.amountPaid,
+      'changeAmount': widget.amountPaid - widget.totalAmount,
+      'paymentMethod': widget.paymentMethod,
+      'items': widget.items,
+      'tax': widget.tax,
+      'serviceCharge': widget.serviceCharge,
+      'discount': widget.discount,
+      'taxInclusive': widget.taxInclusive,
+      'outletName': _outletName,
+      'outletAddress': _outletAddress,
+      'customerId': widget.customerId,
+      'customerName': widget.customerName,
+    });
+  }
+
+  void _newTransaction() {
+    ref.invalidate(dashboardProvider);
+    ref.invalidate(ordersProvider);
+    ref.invalidate(productsProvider);
+    context.go('/dashboard');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final printerState = ref.watch(printerProvider);
+
     return Scaffold(
       backgroundColor: AppColors.surfaceVariant,
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnim,
-          child: Container(
-            width: 480,
-            padding: const EdgeInsets.all(48),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.success.withOpacity(0.15),
-                  blurRadius: 40,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Success icon
-                ScaleTransition(
-                  scale: _scaleAnim,
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: const BoxDecoration(
-                      color: AppColors.success,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(LucideIcons.check, color: Colors.white, size: 52),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Container(
+              width: 480,
+              padding: const EdgeInsets.all(40),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.success.withOpacity(0.15),
+                    blurRadius: 40,
+                    offset: const Offset(0, 10),
                   ),
-                ),
-                const SizedBox(height: 28),
-                Text(
-                  'Pembayaran Berhasil!',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Success icon
+                  ScaleTransition(
+                    scale: _scaleAnim,
+                    child: Container(
+                      width: 96,
+                      height: 96,
+                      decoration: const BoxDecoration(
                         color: AppColors.success,
+                        shape: BoxShape.circle,
                       ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Order #${widget.displayNumber}',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
-                ),
-                const SizedBox(height: 32),
-
-                // Payment details card
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(16),
+                      child: const Icon(LucideIcons.check, color: Colors.white, size: 48),
+                    ),
                   ),
-                  child: Column(
-                    children: [
-                      _buildRow('Total Tagihan', _currency.format(widget.totalAmount),
-                          isBold: true, valueColor: AppColors.textPrimary),
-                      const SizedBox(height: 12),
-                      _buildRow(
-                        'Metode Pembayaran',
-                        widget.paymentMethod,
-                        valueColor: AppColors.primary,
-                      ),
-                      if (widget.paymentMethod == 'Cash') ...[
-                        const SizedBox(height: 12),
-                        _buildRow('Uang Diterima', _currency.format(widget.amountPaid)),
-                        const Divider(height: 24, color: AppColors.border),
-                        _buildRow(
-                          'Kembalian',
-                          _currency.format(_change > 0 ? _change : 0),
-                          isBold: true,
-                          valueColor: AppColors.success,
+                  const SizedBox(height: 24),
+                  Text(
+                    'Pembayaran Berhasil!',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.success,
                         ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Order #${widget.displayNumber}',
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 15),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Payment details card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildRow('Total Tagihan', _currency.format(widget.totalAmount),
+                            isBold: true, valueColor: AppColors.textPrimary),
+                        const SizedBox(height: 10),
+                        _buildRow(
+                          'Metode Pembayaran',
+                          widget.paymentMethod,
+                          valueColor: AppColors.primary,
+                        ),
+                        if (widget.paymentMethod == 'Cash') ...[
+                          const SizedBox(height: 10),
+                          _buildRow('Uang Diterima', _currency.format(widget.amountPaid)),
+                          const Divider(height: 20, color: AppColors.border),
+                          _buildRow(
+                            'Kembalian',
+                            _currency.format(_change > 0 ? _change : 0),
+                            isBold: true,
+                            valueColor: AppColors.success,
+                          ),
+                        ],
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // PRIMARY ACTION — Cetak Struk
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _printReceipt(),
+                      icon: const Icon(LucideIcons.printer, size: 20),
+                      label: Text(
+                        printerState.isConnected ? 'CETAK STRUK' : 'CETAK STRUK (Printer Offline)',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // SECONDARY ACTIONS — WA + Preview
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _sendWa,
+                          icon: const Icon(LucideIcons.messageCircle, size: 18, color: Color(0xFF25D366)),
+                          label: const Text('Kirim WA'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: const BorderSide(color: Color(0xFF25D366)),
+                            foregroundColor: const Color(0xFF25D366),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _viewReceipt,
+                          icon: const Icon(LucideIcons.receipt, size: 18),
+                          label: const Text('Lihat Struk'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 32),
+                  const SizedBox(height: 16),
 
-                // Action buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          context.push('/receipt', extra: {
-                            'orderId': widget.orderId,
-                            'displayNumber': widget.displayNumber,
-                            'totalAmount': widget.totalAmount,
-                            'amountPaid': widget.amountPaid,
-                            'changeAmount': widget.amountPaid - widget.totalAmount,
-                            'paymentMethod': widget.paymentMethod,
-                            'items': widget.items,
-                            'tax': widget.tax,
-                            'serviceCharge': widget.serviceCharge,
-                            'discount': widget.discount,
-                            'taxInclusive': widget.taxInclusive,
-                          });
-                        },
-                        icon: const Icon(LucideIcons.receipt, size: 18),
-                        label: const Text('Lihat Struk'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          // Invalidate providers supaya dashboard langsung fresh
-                          ref.invalidate(dashboardProvider);
-                          ref.invalidate(ordersProvider);
-                          ref.invalidate(productsProvider);
-                          context.go('/dashboard');
-                        },
-                        icon: const Icon(LucideIcons.arrowRight, size: 18),
-                        label: const Text('Transaksi Baru'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  // TERTIARY — Transaksi Baru
+                  TextButton.icon(
+                    onPressed: _newTransaction,
+                    icon: const Icon(LucideIcons.arrowRight, size: 16),
+                    label: const Text('Selesai — Transaksi Baru'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
