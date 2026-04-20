@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/app_database.dart';
@@ -6,11 +8,28 @@ import '../utils/pn_counter.dart';
 import '../services/session_cache.dart';
 import 'package:flutter/foundation.dart';
 
+/// Status terakhir dari SyncService.sync(). UI bisa watch ini untuk kasih
+/// badge/icon tanpa perlu manage loading state manual.
+enum SyncStatus {
+  idle,
+  syncing,
+  success,
+  /// Expected offline scenarios: SocketException, TimeoutException, DioException
+  /// connectionError/timeout. Di-log silent (debugPrint) — gak lempar exception
+  /// biar caller fire-and-forget gak keganggu.
+  networkError,
+  /// HTTP error dari server (4xx/5xx). Di-rethrow biar caller bisa show UI.
+  serverError,
+  /// Bug di Flutter (parsing error, null deref, dll). Di-rethrow biar bug gak
+  /// ketimbun silent.
+  clientError,
+}
+
 class SyncService {
   final AppDatabase db;
   final Dio dio;
   final SharedPreferences prefs;
-  
+
   static const String _lastSyncKey = 'last_sync_hlc';
   static const String _nodeIdKey = 'device_node_id';
 
@@ -21,6 +40,13 @@ class SyncService {
   bool get stockModeChanged => _stockModeChanged;
   String get newStockMode => _newStockMode;
   void clearStockModeChanged() { _stockModeChanged = false; _newStockMode = ''; }
+
+  /// Current sync status — reset to terminal state (never stuck di syncing).
+  SyncStatus _status = SyncStatus.idle;
+  String? _lastError;
+  SyncStatus get status => _status;
+  String? get lastError => _lastError;
+  bool get isSyncing => _status == SyncStatus.syncing;
 
   SyncService(this.db, this.dio, this.prefs);
 
@@ -34,14 +60,21 @@ class SyncService {
   }
 
   Future<void> sync() async {
-    try {
-      // debugPrint('Starting sync process...');
+    // Concurrent sync guard — kalau udah ada yang jalan, skip (bukan error)
+    if (_status == SyncStatus.syncing) {
+      debugPrint('sync() skipped: already in progress');
+      return;
+    }
+    _status = SyncStatus.syncing;
+    _lastError = null;
 
+    try {
       // Rule #50: scope unsynced reads ke outletId aktif — jangan push data
       // outlet lain saat user switch. Kalau outletId null = session belum
       // lengkap, bail out biar sync berikutnya re-run dengan context bener.
       final currentOutletId = SessionCache.instance.outletId;
       if (currentOutletId == null || currentOutletId.isEmpty) {
+        _status = SyncStatus.idle;
         return;
       }
 
@@ -122,13 +155,52 @@ class SyncService {
 
         // 5. Update last sync HLC
         await prefs.setString(_lastSyncKey, serverHlc);
+        _status = SyncStatus.success;
         // debugPrint('Sync completed successfully. New HLC: $serverHlc');
       } else {
-        // debugPrint('Sync failed with status: ${response.statusCode}');
+        _status = SyncStatus.serverError;
+        _lastError = 'Server status: ${response.statusCode}';
+        debugPrint('sync() server status: ${response.statusCode}');
       }
-    } catch (e) {
-      // debugPrint('Sync error: $e');
-      rethrow;
+    } on SocketException catch (e) {
+      // Offline / DNS fail / connection refused — silent, data stays
+      // isSynced=false biar retry otomatis saat online lagi.
+      _status = SyncStatus.networkError;
+      _lastError = 'Tidak ada koneksi internet';
+      debugPrint('sync() SocketException: $e');
+    } on TimeoutException catch (e) {
+      // Jaringan lambat / hang — silent, retry next cycle.
+      _status = SyncStatus.networkError;
+      _lastError = 'Jaringan timeout';
+      debugPrint('sync() TimeoutException: $e');
+    } on DioException catch (e) {
+      final isNetworkFailure = e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.error is SocketException;
+      if (isNetworkFailure) {
+        _status = SyncStatus.networkError;
+        _lastError = 'Jaringan putus di tengah sync';
+        debugPrint('sync() Dio network: ${e.type} ${e.message}');
+        // silent — expected offline scenario
+      } else {
+        _status = SyncStatus.serverError;
+        _lastError = 'Server error: ${e.response?.statusCode ?? "unknown"}';
+        debugPrint('sync() Dio server: ${e.response?.statusCode} ${e.message}');
+        rethrow; // server errors bubble up — caller boleh tampilin UI
+      }
+    } catch (e, st) {
+      _status = SyncStatus.clientError;
+      _lastError = 'Error internal: $e';
+      debugPrint('sync() unknown: $e\n$st');
+      rethrow; // bug Flutter — jangan ditelan silent
+    } finally {
+      // Guard: kalau status masih "syncing" di sini berarti ada code path
+      // yang lupa set terminal state → paksa ke idle biar UI gak nyangkut.
+      if (_status == SyncStatus.syncing) {
+        _status = SyncStatus.idle;
+      }
     }
   }
 

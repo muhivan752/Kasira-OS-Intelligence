@@ -37,35 +37,50 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
       _isSyncing = true;
     });
 
+    final syncService = ref.read(syncServiceProvider);
     try {
-      final syncService = ref.read(syncServiceProvider);
       await syncService.sync();
-      
-      if (mounted) {
-        setState(() {
-          _isSyncing = false;
-          _lastSyncTime = 'Baru saja';
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sinkronisasi data berhasil.'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
+      // Network error sekarang di-handle silent di SyncService (set status,
+      // debugPrint, gak rethrow). Check status buat show snackbar yang tepat.
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isSyncing = false;
-        });
+        setState(() { _isSyncing = false; });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal sinkronisasi: $e'),
+            content: Text('Gagal sinkronisasi: ${syncService.lastError ?? e}'),
             backgroundColor: AppColors.error,
           ),
         );
       }
+      return;
     }
+
+    if (!mounted) return;
+    setState(() {
+      _isSyncing = false;
+      if (syncService.status == SyncStatus.success) {
+        _lastSyncTime = 'Baru saja';
+      }
+    });
+
+    final (msg, color) = switch (syncService.status) {
+      SyncStatus.success => ('Sinkronisasi data berhasil.', AppColors.success),
+      SyncStatus.networkError => (
+          'Offline / jaringan bermasalah. Data akan sync otomatis saat online.',
+          AppColors.error,
+        ),
+      SyncStatus.serverError => (
+          'Server error: ${syncService.lastError ?? "tidak diketahui"}',
+          AppColors.error,
+        ),
+      _ => (
+          'Status: ${syncService.status.name}${syncService.lastError != null ? " — ${syncService.lastError}" : ""}',
+          AppColors.error,
+        ),
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: color),
+    );
   }
 
   @override

@@ -203,8 +203,44 @@ class CartPanel extends ConsumerWidget {
   Future<void> _handleDineIn(BuildContext context, WidgetRef ref, CartState cart) async {
     final tableName = cart.tableName ?? 'Meja';
     final addOrderCtx = ref.read(addOrderContextProvider);
-    final result = await ref.read(cartProvider.notifier).submitDineInOrder();
-    if (result == null || !context.mounted) return;
+
+    // Safety net: submitDineInOrder() sudah catch internal & set state.error,
+    // tapi kalau ada exception tak terduga (SessionCache null, cast error, dll)
+    // bungkus di sini biar app gak force-close di lapangan.
+    Map<String, dynamic>? result;
+    try {
+      result = await ref.read(cartProvider.notifier).submitDineInOrder();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal kirim pesanan: ${_shortError(e)}'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (result == null) {
+      // submitDineInOrder() sudah set state.error (inline error box),
+      // tambahin snackbar biar user langsung ngeh di tombol yang baru aja ditekan.
+      final errMsg = ref.read(cartProvider).error ?? 'Gagal kirim pesanan';
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errMsg),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
 
     final tabNumber = result['tabNumber']?.toString() ?? '';
     final tabId = result['tabId']?.toString() ?? '';
@@ -273,9 +309,43 @@ class CartPanel extends ConsumerWidget {
   }
 
   Future<void> _handlePayment(BuildContext context, WidgetRef ref, CartState cart) async {
-    // 1. Submit order ke backend
-    final orderId = await ref.read(cartProvider.notifier).submitOrder();
-    if (orderId == null) return; // error sudah ditampilkan di state
+    // 1. Submit order ke backend — bungkus UI-level try/catch sbg safety net.
+    // submitOrder() punya catch internal, tapi kalau ada exception sinkron
+    // (invalid state, null deref di getter), lebih baik show snackbar manusiawi
+    // daripada crash zone error boundary.
+    String? orderId;
+    try {
+      orderId = await ref.read(cartProvider.notifier).submitOrder();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal proses pembayaran: ${_shortError(e)}'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (orderId == null) {
+      // submitOrder() sudah set state.error — amplify via snackbar biar user
+      // langsung tau, terutama kalau panel error message ke-scroll.
+      final errMsg = ref.read(cartProvider).error ?? 'Gagal proses pembayaran';
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errMsg),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
 
     // 2. Buka payment modal
     if (context.mounted) {
@@ -347,6 +417,15 @@ class CartPanel extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Ambil pesan error pendek dari Exception — jangan kasih lihat raw stack
+  /// ke kasir di lapangan. Format: "Jenis — ringkasan".
+  static String _shortError(Object e) {
+    final raw = e.toString();
+    // Trim "Exception: " prefix + batasi panjang
+    final cleaned = raw.replaceFirst(RegExp(r'^Exception:\s*'), '');
+    return cleaned.length > 120 ? '${cleaned.substring(0, 117)}...' : cleaned;
   }
 
   void _confirmClear(BuildContext context, WidgetRef ref) {

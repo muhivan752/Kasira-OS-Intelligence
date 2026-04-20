@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -123,23 +126,47 @@ final _router = GoRouter(
 );
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Global error boundary — catch uncaught errors sebelum bikin app crash.
+  // Kasira dipake kasir di lapangan (Dita Coffee, dll), force-close =
+  // potensi kehilangan transaksi. Log + tetep biarin app hidup.
+  runZonedGuarded<Future<void>>(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  await initializeDateFormatting('id_ID', null);
-  final prefs = await SharedPreferences.getInstance();
-  await AppConfig.init(prefs);
+    // Framework-level errors (build, layout, paint, widget lifecycle)
+    FlutterError.onError = (FlutterErrorDetails details) {
+      debugPrint('FlutterError: ${details.exception}');
+      debugPrint('Stack: ${details.stack}');
+      // Biar default presenter jalan (red screen di debug, silent di release)
+      FlutterError.presentError(details);
+    };
 
-  // Pre-warm session cache from SharedPreferences (fast) + SecureStorage (token only)
-  await SessionCache.instance.initFromPrefsCache();
+    // Async uncaught errors yang lolos dari zone (platform channel, dll)
+    ui.PlatformDispatcher.instance.onError = (error, stack) {
+      debugPrint('PlatformDispatcher uncaught: $error');
+      debugPrint('Stack: $stack');
+      return true; // mark as handled — jangan propagate ke OS
+    };
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(prefs),
-      ],
-      child: const KasiraApp(),
-    ),
-  );
+    await initializeDateFormatting('id_ID', null);
+    final prefs = await SharedPreferences.getInstance();
+    await AppConfig.init(prefs);
+
+    // Pre-warm session cache from SharedPreferences (fast) + SecureStorage (token only)
+    await SessionCache.instance.initFromPrefsCache();
+
+    runApp(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+        child: const KasiraApp(),
+      ),
+    );
+  }, (error, stack) {
+    // Zone-level uncaught — async work yang gak di-await + gak di-try/catch
+    debugPrint('Zone uncaught: $error');
+    debugPrint('Stack: $stack');
+  });
 }
 
 class KasiraApp extends StatelessWidget {

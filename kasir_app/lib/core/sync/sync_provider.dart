@@ -4,6 +4,9 @@ import '../database/app_database.dart';
 import '../api/api_client.dart';
 import 'sync_service.dart';
 
+// Re-export SyncStatus biar consumer cukup import sync_provider.dart
+export 'sync_service.dart' show SyncStatus, SyncService;
+
 final databaseProvider = Provider<AppDatabase>((ref) {
   return AppDatabase();
 });

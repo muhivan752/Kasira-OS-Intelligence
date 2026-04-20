@@ -19,6 +19,7 @@ class PrinterState {
   final PrinterDevice? savedDevice;
   final bool isConnected;
   final bool isScanning;
+  final bool isPrinting;
   final List<BluetoothInfo> scanResults;
   final String? error;
 
@@ -26,6 +27,7 @@ class PrinterState {
     this.savedDevice,
     this.isConnected = false,
     this.isScanning = false,
+    this.isPrinting = false,
     this.scanResults = const [],
     this.error,
   });
@@ -34,6 +36,7 @@ class PrinterState {
     PrinterDevice? savedDevice,
     bool? isConnected,
     bool? isScanning,
+    bool? isPrinting,
     List<BluetoothInfo>? scanResults,
     String? error,
     bool clearError = false,
@@ -42,11 +45,16 @@ class PrinterState {
       savedDevice: savedDevice ?? this.savedDevice,
       isConnected: isConnected ?? this.isConnected,
       isScanning: isScanning ?? this.isScanning,
+      isPrinting: isPrinting ?? this.isPrinting,
       scanResults: scanResults ?? this.scanResults,
       error: clearError ? null : (error ?? this.error),
     );
   }
 }
+
+/// Result of printBytes() — lebih informatif daripada bool biar caller
+/// bisa bedain "busy" dari "failed" dari "notConnected".
+enum PrintOutcome { success, busy, notConnected, failed }
 
 class PrinterNotifier extends StateNotifier<PrinterState> {
   PrinterNotifier() : super(const PrinterState()) {
@@ -181,21 +189,46 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
     return false;
   }
 
+  /// Print bytes ke printer. Async lock via `state.isPrinting` biar dua
+  /// perintah simultan (misal auto-print + manual tap) gak clash → struk
+  /// kepotong atau printer stuck. Kalau lagi sibuk, return `false` dan
+  /// set `state.error = 'Printer masih sibuk, tunggu sebentar'` biar
+  /// caller bisa tampilin snackbar yang tepat.
+  ///
+  /// Kembalian `bool` dipertahankan untuk backward compat dengan caller
+  /// existing. Caller yang butuh bedain "busy" dari "failed" bisa pake
+  /// [printBytesWithOutcome] atau baca `state.error` setelah call.
   Future<bool> printBytes(Uint8List bytes) async {
-    if (!state.isConnected) {
-      // Try auto-connect first
-      final reconnected = await autoConnect();
-      if (!reconnected) {
-        state = state.copyWith(error: 'Printer belum terhubung');
-        return false;
-      }
+    final outcome = await printBytesWithOutcome(bytes);
+    return outcome == PrintOutcome.success;
+  }
+
+  /// Versi printBytes yang return enum untuk handling granular.
+  Future<PrintOutcome> printBytesWithOutcome(Uint8List bytes) async {
+    // Async lock: reject overlap request — mencegah dua writeBytes
+    // concurrent yang bikin struk tercampur atau printer stuck.
+    if (state.isPrinting) {
+      state = state.copyWith(error: 'Printer masih sibuk, tunggu sebentar');
+      return PrintOutcome.busy;
     }
+
+    state = state.copyWith(isPrinting: true, clearError: true);
     try {
+      if (!state.isConnected) {
+        final reconnected = await autoConnect();
+        if (!reconnected) {
+          state = state.copyWith(error: 'Printer belum terhubung');
+          return PrintOutcome.notConnected;
+        }
+      }
       final result = await PrintBluetoothThermal.writeBytes(bytes);
-      return result;
+      return result ? PrintOutcome.success : PrintOutcome.failed;
     } catch (e) {
       state = state.copyWith(error: 'Gagal cetak: $e');
-      return false;
+      return PrintOutcome.failed;
+    } finally {
+      // ALWAYS release lock — ensure gak pernah stuck isPrinting=true
+      state = state.copyWith(isPrinting: false);
     }
   }
 

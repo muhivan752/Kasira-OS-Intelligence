@@ -166,21 +166,39 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
     );
 
     final bytes = buildReceipt(data);
-    final ok = await notifier.printBytes(bytes);
+    final outcome = await notifier.printBytesWithOutcome(bytes);
 
     if (!mounted) return;
-    final successMsg = isAutoPrint
-        ? 'Struk otomatis dicetak'
-        : 'Struk dikirim ke printer';
-    final failMsg = isAutoPrint
-        ? 'Auto-print gagal. Tap "CETAK STRUK" untuk coba ulang.'
-        : 'Gagal mencetak, coba lagi';
+    final (msg, color, seconds) = switch (outcome) {
+      PrintOutcome.success => (
+          isAutoPrint ? 'Struk otomatis dicetak' : 'Struk dikirim ke printer',
+          AppColors.success,
+          2,
+        ),
+      PrintOutcome.busy => (
+          'Printer masih sibuk, tunggu sebentar lalu coba lagi.',
+          AppColors.error,
+          3,
+        ),
+      PrintOutcome.notConnected => (
+          'Printer belum terhubung. Hubungkan di Pengaturan > Printer.',
+          AppColors.error,
+          5,
+        ),
+      PrintOutcome.failed => (
+          isAutoPrint
+              ? 'Auto-print gagal. Tap "CETAK STRUK" untuk coba ulang.'
+              : 'Gagal mencetak, coba lagi',
+          AppColors.error,
+          5,
+        ),
+    };
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok ? successMsg : failMsg),
-        backgroundColor: ok ? AppColors.success : AppColors.error,
+        content: Text(msg),
+        backgroundColor: color,
         behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: ok ? 2 : 5),
+        duration: Duration(seconds: seconds),
       ),
     );
   }

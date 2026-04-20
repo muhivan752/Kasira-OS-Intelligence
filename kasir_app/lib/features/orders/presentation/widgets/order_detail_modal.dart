@@ -31,19 +31,41 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
   Future<void> _updateStatus(String orderId, String newStatus, int rowVersion) async {
     setState(() => _updating = true);
     final notifier = ref.read(ordersProvider.notifier);
-    final ok = await notifier.updateStatus(orderId, newStatus, rowVersion);
-    if (mounted) {
-      setState(() => _updating = false);
-      if (ok) {
-        ref.invalidate(orderDetailProvider(orderId));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Status diubah ke ${_statusLabel(newStatus)}'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+    bool ok = false;
+    String? errorMsg;
+    try {
+      ok = await notifier.updateStatus(orderId, newStatus, rowVersion);
+      if (!ok) {
+        // updateStatus sudah set state.error di provider — tarik ke snackbar biar
+        // user di modal ini gak cuma liat tombol loading berhenti tanpa feedback.
+        errorMsg = ref.read(ordersProvider).error ?? 'Gagal ubah status';
       }
+    } catch (e) {
+      // Safety net: provider catch internal, tapi kalau ada exception tak
+      // terduga (cache null, network init error), jangan biarin app crash.
+      errorMsg = 'Gagal ubah status: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e}';
+    }
+
+    if (!mounted) return;
+    setState(() => _updating = false);
+    if (ok) {
+      ref.invalidate(orderDetailProvider(orderId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Status diubah ke ${_statusLabel(newStatus)}'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg ?? 'Gagal ubah status'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
 
