@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.0.34",
+    "version": "1.0.35",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.34/kasira-pos-v1.0.34.apk",
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.35/kasira-pos-v1.0.35.apk",
     "release_notes": "Bug fixes and improvements"
   },
   "dapur": {
-    "version": "1.0.34",
+    "version": "1.0.35",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.34/kasira-dapur-v1.0.34.apk",
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.35/kasira-dapur-v1.0.35.apk",
     "release_notes": "Bug fixes and improvements"
   }
 }
