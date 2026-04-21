@@ -16,6 +16,7 @@ from backend.api import deps
 from backend.models.tenant import Tenant, SubscriptionTier, SubscriptionStatus
 from backend.models.user import User
 from backend.models.audit_log import AuditLog
+from backend.models.event import Event
 from backend.models.subscription_invoice import SubscriptionInvoice
 from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
@@ -806,4 +807,126 @@ async def broadcast_whatsapp(
     return StandardResponse(
         data={"sent": sent, "failed": failed, "total": len(results)},
         message=f"Broadcast selesai: {sent} terkirim, {failed} gagal",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Waitlist monitoring (Batch #27 — Pro Retail/Service signal collection)
+# ---------------------------------------------------------------------------
+@router.get("/waitlist", response_model=StandardResponse[dict])
+async def waitlist_overview(
+    db: AsyncSession = Depends(deps.get_db),
+    admin: User = Depends(deps.get_platform_admin),
+    recent_limit: int = Query(50, ge=1, le=200),
+) -> Any:
+    """
+    Aggregated waitlist interest (Event.event_type='waitlist.interest').
+
+    Returns:
+      summary: total signups, unique tenants, by_domain totals
+      groups: per (domain, display_name) count + unique_tenants + earliest/latest
+      recent: last N events enriched with tenant name
+
+    Reads append-only Event log — no aggregation table, no schema change.
+    Relies on RLS bypass (empty app.current_tenant_id) for platform admin scope.
+    """
+    domain_expr = Event.event_data["domain"].astext
+    display_expr = Event.event_data["display_name"].astext
+    tenant_expr = Event.event_data["tenant_id"].astext
+
+    base_filter = Event.event_type == "waitlist.interest"
+
+    # Summary: totals + per-domain breakdown
+    summary_stmt = (
+        select(
+            func.count(Event.id).label("total"),
+            func.count(func.distinct(tenant_expr)).label("unique_tenants"),
+        )
+        .where(base_filter)
+    )
+    total, unique_tenants = (await db.execute(summary_stmt)).one()
+
+    by_domain_stmt = (
+        select(domain_expr.label("domain"), func.count(Event.id).label("count"))
+        .where(base_filter)
+        .group_by(domain_expr)
+    )
+    by_domain = {row.domain or "unknown": row.count for row in (await db.execute(by_domain_stmt)).all()}
+
+    # Groups: (domain, display_name) aggregated
+    groups_stmt = (
+        select(
+            domain_expr.label("domain"),
+            display_expr.label("display_name"),
+            func.count(Event.id).label("count"),
+            func.count(func.distinct(tenant_expr)).label("unique_tenants"),
+            func.min(Event.created_at).label("earliest"),
+            func.max(Event.created_at).label("latest"),
+        )
+        .where(base_filter)
+        .group_by(domain_expr, display_expr)
+        .order_by(func.count(Event.id).desc(), func.max(Event.created_at).desc())
+    )
+    groups = [
+        {
+            "domain": row.domain or "unknown",
+            "display_name": row.display_name,
+            "count": row.count,
+            "unique_tenants": row.unique_tenants,
+            "earliest": row.earliest.isoformat() if row.earliest else None,
+            "latest": row.latest.isoformat() if row.latest else None,
+        }
+        for row in (await db.execute(groups_stmt)).all()
+    ]
+
+    # Recent events (enriched with tenant name)
+    recent_stmt = (
+        select(Event.event_data, Event.created_at)
+        .where(base_filter)
+        .order_by(Event.created_at.desc())
+        .limit(recent_limit)
+    )
+    recent_rows = (await db.execute(recent_stmt)).all()
+
+    tenant_ids_seen: set[str] = set()
+    for ev_data, _ in recent_rows:
+        tid = (ev_data or {}).get("tenant_id")
+        if tid:
+            tenant_ids_seen.add(tid)
+
+    tenant_name_map: dict[str, str] = {}
+    if tenant_ids_seen:
+        try:
+            tid_uuids = [uuid.UUID(t) for t in tenant_ids_seen]
+            name_rows = (await db.execute(
+                select(Tenant.id, Tenant.name).where(Tenant.id.in_(tid_uuids))
+            )).all()
+            tenant_name_map = {str(tid): tname for tid, tname in name_rows}
+        except Exception as e:
+            sa_logger.warning(f"tenant name enrichment skipped: {e}")
+
+    recent = []
+    for ev_data, created_at in recent_rows:
+        data = ev_data or {}
+        tid = data.get("tenant_id")
+        recent.append({
+            "tenant_id": tid,
+            "tenant_name": tenant_name_map.get(tid) if tid else None,
+            "domain": data.get("domain"),
+            "display_name": data.get("display_name"),
+            "source": data.get("source"),
+            "phone": data.get("phone"),
+            "joined_at": created_at.isoformat() if created_at else None,
+        })
+
+    return StandardResponse(
+        data={
+            "summary": {
+                "total_signups": total or 0,
+                "unique_tenants": unique_tenants or 0,
+                "by_domain": by_domain,
+            },
+            "groups": groups,
+            "recent": recent,
+        },
     )
