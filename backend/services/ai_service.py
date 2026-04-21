@@ -1784,6 +1784,31 @@ async def stream_ai_response(
     except Exception as e:
         logger.debug(f"RAG enrichment skipped: {e}")
 
+    # 3b-domain. Adaptive AI prompt (Batch #27) — inject domain guard kalau
+    # outlet bukan F&B. Mencegah "bias kopi" — AI gak volunteer rekomendasi
+    # resep/menu ke Bengkel/Salon/Apotek kecuali user eksplisit nanya.
+    try:
+        domain_info = await detect_domain(outlet_id, db)
+        bucket = domain_info.get("domain", "generic")
+        _NON_FNB_BUCKETS = {
+            "laundry", "salon_barber", "vape_liquid",
+            "minimarket", "pet_shop", "apotik_herbal",
+        }
+        if bucket in _NON_FNB_BUCKETS:
+            system_prompt += (
+                "\n\n# PENTING — DOMAIN GUARDRAIL\n"
+                f"Outlet ini BUKAN F&B (kategori: {bucket}). "
+                "JANGAN tawarkan resep, menu, HPP makanan, atau saran terkait kopi/masakan "
+                "KECUALI user eksplisit nanya soal itu. Fokus ke laporan, stok barang, "
+                "margin produk retail/jasa, tren penjualan, dan jawaban generik yang relevan "
+                "ke bisnis non-F&B. Kalau user nanya soal fitur yang belum ada "
+                "(misal: barcode scan, booking jadwal, antrean teknisi) → bilang jujur "
+                "'Fitur itu lagi dalam pengembangan — masuk waitlist Pro Retail/Service'."
+            )
+    except Exception as e:
+        # Fail-open — detect_domain error = skip injection, tetep jalan default
+        logger.debug(f"Domain injection skipped (non-fatal): {e}")
+
     # 3b-multi. Multi-turn history — load prior turns dari Redis (ephemeral,
     # TTL 30min rolling). Fail-open: Redis down → empty list = fresh single-turn.
     # History injected di messages array (BUKAN di system_prompt) supaya
