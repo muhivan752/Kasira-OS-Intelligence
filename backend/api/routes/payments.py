@@ -299,7 +299,24 @@ async def create_payment(
                 
             order.status = new_order_status
             order.row_version += 1
-            
+
+            # Release dine-in table when fully paid (mirror orders.py:519-533)
+            if new_order_status == OrderStatus.completed and order.table_id:
+                from backend.models.table import Table
+                active_orders = (await db.execute(
+                    select(func.count(Order.id)).where(
+                        Order.table_id == order.table_id,
+                        Order.id != order.id,
+                        Order.status.notin_(["completed", "cancelled"]),
+                        Order.deleted_at.is_(None),
+                    )
+                )).scalar() or 0
+                if active_orders == 0:
+                    await db.execute(
+                        update(Table).where(Table.id == order.table_id)
+                        .values(status="available", row_version=Table.row_version + 1)
+                    )
+
             # Send WA receipt
             if order.customer_id:
                 from backend.models.customer import Customer
@@ -617,6 +634,23 @@ async def xendit_webhook(
 
                     order.status = new_order_status
                     order.row_version += 1
+
+                    # Release dine-in table when fully paid via webhook (mirror orders.py:519-533)
+                    if new_order_status == OrderStatus.completed and order.table_id:
+                        from backend.models.table import Table
+                        active_orders = (await db.execute(
+                            select(func.count(Order.id)).where(
+                                Order.table_id == order.table_id,
+                                Order.id != order.id,
+                                Order.status.notin_(["completed", "cancelled"]),
+                                Order.deleted_at.is_(None),
+                            )
+                        )).scalar() or 0
+                        if active_orders == 0:
+                            await db.execute(
+                                update(Table).where(Table.id == order.table_id)
+                                .values(status="available", row_version=Table.row_version + 1)
+                            )
 
                     # Update connect_order status jika ini storefront order
                     from backend.models.connect import ConnectOrder

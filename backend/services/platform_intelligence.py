@@ -273,7 +273,7 @@ async def aggregate_hpp_benchmarks(db: AsyncSession, target_week: Optional[date]
 
     from backend.models.brand import Brand
     # Exclude demo tenant products
-    demo_tenant_ids = [t.id for t in (await db.execute(
+    demo_tenant_ids = [t for t in (await db.execute(
         select(Tenant.id).where(Tenant.is_demo == True)
     )).scalars().all()]
 

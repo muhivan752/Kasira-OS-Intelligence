@@ -449,7 +449,7 @@ async def search_similar_products_cross_tenant(
     from backend.models.tenant import Tenant
 
     # Get demo tenant IDs to exclude
-    demo_ids = [t.id for t in (await db.execute(
+    demo_ids = [t for t in (await db.execute(
         select(Tenant.id).where(Tenant.is_demo == True)
     )).scalars().all()]
 
