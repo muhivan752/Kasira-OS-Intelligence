@@ -161,7 +161,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   SizedBox(height: 6),
                   _ProFeatureRow(icon: LucideIcons.layoutGrid, text: 'Meja, Tab & Split Bill'),
                   SizedBox(height: 6),
-                  _ProFeatureRow(icon: LucideIcons.barChart3, text: 'Menu Engineering (BCG Matrix)'),
+                  _ProFeatureRow(icon: LucideIcons.trendingUp, text: 'Menu Engineering (BCG Matrix)'),
                 ],
               ),
             ),
@@ -250,16 +250,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     // Future features per domain — teaser-grade, biar user ngerti value prop
     final teaserFeatures = isRetail
         ? const [
-            (LucideIcons.barcode, 'Scan Barcode & Stok Otomatis'),
-            (LucideIcons.truck, 'Manajemen Supplier & PO'),
+            (LucideIcons.qrCode, 'Scan Barcode & Stok Otomatis'),
+            (LucideIcons.box, 'Manajemen Supplier & PO'),
             (LucideIcons.package, 'Multi-Gudang & Transfer Stok'),
-            (LucideIcons.lineChart, 'Laporan Margin per Kategori'),
+            (LucideIcons.trendingUp, 'Laporan Margin per Kategori'),
           ]
         : const [
-            (LucideIcons.calendarClock, 'Booking Jadwal & Antrean Digital'),
+            (LucideIcons.calendarCheck, 'Booking Jadwal & Antrean Digital'),
             (LucideIcons.users, 'Jadwal Teknisi & Kapasitas'),
             (LucideIcons.bellRing, 'Reminder Customer via WA'),
-            (LucideIcons.handshake, 'Follow-up Servis Berkala'),
+            (LucideIcons.calendarCheck2, 'Follow-up Servis Berkala'),
           ];
 
     showModalBottomSheet(
@@ -955,7 +955,7 @@ class _WaitlistJoinButtonState extends State<_WaitlistJoinButton> {
         onPressed: _loading ? null : _onTap,
         icon: _loading
             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : Icon(isJoined ? LucideIcons.check : LucideIcons.bellPlus, size: 18),
+            : Icon(isJoined ? LucideIcons.check : LucideIcons.bellRing, size: 18),
         label: Text(
           isJoined
               ? 'Sudah di Waitlist'
