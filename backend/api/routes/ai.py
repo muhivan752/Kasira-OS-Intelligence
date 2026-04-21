@@ -36,10 +36,86 @@ from backend.models.recipe import Recipe, RecipeIngredient
 from backend.models.event import Event
 from backend.services.redis import get_redis_client
 from backend.services.audit import log_audit
-from backend.services.ai_service import stream_ai_response
+from backend.services.ai_service import stream_ai_response, DOMAIN_KEYWORDS
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+# ─── Super-group mapping: 10-bucket → 3 UI domain group ─────────────────────
+# Single source of truth untuk Adaptive UI. Flutter pakai `domain` untuk
+# decide label set, `bucket` untuk display name spesifik ke user.
+_BUCKET_TO_SUPER_GROUP = {
+    "kopi_cafe": "fnb",
+    "resto_makanan": "fnb",
+    "warteg": "fnb",
+    "bakery": "fnb",
+    "vape_liquid": "retail",
+    "minimarket": "retail",
+    "pet_shop": "retail",
+    "apotik_herbal": "retail",
+    "laundry": "service",
+    "salon_barber": "service",
+}
+
+_BUCKET_DISPLAY_NAME = {
+    "kopi_cafe": "Cafe/Kopi",
+    "resto_makanan": "Resto",
+    "warteg": "Warteg",
+    "bakery": "Bakery",
+    "vape_liquid": "Vape Shop",
+    "minimarket": "Minimarket",
+    "pet_shop": "Pet Shop",
+    "apotik_herbal": "Apotek",
+    "laundry": "Laundry",
+    "salon_barber": "Salon/Barber",
+}
+
+# Business type dropdown fallback → super-group (saat business_name gak match keyword)
+_BUSINESS_TYPE_TO_SUPER_GROUP = {
+    "cafe": "fnb",
+    "resto": "fnb",
+    "warung": "fnb",
+    "other": "fnb",  # default conservative — user bisa override via suggestion card
+}
+
+# Business-name level keywords (BUKAN product-level — dipisah dari DOMAIN_KEYWORDS
+# biar gak polusi AI prompt context). "Bengkel Jaya", "Salon Cantik", "Apotek
+# Sehat" — nama bisnis Indonesia yang umum tapi gak ada di product keywords.
+_BUSINESS_NAME_HINTS = {
+    "salon_barber": ["bengkel", "salon", "barber", "barbershop", "pangkas"],
+    "apotik_herbal": ["apotek", "apotik", "toko obat"],
+    "minimarket": ["minimarket", "toko kelontong", "warung serba ada"],
+    "pet_shop": ["pet shop", "petshop", "toko hewan"],
+    "vape_liquid": ["vape store", "vape shop", "toko vape"],
+    "laundry": ["laundry"],
+    "kopi_cafe": ["cafe", "kafe", "kedai kopi", "coffee", "kopi"],
+    "bakery": ["bakery", "toko roti", "toko kue"],
+    "resto_makanan": ["resto", "restoran", "rumah makan"],
+    "warteg": ["warteg", "warung nasi", "warung makan"],
+}
+
+# Display name override saat matched hint lebih spesifik dari generic bucket
+# display (misal hint="bengkel" > bucket display "Salon/Barber").
+_HINT_DISPLAY_OVERRIDE = {
+    "bengkel": "Bengkel",
+    "salon": "Salon",
+    "barber": "Barbershop",
+    "barbershop": "Barbershop",
+    "pangkas": "Pangkas Rambut",
+    "apotek": "Apotek",
+    "apotik": "Apotek",
+    "toko obat": "Toko Obat",
+    "minimarket": "Minimarket",
+    "toko kelontong": "Toko Kelontong",
+    "pet shop": "Pet Shop",
+    "petshop": "Pet Shop",
+    "toko hewan": "Toko Hewan",
+    "vape shop": "Vape Shop",
+    "vape store": "Vape Shop",
+    "toko vape": "Toko Vape",
+    "laundry": "Laundry",
+}
 
 
 class ChatRequest(BaseModel):
@@ -812,5 +888,112 @@ async def ai_budget_status(
                 "sonnet_per_tenant": 5,
                 "platform_cap_cents": 100,
             },
+        },
+    }
+
+
+class ClassifyDomainRequest(BaseModel):
+    business_name: str = Field(..., min_length=1, max_length=200)
+    business_type: Optional[str] = Field(
+        None, description="Dropdown value: cafe/warung/resto/other (optional hint)"
+    )
+
+
+@router.post("/classify-domain")
+async def classify_domain(body: ClassifyDomainRequest) -> dict:
+    """
+    Lightweight domain classifier untuk Adaptive UI saat register (pre-login).
+
+    Input: business_name + optional business_type dropdown value.
+    Output: {domain, bucket, display_name, confidence, suggest_ui_switch}
+
+    Public endpoint (tidak perlu auth) — pure classification, no DB write, no
+    tenant context. Di-proteksi rate limit global slowapi (200/min default).
+
+    Algorithm: keyword scoring weighted by match count. Winning bucket maps ke
+    super-group (fnb/retail/service). `suggest_ui_switch=true` kalau domain
+    non-F&B AND confidence >= 0.5 → Flutter tampilkan suggestion card.
+    """
+    text = (body.business_name or "").lower()
+    if len(text) < 3:
+        # Too short untuk confident classify — fallback
+        return _fallback_response(body.business_type)
+
+    # Score tiap bucket — product keywords (weight 1) + business-name hints (weight 2).
+    # Business-name hints prioritized karena lebih deterministik ("Salon Cantik" >>
+    # "style" / "cukur" yang bisa muncul di F&B juga).
+    scores: dict[str, int] = {bucket: 0 for bucket in DOMAIN_KEYWORDS}
+    matched_keywords: dict[str, list[str]] = {bucket: [] for bucket in DOMAIN_KEYWORDS}
+    for bucket, keywords in DOMAIN_KEYWORDS.items():
+        for kw in keywords:
+            if kw.lower() in text:
+                scores[bucket] += 1
+                matched_keywords[bucket].append(kw)
+                if len(matched_keywords[bucket]) >= 3:
+                    break  # cap per bucket — avoid over-weight single long text
+
+    # Business-name hint pass — weight 2 (more authoritative than product keyword)
+    for bucket, hints in _BUSINESS_NAME_HINTS.items():
+        for hint in hints:
+            if hint in text:
+                scores[bucket] += 2
+                if hint not in matched_keywords[bucket]:
+                    matched_keywords[bucket].insert(0, hint)
+                break  # 1 hint match per bucket cukup
+
+    top_bucket = max(scores, key=scores.get)
+    top_score = scores[top_bucket]
+
+    if top_score == 0:
+        # No keyword match → fallback ke business_type hint
+        return _fallback_response(body.business_type)
+
+    # Confidence: 1 match = 0.55, 2 matches = 0.75, 3+ = 0.9 (capped)
+    confidence = min(0.9, 0.35 + 0.2 * top_score)
+
+    super_group = _BUCKET_TO_SUPER_GROUP.get(top_bucket, "fnb")
+    display_name = _BUCKET_DISPLAY_NAME.get(top_bucket, top_bucket)
+
+    # Override display_name pakai hint keyword yang lebih spesifik (kalau ada).
+    # Priority: hint match > bucket generic name. "Bengkel" over "Salon/Barber".
+    for kw in matched_keywords[top_bucket]:
+        if kw.lower() in _HINT_DISPLAY_OVERRIDE:
+            display_name = _HINT_DISPLAY_OVERRIDE[kw.lower()]
+            break
+
+    # Suggestion trigger: hanya untuk Non-F&B + confident. F&B = default, gak
+    # perlu konfirm ke user (mengurangi noise).
+    suggest_ui_switch = (super_group != "fnb") and confidence >= 0.5
+
+    return {
+        "success": True,
+        "data": {
+            "domain": super_group,
+            "bucket": top_bucket,
+            "display_name": display_name,
+            "confidence": round(confidence, 2),
+            "suggest_ui_switch": suggest_ui_switch,
+            "matched_keywords": matched_keywords[top_bucket][:3],
+        },
+    }
+
+
+def _fallback_response(business_type: Optional[str]) -> dict:
+    """Return default F&B classification saat text gak match apapun."""
+    super_group = _BUSINESS_TYPE_TO_SUPER_GROUP.get(
+        (business_type or "").lower(), "fnb"
+    )
+    # Map dropdown value → bucket approximation untuk display_name
+    bucket_map = {"cafe": "kopi_cafe", "resto": "resto_makanan", "warung": "warteg"}
+    bucket = bucket_map.get((business_type or "").lower(), "kopi_cafe")
+    return {
+        "success": True,
+        "data": {
+            "domain": super_group,
+            "bucket": bucket,
+            "display_name": _BUCKET_DISPLAY_NAME.get(bucket, "Cafe/Kopi"),
+            "confidence": 0.3,
+            "suggest_ui_switch": False,
+            "matched_keywords": [],
         },
     }
