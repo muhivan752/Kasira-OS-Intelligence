@@ -34,9 +34,11 @@ from backend.models.product import Product
 from backend.models.outlet import Outlet
 from backend.models.tenant import Tenant
 from backend.models.table import Table
+from backend.models.tab import Tab
 from backend.models.event import Event
 from backend.services.stock_service import restore_stock_on_cancel
 from backend.services.ingredient_stock_service import restore_ingredients_on_cancel
+from backend.services.tab_service import recalculate_tab
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +115,26 @@ async def cleanup_stale_orders_once() -> dict:
                 # Cancel order
                 order.status = 'cancelled'
                 order.row_version += 1
+
+                # Recalc parent tab (mirror orders.py:498-517 cancel path).
+                # Janitor cancel leaves stale tab.total_amount otherwise → Batch #20 gap.
+                # Skip if tab already closed (paid/cancelled) or deleted.
+                if order.tab_id:
+                    try:
+                        linked_tab = (await db.execute(
+                            select(Tab).where(
+                                Tab.id == order.tab_id,
+                                Tab.deleted_at.is_(None),
+                            )
+                        )).scalar_one_or_none()
+                        if linked_tab and linked_tab.status not in ('paid', 'cancelled'):
+                            await recalculate_tab(db, linked_tab)
+                            linked_tab.row_version += 1
+                    except Exception as e:
+                        logger.error(
+                            f"stale_order_cleanup: tab recalc failed for order {order.id} "
+                            f"(tab {order.tab_id}): {e}"
+                        )
 
                 # Release table if no other active orders (mirror orders.py:519-533)
                 if order.table_id:
