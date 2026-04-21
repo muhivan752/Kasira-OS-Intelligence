@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/localization/business_labels.dart';
 import '../../../../core/sync/sync_provider.dart';
 import '../../../products/providers/products_provider.dart';
 import '../../../dashboard/providers/dashboard_provider.dart';
@@ -252,9 +253,9 @@ class _PosPageState extends ConsumerState<PosPage> {
                   children: [
                     const Icon(LucideIcons.utensils, size: 16, color: AppColors.primary),
                     const SizedBox(width: 8),
-                    const Text(
-                      'Pilih Meja — Dine In',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                    Text(
+                      '${BusinessLabels.getLabel('select_table')} — Dine In',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                     ),
                     const Spacer(),
                     TextButton.icon(
@@ -274,7 +275,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Meja ${table.name} sedang ${table.status.name}'),
+                          content: Text('${BusinessLabels.getLabel('table')} ${table.name} sedang ${table.status.name}'),
                           backgroundColor: AppColors.error,
                         ),
                       );
@@ -658,8 +659,8 @@ class _AddOrderBanner extends ConsumerWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Tambah Pesanan → ${context_.tabNumber}'
-              '${context_.tableName != null ? " · Meja ${context_.tableName}" : ""}',
+              'Tambah ${BusinessLabels.getLabel('order')} → ${context_.tabNumber}'
+              '${context_.tableName != null ? " · ${BusinessLabels.getLabel('table')} ${context_.tableName}" : ""}',
               style: const TextStyle(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w600,

@@ -34,6 +34,18 @@ class _RegisterPageState extends State<RegisterPage> {
   String _businessType = 'cafe';
   String _referralCode = '';
 
+  // ── Domain auto-detect (Batch #26) ─────────────────────────────────────
+  // Debounced classify on business_name input. Suggestion card hanya muncul
+  // kalau domain non-F&B + confidence >=0.5 (backend tentuin via
+  // `suggest_ui_switch` flag). User accept → _userAcceptedDomain=true →
+  // persist ke SessionCache SETELAH register success (bukan sebelum).
+  Timer? _classifyDebounce;
+  CancelToken? _classifyCancelToken;
+  String? _detectedDomain;       // 'fnb' | 'retail' | 'service'
+  String? _detectedDisplayName;  // e.g. "Salon/Barber", "Laundry"
+  bool _showDomainSuggestion = false;
+  bool? _userAcceptedDomain;     // null = belum interaksi, true/false = pilihan user
+
   final _cache = SessionCache.instance;
   Dio get _dio => Dio(BaseOptions(
     baseUrl: AppConfig.baseUrl,
@@ -44,6 +56,8 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   void dispose() {
     _timer?.cancel();
+    _classifyDebounce?.cancel();
+    _classifyCancelToken?.cancel('dispose');
     _phoneCtrl.dispose();
     _nameCtrl.dispose();
     _businessCtrl.dispose();
@@ -51,6 +65,92 @@ class _RegisterPageState extends State<RegisterPage> {
     _pinCtrl.dispose();
     _pinConfirmCtrl.dispose();
     super.dispose();
+  }
+
+  // ── Domain auto-detect debounce handler ────────────────────────────────
+  void _onBusinessNameChanged(String value) {
+    // Reset suggestion saat user edit ulang (kemungkinan nama beda)
+    if (_showDomainSuggestion && _userAcceptedDomain == null) {
+      setState(() {
+        _showDomainSuggestion = false;
+        _detectedDomain = null;
+        _detectedDisplayName = null;
+      });
+    }
+
+    final text = value.trim();
+    _classifyDebounce?.cancel();
+
+    // Minimum 4 char — terlalu pendek bikin false positive
+    if (text.length < 4) return;
+
+    _classifyDebounce = Timer(const Duration(milliseconds: 500), () {
+      _classifyDomain(text);
+    });
+  }
+
+  Future<void> _classifyDomain(String businessName) async {
+    // Cancel in-flight request kalau ada
+    _classifyCancelToken?.cancel('new_request');
+    _classifyCancelToken = CancelToken();
+
+    try {
+      final resp = await _dio.post(
+        '/api/v1/ai/classify-domain',
+        data: {
+          'business_name': businessName,
+          'business_type': _businessType,
+        },
+        cancelToken: _classifyCancelToken,
+      );
+
+      final data = resp.data is String
+          ? json.decode(resp.data as String)['data'] as Map<String, dynamic>
+          : (resp.data as Map<String, dynamic>)['data'] as Map<String, dynamic>;
+
+      if (!mounted) return;
+
+      final suggestUiSwitch = data['suggest_ui_switch'] as bool? ?? false;
+      if (!suggestUiSwitch) return; // F&B = default, skip suggestion card
+
+      setState(() {
+        _detectedDomain = data['domain'] as String?;
+        _detectedDisplayName = data['display_name'] as String?;
+        _showDomainSuggestion = true;
+        _userAcceptedDomain = null;
+      });
+    } on DioException catch (e) {
+      // Silent fail — register flow tetap lanjut default F&B (fail-open per amendment E)
+      if (e.type != DioExceptionType.cancel) {
+        // log only, gak show error ke user
+        // ignore: avoid_print
+        print('Classify domain error (non-fatal): ${e.message}');
+      }
+    } catch (_) {
+      // ignore parse error
+    }
+  }
+
+  String _domainEmoji(String? domain) {
+    switch (domain) {
+      case 'service':
+        return '💈';
+      case 'retail':
+        return '🛒';
+      default:
+        return '☕';
+    }
+  }
+
+  String _domainLabel(String? domain) {
+    switch (domain) {
+      case 'service':
+        return 'Service';
+      case 'retail':
+        return 'Retail';
+      default:
+        return 'F&B';
+    }
   }
 
   Future<void> _sendOtp() async {
@@ -129,6 +229,12 @@ class _RegisterPageState extends State<RegisterPage> {
       if (data['outlet_id'] != null) await _cache.setOutletId(data['outlet_id'].toString());
       await _cache.setStockMode(data['stock_mode']?.toString() ?? 'simple');
       await _cache.setSubscriptionTier(data['subscription_tier']?.toString() ?? 'starter');
+
+      // Persist domain pilihan user (Batch #26). Null kalau user tolak atau
+      // suggestion tidak muncul (default F&B via BusinessLabels fallback).
+      if (_userAcceptedDomain == true && _detectedDomain != null) {
+        await _cache.setBusinessDomain(_detectedDomain);
+      }
 
       _timer?.cancel();
       setState(() { _step = RegStep.setPin; _isLoading = false; });
@@ -230,7 +336,15 @@ class _RegisterPageState extends State<RegisterPage> {
                 const SizedBox(height: 16),
                 _buildField('Nama Pemilik', _nameCtrl, hint: 'Ivan'),
                 const SizedBox(height: 16),
-                _buildField('Nama Usaha', _businessCtrl, hint: 'Warung Kopi Ivan'),
+                _buildField(
+                  'Nama Usaha',
+                  _businessCtrl,
+                  hint: 'Warung Kopi Ivan',
+                  onChanged: _onBusinessNameChanged,
+                ),
+                // Suggestion card — muncul saat classify detect Non-F&B
+                if (_showDomainSuggestion && _detectedDomain != null)
+                  _buildDomainSuggestionCard(),
                 const SizedBox(height: 16),
                 // Business type
                 Text('Jenis Usaha', style: TextStyle(color: Colors.grey[300], fontSize: 13, fontWeight: FontWeight.w500)),
@@ -336,6 +450,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Widget _buildField(String label, TextEditingController ctrl, {
     String? hint, bool obscure = false, TextInputType? keyboardType, int? maxLength,
+    ValueChanged<String>? onChanged,
   }) {
     return TextField(
       controller: ctrl,
@@ -344,6 +459,7 @@ class _RegisterPageState extends State<RegisterPage> {
       maxLength: maxLength,
       style: const TextStyle(color: Colors.white),
       inputFormatters: keyboardType == TextInputType.number ? [FilteringTextInputFormatter.digitsOnly] : null,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -353,6 +469,88 @@ class _RegisterPageState extends State<RegisterPage> {
         filled: true,
         fillColor: const Color(0xFF141820),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      ),
+    );
+  }
+
+  Widget _buildDomainSuggestionCard() {
+    final displayName = _detectedDisplayName ?? 'bisnis kamu';
+    final domainLabel = _domainLabel(_detectedDomain);
+    final emoji = _domainEmoji(_detectedDomain);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10, bottom: 4),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.09),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withOpacity(0.4), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.35),
+                    children: [
+                      const TextSpan(text: 'Kami deteksi bisnisnya '),
+                      TextSpan(
+                        text: displayName,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const TextSpan(text: ' — pakai istilah '),
+                      TextSpan(
+                        text: domainLabel,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const TextSpan(text: '?'),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => setState(() {
+                    _userAcceptedDomain = true;
+                    _showDomainSuggestion = false;
+                  }),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: AppColors.primary.withOpacity(0.6)),
+                    foregroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                  ),
+                  icon: const Icon(Icons.check, size: 16),
+                  label: const Text('Iya, pakai', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextButton(
+                  onPressed: () => setState(() {
+                    _userAcceptedDomain = false;
+                    _showDomainSuggestion = false;
+                    _detectedDomain = null;
+                  }),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.grey[400],
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                  ),
+                  child: const Text('Bukan', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

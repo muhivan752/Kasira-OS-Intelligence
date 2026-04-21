@@ -24,6 +24,10 @@ class SessionCache {
   String? shiftSessionId;
   String? phone;
   String? userId;
+  // Business domain untuk Adaptive UI labels (Batch #26).
+  // Values: 'fnb' (default) | 'retail' | 'service'. Null = belum di-detect,
+  // treat as 'fnb' via BusinessLabels.getLabel fallback.
+  String? businessDomain;
 
   bool _initialized = false;
   bool get isInitialized => _initialized;
@@ -66,6 +70,7 @@ class SessionCache {
     // order_detail_modal saat user buka receipt, atau via fetchOutletInfo).
     outletName = prefs.getString('c_outlet_name');
     outletAddress = prefs.getString('c_outlet_address');
+    businessDomain = prefs.getString('c_business_domain');
 
     _initialized = true;
 
@@ -86,6 +91,7 @@ class SessionCache {
     outletAddress = prefs.getString('c_outlet_address');
     stockMode = prefs.getString('c_stock_mode');
     subscriptionTier = prefs.getString('c_subscription_tier');
+    businessDomain = prefs.getString('c_business_domain');
     // Token still needs SecureStorage — read in parallel
     const secure = FlutterSecureStorage();
     final results = await Future.wait([
@@ -168,6 +174,19 @@ class SessionCache {
     const FlutterSecureStorage().write(key: 'user_id', value: value);
   }
 
+  /// Set business domain untuk Adaptive UI (Batch #26).
+  /// Value: 'fnb' | 'retail' | 'service'. Pass null untuk clear (revert ke default F&B).
+  /// Persist ke SharedPreferences only (non-sensitive, gak butuh SecureStorage).
+  Future<void> setBusinessDomain(String? value) async {
+    businessDomain = value;
+    final prefs = await SharedPreferences.getInstance();
+    if (value == null) {
+      await prefs.remove('c_business_domain');
+    } else {
+      await prefs.setString('c_business_domain', value);
+    }
+  }
+
   // ── Auth headers (convenience) ─────────────────────────────────────────────
   Map<String, String> get authHeaders => {
     if (accessToken != null) 'Authorization': 'Bearer $accessToken',
@@ -224,6 +243,7 @@ class SessionCache {
     shiftSessionId = null;
     phone = null;
     userId = null;
+    businessDomain = null;
     _initialized = false;
     invalidateTaxConfigCache();
     await const FlutterSecureStorage().deleteAll();
@@ -235,6 +255,7 @@ class SessionCache {
       'c_outlet_address',
       'c_stock_mode',
       'c_subscription_tier',
+      'c_business_domain',
     ]) {
       prefs.remove(key);
     }

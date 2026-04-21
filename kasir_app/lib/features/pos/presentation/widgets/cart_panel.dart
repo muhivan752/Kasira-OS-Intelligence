@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/localization/business_labels.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/pos_mode_provider.dart';
@@ -35,7 +36,7 @@ class CartPanel extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              Text('Pesanan', style: Theme.of(context).textTheme.titleLarge),
+              Text(BusinessLabels.getLabel('order'), style: Theme.of(context).textTheme.titleLarge),
               if (cart.items.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Container(
@@ -201,7 +202,7 @@ class CartPanel extends ConsumerWidget {
 
   /// Dine-in: kirim order ke dapur, link ke tab — bayar nanti
   Future<void> _handleDineIn(BuildContext context, WidgetRef ref, CartState cart) async {
-    final tableName = cart.tableName ?? 'Meja';
+    final tableName = cart.tableName ?? BusinessLabels.getLabel('table');
     final addOrderCtx = ref.read(addOrderContextProvider);
 
     // Safety net: submitDineInOrder() sudah catch internal & set state.error,
