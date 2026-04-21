@@ -45,7 +45,10 @@ logger = logging.getLogger(__name__)
 class ChatRequest(BaseModel):
     message: str
     outlet_id: str
-    conversation_id: Optional[str] = None  # untuk multi-turn (future use)
+    # Multi-turn: kirim null di turn pertama, server balikin UUID di `done` event.
+    # Pake UUID itu untuk turn-turn berikutnya supaya server load prior history.
+    # History TTL 30min rolling (Redis ephemeral), max 5 turn pair.
+    conversation_id: Optional[str] = None
 
 
 @router.post("/chat")
@@ -126,7 +129,11 @@ async def ai_chat(
             action="ai_chat",
             entity="ai",
             entity_id=body.outlet_id,
-            after_state={"message_length": len(body.message), "tier": tier},
+            after_state={
+                "message_length": len(body.message),
+                "tier": tier,
+                "conversation_id": body.conversation_id,
+            },
             user_id=str(current_user.id),
             tenant_id=str(current_user.tenant_id),
         )
@@ -154,6 +161,7 @@ async def ai_chat(
                 db=db,
                 redis_client=redis,
                 user_id=str(current_user.id),
+                conversation_id=body.conversation_id,
             ):
                 yield chunk
         except Exception as e:

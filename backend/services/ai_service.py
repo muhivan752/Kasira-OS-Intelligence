@@ -16,7 +16,7 @@ import json
 import logging
 from datetime import datetime, timezone, time as dt_time, timedelta
 from typing import AsyncGenerator, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import sqlalchemy
 from sqlalchemy import select, func, text
@@ -64,6 +64,13 @@ PRICING_COACH_KEYWORDS = [
 SONNET_PER_TENANT_DAILY = 5
 SONNET_MODEL_ID = "claude-sonnet-4-5-20250929"
 HAIKU_MODEL_ID = "claude-haiku-4-5-20251001"
+
+# Multi-turn conversation (Redis-only, ephemeral)
+# TTL rolling 30min — diperbarui setiap turn baru. History 5 turn pair
+# (user+assistant) = 10 entries. Lebih dari itu mulai bloat context window
+# + biaya naik tanpa benefit signifikan untuk POS chat.
+CONVERSATION_TTL_SECONDS = 1800
+CONVERSATION_MAX_ENTRIES = 10  # 5 turn pair
 
 
 # ─── Domain Detection (Smart Suggest) ─────────────────────────────────────────
@@ -1567,6 +1574,82 @@ formal. Jangan pake emoji.
 
 # ─── SSE Generator (Rule #9 async) ────────────────────────────────────────────
 
+def _conversation_key(tenant_id: str, conversation_id: str) -> str:
+    # Tenant-scoped key: cegah cross-tenant leak kalau client sengaja/tidak
+    # sengaja reuse conversation_id string milik tenant lain.
+    return f"ai:conversation:{tenant_id}:{conversation_id}"
+
+
+async def _load_conversation_history(
+    redis_client, tenant_id: str, conversation_id: str
+) -> list[dict]:
+    """
+    Load prior turns dari Redis list `ai:conversation:{tenant_id}:{conv_id}`.
+
+    Format per entry: `{"role": "user"|"assistant", "content": str}`.
+    Stored oldest → newest via RPUSH, load semua via LRANGE 0 -1.
+
+    Fail-open: kalau Redis down / parse error → return [] (fresh turn tanpa
+    history, gak crash). Conversation_id gak boleh jadi single point of failure.
+    """
+    try:
+        raw_entries = await redis_client.lrange(
+            _conversation_key(tenant_id, conversation_id), 0, -1
+        )
+    except Exception as e:
+        logger.warning(
+            "Conversation history load failed (Redis issue?) conv=%s error=%s",
+            conversation_id, e,
+        )
+        return []
+
+    history = []
+    for raw in raw_entries:
+        try:
+            entry = json.loads(raw)
+            if entry.get("role") in ("user", "assistant") and entry.get("content"):
+                history.append({
+                    "role": entry["role"],
+                    "content": entry["content"],
+                })
+        except Exception:
+            continue  # skip corrupt entry, gak break
+    return history
+
+
+async def _save_conversation_turn(
+    redis_client,
+    tenant_id: str,
+    conversation_id: str,
+    user_message: str,
+    assistant_message: str,
+) -> None:
+    """
+    Append 1 turn pair (user + assistant) ke Redis list. Trim ke
+    CONVERSATION_MAX_ENTRIES (keep tail = paling recent). Reset TTL ke 30min.
+
+    Fail-silent: Redis hiccup = lose multi-turn history untuk conv ini,
+    tapi gak block stream completion yang udah yield ke user.
+    """
+    try:
+        key = _conversation_key(tenant_id, conversation_id)
+        pipe = redis_client.pipeline()
+        pipe.rpush(
+            key,
+            json.dumps({"role": "user", "content": user_message}),
+            json.dumps({"role": "assistant", "content": assistant_message}),
+        )
+        # Keep only last N entries (negative index = tail)
+        pipe.ltrim(key, -CONVERSATION_MAX_ENTRIES, -1)
+        pipe.expire(key, CONVERSATION_TTL_SECONDS)
+        await pipe.execute()
+    except Exception as e:
+        logger.warning(
+            "Conversation history save failed (Redis issue?) conv=%s error=%s",
+            conversation_id, e,
+        )
+
+
 async def stream_ai_response(
     message: str,
     outlet_id: str,
@@ -1576,13 +1659,23 @@ async def stream_ai_response(
     db: AsyncSession,
     redis_client,
     user_id: str = "",
+    conversation_id: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """
     Generator untuk SSE stream.
     Yields: "data: {...}\n\n" strings
     """
 
+    # Normalize conversation_id — generate UUID kalau null supaya client
+    # selalu dapet ID via done event. Invalid/empty string di-treat as None.
+    if not conversation_id or not isinstance(conversation_id, str):
+        conversation_id = str(uuid4())
+
     def sse(payload: dict) -> str:
+        # Pastikan semua done/chunk payload include conversation_id biar
+        # client bisa persist untuk turn berikutnya.
+        if payload.get("type") == "done" and "conversation_id" not in payload:
+            payload["conversation_id"] = conversation_id
         return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     # 1. Classify intent — SETUP_RECIPE / RESTOCK = actionable, selain itu langsung ke Claude
@@ -1691,6 +1784,16 @@ async def stream_ai_response(
     except Exception as e:
         logger.debug(f"RAG enrichment skipped: {e}")
 
+    # 3b-multi. Multi-turn history — load prior turns dari Redis (ephemeral,
+    # TTL 30min rolling). Fail-open: Redis down → empty list = fresh single-turn.
+    # History injected di messages array (BUKAN di system_prompt) supaya
+    # Anthropic prompt cache breakpoint tetep di system param = cache hit
+    # preserved untuk non-pricing intent.
+    prior_history = await _load_conversation_history(
+        redis_client, tenant_id, conversation_id
+    )
+    messages = prior_history + [{"role": "user", "content": message}]
+
     # 3c. Pricing coach — inject HPP + margin data + coach system prompt
     # Fail-CLOSED semantics: Redis down → fallback ke Haiku (bukan silent
     # unlimited Sonnet spend). Single source of truth untuk model selection
@@ -1786,7 +1889,7 @@ async def stream_ai_response(
                         model=try_model,
                         max_tokens=max_tok,
                         system=system_prompt,
-                        messages=[{"role": "user", "content": message}],
+                        messages=messages,
                     ) as stream:
                         async for text_chunk in stream.text_stream:
                             buffer.append(text_chunk)
@@ -1825,6 +1928,13 @@ async def stream_ai_response(
                             else "sonnet_api_error"
                         )
                     yield sse(done_payload)
+                    # Persist multi-turn: pake 'message' asli (tanpa pricing_ctx
+                    # inline yg di system_prompt) + full assistant response.
+                    await _save_conversation_turn(
+                        redis_client, tenant_id, conversation_id,
+                        user_message=message,
+                        assistant_message="".join(buffer),
+                    )
                     return  # sukses — exit handler
 
                 except Exception as e:
@@ -1851,13 +1961,15 @@ async def stream_ai_response(
             return
 
         # Non-pricing intent: direct stream, no fallback
+        assistant_buffer = []
         async with client.messages.stream(
             model=model,
             max_tokens=max_tok,
             system=system_prompt,
-            messages=[{"role": "user", "content": message}],
+            messages=messages,
         ) as stream:
             async for text_chunk in stream.text_stream:
+                assistant_buffer.append(text_chunk)
                 yield sse({"type": "chunk", "content": text_chunk})
 
             final_msg = await stream.get_final_message()
@@ -1866,6 +1978,13 @@ async def stream_ai_response(
             )
 
         yield sse({"type": "done", "intent": intent, "tokens_used": tokens_used, "model": model})
+        # Persist multi-turn turn pair setelah stream sukses. Fail-silent
+        # supaya error save gak corrupt user-visible done event.
+        await _save_conversation_turn(
+            redis_client, tenant_id, conversation_id,
+            user_message=message,
+            assistant_message="".join(assistant_buffer),
+        )
 
     except Exception as e:
         logger.error(f"Claude API error: {e}")
