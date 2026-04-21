@@ -54,6 +54,12 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
   StreamSubscription? _streamSub;
   int _msgId = 0;
 
+  // Multi-turn conversation ID (Batch #23). Null = fresh conversation —
+  // server auto-generate UUID + echo di done event. Subsequent turn kirim
+  // ID ini biar Redis history ter-load (TTL rolling 30min). Reset via
+  // resetConversation() saat user tutup modal chat atau ganti konteks.
+  String? _currentConversationId;
+
   String _nextId() => 'msg_${_msgId++}';
 
   Future<void> sendMessage(String text) async {
@@ -91,6 +97,10 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
       request.body = jsonEncode({
         'message': text.trim(),
         'outlet_id': outletId,
+        // Sertakan conv_id kalau ada (turn kedua dst). Null di turn pertama —
+        // backend bakal generate UUID baru dan echo balik di done event.
+        if (_currentConversationId != null)
+          'conversation_id': _currentConversationId,
       });
 
       final client = http.Client();
@@ -128,6 +138,13 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
               buffer.write(event['content'] ?? '');
               _updateAssistant(assistantMsg.id, buffer.toString());
             } else if (type == 'done') {
+              // Capture conv_id yang di-echo backend — persist untuk turn
+              // berikutnya biar Redis history ter-load. Backend auto-gen UUID
+              // kalau kita kirim null, jadi field ini selalu ada di done event.
+              final convId = event['conversation_id'] as String?;
+              if (convId != null && convId.isNotEmpty) {
+                _currentConversationId = convId;
+              }
               _finalizeAssistant(
                 assistantMsg.id,
                 buffer.toString(),
@@ -188,8 +205,17 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
     state = state.copyWith(messages: msgs, isLoading: false, error: error);
   }
 
+  /// Reset conv_id multi-turn — panggil saat user tutup modal chat / switch
+  /// outlet / logout untuk start session fresh. Redis history tetep expire
+  /// otomatis via TTL 30min, ini cuma signal Flutter untuk gak pake conv_id
+  /// lama lagi di request berikutnya.
+  void resetConversation() {
+    _currentConversationId = null;
+  }
+
   void clearChat() {
     _streamSub?.cancel();
+    resetConversation();
     state = const AiChatState();
   }
 

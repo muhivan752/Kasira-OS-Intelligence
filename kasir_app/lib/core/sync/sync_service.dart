@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' as drift;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import '../database/app_database.dart';
 import '../utils/hlc.dart';
 import '../utils/pn_counter.dart';
@@ -38,6 +39,15 @@ class SyncService {
   // launch, survive logout (identity device fisik). Key legacy-compat pake
   // nama lama `device_node_id` biar user existing gak reset.
   static const String _deviceIdKey = 'device_node_id';
+
+  // Persistent idempotency_key (Batch #23 bulletproof): disimpan di prefs
+  // sampai server balas 200 OK. Kalau network drop mid-push, next sync()
+  // reuse key yang sama → backend dedup via (tenant_id, key) composite PK =
+  // zero duplicate stock deduct walaupun ruko Medan sinyal naik-turun.
+  static const String _pendingIdempotencyKey = 'pending_sync_idempotency_key';
+
+  // UUID v4 generator untuk idempotency_key sync batch (Batch #23).
+  static const _uuid = Uuid();
 
   /// Set to true after sync if stock_mode changed on server
   bool _stockModeChanged = false;
@@ -175,10 +185,23 @@ class SyncService {
       // Multi-outlet tenant WAJIB kirim outlet_id — backend reject (400) kalau
       // tenant punya >1 outlet dan outlet_id kosong. Single-outlet backward
       // compat masih jalan karena backend auto-pick satu-satunya outlet.
+      //
+      // idempotency_key (Batch #23 bulletproof): cek prefs dulu — kalau ada
+      // key pending dari attempt sebelumnya yang gagal/timeout, REUSE key itu
+      // supaya backend bisa dedup. Kalau kosong, generate v4 baru + save ke
+      // prefs. Key di-remove dari prefs cuma setelah server balas 200 OK
+      // (end of success block) — guarantee retry-safe walau mid-flight drop.
+      String? pendingKey = prefs.getString(_pendingIdempotencyKey);
+      if (pendingKey == null || pendingKey.isEmpty) {
+        pendingKey = _uuid.v4();
+        await prefs.setString(_pendingIdempotencyKey, pendingKey);
+      }
+
       final payload = {
         'node_id': nodeId,
         'outlet_id': currentOutletId,
         'last_sync_hlc': lastSyncHlc,
+        'idempotency_key': pendingKey,
         'changes': changes,
       };
 
@@ -223,8 +246,38 @@ class SyncService {
           cashActivities: unsyncedCashActivities,
         );
 
-        // 5. Update last sync HLC
-        await prefs.setString(_lastSyncKey, serverHlc);
+        // 5. Update last sync HLC — merge server HLC dengan local via
+        // HLC.receive() daripada naïve string-write (Batch #23 fix). Ini
+        // guarantee monotonic increase + handle clock drift device↔server.
+        // Sebelumnya naïve write bisa regress HLC kalau device clock mundur
+        // → offline order HLC < previous → gagal menang di CRDT merge.
+        if (serverHlc is String && serverHlc.isNotEmpty) {
+          HLC localHlc;
+          try {
+            localHlc = (lastSyncHlc != null && lastSyncHlc.isNotEmpty)
+                ? HLC.parse(lastSyncHlc)
+                : HLC.now(nodeId);
+          } catch (_) {
+            // Prefs corrupt (malformed HLC dari version lama atau manual edit)
+            // — fallback ke fresh HLC, gak crash.
+            localHlc = HLC.now(nodeId);
+          }
+          try {
+            final merged = HLC.fromServer(localHlc, serverHlc);
+            await prefs.setString(_lastSyncKey, merged.toString());
+          } on FormatException catch (e) {
+            // Server HLC malformed — skip save, sync berikutnya retry.
+            // Prefs gak ter-corrupt.
+            debugPrint('sync() server HLC malformed, skip save: $e');
+          }
+        }
+
+        // 6. Hapus pending idempotency_key — sync selesai end-to-end, next
+        // sync() generate fresh. Timing: SETELAH HLC update + markAsSynced
+        // biar kalau ada failure mid-way, key stays persist → retry reuses →
+        // backend dedup. Placed paling akhir sebelum _status=success.
+        await prefs.remove(_pendingIdempotencyKey);
+
         _status = SyncStatus.success;
         // debugPrint('Sync completed successfully. New HLC: $serverHlc');
       } else {
