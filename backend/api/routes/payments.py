@@ -138,7 +138,12 @@ async def create_payment(
             raise HTTPException(status_code=404, detail="Order tidak ditemukan")
         if order.status == OrderStatus.completed:
             raise HTTPException(status_code=400, detail="Order sudah selesai (sudah dibayar)")
-            
+        if order.status == OrderStatus.cancelled:
+            raise HTTPException(
+                status_code=400,
+                detail="Order sudah dibatalkan otomatis oleh sistem (stale cleanup) — silakan buat order baru."
+            )
+
     # Block partial payments for non-Pro tiers (Rule #43)
     if payment_in.is_partial:
         from backend.models.tenant import Tenant

@@ -417,6 +417,17 @@ async def pay_tab_full(
     if total <= 0:
         raise HTTPException(status_code=400, detail="Tab kosong")
 
+    # Guard: block payment if all underlying orders already auto-cancelled by system
+    # (mirror payments.py cancelled-guard — prevents "ghost race" with stale_order_cleanup janitor)
+    if tab.orders and all(
+        (o.status.value if hasattr(o.status, 'value') else str(o.status)) == 'cancelled'
+        for o in tab.orders
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Order di tab ini sudah dibatalkan otomatis oleh sistem (stale cleanup) — silakan buat tab/order baru."
+        )
+
     # Idempotency check
     if body.idempotency_key:
         existing = await db.execute(
@@ -522,6 +533,17 @@ async def pay_split(
     tab = await _get_tab_or_404(db, tab_id, lock=True)
     if tab.status in ('paid', 'cancelled'):
         raise HTTPException(status_code=400, detail="Tab sudah ditutup")
+
+    # Guard: block payment if all underlying orders already auto-cancelled by system
+    # (mirror payments.py cancelled-guard — prevents "ghost race" with stale_order_cleanup janitor)
+    if tab.orders and all(
+        (o.status.value if hasattr(o.status, 'value') else str(o.status)) == 'cancelled'
+        for o in tab.orders
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Order di tab ini sudah dibatalkan otomatis oleh sistem (stale cleanup) — silakan buat tab/order baru."
+        )
 
     split = None
     for s in tab.splits:
