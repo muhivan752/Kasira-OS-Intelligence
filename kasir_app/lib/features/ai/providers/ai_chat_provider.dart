@@ -27,23 +27,32 @@ class AiChatState {
   final List<ChatMessage> messages;
   final bool isLoading;
   final String? error;
+  // Mirror dari _currentConversationId di notifier — expose supaya UI bisa
+  // reactive surface "context aware" indicator. Null = fresh session.
+  final String? conversationId;
 
   const AiChatState({
     this.messages = const [],
     this.isLoading = false,
     this.error,
+    this.conversationId,
   });
+
+  bool get hasConversationContext => conversationId != null;
 
   AiChatState copyWith({
     List<ChatMessage>? messages,
     bool? isLoading,
     String? error,
     bool clearError = false,
+    String? conversationId,
+    bool clearConversationId = false,
   }) =>
       AiChatState(
         messages: messages ?? this.messages,
         isLoading: isLoading ?? this.isLoading,
         error: clearError ? null : (error ?? this.error),
+        conversationId: clearConversationId ? null : (conversationId ?? this.conversationId),
       );
 }
 
@@ -117,7 +126,7 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
       }
 
       if (response.statusCode != 200) {
-        _setError(assistantMsg.id, 'Gagal terhubung ke AI (${response.statusCode})');
+        _setError(assistantMsg.id, 'Gagal memuat pesan. Coba lagi ya.');
         return;
       }
 
@@ -151,9 +160,10 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
                 intent: event['intent'] as String?,
                 model: event['model'] as String?,
                 tokens: event['tokens_used'] as int?,
+                conversationId: _currentConversationId,
               );
             } else if (type == 'error') {
-              _setError(assistantMsg.id, event['message'] as String? ?? 'AI error');
+              _setError(assistantMsg.id, event['message'] as String? ?? 'Kasira AI mengalami masalah.');
             }
           } catch (_) {
             // Skip unparseable lines
@@ -178,7 +188,7 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
   }
 
   void _finalizeAssistant(String msgId, String content,
-      {String? intent, String? model, int? tokens}) {
+      {String? intent, String? model, int? tokens, String? conversationId}) {
     final msgs = state.messages.map((m) {
       if (m.id == msgId) {
         return ChatMessage(
@@ -192,7 +202,11 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
       }
       return m;
     }).toList();
-    state = state.copyWith(messages: msgs, isLoading: false);
+    state = state.copyWith(
+      messages: msgs,
+      isLoading: false,
+      conversationId: conversationId,
+    );
   }
 
   void _setError(String msgId, String error) {
@@ -211,11 +225,12 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
   /// lama lagi di request berikutnya.
   void resetConversation() {
     _currentConversationId = null;
+    state = state.copyWith(clearConversationId: true);
   }
 
   void clearChat() {
     _streamSub?.cancel();
-    resetConversation();
+    resetConversation(); // hapus memori multi-turn (conv_id + state mirror)
     state = const AiChatState();
   }
 

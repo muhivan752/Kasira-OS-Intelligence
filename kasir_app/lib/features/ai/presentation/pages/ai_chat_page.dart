@@ -33,12 +33,14 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   }
 
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
+    // Schedule setelah layout selesai — lebih akurat dari Future.delayed 100ms
+    // karena maxScrollExtent baru valid setelah ListView rebuild.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
         );
       }
     });
@@ -89,12 +91,17 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             IconButton(
               onPressed: () => ref.read(aiChatProvider.notifier).clearChat(),
               icon: const Icon(LucideIcons.trash2, size: 18),
-              tooltip: 'Hapus chat',
+              tooltip: 'Hapus Obrolan',
             ),
         ],
       ),
       body: Column(
         children: [
+          // Context awareness indicator — muncul saat multi-turn aktif.
+          // Visual subtle (tipis, muted) biar gak ganggu flow tapi jelas
+          // kasih sinyal "AI inget konteks obrolan sebelumnya".
+          if (chat.hasConversationContext && chat.messages.isNotEmpty)
+            _ContextAwarenessBanner(),
           // Messages
           Expanded(
             child: chat.messages.isEmpty
@@ -103,7 +110,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                     controller: _scrollController,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     itemCount: chat.messages.length,
-                    itemBuilder: (_, i) => _MessageBubble(message: chat.messages[i]),
+                    itemBuilder: (_, i) => _MessageBubble(
+                      key: ValueKey(chat.messages[i].id),
+                      message: chat.messages[i],
+                    ),
                   ),
           ),
 
@@ -125,7 +135,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                       textInputAction: TextInputAction.send,
                       style: const TextStyle(fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: 'Tanya tentang bisnis kamu...',
+                        hintText: 'Tanya sesuatu ke Kasira AI...',
                         hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
                         filled: true,
                         fillColor: AppColors.surfaceVariant,
@@ -216,14 +226,22 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
 
-  const _MessageBubble({required this.message});
+  const _MessageBubble({super.key, required this.message});
 
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == 'user';
     final isError = message.role == 'error';
 
-    return Padding(
+    // Fade-in subtle (0 → 1 opacity, 220ms easeOut). TweenAnimationBuilder
+    // cuma run sekali per widget lifecycle — bubble existing gak re-animate
+    // saat parent rebuild (pakai ValueKey di ListView biar identity preserved).
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      builder: (_, value, child) => Opacity(opacity: value, child: child),
+      child: Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
@@ -265,11 +283,7 @@ class _MessageBubble extends StatelessWidget {
                     ),
                   ),
                   child: message.content.isEmpty && !isError
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                        )
+                      ? const _TypingIndicator()
                       : _MarkdownText(
                           content: message.content,
                           color: isError ? AppColors.error : AppColors.textPrimary,
@@ -286,6 +300,122 @@ class _MessageBubble extends StatelessWidget {
             ),
           ),
           if (isUser) const SizedBox(width: 8),
+        ],
+      ),
+      ),
+    );
+  }
+}
+
+/// Typing indicator dengan teks "Kasira AI sedang berpikir..." — muncul saat
+/// assistant bubble masih kosong (pre-first-chunk). Dots pakai pulse animation
+/// subtle biar kasir tau AI lagi proses, bukan freeze.
+class _TypingIndicator extends StatefulWidget {
+  const _TypingIndicator();
+
+  @override
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
+}
+
+class _TypingIndicatorState extends State<_TypingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        AnimatedBuilder(
+          animation: _ctrl,
+          builder: (_, __) {
+            final t = _ctrl.value;
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(3, (i) {
+                final phase = (t + i * 0.2) % 1.0;
+                final scale = 0.6 + 0.4 * (phase < 0.5 ? phase * 2 : (1 - phase) * 2);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                  child: Transform.scale(
+                    scale: scale,
+                    child: Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            );
+          },
+        ),
+        const SizedBox(width: 10),
+        const Text(
+          'Kasira AI sedang berpikir...',
+          style: TextStyle(
+            fontSize: 12.5,
+            color: AppColors.textSecondary,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Context awareness banner — muncul saat `conversationId != null`.
+/// Sinyal halus ke kasir bahwa AI masih "inget" konteks obrolan sebelumnya
+/// (multi-turn aktif, Redis history rolling TTL 30min).
+class _ContextAwarenessBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.06),
+        border: const Border(
+          bottom: BorderSide(color: AppColors.border, width: 0.5),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            LucideIcons.link,
+            size: 11,
+            color: AppColors.primary.withOpacity(0.8),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Melanjutkan konteks obrolan...',
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.primary.withOpacity(0.85),
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.1,
+            ),
+          ),
         ],
       ),
     );
