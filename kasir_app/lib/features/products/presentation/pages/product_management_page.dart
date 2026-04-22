@@ -39,17 +39,15 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
       if (stockMode == 'recipe' && outletId.isNotEmpty) {
         final stocks = await (db.select(db.outletStocks)
               ..where((os) => os.outletId.equals(outletId))
-              ..where((os) => os.isDeleted.equals(false))
-              ..where((os) => os.computedStock.isSmallerOrEqualValue(0)))
+              ..where((os) => os.isDeleted.equals(false)))
             .get();
-        count = stocks.length;
+        count = stocks.where((s) => s.computedStock <= 0).length;
       } else {
         final products = await (db.select(db.products)
               ..where((p) => p.isDeleted.equals(false))
-              ..where((p) => p.stockEnabled.equals(true))
-              ..where((p) => p.stockQty.isSmallerOrEqualValue(0)))
+              ..where((p) => p.stockEnabled.equals(true)))
             .get();
-        count = products.length;
+        count = products.where((p) => p.stockQty <= 0).length;
       }
     } catch (_) {
       count = 0; // fail-silent — badge hilang kalau query gagal, bukan crash
