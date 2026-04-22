@@ -17,3 +17,4 @@ __pycache__/
 # Load test — local results + JWT config (contains tokens)
 load_test/results/
 load_test/config.json
+loadtest/
