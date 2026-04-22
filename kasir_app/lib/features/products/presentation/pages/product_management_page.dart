@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/database/app_database.dart';
+import '../../../../core/sync/sync_provider.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../providers/products_provider.dart';
 import '../widgets/product_detail_sheet.dart';
