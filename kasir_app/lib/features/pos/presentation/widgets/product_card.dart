@@ -9,6 +9,7 @@ class ProductCard extends StatelessWidget {
   final double price;
   final int stock;
   final bool stockEnabled;
+  final bool isAvailable;
   final String imageUrl;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
@@ -20,6 +21,7 @@ class ProductCard extends StatelessWidget {
     required this.price,
     required this.stock,
     this.stockEnabled = false,
+    this.isAvailable = true,
     required this.imageUrl,
     required this.onTap,
     this.onLongPress,
@@ -29,6 +31,8 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOutOfStock = stockEnabled && stock <= 0;
+    final isDisabled = !isAvailable || isOutOfStock;
+    final badgeLabel = isOutOfStock ? 'HABIS' : 'NONAKTIF';
     final currencyFormatter =
         NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -38,8 +42,8 @@ class ProductCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       elevation: 0,
       child: InkWell(
-        onTap: isOutOfStock ? null : onTap,
-        onLongPress: onLongPress,
+        onTap: isDisabled ? null : onTap,
+        onLongPress: isDisabled ? null : onLongPress,
         splashColor: AppColors.primary.withOpacity(0.08),
         highlightColor: AppColors.primary.withOpacity(0.04),
         child: Container(
@@ -49,94 +53,94 @@ class ProductCard extends StatelessWidget {
           ),
           child: Stack(
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Image area
-                  Expanded(
-                    flex: 3,
-                    child: Container(
-                      width: double.infinity,
-                      color: AppColors.surfaceVariant,
-                      child: CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        fit: BoxFit.cover,
-                        memCacheWidth: 300,
-                        fadeInDuration: const Duration(milliseconds: 150),
-                        color: isOutOfStock ? Colors.grey : null,
-                        colorBlendMode:
-                            isOutOfStock ? BlendMode.saturation : null,
-                        placeholder: (_, __) => const Center(
-                          child: Icon(LucideIcons.image,
-                              color: AppColors.textTertiary, size: 28),
-                        ),
-                        errorWidget: (_, __, ___) => const Center(
-                          child: Icon(LucideIcons.image,
-                              color: AppColors.textTertiary, size: 28),
+              Opacity(
+                opacity: isDisabled ? 0.5 : 1.0,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Image area
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        width: double.infinity,
+                        color: AppColors.surfaceVariant,
+                        child: CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                          memCacheWidth: 300,
+                          fadeInDuration: const Duration(milliseconds: 150),
+                          placeholder: (_, __) => const Center(
+                            child: Icon(LucideIcons.image,
+                                color: AppColors.textTertiary, size: 28),
+                          ),
+                          errorWidget: (_, __, ___) => const Center(
+                            child: Icon(LucideIcons.image,
+                                color: AppColors.textTertiary, size: 28),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  // Info area
-                  Expanded(
-                    flex: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                              color: isOutOfStock
-                                  ? AppColors.textTertiary
-                                  : AppColors.textPrimary,
-                              height: 1.3,
-                            ),
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  currencyFormatter.format(price),
-                                  style: TextStyle(
-                                    color: isOutOfStock
-                                        ? AppColors.textTertiary
-                                        : AppColors.primary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                    // Info area
+                    Expanded(
+                      flex: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                                color: isDisabled
+                                    ? AppColors.textTertiary
+                                    : AppColors.textPrimary,
+                                height: 1.3,
                               ),
-                              if (!isOutOfStock)
-                                Container(
-                                  width: 26,
-                                  height: 26,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary,
-                                    borderRadius: BorderRadius.circular(8),
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    currencyFormatter.format(price),
+                                    style: TextStyle(
+                                      color: isDisabled
+                                          ? AppColors.textTertiary
+                                          : AppColors.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  child: const Icon(LucideIcons.plus,
-                                      size: 14, color: Colors.white),
                                 ),
-                            ],
-                          ),
-                        ],
+                                if (!isDisabled)
+                                  Container(
+                                    width: 26,
+                                    height: 26,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(LucideIcons.plus,
+                                        size: 14, color: Colors.white),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
 
               // Best seller badge
-              if (isBestSeller && !isOutOfStock)
+              if (isBestSeller && !isDisabled)
                 Positioned(
                   top: 6,
                   left: 6,
@@ -172,8 +176,8 @@ class ProductCard extends StatelessWidget {
                   ),
                 ),
 
-              // Out of stock overlay
-              if (isOutOfStock)
+              // Disabled overlay (out of stock or deactivated)
+              if (isDisabled)
                 Positioned.fill(
                   child: Container(
                     color: AppColors.background.withOpacity(0.75),
@@ -185,9 +189,9 @@ class ProductCard extends StatelessWidget {
                           color: AppColors.textSecondary,
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Text(
-                          'HABIS',
-                          style: TextStyle(
+                        child: Text(
+                          badgeLabel,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                             fontSize: 11,

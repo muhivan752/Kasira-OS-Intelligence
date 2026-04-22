@@ -598,6 +598,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                 price: product.price,
                 stock: product.stock,
                 stockEnabled: product.stockEnabled,
+                isAvailable: product.isAvailable,
                 imageUrl: product.imageUrl ?? '',
                 isBestSeller: product.isBestSeller,
                 onLongPress: () => ProductDetailSheet.show(
