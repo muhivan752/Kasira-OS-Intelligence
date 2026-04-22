@@ -175,7 +175,14 @@ class SyncService {
         'orders': unsyncedOrders.map(_orderToJson).toList(),
         'order_items': unsyncedOrderItems.map(_orderItemToJson).toList(),
         'payments': unsyncedPayments.map(_paymentToJson).toList(),
-        'outlet_stock': [], // Handled via products/orders usually
+        // TODO(stock-sync): Implement bidirectional stock sync when CRDT
+        // (PN-Counter) is ready for OutletStocks table. Backend expects
+        // crdt_positive/crdt_negative JSON per device node (see
+        // backend/services/sync.py:156 process_stock_sync). Flutter Drift
+        // schema only caches computedStock snapshot. Current flow is
+        // remote-first: POST /ingredients/{id}/restock → server update →
+        // next sync pull returns fresh record.
+        'outlet_stock': [],
         'shifts': unsyncedShifts.map(_shiftToJson).toList(),
         'cash_activities': unsyncedCashActivities.map(_cashActivityToJson).toList(),
       };

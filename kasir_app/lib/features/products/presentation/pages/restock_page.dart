@@ -15,7 +15,10 @@ import '../../../../core/theme/app_colors.dart';
 /// Simple mode: list product stock_enabled, tap → restock product.
 /// Recipe mode: list ingredient + current outlet_stock, tap → restock ingredient.
 class RestockPage extends ConsumerStatefulWidget {
-  const RestockPage({super.key});
+  /// Jika `true`, page di-render tanpa Scaffold+AppBar — dipake saat embed
+  /// di dalam TabBarView ProductManagementPage. Default `false` (standalone).
+  final bool embedded;
+  const RestockPage({super.key, this.embedded = false});
 
   @override
   ConsumerState<RestockPage> createState() => _RestockPageState();
@@ -111,16 +114,7 @@ class _RestockPageState extends ConsumerState<RestockPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Restock Stok'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
-      ),
-      body: Column(
+    final body = Column(
         children: [
           // Mode banner
           Container(
@@ -236,7 +230,21 @@ class _RestockPageState extends ConsumerState<RestockPage> {
             ),
           ),
         ],
+      );
+
+    if (widget.embedded) {
+      return body;
+    }
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Restock Stok'),
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
+      body: body,
     );
   }
 }

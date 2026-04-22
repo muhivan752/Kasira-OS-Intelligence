@@ -72,7 +72,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     (icon: LucideIcons.receipt, label: BusinessLabels.getLabel('order')),
     (icon: LucideIcons.calendarCheck, label: 'Reservasi'),
     (icon: LucideIcons.bot, label: 'AI'),
-    (icon: LucideIcons.package, label: 'Produk'),
+    (icon: LucideIcons.packageSearch, label: 'Produk & Stok'),
     (icon: LucideIcons.settings, label: 'Setting'),
   ];
 
