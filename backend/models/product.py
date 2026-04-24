@@ -15,6 +15,7 @@ class Product(BaseModel):
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     base_price = Column(Numeric(12, 2), nullable=False)
+    buy_price = Column(Numeric(12, 2), nullable=True)
     image_url = Column(String, nullable=True)
     order_count = Column(Integer, server_default='0', nullable=False)
     is_active = Column(Boolean, server_default='true', nullable=False)

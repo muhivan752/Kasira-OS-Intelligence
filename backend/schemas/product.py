@@ -8,6 +8,7 @@ class ProductBase(BaseModel):
     name: str
     description: Optional[str] = None
     base_price: Decimal = Field(..., ge=0)
+    buy_price: Optional[Decimal] = Field(None, ge=0)
     image_url: Optional[str] = None
     is_active: bool = True
     stock_enabled: bool = False
@@ -27,6 +28,7 @@ class ProductUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     base_price: Optional[Decimal] = Field(None, ge=0)
+    buy_price: Optional[Decimal] = Field(None, ge=0)
     image_url: Optional[str] = None
     is_active: Optional[bool] = None
     stock_enabled: Optional[bool] = None
