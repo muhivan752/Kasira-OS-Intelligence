@@ -22,6 +22,7 @@ import logging
 from typing import Optional
 from uuid import UUID
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
@@ -305,6 +306,7 @@ async def restock_product(
     outlet_id: UUID,
     user_id: Optional[UUID],
     notes: Optional[str] = None,
+    unit_buy_price: Optional[Decimal] = None,
     tier: str = "starter",
 ) -> Product:
     """
@@ -314,6 +316,8 @@ async def restock_product(
     - Tulis event stock.restock ke events table
     - Update products.stock_qty cache
     - Auto-show produk jika sebelumnya hidden karena stok 0
+    - Snapshot products.buy_price kalau unit_buy_price dikirim (last-write-wins,
+      selaras pattern ingredient.buy_price). History harga via event payload.
     """
     from fastapi import HTTPException
 
@@ -323,19 +327,24 @@ async def restock_product(
     # Re-aktifkan produk jika sebelumnya auto-hidden karena stok 0
     is_active = True if stock_before == 0 and product.stock_auto_hide else product.is_active
 
-    # 1. Append event
+    # 1. Append event — payload tambahan unit_buy_price + total_cost kalau dikirim (additive)
+    event_payload = {
+        "product_id": str(product.id),
+        "outlet_id": str(outlet_id),
+        "quantity": quantity,
+        "stock_before": stock_before,
+        "stock_after": stock_after,
+        "notes": notes,
+    }
+    if unit_buy_price is not None:
+        event_payload["unit_buy_price"] = str(unit_buy_price)
+        event_payload["total_cost"] = str(unit_buy_price * Decimal(quantity))
+
     event = Event(
         outlet_id=outlet_id,
         stream_id=f"product:{product.id}",
         event_type="stock.restock",
-        event_data={
-            "product_id": str(product.id),
-            "outlet_id": str(outlet_id),
-            "quantity": quantity,
-            "stock_before": stock_before,
-            "stock_after": stock_after,
-            "notes": notes,
-        },
+        event_data=event_payload,
         event_metadata={
             "tier": tier,
             "user_id": str(user_id) if user_id else None,
@@ -357,15 +366,20 @@ async def restock_product(
         else:
             current_version = product.row_version
 
+        update_values = {
+            "stock_qty": stock_after,
+            "is_active": is_active,
+            "last_restock_at": datetime.now(timezone.utc),
+            "row_version": Product.row_version + 1,
+        }
+        # Snapshot buy_price hanya kalau dikirim — None = preserve existing value
+        if unit_buy_price is not None:
+            update_values["buy_price"] = unit_buy_price
+
         result = await db.execute(
             update(Product)
             .where(Product.id == product.id, Product.row_version == current_version)
-            .values(
-                stock_qty=stock_after,
-                is_active=is_active,
-                last_restock_at=datetime.now(timezone.utc),
-                row_version=Product.row_version + 1,
-            )
+            .values(**update_values)
             .returning(Product)
         )
         updated = result.scalar_one_or_none()

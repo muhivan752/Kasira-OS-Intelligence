@@ -106,7 +106,11 @@ async def restock_product(
     tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
     tier = getattr(getattr(tenant, "subscription_tier", None), "value", "starter")
 
-    before_state = {"stock_qty": product.stock_qty, "is_active": product.is_active}
+    before_state = {
+        "stock_qty": product.stock_qty,
+        "is_active": product.is_active,
+        "buy_price": float(product.buy_price) if product.buy_price is not None else None,
+    }
 
     updated_product = await svc_restock(
         db,
@@ -115,6 +119,7 @@ async def restock_product(
         outlet_id=restock_in.outlet_id,
         user_id=current_user.id,
         notes=restock_in.notes,
+        unit_buy_price=restock_in.unit_buy_price,
         tier=tier,
     )
 
@@ -129,6 +134,8 @@ async def restock_product(
             "is_active": updated_product.is_active,
             "restock_amount": restock_in.quantity,
             "notes": restock_in.notes,
+            "unit_buy_price": float(restock_in.unit_buy_price) if restock_in.unit_buy_price is not None else None,
+            "buy_price": float(updated_product.buy_price) if updated_product.buy_price is not None else None,
         },
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,

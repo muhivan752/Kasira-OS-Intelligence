@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from datetime import datetime, timezone, date, time, timedelta
+from decimal import Decimal
 from uuid import UUID
 from typing import Any, Optional
 
@@ -311,4 +312,127 @@ async def get_daily_report(
         message="Daily report retrieved successfully",
         data=data,
         request_id=request.state.request_id,
+    )
+
+
+@router.get("/margin", response_model=StandardResponse)
+async def get_margin_report(
+    request: Request,
+    outlet_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Margin report untuk outlet stock_mode='simple' (Starter + Pro mix-mode).
+    Pro recipe mode → 400, arahkan ke /recipes/hpp-report (HPP via unit_utils.py).
+
+    Output: list produk dengan buy_price snapshot + margin per unit.
+    Produk tanpa buy_price tetap muncul (missing_buy_price=true) — action focus
+    user buat fill the gap.
+    """
+    # 1. Validate outlet ownership + load stock_mode
+    outlet_res = await db.execute(
+        select(Outlet).where(
+            Outlet.id == outlet_id,
+            Outlet.tenant_id == current_user.tenant_id,
+            Outlet.deleted_at.is_(None),
+        )
+    )
+    outlet = outlet_res.scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    stock_mode_raw = getattr(outlet, "stock_mode", "simple")
+    stock_mode = stock_mode_raw.value if hasattr(stock_mode_raw, "value") else str(stock_mode_raw or "simple")
+
+    if stock_mode == "recipe":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "STOCK_MODE_NOT_SUPPORTED",
+                "mode": "recipe",
+                "message": "Outlet pakai recipe mode — pakai /recipes/hpp-report untuk HPP berbasis bahan baku.",
+            },
+        )
+
+    # 2. Fetch products dalam brand outlet (tenant scope sudah via outlet validation)
+    products_res = await db.execute(
+        select(ProductModel)
+        .where(
+            ProductModel.brand_id == outlet.brand_id,
+            ProductModel.deleted_at.is_(None),
+        )
+        .order_by(ProductModel.name.asc())
+    )
+    products = products_res.scalars().all()
+
+    items = []
+    margin_pct_values = []
+    with_buy_price = 0
+    missing_buy_price = 0
+
+    for p in products:
+        base_price = p.base_price or Decimal("0")
+        buy_price = p.buy_price
+        has_buy = buy_price is not None
+        if has_buy:
+            with_buy_price += 1
+        else:
+            missing_buy_price += 1
+
+        margin = None
+        margin_pct = None
+        if has_buy:
+            margin = base_price - buy_price
+            if base_price > 0:
+                margin_pct = float((margin / base_price) * 100)
+                margin_pct_values.append(margin_pct)
+
+        items.append({
+            "id": str(p.id),
+            "name": p.name,
+            "sku": p.sku,
+            "base_price": float(base_price),
+            "buy_price": float(buy_price) if has_buy else None,
+            "margin": float(margin) if margin is not None else None,
+            "margin_pct": margin_pct,
+            "stock_qty": p.stock_qty,
+            "stock_enabled": p.stock_enabled,
+            "sold_total": p.sold_total,
+            "missing_buy_price": not has_buy,
+            "negative_margin": (margin is not None and margin < 0),
+            "last_restock_at": p.last_restock_at.isoformat() if p.last_restock_at else None,
+        })
+
+    # Sort: missing buy_price first (action focus), lalu margin_pct asc (rugi/tipis dulu),
+    # tail-end produk tanpa margin_pct (base_price=0) di belakang
+    def _sort_key(it):
+        missing = it["missing_buy_price"]
+        # missing first → 0, ada → 1
+        bucket = 0 if missing else 1
+        # margin_pct asc, None → +inf agar sink ke bawah dalam bucket "ada"
+        mp = it["margin_pct"] if it["margin_pct"] is not None else float("inf")
+        return (bucket, mp)
+
+    items.sort(key=_sort_key)
+
+    avg_margin_pct = (sum(margin_pct_values) / len(margin_pct_values)) if margin_pct_values else None
+
+    summary = {
+        "total_products": len(products),
+        "with_buy_price": with_buy_price,
+        "missing_buy_price": missing_buy_price,
+        "avg_margin_pct": avg_margin_pct,
+        "stock_mode": stock_mode,
+    }
+
+    return StandardResponse(
+        success=True,
+        data={
+            "outlet_id": str(outlet_id),
+            "summary": summary,
+            "products": items,
+        },
+        request_id=request.state.request_id,
+        message="Margin report retrieved successfully",
     )
