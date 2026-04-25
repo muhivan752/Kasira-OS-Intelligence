@@ -201,17 +201,27 @@ export default function MarginReportPage() {
             </div>
           </div>
 
-          {/* Action focus banner */}
+          {/* Action focus banner — clarify modal vs stok karena merchant non-technical
+              sering confuse "modal" sama "stok ditambah". */}
           {(summary?.missing_buy_price ?? 0) > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-semibold text-amber-900">
-                  {summary?.missing_buy_price} produk belum punya harga modal
+                  {summary?.missing_buy_price} produk belum diisi harga beli (modal)
                 </p>
                 <p className="text-sm text-amber-700 mt-1">
-                  Edit harga beli via halaman <Link href="/dashboard/menu" className="underline font-medium">Menu</Link>{' '}
-                  atau dari aplikasi Kasir saat restock. Margin gak bisa dihitung selama harga beli kosong.
+                  <span className="font-medium">Modal</span> = harga beli ke supplier (bukan stok).
+                  Tanpa modal, margin tidak bisa dihitung.
+                </p>
+                <p className="text-xs text-amber-600 mt-2 italic">
+                  Contoh: jual nasi 18rb, beli bahan 8rb → modal = 8rb, margin = 10rb (55,6%).
+                </p>
+                <p className="text-sm text-amber-700 mt-2">
+                  Cara isi: edit produk via halaman{' '}
+                  <Link href="/dashboard/menu" className="underline font-medium">Menu</Link>
+                  {' '}→ field <span className="font-medium">"Harga Beli / Modal"</span>,
+                  atau dari aplikasi Kasir saat restock.
                 </p>
               </div>
             </div>
@@ -257,7 +267,7 @@ export default function MarginReportPage() {
                           <div className="text-sm font-medium text-gray-900">{p.name}</div>
                           {p.sku && <div className="text-xs text-gray-500">{p.sku}</div>}
                           {p.missing_buy_price && (
-                            <div className="text-xs text-amber-700 italic mt-0.5">Modal belum diisi</div>
+                            <div className="text-xs text-amber-700 italic mt-0.5">Belum diisi harga beli (modal)</div>
                           )}
                           {p.negative_margin && !p.missing_buy_price && (
                             <div className="text-xs text-red-700 italic mt-0.5">Rugi — modal &gt; jual</div>

@@ -279,17 +279,50 @@ class _ActionFocusBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFFDE68A)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(LucideIcons.alertCircle,
-              size: 16, color: Color(0xFFB45309)),
-          const SizedBox(width: 10),
-          Expanded(
+          Row(
+            children: [
+              const Icon(LucideIcons.alertCircle,
+                  size: 16, color: Color(0xFFB45309)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '$missingCount produk belum diisi harga beli (modal)',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF92400E),
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Padding(
+            padding: EdgeInsets.only(left: 26),
             child: Text(
-              '$missingCount produk belum punya harga modal. Isi via tab Stok → Restock → field "Harga Beli per Unit".',
-              style: const TextStyle(
-                fontSize: 12,
+              'Modal = harga beli ke supplier (bukan stok). '
+              'Tanpa modal, margin gak bisa dihitung. '
+              'Contoh: jual nasi 18rb, beli bahan 8rb → modal = 8rb.',
+              style: TextStyle(
+                fontSize: 11,
                 color: Color(0xFF92400E),
+                height: 1.45,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Padding(
+            padding: EdgeInsets.only(left: 26),
+            child: Text(
+              'Cara isi: tab Stok → tap produk → field "Harga Beli per Unit".',
+              style: TextStyle(
+                fontSize: 11,
+                color: Color(0xFF92400E),
+                fontStyle: FontStyle.italic,
                 height: 1.4,
               ),
             ),
@@ -370,7 +403,7 @@ class _MarginTile extends StatelessWidget {
                 if (missing) ...[
                   const SizedBox(height: 4),
                   const Text(
-                    'Modal belum diisi',
+                    'Belum diisi harga beli (modal)',
                     style: TextStyle(
                       fontSize: 11,
                       color: Color(0xFFB45309),

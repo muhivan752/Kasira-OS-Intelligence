@@ -641,7 +641,8 @@ export default function MenuPage() {
                 {/* Harga Beli (Modal) — Starter margin tracking. Optional, addit-
                     ive di backend (Pro recipe ignore field, pake HPP via
                     unit_utils.py). Show live margin preview kalau dua harga
-                    udah diisi. */}
+                    udah diisi. Helper text di-clarify supaya user non-technical
+                    (cafe owner) gak bingung antara "modal" vs "stok". */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Harga Beli / Modal (Rp) <span className="text-xs font-normal text-gray-500">— opsional</span>
@@ -666,7 +667,7 @@ export default function MenuPage() {
                     }
                     return (
                       <p className="text-xs text-gray-500 mt-1">
-                        Untuk track margin per produk. Update otomatis tiap restock dengan harga beli.
+                        Modal = harga beli ke supplier (bukan stok!). Contoh: jual nasi 18rb, modal beli bahan 8rb → margin 10rb. Wajib diisi kalau mau lihat untung-rugi per produk di Laporan.
                       </p>
                     );
                   })()}
