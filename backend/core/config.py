@@ -46,9 +46,6 @@ class Settings(BaseSettings):
     # App Environment
     ENVIRONMENT: str = "development"
 
-    # Master OTP — set di .env untuk bypass OTP saat pilot/testing
-    MASTER_OTP: str = ""
-
     # Superadmin — comma-separated phone numbers
     SUPERADMIN_PHONES: str = ""
 

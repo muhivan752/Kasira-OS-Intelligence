@@ -103,22 +103,18 @@ async def verify_otp(
 
     stored_otp = await redis.get(f"otp:{request.phone}")
 
-    # Allow master OTP bypass (pilot/testing) — skip stored_otp check entirely
-    is_master = settings.MASTER_OTP and request.otp == settings.MASTER_OTP
-
-    if not stored_otp and not is_master:
+    if not stored_otp:
         raise HTTPException(status_code=400, detail="OTP expired atau tidak ditemukan. Kirim ulang OTP.")
 
     # Decode jika Redis return bytes (safety)
-    otp_str = (stored_otp.decode() if isinstance(stored_otp, bytes) else str(stored_otp)) if stored_otp else ""
+    otp_str = stored_otp.decode() if isinstance(stored_otp, bytes) else str(stored_otp)
     if otp_str != request.otp:
-        if not is_master:
-            # Increment rate limit counter
-            if not verify_attempts:
-                await redis.setex(verify_rate_key, 900, 1)
-            else:
-                await redis.incr(verify_rate_key)
-            raise HTTPException(status_code=400, detail="OTP tidak valid")
+        # Increment rate limit counter
+        if not verify_attempts:
+            await redis.setex(verify_rate_key, 900, 1)
+        else:
+            await redis.incr(verify_rate_key)
+        raise HTTPException(status_code=400, detail="OTP tidak valid")
             
     # OTP is valid, delete it
     await redis.delete(f"otp:{request.phone}")
@@ -224,8 +220,7 @@ async def register(
         raise HTTPException(status_code=400, detail="OTP expired atau tidak ditemukan. Kirim ulang OTP.")
     otp_str_reg = stored_otp.decode() if isinstance(stored_otp, bytes) else str(stored_otp)
     if otp_str_reg != request.otp:
-        if not settings.MASTER_OTP or request.otp != settings.MASTER_OTP:
-            raise HTTPException(status_code=400, detail="OTP tidak valid")
+        raise HTTPException(status_code=400, detail="OTP tidak valid")
     await redis.delete(f"otp:{request.phone}")
 
     # Cek duplikat phone
