@@ -312,6 +312,29 @@ export async function getReportSummary(outletId: string, startDate: string, endD
   } catch { return null; }
 }
 
+/**
+ * Margin report (Starter feature) — list produk + computed margin (base_price - buy_price).
+ * Returns { data, error }. Error includes recipe-mode reject (400 STOCK_MODE_NOT_SUPPORTED).
+ */
+export async function getMarginReport(outletId: string): Promise<{ data: any | null; error: string | null; isRecipeMode: boolean }> {
+  try {
+    const res = await fetchWithAuth(`/reports/margin?outlet_id=${outletId}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const detail = body?.detail;
+      if (res.status === 400 && typeof detail === 'object' && detail?.code === 'STOCK_MODE_NOT_SUPPORTED') {
+        return { data: null, error: detail.message || 'Outlet pakai mode Resep — pakai Laporan HPP.', isRecipeMode: true };
+      }
+      const msg = typeof detail === 'string' ? detail : (detail?.message || `Error ${res.status}`);
+      return { data: null, error: msg, isRecipeMode: false };
+    }
+    const json = await res.json();
+    return { data: json.data, error: null, isRecipeMode: false };
+  } catch (e: any) {
+    return { data: null, error: e?.message || 'Gagal memuat laporan', isRecipeMode: false };
+  }
+}
+
 export async function getWeeklyRevenue(outletId: string) {
   const days: { date: Date; dateStr: string }[] = [];
   for (let i = 6; i >= 0; i--) {

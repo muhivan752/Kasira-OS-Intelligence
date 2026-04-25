@@ -59,7 +59,7 @@ export default function MenuPage() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [productForm, setProductForm] = useState({
-    name: '', description: '', base_price: '', stock_qty: '',
+    name: '', description: '', base_price: '', buy_price: '', stock_qty: '',
     category_id: '', image_url: '', is_active: true,
   });
   const [savingProduct, setSavingProduct] = useState(false);
@@ -161,6 +161,8 @@ export default function MenuPage() {
         name: product.name,
         description: product.description || '',
         base_price: product.base_price.toString(),
+        // buy_price (Decimal) bisa datang sbg string atau number atau null/undefined.
+        buy_price: product.buy_price != null ? product.buy_price.toString() : '',
         stock_qty: product.stock_qty.toString(),
         category_id: product.category_id || '',
         image_url: product.image_url || '',
@@ -191,7 +193,7 @@ export default function MenuPage() {
     } else {
       setEditingProduct(null);
       setProductForm({
-        name: '', description: '', base_price: '', stock_qty: '',
+        name: '', description: '', base_price: '', buy_price: '', stock_qty: '',
         category_id: categories.length > 0 ? categories[0].id : '',
         image_url: '', is_active: true,
       });
@@ -234,6 +236,10 @@ export default function MenuPage() {
       name: productForm.name,
       description: productForm.description || null,
       base_price: parseFloat(productForm.base_price),
+      // buy_price opsional. Empty string = null (preserve "belum diisi" state),
+      // bukan 0. Pro recipe mode tetep boleh terima — backend ignore field
+      // ini di HPP path (HPP pake recipe via unit_utils), so additive safe.
+      buy_price: productForm.buy_price.trim() !== '' ? parseFloat(productForm.buy_price) : null,
       stock_qty: stockMode === 'recipe' ? 0 : parseInt(productForm.stock_qty || '0'),
       stock_enabled: stockMode === 'simple',
       category_id: productForm.category_id || null,
@@ -618,7 +624,7 @@ export default function MenuPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Harga (Rp) <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Harga Jual (Rp) <span className="text-red-500">*</span></label>
                     <input type="number" required min="0"
                       value={productForm.base_price} onChange={e => setProductForm({ ...productForm, base_price: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
@@ -631,6 +637,39 @@ export default function MenuPage() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                     </div>
                   )}
+                </div>
+                {/* Harga Beli (Modal) — Starter margin tracking. Optional, addit-
+                    ive di backend (Pro recipe ignore field, pake HPP via
+                    unit_utils.py). Show live margin preview kalau dua harga
+                    udah diisi. */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Harga Beli / Modal (Rp) <span className="text-xs font-normal text-gray-500">— opsional</span>
+                  </label>
+                  <input type="number" min="0" placeholder="0"
+                    value={productForm.buy_price}
+                    onChange={e => setProductForm({ ...productForm, buy_price: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  {(() => {
+                    const sell = parseFloat(productForm.base_price);
+                    const buy = parseFloat(productForm.buy_price);
+                    if (!isNaN(sell) && !isNaN(buy) && sell > 0 && buy >= 0) {
+                      const margin = sell - buy;
+                      const pct = (margin / sell) * 100;
+                      const negative = margin < 0;
+                      return (
+                        <p className={`text-xs mt-1 ${negative ? 'text-red-600 font-semibold' : 'text-green-600'}`}>
+                          Margin: Rp {margin.toLocaleString('id-ID')} ({pct.toFixed(1)}%)
+                          {negative && ' — rugi!'}
+                        </p>
+                      );
+                    }
+                    return (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Untuk track margin per produk. Update otomatis tiap restock dengan harga beli.
+                      </p>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Foto Produk (Opsional)</label>

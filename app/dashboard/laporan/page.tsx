@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { getOutlets, getReportSummary, getOrders } from '@/app/actions/api';
-import { Calendar, Download, Banknote, CreditCard, TrendingUp, BarChart3, ShoppingCart } from 'lucide-react';
+import { Calendar, Download, Banknote, CreditCard, TrendingUp, BarChart3, ShoppingCart, Wallet, ChevronRight, BookOpen } from 'lucide-react';
 
 export default function LaporanPage() {
   const [loading, setLoading] = useState(true);
@@ -176,6 +177,36 @@ export default function LaporanPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Sub-laporan navigation — discoverability untuk margin & HPP report */}
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Link
+          href="/dashboard/laporan/margin"
+          className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:border-green-500 hover:shadow-md transition-all flex items-center gap-3 group"
+        >
+          <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center text-green-600 flex-shrink-0">
+            <Wallet className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900">Untung-Rugi per Produk</p>
+            <p className="text-xs text-gray-500 truncate">Margin tracking untuk mode Stok Sederhana</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-green-600 flex-shrink-0" />
+        </Link>
+        <Link
+          href="/dashboard/laporan/hpp"
+          className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:border-blue-500 hover:shadow-md transition-all flex items-center gap-3 group"
+        >
+          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 flex-shrink-0">
+            <BookOpen className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900">Laporan HPP / Resep</p>
+            <p className="text-xs text-gray-500 truncate">Margin berbasis bahan baku — mode Resep (Pro)</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 flex-shrink-0" />
+        </Link>
       </div>
 
       {/* Revenue Chart (simple bar chart) */}
