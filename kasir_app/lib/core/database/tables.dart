@@ -19,6 +19,10 @@ class Products extends Table with CrdtTable {
   TextColumn get name => text()();
   TextColumn get description => text().nullable()();
   RealColumn get basePrice => real()();
+  // Harga beli (modal) — Starter margin tracking. Nullable agar bisa
+  // bedakan "belum diisi" vs "diisi 0". Beda dari Ingredient.buyPrice
+  // yang default 0 (Pro recipe selalu butuh angka).
+  RealColumn get buyPrice => real().nullable()();
   TextColumn get sku => text().nullable()();
   TextColumn get barcode => text().nullable()();
   TextColumn get imageUrl => text().nullable()();

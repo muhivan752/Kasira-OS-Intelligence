@@ -9,6 +9,7 @@ import '../../../../core/services/session_cache.dart';
 import '../../providers/products_provider.dart';
 import '../widgets/product_detail_sheet.dart';
 import 'restock_page.dart';
+import 'margin_report_page.dart';
 
 class ProductManagementPage extends ConsumerStatefulWidget {
   const ProductManagementPage({super.key});
@@ -87,7 +88,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
     final productsAsync = ref.watch(productsProvider);
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: Column(
@@ -179,6 +180,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
                       ],
                     ),
                   ),
+                  const Tab(height: 40, text: 'Untung-Rugi'),
                 ],
               ),
             ),
@@ -190,6 +192,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
                 children: [
                   _buildProductsTab(productsAsync),
                   const RestockPage(embedded: true),
+                  const MarginReportPage(embedded: true),
                 ],
               ),
             ),
@@ -375,11 +378,31 @@ class _ProductTileState extends State<_ProductTile> {
               ),
             ),
 
-            // Price
-            Text(
-              widget.currency.format(product.price),
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 14),
+            // Price + margin (subtle, owner-context only — POS card sengaja
+            // tidak menampilkan margin agar tidak terlihat customer/cashier).
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.currency.format(product.price),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                if (product.margin != null && product.marginPct != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Margin ${widget.currency.format(product.margin)} (${product.marginPct!.toStringAsFixed(0)}%)',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: product.margin! < 0
+                          ? AppColors.error
+                          : AppColors.textTertiary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(width: 20),
 

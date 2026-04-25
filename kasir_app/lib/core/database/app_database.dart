@@ -13,7 +13,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -29,6 +29,11 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 4) {
             await m.createTable(outletStocks);
+          }
+          if (from < 5) {
+            // Fase 3 Starter Margin Tracking — products.buyPrice nullable.
+            // Additive: existing rows get NULL by default (=belum diisi).
+            await m.addColumn(products, products.buyPrice);
           }
         },
       );

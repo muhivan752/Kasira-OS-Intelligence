@@ -83,6 +83,7 @@ class _RestockPageState extends ConsumerState<RestockPage> {
               unit: 'pcs',
               isRecipe: false,
               rowVersion: p.rowVersion,
+              currentBuyPrice: p.buyPrice,
             ))
         .toList();
   }
@@ -256,6 +257,9 @@ class _RestockItem {
   final String unit;
   final bool isRecipe;
   final int rowVersion;
+  /// Snapshot harga beli terakhir (nullable, hanya untuk simple-mode product).
+  /// Recipe-mode pakai ingredient.buy_price flow yang lain — tidak relevan disini.
+  final double? currentBuyPrice;
 
   _RestockItem({
     required this.id,
@@ -264,6 +268,7 @@ class _RestockItem {
     required this.unit,
     required this.isRecipe,
     this.rowVersion = 0,
+    this.currentBuyPrice,
   });
 }
 
@@ -369,6 +374,7 @@ class _RestockSheet extends ConsumerStatefulWidget {
 class _RestockSheetState extends ConsumerState<_RestockSheet> {
   final _qtyController = TextEditingController();
   final _notesController = TextEditingController();
+  final _buyPriceController = TextEditingController();
   final _qtyFocus = FocusNode();
   bool _submitting = false;
   String? _error;
@@ -376,6 +382,14 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
   @override
   void initState() {
     super.initState();
+    // Pre-fill harga beli dengan snapshot terakhir kalau ada — user
+    // tinggal konfirmasi atau ubah. Skip untuk recipe (endpoint lain).
+    if (!widget.item.isRecipe && widget.item.currentBuyPrice != null) {
+      final bp = widget.item.currentBuyPrice!;
+      _buyPriceController.text = bp % 1 == 0
+          ? bp.toInt().toString()
+          : bp.toStringAsFixed(2);
+    }
     // Auto-focus + select all on open biar gampang ngetik di mobile.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _qtyFocus.requestFocus();
@@ -386,6 +400,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
   void dispose() {
     _qtyController.dispose();
     _notesController.dispose();
+    _buyPriceController.dispose();
     _qtyFocus.dispose();
     super.dispose();
   }
@@ -396,6 +411,22 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
     if (qty == null || qty <= 0) {
       setState(() => _error = 'Jumlah tidak valid');
       return;
+    }
+
+    // Parse harga beli (opsional). Skip untuk recipe — endpoint ingredient
+    // tidak terima unit_buy_price field di body schema.
+    // Input restricted ke digitsOnly (integer Rupiah) — gak ada decimal ambig.
+    double? unitBuyPrice;
+    if (!widget.item.isRecipe) {
+      final bpRaw = _buyPriceController.text.trim();
+      if (bpRaw.isNotEmpty) {
+        final parsed = int.tryParse(bpRaw);
+        if (parsed == null || parsed < 0) {
+          setState(() => _error = 'Harga beli tidak valid');
+          return;
+        }
+        unitBuyPrice = parsed.toDouble();
+      }
     }
 
     setState(() {
@@ -432,6 +463,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
           'quantity': widget.item.isRecipe ? qty : qty.toInt(),
           if (_notesController.text.trim().isNotEmpty)
             'notes': _notesController.text.trim(),
+          if (unitBuyPrice != null) 'unit_buy_price': unitBuyPrice,
         },
       );
 
@@ -559,6 +591,46 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
                     style: const TextStyle(
                         fontSize: 18, fontWeight: FontWeight.w600),
                   ),
+                  // Harga Beli — hanya untuk simple-mode product. Recipe
+                  // mode (ingredient) pakai field buy_price di endpoint
+                  // ingredient sendiri, bukan disini.
+                  if (!widget.item.isRecipe) ...[
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Harga Beli per Unit (opsional)',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _buyPriceController,
+                      // Integer Rupiah only — Indonesian cafe gak input cents.
+                      // Hindari ambigu "8.500" (= 8.5 atau 8500?) dgn restrict
+                      // ke digits saja. User ngetik 8500, jelas = Rp 8.500.
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(
+                        hintText: '0',
+                        prefixText: 'Rp ',
+                        helperText:
+                            'Diisi = update modal & track margin. Kosong = harga modal lama tetap.',
+                        helperMaxLines: 2,
+                        helperStyle: const TextStyle(
+                            fontSize: 11, color: AppColors.textTertiary),
+                        filled: true,
+                        fillColor: AppColors.surfaceVariant,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                      ),
+                      style: const TextStyle(fontSize: 15),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   const Text(
                     'Catatan (opsional)',

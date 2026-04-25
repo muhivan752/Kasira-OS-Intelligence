@@ -383,6 +383,10 @@ class SyncService {
               name: p['name'],
               description: p['description'],
               basePrice: (p['base_price'] as num).toDouble(),
+              // buy_price (Decimal) datang sebagai string "8500.00" atau null
+              // dari backend. Server adalah source of truth — Flutter gak
+              // pernah push, jadi langsung overwrite local dengan server val.
+              buyPrice: _toDoubleOrNull(p['buy_price']),
               sku: p['sku'],
               barcode: p['barcode'],
               imageUrl: p['image_url'],
@@ -768,6 +772,17 @@ class SyncService {
     if (v == null) return fallback;
     if (v is num) return v.toDouble();
     return double.tryParse(v.toString()) ?? fallback;
+  }
+
+  /// Variant null-preserving — pakai untuk kolom Drift nullable Real
+  /// (mis. Products.buyPrice). Beda dari _toDouble yg fallback ke 0.0,
+  /// disini null = "belum diisi" (informative state, bukan zero).
+  static double? _toDoubleOrNull(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    final s = v.toString();
+    if (s.isEmpty) return null;
+    return double.tryParse(s);
   }
 
   Map<String, dynamic> _cashActivityToJson(CashActivityLocal ca) => {

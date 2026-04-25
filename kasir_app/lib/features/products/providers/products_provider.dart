@@ -11,6 +11,7 @@ class ProductModel {
   final String id;
   final String name;
   final double price;
+  final double? buyPrice;
   final int stock;
   final bool stockEnabled;
   final String? imageUrl;
@@ -25,6 +26,7 @@ class ProductModel {
     required this.id,
     required this.name,
     required this.price,
+    this.buyPrice,
     required this.stock,
     this.stockEnabled = false,
     this.imageUrl,
@@ -36,11 +38,19 @@ class ProductModel {
     this.isBestSeller = false,
   });
 
+  /// Margin per unit (Rp). Null kalau buyPrice belum diisi.
+  double? get margin => buyPrice == null ? null : price - buyPrice!;
+
+  /// Margin percentage (0-100). Null kalau buyPrice belum diisi atau price=0.
+  double? get marginPct =>
+      (buyPrice == null || price <= 0) ? null : ((price - buyPrice!) / price) * 100;
+
   ProductModel copyWith({bool? isBestSeller}) {
     return ProductModel(
       id: id,
       name: name,
       price: price,
+      buyPrice: buyPrice,
       stock: stock,
       stockEnabled: stockEnabled,
       imageUrl: imageUrl,
@@ -58,6 +68,9 @@ class ProductModel {
       id: json['id'] as String,
       name: json['name'] as String,
       price: _toDouble(json['price']),
+      // buy_price bisa null (kebanyakan produk legacy belum diisi),
+      // bisa string Decimal "8500.00", atau num.
+      buyPrice: _toDoubleOrNull(json['buy_price']),
       stock: (json['stock_qty'] as num?)?.toInt() ?? 0,
       stockEnabled: (json['stock_enabled'] as bool?) ?? false,
       imageUrl: json['image_url'] as String?,
@@ -72,6 +85,17 @@ class ProductModel {
   static double _toDouble(dynamic v) {
     if (v is num) return v.toDouble();
     return double.tryParse(v.toString()) ?? 0.0;
+  }
+
+  /// Parse num/string ke double, return null kalau v null atau gagal parse.
+  /// Beda dari _toDouble yang fallback ke 0.0 — disini kita perlu bedakan
+  /// "belum diisi" (null) vs "0" (free product / loss leader).
+  static double? _toDoubleOrNull(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    final s = v.toString();
+    if (s.isEmpty) return null;
+    return double.tryParse(s);
   }
 }
 
@@ -114,6 +138,7 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
               id: p.id,
               name: p.name,
               price: p.basePrice,
+              buyPrice: p.buyPrice,
               stock: stock,
               stockEnabled: p.stockEnabled,
               imageUrl: p.imageUrl,
