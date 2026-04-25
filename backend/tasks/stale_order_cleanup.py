@@ -185,6 +185,10 @@ async def cleanup_stale_orders_once() -> dict:
         # Orphan table heal pass: tables.status='occupied' but zero active orders
         # → force 'available'. Catches legacy residue from pre-Batch #19 bug
         # (cash payment didn't release table) + any future gap.
+        # GUARD: SKIP heal kalau table punya tab yang masih aktif (open/asking_bill/
+        # splitting). Order completed via Kitchen Display tidak otomatis = paid;
+        # table harus stay occupied sampai tab.status = paid/cancelled.
+        from backend.models.tab import Tab
         orphan_healed = 0
         try:
             occupied_tables = (await db.execute(
@@ -192,6 +196,17 @@ async def cleanup_stale_orders_once() -> dict:
             )).scalars().all()
 
             for tbl in occupied_tables:
+                # Cek tab aktif di table — kalau ada, skip heal
+                active_tab = (await db.execute(
+                    select(func.count(Tab.id)).where(
+                        Tab.table_id == tbl.id,
+                        Tab.deleted_at.is_(None),
+                        Tab.status.notin_(['paid', 'cancelled']),
+                    )
+                )).scalar() or 0
+                if active_tab > 0:
+                    continue  # skip heal — tab masih owe payment
+
                 active = (await db.execute(
                     select(func.count(Order.id)).where(
                         Order.table_id == tbl.id,

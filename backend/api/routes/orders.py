@@ -516,21 +516,41 @@ async def update_order_status(
             linked_tab.total_amount = sum(o.total_amount for o in remaining_orders)
             linked_tab.row_version += 1
 
-    # Release table when order completed/cancelled (if no other active orders on same table)
+    # Release table when order completed/cancelled (if no other active orders on same table).
+    # GUARD: kalau order belongs to active tab (open/asking_bill/splitting), JANGAN
+    # release table — tab era "order completed" = kitchen done, BUKAN "all paid".
+    # Table harus tetap occupied sampai tab.status = paid/cancelled. Tanpa guard ini,
+    # split-bill scenario release table prematurely saat kitchen mark order done.
     if status_in.status in (OrderStatus.completed, OrderStatus.cancelled) and order.table_id:
-        active_orders = (await db.execute(
-            select(func.count(Order.id)).where(
-                Order.table_id == order.table_id,
-                Order.id != order.id,
-                Order.status.notin_(["completed", "cancelled"]),
-                Order.deleted_at.is_(None),
+        skip_release = False
+        if order.tab_id:
+            from backend.models.tab import Tab
+            tab_check = await db.execute(
+                select(Tab.status).where(
+                    Tab.id == order.tab_id,
+                    Tab.deleted_at.is_(None),
+                )
             )
-        )).scalar() or 0
-        if active_orders == 0:
-            await db.execute(
-                update(Table).where(Table.id == order.table_id)
-                .values(status="available", row_version=Table.row_version + 1)
-            )
+            tab_status_val = tab_check.scalar_one_or_none()
+            if tab_status_val is not None:
+                tab_status_str = tab_status_val.value if hasattr(tab_status_val, 'value') else str(tab_status_val)
+                if tab_status_str not in ('paid', 'cancelled'):
+                    skip_release = True
+
+        if not skip_release:
+            active_orders = (await db.execute(
+                select(func.count(Order.id)).where(
+                    Order.table_id == order.table_id,
+                    Order.id != order.id,
+                    Order.status.notin_(["completed", "cancelled"]),
+                    Order.deleted_at.is_(None),
+                )
+            )).scalar() or 0
+            if active_orders == 0:
+                await db.execute(
+                    update(Table).where(Table.id == order.table_id)
+                    .values(status="available", row_version=Table.row_version + 1)
+                )
 
     # Append order lifecycle event to event store
     status_val = status_in.status.value if hasattr(status_in.status, 'value') else str(status_in.status)

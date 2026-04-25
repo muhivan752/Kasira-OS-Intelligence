@@ -89,8 +89,22 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
   }
 
   Widget _buildTabCard(TabModel tab) {
-    final statusColor = tab.status == 'asking_bill' ? AppColors.warning : AppColors.success;
-    final statusLabel = tab.status == 'asking_bill' ? 'Minta Bill' : 'Aktif';
+    // Status mapping per tab.status: open/asking_bill/splitting (active states)
+    final Color statusColor;
+    final String statusLabel;
+    switch (tab.status) {
+      case 'asking_bill':
+        statusColor = AppColors.warning;
+        statusLabel = 'Minta Bill';
+        break;
+      case 'splitting':
+        statusColor = AppColors.info;
+        statusLabel = 'Split Bill';
+        break;
+      default:
+        statusColor = AppColors.success;
+        statusLabel = 'Aktif';
+    }
     final elapsed = DateTime.now().difference(tab.createdAt);
     final elapsedLabel = elapsed.inHours > 0
         ? '${elapsed.inHours}j ${elapsed.inMinutes % 60}m'
