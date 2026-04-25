@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.0.39",
+    "version": "1.0.40",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.39/kasira-pos-v1.0.39.apk",
-    "release_notes": "Starter Margin Tracking — restock dengan harga beli + tab Untung-Rugi"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.40/kasira-pos-v1.0.40.apk",
+    "release_notes": "Pre-launch hardening — QRIS polling timeout retry dialog"
   },
   "dapur": {
-    "version": "1.0.39",
+    "version": "1.0.40",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.39/kasira-dapur-v1.0.39.apk",
-    "release_notes": "Starter Margin Tracking — restock dengan harga beli + tab Untung-Rugi"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.40/kasira-dapur-v1.0.40.apk",
+    "release_notes": "Pre-launch hardening — QRIS polling timeout retry dialog"
   }
 }
