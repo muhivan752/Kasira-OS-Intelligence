@@ -25,7 +25,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import AsyncSessionLocal
@@ -224,6 +224,11 @@ async def reconcile_payments():
     """
     try:
         async with AsyncSessionLocal() as db:
+            # RLS bypass — background task lintas tenant. Pattern sama dengan
+            # stale_order_cleanup.py:57. Tanpa ini, RLS policy `payments`
+            # block query (current_setting unset = NULL ≠ '').
+            await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
+
             now = datetime.now(timezone.utc)
             cutoff = now - PENDING_TIMEOUT
 
