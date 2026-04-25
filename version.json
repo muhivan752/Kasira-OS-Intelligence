@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.0.41",
+    "version": "1.0.42",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.41/kasira-pos-v1.0.41.apk",
-    "release_notes": "Fix split-bill table release + tabs list status label"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.42/kasira-pos-v1.0.42.apk",
+    "release_notes": "UX clarify modal vs stok di Laporan Untung-Rugi"
   },
   "dapur": {
-    "version": "1.0.41",
+    "version": "1.0.42",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.41/kasira-dapur-v1.0.41.apk",
-    "release_notes": "Fix split-bill table release + tabs list status label"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.42/kasira-dapur-v1.0.42.apk",
+    "release_notes": "UX clarify modal vs stok di Laporan Untung-Rugi"
   }
 }
