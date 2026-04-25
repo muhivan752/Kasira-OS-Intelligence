@@ -358,12 +358,23 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Auto-switch ke POS tab kalau posMode non-selection (mis. dari "Tambah Pesanan")
-    final currentMode = ref.watch(posModeProvider);
-    if (currentMode != PosMode.selection && _selectedIndex != 1) {
+    // One-shot redirect ke POS tab kalau pendingNavigateToPos=true (di-set oleh
+    // tab_detail_page.dart saat user tap "Tambah Pesanan"). Setelah consume,
+    // clear provider — gak persistent jadi user tetap bisa navigate balik ke
+    // dashboard kapan aja walau posMode masih dineInOrdering.
+    final pendingNavigate = ref.watch(pendingNavigateToPosProvider);
+    if (pendingNavigate && _selectedIndex != 1) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _selectedIndex != 1) {
+        if (mounted) {
           setState(() => _selectedIndex = 1);
+          ref.read(pendingNavigateToPosProvider.notifier).state = false;
+        }
+      });
+    } else if (pendingNavigate) {
+      // Already di POS tab tapi flag masih true — clear aja
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(pendingNavigateToPosProvider.notifier).state = false;
         }
       });
     }

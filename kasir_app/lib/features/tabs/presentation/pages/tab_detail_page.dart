@@ -109,6 +109,9 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                   tabNumber: tab.tabNumber,
                   tableName: tab.tableName,
                 );
+                // One-shot signal — dashboard akan switch ke POS tab sekali, lalu clear.
+                // Beda dari watch posModeProvider persistent yg bikin user stuck di POS tab.
+                ref.read(pendingNavigateToPosProvider.notifier).state = true;
                 context.go('/dashboard');
               },
               onMoveTable: () => _showMoveTableModal(tab),

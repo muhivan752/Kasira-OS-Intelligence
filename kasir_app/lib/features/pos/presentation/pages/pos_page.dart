@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/localization/business_labels.dart';
 import '../../../../core/sync/sync_provider.dart';
@@ -168,6 +172,97 @@ class _PosPageState extends ConsumerState<PosPage> {
     }
   }
 
+  /// Handler tap meja di POS dine-in mode.
+  /// - Available: langsung set table di cart + masuk product menu (existing flow)
+  /// - Occupied: cek tab aktif via /tabs/by-table/{id}. Kalau ada tab → navigate
+  ///   ke /tabs/{id} biar user lihat tab existing dulu (tombol "Tambah Pesanan"
+  ///   di tab detail bakal lanjut flow add-order properly). Kalau gak ada tab
+  ///   (orphan occupied state, edge case), fallback ke set table langsung +
+  ///   snackbar warning supaya user aware.
+  /// - Reserved/dirty: snackbar info, no action.
+  Future<void> _onPosTableSelected(TableModel table) async {
+    if (table.status == TableStatus.available) {
+      ref.read(cartProvider.notifier).setTable(table.id, name: table.name);
+      ref.read(posModeProvider.notifier).state = PosMode.dineInOrdering;
+      return;
+    }
+
+    if (table.status == TableStatus.occupied) {
+      // Show loading dialog while fetching tab info
+      final loadingDialog = showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      try {
+        final cache = SessionCache.instance;
+        final dio = Dio(BaseOptions(
+          baseUrl: AppConfig.apiV1,
+          connectTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 8),
+        ));
+        final res = await dio.get(
+          '/tabs/by-table/${table.id}',
+          queryParameters: {'outlet_id': cache.outletId},
+          options: Options(headers: cache.authHeaders),
+        );
+
+        if (mounted) Navigator.of(context, rootNavigator: true).pop();
+        loadingDialog.ignore();
+
+        final tabData = res.data['data'];
+        if (tabData != null) {
+          // Tab aktif ditemukan — delegate ke tab detail page (yang punya
+          // tombol "Tambah Pesanan" buat add order ke tab existing properly).
+          final tabId = tabData['id'] as String;
+          if (mounted) context.push('/tabs/$tabId');
+          return;
+        }
+
+        // Orphan state: meja occupied tapi gak ada tab aktif. Defensive
+        // fallback: tetap allow user lanjut tapi kasih warning.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${BusinessLabels.getLabel('table')} ${table.name} ditandai terisi tapi tidak ada tab aktif. Lanjut buat order baru.',
+              ),
+              backgroundColor: AppColors.warning,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+          ref.read(cartProvider.notifier).setTable(table.id, name: table.name);
+          ref.read(posModeProvider.notifier).state = PosMode.dineInOrdering;
+        }
+      } catch (e) {
+        if (mounted) Navigator.of(context, rootNavigator: true).pop();
+        loadingDialog.ignore();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal cek tab di ${table.name}: ${e.toString()}'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+      return;
+    }
+
+    // Reserved / dirty / other states
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${BusinessLabels.getLabel('table')} ${table.name} sedang ${table.status.name}',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.shortestSide >= 600;
@@ -268,19 +363,7 @@ class _PosPageState extends ConsumerState<PosPage> {
               ),
               Expanded(
                 child: TableGridPage(
-                  onTableSelected: (table) {
-                    if (table.status == TableStatus.available || table.status == TableStatus.occupied) {
-                      ref.read(cartProvider.notifier).setTable(table.id, name: table.name);
-                      ref.read(posModeProvider.notifier).state = PosMode.dineInOrdering;
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('${BusinessLabels.getLabel('table')} ${table.name} sedang ${table.status.name}'),
-                          backgroundColor: AppColors.error,
-                        ),
-                      );
-                    }
-                  },
+                  onTableSelected: _onPosTableSelected,
                 ),
               ),
             ],
