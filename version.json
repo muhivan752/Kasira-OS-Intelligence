@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.0.43",
+    "version": "1.0.44",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.43/kasira-pos-v1.0.43.apk",
-    "release_notes": "Fix split-bill UX — table tap, info card, grid sub-badge"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.44/kasira-pos-v1.0.44.apk",
+    "release_notes": "Fix split-bill flow + dashboard nav (tap occupied table + persistent redirect)"
   },
   "dapur": {
-    "version": "1.0.43",
+    "version": "1.0.44",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.43/kasira-dapur-v1.0.43.apk",
-    "release_notes": "Fix split-bill UX — table tap, info card, grid sub-badge"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.44/kasira-dapur-v1.0.44.apk",
+    "release_notes": "Fix split-bill flow + dashboard nav (tap occupied table + persistent redirect)"
   }
 }
