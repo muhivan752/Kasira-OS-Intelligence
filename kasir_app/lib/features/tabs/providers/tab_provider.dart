@@ -120,6 +120,7 @@ class TabModel {
 
   bool get isOpen => status == 'open' || status == 'asking_bill';
   bool get isSplitting => status == 'splitting';
+  bool get isActive => isOpen || isSplitting;
   bool get isPaid => status == 'paid';
   bool get isCancelled => status == 'cancelled';
   bool get hasOrders => orderIds.isNotEmpty;
@@ -159,7 +160,7 @@ class TabItemModel {
 
 final activeTabsCountProvider = Provider<int>((ref) {
   final tabs = ref.watch(tabProvider).tabs;
-  return tabs.where((t) => t.isOpen).length;
+  return tabs.where((t) => t.isActive).length;
 });
 
 // ── Add Order Context (state for "tambah pesanan" flow) ──

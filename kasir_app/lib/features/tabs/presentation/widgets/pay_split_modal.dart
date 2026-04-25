@@ -1,7 +1,12 @@
+import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../../../core/config/app_config.dart';
+import '../../../../core/services/printer_service.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/tab_provider.dart';
 
@@ -289,6 +294,12 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (result != null) {
+        // Auto-print struk per split untuk yang udah bayar (cash only — QRIS pending poll).
+        // Fail-silent (Rule #54) — print error gak boleh block snackbar success.
+        if (widget.split != null && _paymentMethod == 'cash') {
+          unawaited(_autoPrintSplitReceipt(widget.tab.id, widget.split!.id));
+        }
+
         Navigator.pop(context);
         widget.onPaid(result);
 
@@ -303,6 +314,28 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
       } else {
         setState(() => _error = ref.read(tabProvider).error ?? 'Gagal memproses pembayaran');
       }
+    }
+  }
+
+  Future<void> _autoPrintSplitReceipt(String tabId, String splitId) async {
+    try {
+      final cache = SessionCache.instance;
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 6),
+        receiveTimeout: const Duration(seconds: 6),
+      ));
+      final res = await dio.get(
+        '/tabs/$tabId/splits/$splitId/receipt',
+        options: Options(headers: cache.authHeaders),
+      );
+      final data = res.data['data'] as Map<String, dynamic>?;
+      if (data == null) return;
+      final receiptData = SplitReceiptData.fromJson(data);
+      final bytes = buildSplitReceipt(receiptData);
+      await ref.read(printerProvider.notifier).printBytes(bytes);
+    } catch (_) {
+      // silent fail — print issue jangan block payment flow
     }
   }
 }

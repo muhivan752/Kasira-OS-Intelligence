@@ -29,7 +29,7 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(tabProvider);
-    final activeTabs = state.tabs.where((t) => t.isOpen).toList()
+    final activeTabs = state.tabs.where((t) => t.isActive).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     return Scaffold(

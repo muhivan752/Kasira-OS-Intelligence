@@ -33,6 +33,8 @@ from backend.models.tab import Tab, TabSplit
 from backend.models.order import Order, OrderItem
 from backend.models.payment import Payment
 from backend.models.reservation import Table
+from backend.models.outlet import Outlet
+from backend.models.outlet_tax_config import OutletTaxConfig
 from backend.schemas.tab import (
     TabCreate, TabAddOrder, TabResponse,
     SplitEqualRequest, SplitPerItemRequest, SplitCustomRequest,
@@ -973,3 +975,92 @@ async def get_tab_items(
         for i in items
     ]
     return StandardResponse(success=True, data=data, request_id=request.state.request_id)
+
+
+# ── GET SPLIT RECEIPT (struk per orang yg udah bayar split) ──
+
+@router.get("/{tab_id}/splits/{split_id}/receipt", response_model=StandardResponse[dict])
+async def get_split_receipt(
+    request: Request,
+    tab_id: UUID,
+    split_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Return structured receipt data per split untuk dicetak ke 1 orang yg udah bayar.
+    Mirror pattern get_order_receipt — Flutter konsumsi JSON ini lalu rebuild ESC/POS
+    bytes via buildSplitReceipt().
+
+    Banner struk: "BAYAR PATUNGAN" + "Tamu X dari N".
+    Footer: status outstanding tab ("Bill belum lunas, X orang lagi" atau "Bill LUNAS").
+    """
+    tab = await _get_tab_or_404(db, tab_id)
+
+    # Find split
+    split = next((s for s in tab.splits if s.id == split_id), None)
+    if not split:
+        raise HTTPException(status_code=404, detail="Split tidak ditemukan")
+
+    # Tenant scoping via outlet
+    outlet = await db.get(Outlet, tab.outlet_id)
+    if not outlet or outlet.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Tab bukan milik tenant Anda")
+
+    # Payment record (kalau split.payment_id ada)
+    payment = None
+    if split.payment_id:
+        payment = await db.get(Payment, split.payment_id)
+
+    # Tax config
+    tax_cfg = (await db.execute(
+        select(OutletTaxConfig).where(OutletTaxConfig.outlet_id == outlet.id)
+    )).scalar_one_or_none()
+
+    # Format tanggal WIB
+    from datetime import timezone as tz, timedelta
+    wib = tz(timedelta(hours=7))
+    paid_at = split.paid_at or _utc_now()
+    date_time = paid_at.astimezone(wib).strftime("%d/%m/%Y %H:%M")
+
+    # Position "Tamu X dari N" — sort splits by created_at biar deterministic
+    sorted_splits = sorted(tab.splits, key=lambda s: s.created_at)
+    position = next((idx + 1 for idx, s in enumerate(sorted_splits) if s.id == split_id), 0)
+    total_splits = len(sorted_splits)
+
+    # Outstanding info
+    paid_count = sum(1 for s in tab.splits if s.status == 'paid')
+    unpaid_count = total_splits - paid_count
+    outstanding = max(Decimal('0'), Decimal(str(tab.total_amount)) - Decimal(str(tab.paid_amount)))
+    is_tab_paid = (tab.status == 'paid') or (unpaid_count == 0)
+
+    # Payment method label
+    method_label_map = {"cash": "Tunai", "qris": "QRIS", "card": "Kartu", "transfer": "Transfer"}
+    payment_method_raw = payment.payment_method if payment else "cash"
+    payment_method_label = method_label_map.get(payment_method_raw, payment_method_raw.upper())
+
+    data = {
+        "outlet_name": outlet.name or "Kasira",
+        "outlet_address": outlet.address or "",
+        "tax_number": tax_cfg.tax_number if tax_cfg else None,
+        "custom_footer": tax_cfg.receipt_footer if tax_cfg else None,
+        "date_time": date_time,
+        "tab_number": tab.tab_number,
+        "tab_total": float(tab.total_amount or 0),
+        "split_label": split.label,
+        "split_amount": float(split.amount or 0),
+        "split_position": position,
+        "split_total_count": total_splits,
+        "payment_method": payment_method_label,
+        "amount_paid": float(payment.amount_paid) if payment else float(split.amount or 0),
+        "change_amount": float(payment.change_amount) if payment else 0.0,
+        "is_tab_paid": is_tab_paid,
+        "outstanding_amount": float(outstanding),
+        "outstanding_count": unpaid_count,
+    }
+
+    return StandardResponse(
+        success=True,
+        data=data,
+        request_id=request.state.request_id,
+    )
