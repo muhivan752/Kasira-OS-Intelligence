@@ -39,6 +39,11 @@ class _PaymentModalState extends State<PaymentModal> {
   int _qrisTimerSeconds = 15 * 60;
   Timer? _qrisTimer;
   Timer? _qrisPollingTimer;
+  // Tracker untuk polling health — terakhir kali response dari backend
+  // sukses diterima (response != null, terlepas status). Dipakai untuk
+  // cancel polling + show retry dialog kalau >= 30s tanpa sukses.
+  DateTime? _lastPollSuccessAt;
+  bool _pollingErrorDialogShown = false;
 
   // Inline error untuk cash payment
   String? _cashError;
@@ -126,6 +131,9 @@ class _PaymentModalState extends State<PaymentModal> {
 
   void _startQrisPolling() {
     _qrisPollingTimer?.cancel();
+    // Reset health tracker tiap kali polling start (termasuk retry dari dialog).
+    _lastPollSuccessAt = DateTime.now();
+    _pollingErrorDialogShown = false;
     _qrisPollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
       if (_qrisPaymentId == null) return;
       try {
@@ -133,6 +141,9 @@ class _PaymentModalState extends State<PaymentModal> {
           '/payments/$_qrisPaymentId/status',
           options: Options(headers: _cache.authHeaders),
         );
+        // Tandai polling sehat — response sampai (backend reachable),
+        // terlepas status payment-nya pending/paid.
+        _lastPollSuccessAt = DateTime.now();
         final data = response.data['data'];
         if (data != null && data['status'] == 'paid') {
           timer.cancel();
@@ -145,8 +156,69 @@ class _PaymentModalState extends State<PaymentModal> {
             }
           });
         }
-      } catch (_) {}
+      } catch (_) {
+        // Polling gagal (network/timeout/server error). Cek elapsed sejak
+        // terakhir sukses — kalau >= 30s, stop polling + show retry dialog.
+        // Tidak crash app: error tetap silent, user dapet feedback via UI.
+        final lastSuccess = _lastPollSuccessAt;
+        if (lastSuccess != null &&
+            DateTime.now().difference(lastSuccess).inSeconds >= 30 &&
+            !_pollingErrorDialogShown) {
+          timer.cancel();
+          _pollingErrorDialogShown = true;
+          if (mounted) _showPollingErrorDialog();
+        }
+      }
     });
+  }
+
+  /// Dialog retry saat QRIS polling >= 30s tanpa response sukses.
+  /// Tap "Coba Lagi" → restart polling dari awal (reset health tracker).
+  /// Tap "Tutup" → polling tetap stop; user bisa cancel via tombol X di
+  /// header modal atau biarkan QR timer 15-menit habis.
+  void _showPollingErrorDialog() {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(LucideIcons.wifiOff, color: AppColors.error, size: 22),
+            SizedBox(width: 10),
+            Expanded(child: Text('Koneksi Bermasalah', style: TextStyle(fontSize: 16))),
+          ],
+        ),
+        content: const Text(
+          'Status pembayaran QRIS tidak bisa diperiksa selama 30 detik. '
+          'Mungkin koneksi internet bermasalah.\n\n'
+          'Kalau customer sudah scan QR & bayar, tap "Coba Lagi" untuk '
+          'cek ulang. Atau tutup dialog ini dan tap X di pojok atas '
+          'modal kalau mau batalkan.',
+          style: TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('Tutup', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(dialogCtx).pop();
+              // Restart polling dari awal — reset _lastPollSuccessAt + flag.
+              _startQrisPolling();
+            },
+            icon: const Icon(LucideIcons.refreshCw, size: 16),
+            label: const Text('Coba Lagi'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _generateQris() async {
