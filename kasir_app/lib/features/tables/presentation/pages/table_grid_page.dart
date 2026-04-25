@@ -41,6 +41,10 @@ class TableGridPage extends StatefulWidget {
 class _TableGridPageState extends State<TableGridPage> {
   TableStatus? _filterStatus;
   List<TableModel> _tables = [];
+  // Map table_id → tab.status untuk render sub-badge di occupied cards.
+  // Active states only (open/asking_bill/splitting). Empty kalau gak ada
+  // active tab di table tsb. Refreshed bareng dgn _load.
+  Map<String, String> _tabStatusByTable = {};
   bool _isLoading = true;
 
   @override
@@ -55,13 +59,34 @@ class _TableGridPageState extends State<TableGridPage> {
       final cache = SessionCache.instance;
 
       final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1, connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 15)));
-      final res = await dio.get(
-        '/tables/',
-        queryParameters: {'outlet_id': cache.outletId},
-        options: Options(headers: cache.authHeaders),
-      );
 
-      final list = (res.data['data'] as List? ?? []).map((t) {
+      // Paralel: fetch tables + active tabs sekaligus untuk minimize roundtrip.
+      // /tabs/ tanpa status filter return semua — client-side filter ke active.
+      final results = await Future.wait([
+        dio.get(
+          '/tables/',
+          queryParameters: {'outlet_id': cache.outletId},
+          options: Options(headers: cache.authHeaders),
+        ),
+        dio.get(
+          '/tabs/',
+          queryParameters: {'outlet_id': cache.outletId},
+          options: Options(headers: cache.authHeaders),
+        ).catchError((_) {
+          // Tabs fetch gagal? Fallback empty — table grid tetap render
+          // tanpa sub-badge, no crash.
+          return Response(
+            requestOptions: RequestOptions(path: '/tabs/'),
+            data: {'data': []},
+            statusCode: 200,
+          );
+        }),
+      ]);
+
+      final tablesRes = results[0];
+      final tabsRes = results[1];
+
+      final list = (tablesRes.data['data'] as List? ?? []).map((t) {
         final statusStr = t['status'] as String? ?? 'available';
         final status = TableStatus.values.firstWhere(
           (s) => s.name == statusStr,
@@ -75,7 +100,24 @@ class _TableGridPageState extends State<TableGridPage> {
         );
       }).toList();
 
-      if (mounted) setState(() { _tables = list; _isLoading = false; });
+      // Build map table_id → tab.status untuk active tabs only
+      final tabStatusMap = <String, String>{};
+      const activeStates = {'open', 'asking_bill', 'splitting'};
+      for (final t in (tabsRes.data['data'] as List? ?? [])) {
+        final tabStatus = t['status'] as String? ?? '';
+        final tableId = t['table_id'] as String?;
+        if (tableId != null && activeStates.contains(tabStatus)) {
+          // Kalau ada multi tab per table (edge case), pick yang most recent
+          // (backend sort created_at desc) — first hit wins.
+          tabStatusMap.putIfAbsent(tableId, () => tabStatus);
+        }
+      }
+
+      if (mounted) setState(() {
+        _tables = list;
+        _tabStatusByTable = tabStatusMap;
+        _isLoading = false;
+      });
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -222,9 +264,26 @@ class _TableGridPageState extends State<TableGridPage> {
     );
   }
 
+  /// Sub-badge config untuk occupied table — show tab.status spesifik
+  /// supaya owner langsung tau "split bill in progress" / "minta bill"
+  /// tanpa harus tap dulu.
+  ({Color color, String label, IconData icon})? _tabSubBadge(String? tabStatus) {
+    switch (tabStatus) {
+      case 'splitting':
+        return (color: AppColors.info, label: 'Split Bill', icon: LucideIcons.split);
+      case 'asking_bill':
+        return (color: AppColors.warning, label: 'Minta Bill', icon: LucideIcons.receipt);
+      default:
+        return null;
+    }
+  }
+
   Widget _buildTableCard(TableModel table) {
     final config = _statusConfig(table.status);
     final isSelectable = table.status == TableStatus.available;
+    final subBadge = table.status == TableStatus.occupied
+        ? _tabSubBadge(_tabStatusByTable[table.id])
+        : null;
 
     return GestureDetector(
       onTap: () {
@@ -296,20 +355,50 @@ class _TableGridPageState extends State<TableGridPage> {
               ),
             ],
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: config.badgeColor,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                config.statusLabel,
-                style: TextStyle(
-                  color: config.iconColor,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: config.badgeColor,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    config.statusLabel,
+                    style: TextStyle(
+                      color: config.iconColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
+                if (subBadge != null) ...[
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: subBadge.color.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: subBadge.color, width: 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(subBadge.icon, size: 10, color: subBadge.color),
+                        const SizedBox(width: 3),
+                        Text(
+                          subBadge.label,
+                          style: TextStyle(
+                            color: subBadge.color,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
             ),
           ],
         ),
@@ -390,18 +479,18 @@ class _TableGridPageState extends State<TableGridPage> {
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 10),
       ));
+      // Pakai /tabs/by-table/{table_id} yang filter SEMUA active state
+      // (open, asking_bill, splitting) di backend. Sebelumnya pake
+      // /tabs/?status=open yang miss split-bill in-progress → user
+      // confused karena meja occupied tapi snackbar bilang "tidak ada tab".
       final res = await dio.get(
-        '/tabs/',
-        queryParameters: {
-          'outlet_id': cache.outletId,
-          'table_id': table.id,
-          'status': 'open',
-        },
+        '/tabs/by-table/${table.id}',
+        queryParameters: {'outlet_id': cache.outletId},
         options: Options(headers: cache.authHeaders),
       );
       if (mounted) Navigator.of(context, rootNavigator: true).pop();
-      final list = (res.data['data'] as List? ?? []);
-      if (list.isEmpty) {
+      final tabData = res.data['data'];
+      if (tabData == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -412,7 +501,7 @@ class _TableGridPageState extends State<TableGridPage> {
         }
         return;
       }
-      final tabId = list.first['id'] as String;
+      final tabId = tabData['id'] as String;
       if (mounted) context.push('/tabs/$tabId');
     } catch (e) {
       if (mounted) Navigator.of(context, rootNavigator: true).pop();

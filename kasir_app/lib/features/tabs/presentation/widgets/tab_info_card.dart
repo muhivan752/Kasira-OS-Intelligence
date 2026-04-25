@@ -29,8 +29,16 @@ class TabInfoCard extends StatelessWidget {
             if (tab.tableName != null)
               _buildInfoRow(LucideIcons.armchair, 'Meja', tab.tableName!),
             _buildInfoRow(LucideIcons.users, 'Jumlah Tamu', '${tab.guestCount} orang'),
-            _buildInfoRow(LucideIcons.shoppingCart, 'Jumlah Order', '${tab.orderIds.length}'),
-            if (tab.splitMethod != null)
+            _buildInfoRow(LucideIcons.shoppingCart, 'Total Pesanan',
+                '${tab.orderIds.length} pesanan'),
+            if (tab.splits.isNotEmpty) ...[
+              _buildInfoRow(
+                LucideIcons.split,
+                'Pembayaran',
+                _buildPaymentSummary(tab),
+                valueColor: tab.splits.any((s) => !s.isPaid) ? AppColors.warning : AppColors.success,
+              ),
+            ] else if (tab.splitMethod != null)
               _buildInfoRow(LucideIcons.split, 'Metode Split', _splitLabel(tab.splitMethod!)),
             if (tab.notes != null)
               _buildInfoRow(LucideIcons.stickyNote, 'Catatan', tab.notes!),
@@ -40,7 +48,7 @@ class TabInfoCard extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value) {
+  Widget _buildInfoRow(IconData icon, String label, String value, {Color? valueColor}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -48,10 +56,30 @@ class TabInfoCard extends StatelessWidget {
           Icon(icon, size: 16, color: AppColors.textSecondary),
           const SizedBox(width: 8),
           Text('$label: ', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: valueColor ?? AppColors.textPrimary,
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// Summary string utk row "Pembayaran" — show split count + paid/unpaid.
+  /// Contoh output: "2 split (1 lunas, 1 belum)"
+  String _buildPaymentSummary(TabModel tab) {
+    final total = tab.splits.length;
+    final paid = tab.splits.where((s) => s.isPaid).length;
+    final unpaid = total - paid;
+    if (paid == 0) return '$total split (semua belum lunas)';
+    if (unpaid == 0) return '$total split (semua lunas ✓)';
+    return '$total split ($paid lunas, $unpaid belum)';
   }
 
   String _splitLabel(String method) {
