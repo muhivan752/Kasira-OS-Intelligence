@@ -1153,6 +1153,32 @@ async def approve_refund(
                                 tier=tier,
                             )
 
+        # Revert per-item ad-hoc payment marks (Migration 085)
+        # Kalau payment ini link ke order_items via paid_payment_id (= pay-items payment),
+        # items balik ke "unpaid pool" → kasir bisa rebill ke customer lain.
+        # PENTING: pay-items SENGAJA gak nambah tab.paid_amount (source of truth = items.paid_at).
+        # Jadi refund pay-items HANYA revert items, JANGAN decrement tab.paid_amount.
+        # tab.paid_amount cuma di-affect kalau payment link ke split/full (path lain).
+        from backend.models.tab import Tab as _Tab
+        reverted_items_q = await db.execute(
+            select(OrderItem).where(OrderItem.paid_payment_id == payment.id)
+        )
+        reverted_items = reverted_items_q.scalars().all()
+        if reverted_items:
+            for it in reverted_items:
+                it.paid_at = None
+                it.paid_payment_id = None
+                it.row_version = (it.row_version or 0) + 1
+
+            # Re-open tab kalau sudah closed (split via items refunded mid-close)
+            if payment.tab_id:
+                tab = await db.get(_Tab, payment.tab_id)
+                if tab and tab.status == 'paid':
+                    tab.status = 'open'
+                    tab.closed_at = None
+                    tab.closed_by = None
+                    tab.row_version = (tab.row_version or 0) + 1
+
     db.add(Event(
         outlet_id=payment.outlet_id if payment else None,
         stream_id=f"refund:{refund.id}",

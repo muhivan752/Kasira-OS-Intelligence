@@ -37,6 +37,8 @@ class OrderItemResponse(OrderItemBase):
     product_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    paid_at: Optional[datetime] = None
+    paid_payment_id: Optional[UUID] = None
 
     model_config = ConfigDict(from_attributes=True)
 

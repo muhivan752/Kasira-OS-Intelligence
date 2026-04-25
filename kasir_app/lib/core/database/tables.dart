@@ -68,6 +68,11 @@ class OrderItems extends Table with CrdtTable {
   RealColumn get totalPrice => real()();
   TextColumn get modifiers => text().nullable()(); // JSON string
   TextColumn get notes => text().nullable()();
+  // Migration 085 — per-item ad-hoc payment (warkop pattern)
+  // null = unpaid, set = item dibayar via /tabs/{id}/pay-items.
+  // Server source of truth — Flutter cuma READ (push gak include).
+  DateTimeColumn get paidAt => dateTime().nullable()();
+  TextColumn get paidPaymentId => text().nullable()();
 }
 
 @DataClassName('PaymentLocal')

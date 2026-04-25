@@ -451,6 +451,9 @@ class SyncService {
               totalPrice: (oi['total_price'] as num).toDouble(),
               modifiers: oi['modifiers']?.toString(),
               notes: oi['notes'],
+              // Migration 085 — per-item ad-hoc payment fields (server source of truth)
+              paidAt: oi['paid_at'] != null ? DateTime.parse(oi['paid_at']) : null,
+              paidPaymentId: oi['paid_payment_id'],
               rowVersion: oi['row_version'] ?? 0,
               isDeleted: oi['is_deleted'] ?? false,
               lastModifiedHlc: oi['hlc'],

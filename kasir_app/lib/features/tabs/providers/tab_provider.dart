@@ -134,6 +134,9 @@ class TabItemModel {
   final int quantity;
   final double unitPrice;
   final double totalPrice;
+  final DateTime? paidAt;
+  final String? paidPaymentId;
+  final String? notes;
 
   const TabItemModel({
     required this.id,
@@ -143,7 +146,12 @@ class TabItemModel {
     required this.quantity,
     required this.unitPrice,
     required this.totalPrice,
+    this.paidAt,
+    this.paidPaymentId,
+    this.notes,
   });
+
+  bool get isPaid => paidAt != null;
 
   factory TabItemModel.fromJson(Map<String, dynamic> j) => TabItemModel(
         id: j['id'] as String,
@@ -153,6 +161,9 @@ class TabItemModel {
         quantity: (j['quantity'] as num?)?.toInt() ?? 1,
         unitPrice: (j['unit_price'] as num?)?.toDouble() ?? 0,
         totalPrice: (j['total_price'] as num?)?.toDouble() ?? 0,
+        paidAt: j['paid_at'] != null ? DateTime.tryParse(j['paid_at'] as String) : null,
+        paidPaymentId: j['paid_payment_id'] as String?,
+        notes: j['notes'] as String?,
       );
 }
 
@@ -383,6 +394,39 @@ class TabNotifier extends StateNotifier<TabListState> {
       return TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
     } on DioException catch (e) {
       state = state.copyWith(error: e.response?.data?['detail']?.toString() ?? 'Gagal bayar split');
+      return null;
+    }
+  }
+
+  /// Pay-items (warkop ad-hoc per-item payment).
+  /// Backend marks selected items.paid_at + paid_payment_id, tab.status auto-close
+  /// kalau semua items+splits paid.
+  Future<TabModel?> payItems(
+      String tabId, List<String> orderItemIds, String paymentMethod, double amountPaid,
+      {String? idempotencyKey}) async {
+    try {
+      final res = await _dio.post(
+        '/tabs/$tabId/pay-items',
+        options: Options(headers: _headers),
+        data: {
+          'order_item_ids': orderItemIds,
+          'payment_method': paymentMethod,
+          'amount_paid': amountPaid,
+          if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+        },
+      );
+      final tab = TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
+      await fetchTabs();
+      return tab;
+    } on DioException catch (e) {
+      final detail = e.response?.data?['detail'];
+      String errMsg = 'Gagal bayar items';
+      if (detail is Map && detail['message'] != null) {
+        errMsg = detail['message'].toString();
+      } else if (detail is String) {
+        errMsg = detail;
+      }
+      state = state.copyWith(error: errMsg);
       return null;
     }
   }

@@ -1,6 +1,7 @@
 from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timezone, date
+from decimal import Decimal
 from sqlalchemy.orm import selectinload
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -610,6 +611,7 @@ async def update_order_status(
 async def get_order_receipt(
     request: Request,
     order_id: UUID,
+    payment_id: Optional[UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Any:
@@ -617,6 +619,11 @@ async def get_order_receipt(
     Return structured receipt data untuk reprint di mobile/POS.
     Flutter konsumsi JSON ini lalu rebuild ESC/POS bytes via buildReceipt().
     Offline fallback: Flutter bisa rebuild dari drift DB lokal.
+
+    Optional ?payment_id=... — kalau diset, return SUBSET receipt:
+    cuma items yg `paid_payment_id == payment_id` (untuk struk per ad-hoc payment).
+    Subset totals di-recompute dari items yg ke-include + payment record yg match.
+    Tanpa param → existing full-receipt behavior (backward compat).
     """
     # Load order + items (+ product untuk fallback nama item)
     query = select(Order).options(
@@ -631,13 +638,28 @@ async def get_order_receipt(
     if not outlet or outlet.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Order bukan milik tenant Anda")
 
-    # Latest payment untuk method, amount_paid, change
-    payment = (await db.execute(
-        select(Payment)
-        .where(Payment.order_id == order.id, Payment.deleted_at.is_(None))
-        .order_by(Payment.created_at.desc())
-        .limit(1)
-    )).scalar_one_or_none()
+    # Determine target payment + items subset
+    if payment_id:
+        payment = await db.get(Payment, payment_id)
+        if not payment or payment.outlet_id != outlet.id:
+            raise HTTPException(status_code=404, detail="Payment tidak ditemukan")
+        filtered_items = [i for i in order.items if i.paid_payment_id == payment_id]
+        if not filtered_items:
+            raise HTTPException(
+                status_code=404,
+                detail="Tidak ada item terkait payment ini di order"
+            )
+        is_subset = True
+    else:
+        # Latest payment untuk method, amount_paid, change
+        payment = (await db.execute(
+            select(Payment)
+            .where(Payment.order_id == order.id, Payment.deleted_at.is_(None))
+            .order_by(Payment.created_at.desc())
+            .limit(1)
+        )).scalar_one_or_none()
+        filtered_items = list(order.items)
+        is_subset = False
 
     # Tax config (NPWP + custom receipt footer)
     tax_cfg = (await db.execute(
@@ -661,10 +683,27 @@ async def get_order_receipt(
             "price": float(item.unit_price or 0),
             "notes": item.notes,
         }
-        for item in order.items
+        for item in filtered_items
     ]
 
-    total_val = float(order.total_amount or 0)
+    if is_subset:
+        # Subset totals: re-compute dari filtered items
+        subset_subtotal = sum((Decimal(str(it.total_price or 0)) for it in filtered_items), Decimal('0'))
+        # Tax/service share proportional
+        order_subtotal = Decimal(str(order.subtotal or 0)) or Decimal('1')
+        tax_share = (Decimal(str(order.tax_amount or 0)) * subset_subtotal / order_subtotal).quantize(Decimal('0.01')) if order_subtotal > 0 else Decimal('0')
+        service_share = (Decimal(str(order.service_charge_amount or 0)) * subset_subtotal / order_subtotal).quantize(Decimal('0.01')) if order_subtotal > 0 else Decimal('0')
+        total_val = float(payment.amount_due) if payment else float(subset_subtotal + tax_share + service_share)
+        subtotal_val = float(subset_subtotal)
+        tax_val = float(tax_share)
+        service_val = float(service_share)
+        discount_val = 0.0
+    else:
+        total_val = float(order.total_amount or 0)
+        subtotal_val = float(order.subtotal or 0)
+        tax_val = float(order.tax_amount or 0)
+        service_val = float(order.service_charge_amount or 0)
+        discount_val = float(order.discount_amount or 0)
 
     data = {
         "outlet_name": outlet.name or "Kasira",
@@ -672,16 +711,17 @@ async def get_order_receipt(
         "order_number": str(order.display_number),
         "date_time": date_time,
         "items": items,
-        "subtotal": float(order.subtotal or 0),
-        "service_charge": float(order.service_charge_amount or 0),
-        "tax": float(order.tax_amount or 0),
-        "discount": float(order.discount_amount or 0),
+        "subtotal": subtotal_val,
+        "service_charge": service_val,
+        "tax": tax_val,
+        "discount": discount_val,
         "total": total_val,
         "payment_method": payment_method_label,
         "amount_paid": float(payment.amount_paid or total_val) if payment else total_val,
         "change_amount": float(payment.change_amount or 0) if payment else 0.0,
         "tax_number": tax_cfg.tax_number if tax_cfg else None,
         "custom_footer": tax_cfg.receipt_footer if tax_cfg else None,
+        "is_subset": is_subset,
     }
 
     return StandardResponse(

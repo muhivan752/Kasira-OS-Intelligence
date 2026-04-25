@@ -131,6 +131,19 @@ class PaySplitRequest(BaseModel):
     row_version: int
 
 
+class PayItemsRequest(BaseModel):
+    """Bayar items spesifik di tab (warkop ad-hoc pattern).
+
+    Kasir centang items yg customer sebut → hitung total → bayar.
+    Items kepay ditandai paid_at + paid_payment_id; sisa items di tab
+    tetap unpaid sampai customer lain bayar bagiannya.
+    """
+    order_item_ids: List[UUID] = Field(..., min_length=1)
+    payment_method: str = Field(..., pattern='^(cash|qris|card|transfer)$')
+    amount_paid: Decimal = Field(..., gt=0)
+    idempotency_key: Optional[str] = None
+
+
 class MoveTableRequest(BaseModel):
     """Pindah meja."""
     new_table_id: UUID

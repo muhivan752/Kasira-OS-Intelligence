@@ -54,6 +54,10 @@ class OrderItem(BaseModel):
     notes = Column(Text, nullable=True)
     row_version = Column(Integer, server_default='0', nullable=False)
 
+    # Per-item ad-hoc payment (Migration 085) — warkop pattern
+    paid_at = Column(DateTime(timezone=True), nullable=True)
+    paid_payment_id = Column(UUID(as_uuid=True), ForeignKey('payments.id', ondelete='SET NULL'), nullable=True)
+
     # Relationships
     order = relationship("Order", back_populates="items")
     product = relationship("Product")

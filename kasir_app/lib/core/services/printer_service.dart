@@ -643,6 +643,175 @@ Uint8List buildRefundReceipt(RefundReceiptData d) {
   return Uint8List.fromList(bytes);
 }
 
+/// Items receipt data — struk untuk pay-items ad-hoc (warkop pattern).
+class ItemsReceiptData {
+  final String outletName;
+  final String outletAddress;
+  final String? taxNumber;
+  final String? customFooter;
+  final String dateTime;
+  final String tabNumber;
+  final List<ReceiptLineItem> items;
+  final double itemsSubtotal;
+  final double tax;
+  final double serviceCharge;
+  final double total;
+  final String paymentMethod;
+  final double amountPaid;
+  final double changeAmount;
+  final bool isTabPaid;
+  final double outstandingAmount;
+  final int outstandingItemCount;
+
+  const ItemsReceiptData({
+    required this.outletName,
+    required this.outletAddress,
+    this.taxNumber,
+    this.customFooter,
+    required this.dateTime,
+    required this.tabNumber,
+    required this.items,
+    required this.itemsSubtotal,
+    required this.tax,
+    required this.serviceCharge,
+    required this.total,
+    required this.paymentMethod,
+    required this.amountPaid,
+    required this.changeAmount,
+    required this.isTabPaid,
+    required this.outstandingAmount,
+    required this.outstandingItemCount,
+  });
+
+  static ItemsReceiptData fromJson(Map<String, dynamic> j, {required String tabNumber, required bool isTabPaid, required double outstandingAmount, required int outstandingItemCount}) {
+    final itemsRaw = (j['items'] as List?) ?? const [];
+    final items = itemsRaw.map((e) {
+      final m = Map<String, dynamic>.from(e as Map);
+      return ReceiptLineItem(
+        name: (m['name'] ?? 'Item').toString(),
+        qty: (m['qty'] as num?)?.toInt() ?? 1,
+        price: (m['price'] as num?)?.toDouble() ?? 0,
+        notes: m['notes']?.toString(),
+      );
+    }).toList();
+    return ItemsReceiptData(
+      outletName: (j['outlet_name'] ?? 'Kasira').toString(),
+      outletAddress: (j['outlet_address'] ?? '').toString(),
+      taxNumber: j['tax_number']?.toString(),
+      customFooter: j['custom_footer']?.toString(),
+      dateTime: (j['date_time'] ?? '').toString(),
+      tabNumber: tabNumber,
+      items: items,
+      itemsSubtotal: (j['subtotal'] as num?)?.toDouble() ?? 0,
+      tax: (j['tax'] as num?)?.toDouble() ?? 0,
+      serviceCharge: (j['service_charge'] as num?)?.toDouble() ?? 0,
+      total: (j['total'] as num?)?.toDouble() ?? 0,
+      paymentMethod: (j['payment_method'] ?? 'Tunai').toString(),
+      amountPaid: (j['amount_paid'] as num?)?.toDouble() ?? 0,
+      changeAmount: (j['change_amount'] as num?)?.toDouble() ?? 0,
+      isTabPaid: isTabPaid,
+      outstandingAmount: outstandingAmount,
+      outstandingItemCount: outstandingItemCount,
+    );
+  }
+}
+
+/// Items receipt — struk untuk customer yg bayar items spesifik (warkop pattern).
+/// Banner "PEMBAYARAN PESANAN" + list items dipay + footer outstanding info.
+Uint8List buildItemsReceipt(ItemsReceiptData d) {
+  final bytes = <int>[];
+  const w = 32;
+
+  bytes.addAll(EscPos.init);
+
+  bytes.addAll(EscPos.alignCenter);
+  bytes.addAll(EscPos.boldOn);
+  bytes.addAll(EscPos.fontBig);
+  bytes.addAll(EscPos.line(d.outletName.toUpperCase()));
+  bytes.addAll(EscPos.fontNormal);
+  bytes.addAll(EscPos.boldOff);
+  if (d.outletAddress.isNotEmpty) {
+    bytes.addAll(EscPos.line(d.outletAddress));
+  }
+  if (d.taxNumber != null && d.taxNumber!.isNotEmpty) {
+    bytes.addAll(EscPos.line('NPWP: ${d.taxNumber}'));
+  }
+  bytes.addAll([0x0A]);
+
+  bytes.addAll(EscPos.boldOn);
+  bytes.addAll(EscPos.line('*** PEMBAYARAN PESANAN ***'));
+  bytes.addAll(EscPos.boldOff);
+  bytes.addAll([0x0A]);
+
+  bytes.addAll(EscPos.alignLeft);
+  bytes.addAll(EscPos.divider(width: w));
+  bytes.addAll(EscPos.line('Tab : ${d.tabNumber}'));
+  bytes.addAll(EscPos.line('Tgl : ${d.dateTime}'));
+  bytes.addAll(EscPos.divider(width: w));
+
+  // Items
+  for (final item in d.items) {
+    for (final nameLine in _wrapWords(item.name, w)) {
+      bytes.addAll(EscPos.line(nameLine));
+    }
+    bytes.addAll(EscPos.rowLR(
+      '  ${item.qty} x ${_rp(item.price)}',
+      _rp(item.subtotal),
+      width: w,
+    ));
+    if (item.notes != null && item.notes!.isNotEmpty) {
+      for (final l in _wrapWords('  ${item.notes!}', w)) {
+        bytes.addAll(EscPos.line(l));
+      }
+    }
+  }
+  bytes.addAll(EscPos.divider(width: w));
+
+  // Totals
+  bytes.addAll(EscPos.rowLR('Subtotal', _rp(d.itemsSubtotal), width: w));
+  if (d.tax > 0) bytes.addAll(EscPos.rowLR('Pajak', _rp(d.tax), width: w));
+  if (d.serviceCharge > 0) bytes.addAll(EscPos.rowLR('Service', _rp(d.serviceCharge), width: w));
+  bytes.addAll(EscPos.divider(width: w));
+
+  bytes.addAll(EscPos.boldOn);
+  bytes.addAll(EscPos.rowLR('TOTAL', _rp(d.total), width: w));
+  bytes.addAll(EscPos.boldOff);
+  bytes.addAll(EscPos.line('Metode : ${d.paymentMethod}'));
+  if (d.paymentMethod == 'Tunai') {
+    bytes.addAll(EscPos.rowLR('Dibayar', _rp(d.amountPaid), width: w));
+    if (d.changeAmount > 0) {
+      bytes.addAll(EscPos.rowLR('Kembali', _rp(d.changeAmount), width: w));
+    }
+  }
+  bytes.addAll(EscPos.divider(width: w));
+
+  // Footer outstanding info
+  bytes.addAll(EscPos.alignCenter);
+  if (d.isTabPaid) {
+    bytes.addAll(EscPos.boldOn);
+    bytes.addAll(EscPos.line('*** SEMUA SUDAH LUNAS ***'));
+    bytes.addAll(EscPos.boldOff);
+    bytes.addAll(EscPos.line('Terima kasih atas kunjungan Anda'));
+  } else {
+    final itemText = d.outstandingItemCount == 1 ? '1 item lagi' : '${d.outstandingItemCount} item lagi';
+    bytes.addAll(EscPos.line('Sisa pesanan di meja: $itemText'));
+    bytes.addAll(EscPos.line('Total sisa: ${_rp(d.outstandingAmount)}'));
+  }
+  bytes.addAll([0x0A]);
+
+  if (d.customFooter != null && d.customFooter!.trim().isNotEmpty) {
+    for (final l in _wrapWords(d.customFooter!.trim(), w)) {
+      bytes.addAll(EscPos.line(l));
+    }
+  } else {
+    bytes.addAll(EscPos.line('Powered by Kasira'));
+  }
+  bytes.addAll(EscPos.feedLines3);
+  bytes.addAll(EscPos.cut);
+
+  return Uint8List.fromList(bytes);
+}
+
 /// Split receipt — struk per orang yg bayar patungan.
 /// Banner "BAYAR PATUNGAN" + "Tamu X dari N", footer "Bill belum lunas, Y orang lagi"
 /// atau "Bill SUDAH LUNAS" kalau split terakhir close tab.

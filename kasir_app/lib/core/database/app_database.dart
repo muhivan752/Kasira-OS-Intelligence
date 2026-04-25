@@ -13,7 +13,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -34,6 +34,12 @@ class AppDatabase extends _$AppDatabase {
             // Fase 3 Starter Margin Tracking — products.buyPrice nullable.
             // Additive: existing rows get NULL by default (=belum diisi).
             await m.addColumn(products, products.buyPrice);
+          }
+          if (from < 6) {
+            // Migration 085 — per-item ad-hoc payment (warkop pattern).
+            // Additive: existing items NULL = unpaid (atau historical paid via order.status='completed').
+            await m.addColumn(orderItems, orderItems.paidAt);
+            await m.addColumn(orderItems, orderItems.paidPaymentId);
           }
         },
       );

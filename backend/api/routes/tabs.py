@@ -38,7 +38,7 @@ from backend.models.outlet_tax_config import OutletTaxConfig
 from backend.schemas.tab import (
     TabCreate, TabAddOrder, TabResponse,
     SplitEqualRequest, SplitPerItemRequest, SplitCustomRequest,
-    PaySplitRequest, MoveTableRequest, MergeTabRequest,
+    PaySplitRequest, PayItemsRequest, MoveTableRequest, MergeTabRequest,
 )
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
@@ -48,6 +48,8 @@ from backend.services.tab_service import (
     tab_response as _tab_response,
     get_tab_or_404 as _get_tab_or_404,
     recalculate_tab as _recalculate_tab,
+    tab_remaining_after_items as _tab_remaining_after_items,
+    compute_paid_items_total as _compute_paid_items_total,
     find_active_shift as _find_active_shift,
 )
 
@@ -220,12 +222,21 @@ async def split_equal(
     if total <= 0:
         raise HTTPException(status_code=400, detail="Tab kosong, tambah order dulu")
 
+    # Effective total = exclude items udah paid via ad-hoc + amount yg sudah di-split paid
+    paid_items_total = _compute_paid_items_total(tab)
+    effective_total = max(Decimal('0'), total - Decimal(str(tab.paid_amount or 0)) - paid_items_total)
+    if effective_total <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "ALREADY_FULLY_PAID", "message": "Semua sudah dibayar individual — tidak ada sisa untuk di-split"}
+        )
+
     # Delete existing splits
     for s in list(tab.splits):
         await db.delete(s)
 
-    per_person = (total / body.num_people).quantize(Decimal('0.01'))
-    remainder = total - (per_person * body.num_people)
+    per_person = (effective_total / body.num_people).quantize(Decimal('0.01'))
+    remainder = effective_total - (per_person * body.num_people)
 
     for i in range(body.num_people):
         amount = per_person + (remainder if i == 0 else Decimal('0'))
@@ -240,7 +251,7 @@ async def split_equal(
     tab.status = 'splitting'
     tab.row_version += 1
 
-    _tab_event(db, tab, "tab.split", {"method": "equal", "num_people": body.num_people}, current_user.id)
+    _tab_event(db, tab, "tab.split", {"method": "equal", "num_people": body.num_people, "effective_total": float(effective_total)}, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
         after_state={"action": "split_equal", "num_people": body.num_people},
@@ -280,19 +291,33 @@ async def split_per_item(
     if not order_ids:
         raise HTTPException(status_code=400, detail="Tab belum punya order")
 
-    items_q = select(OrderItem).where(
-        OrderItem.order_id.in_(order_ids),
-        OrderItem.deleted_at.is_(None),
+    items_q = (
+        select(OrderItem)
+        .options(selectinload(OrderItem.product))
+        .where(
+            OrderItem.order_id.in_(order_ids),
+            OrderItem.deleted_at.is_(None),
+        )
     )
     items_result = await db.execute(items_q)
     all_items = {i.id: i for i in items_result.scalars().all()}
 
-    # Validate all assigned item_ids exist
+    # Validate all assigned item_ids exist + belum dibayar (ad-hoc paid items
+    # gak boleh re-assigned ke split — double-pay risk)
     assigned_ids = set()
     for assignment in body.assignments:
         for item_id in assignment.item_ids:
             if item_id not in all_items:
                 raise HTTPException(status_code=400, detail=f"Item {item_id} tidak ditemukan di tab ini")
+            if all_items[item_id].paid_at is not None:
+                item_name = all_items[item_id].product_name or 'Unknown'
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "code": "ITEM_ALREADY_PAID",
+                        "message": f"Item '{item_name}' sudah dibayar individual — tidak bisa di-assign ke split"
+                    }
+                )
             if item_id in assigned_ids:
                 raise HTTPException(status_code=400, detail=f"Item {item_id} sudah di-assign ke orang lain")
             assigned_ids.add(item_id)
@@ -419,6 +444,15 @@ async def pay_tab_full(
     if total <= 0:
         raise HTTPException(status_code=400, detail="Tab kosong")
 
+    # Compute effective amount (subtract items udah paid via ad-hoc per-item)
+    paid_items_total = _compute_paid_items_total(tab)
+    effective_total = max(Decimal('0'), total - Decimal(str(tab.paid_amount or 0)) - paid_items_total)
+    if effective_total <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "ALREADY_FULLY_PAID", "message": "Semua sudah dibayar — tidak ada sisa untuk pay-full"}
+        )
+
     # Guard: block payment if all underlying orders already auto-cancelled by system
     # (mirror payments.py cancelled-guard — prevents "ghost race" with stale_order_cleanup janitor)
     if tab.orders and all(
@@ -445,20 +479,20 @@ async def pay_tab_full(
                 request_id=request.state.request_id, message="Sudah dibayar (idempotent)"
             )
 
-    if body.payment_method == 'cash' and body.amount_paid < total:
-        raise HTTPException(status_code=400, detail="Nominal pembayaran kurang dari total tab")
+    if body.payment_method == 'cash' and body.amount_paid < effective_total:
+        raise HTTPException(status_code=400, detail="Nominal pembayaran kurang dari sisa tab")
 
     # Pick first order as payment anchor (or None)
     first_order_id = tab.orders[0].id if tab.orders else None
 
-    change = max(Decimal('0'), body.amount_paid - total)
+    change = max(Decimal('0'), Decimal(str(body.amount_paid)) - effective_total)
     payment = Payment(
         order_id=first_order_id,
         tab_id=tab.id,
         outlet_id=tab.outlet_id,
         shift_session_id=tab.shift_session_id,
         payment_method=body.payment_method,
-        amount_due=total,
+        amount_due=effective_total,
         amount_paid=body.amount_paid,
         change_amount=change,
         status='paid' if body.payment_method == 'cash' else 'pending',
@@ -475,7 +509,8 @@ async def pay_tab_full(
         await db.delete(s)
 
     full_split = TabSplit(
-        tab_id=tab.id, label="Bayar Penuh", amount=total,
+        tab_id=tab.id, label="Bayar Penuh (Sisa)" if paid_items_total > 0 else "Bayar Penuh",
+        amount=effective_total,
         payment_id=payment.id,
         status='paid' if body.payment_method == 'cash' else 'pending',
         paid_at=_utc_now() if body.payment_method == 'cash' else None,
@@ -483,11 +518,23 @@ async def pay_tab_full(
     db.add(full_split)
 
     if body.payment_method == 'cash':
-        tab.paid_amount = total
+        # Mark remaining unpaid items as paid via this payment (settle sisa)
+        now = _utc_now()
+        for o in tab.orders:
+            ostatus = o.status.value if hasattr(o.status, 'value') else str(o.status)
+            if ostatus == 'cancelled' or o.deleted_at is not None:
+                continue
+            for item in (o.items or []):
+                if item.deleted_at is None and item.paid_at is None:
+                    item.paid_at = now
+                    item.paid_payment_id = payment.id
+                    item.row_version = (item.row_version or 0) + 1
+
+        tab.paid_amount = Decimal(str(tab.paid_amount or 0)) + effective_total
         tab.status = 'paid'
         tab.split_method = 'full'
         tab.closed_by = current_user.id
-        tab.closed_at = _utc_now()
+        tab.closed_at = now
         # Mark all orders as completed
         for order in tab.orders:
             if order.status not in ('completed', 'cancelled'):
@@ -651,6 +698,207 @@ async def pay_split(
         success=True, data=_tab_response(tab),
         request_id=request.state.request_id,
         message=f"Split '{split.label}' dibayar"
+    )
+
+
+# ── PAY ITEMS (warkop ad-hoc per-item payment) ──
+
+async def _complete_order_if_fully_paid(db: AsyncSession, order: Order) -> None:
+    """Helper: set order.status='completed' kalau semua items udah paid_at NOT NULL.
+
+    Skip kalau order udah completed/cancelled. Skip table release karena
+    parent tab guard (Rule #15) — tab.status closing logic yg trigger release.
+    Order completion di sini cuma flip status biar reports/analytics akurat.
+    """
+    order_status = order.status.value if hasattr(order.status, 'value') else str(order.status)
+    if order_status in ('completed', 'cancelled'):
+        return
+    if not order.items:
+        return
+    all_paid = all(
+        (item.deleted_at is not None) or (item.paid_at is not None)
+        for item in order.items
+    )
+    if all_paid:
+        order.status = 'completed'
+        order.row_version = (order.row_version or 0) + 1
+
+
+@router.post("/{tab_id}/pay-items", response_model=StandardResponse[TabResponse])
+async def pay_items(
+    request: Request,
+    tab_id: UUID,
+    body: PayItemsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Bayar items spesifik di tab (warkop ad-hoc).
+
+    Validate: items belong to tab, semua unpaid (paid_at IS NULL), order parent
+    tidak cancelled. Compute total dari items[].total_price → buat Payment record
+    (is_partial=True), set items.paid_at + paid_payment_id, increment tab.paid_amount.
+
+    Auto-trigger: kalau tab_remaining_after_items == 0 → tab.status='paid' + close
+    + release table (Rule #15 guard preserved).
+    """
+    tab = await _get_tab_or_404(db, tab_id, lock=True)
+    if tab.status in ('paid', 'cancelled'):
+        raise HTTPException(status_code=400, detail="Tab sudah ditutup")
+
+    # Ghost race guard — kalau semua orders cancelled by janitor
+    if tab.orders and all(
+        (o.status.value if hasattr(o.status, 'value') else str(o.status)) == 'cancelled'
+        for o in tab.orders
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Order di tab ini sudah dibatalkan otomatis oleh sistem (stale cleanup)."
+        )
+
+    # Build map item_id → (order, item) dari tab.orders.items, skip cancelled/deleted
+    items_in_tab = {}
+    for o in tab.orders:
+        order_status = o.status.value if hasattr(o.status, 'value') else str(o.status)
+        if order_status == 'cancelled' or o.deleted_at is not None:
+            continue
+        for it in (o.items or []):
+            if it.deleted_at is None:
+                items_in_tab[it.id] = (o, it)
+
+    # Validate semua requested item_ids exist + unpaid
+    target_items = []
+    for iid in body.order_item_ids:
+        pair = items_in_tab.get(iid)
+        if pair is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Item {iid} tidak ditemukan di tab atau order sudah dibatalkan"
+            )
+        order, item = pair
+        if item.paid_at is not None:
+            item_name = item.product_name or 'Unknown'
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "ITEM_ALREADY_PAID", "message": f"Item '{item_name}' sudah dibayar sebelumnya"}
+            )
+        target_items.append((order, item))
+
+    # Compute total
+    total_due = sum((Decimal(str(it.total_price or 0)) for _, it in target_items), Decimal('0'))
+    if total_due <= 0:
+        raise HTTPException(status_code=400, detail="Total item Rp 0, tidak ada yg perlu dibayar")
+
+    if body.payment_method == 'cash' and body.amount_paid < total_due:
+        raise HTTPException(status_code=400, detail="Nominal pembayaran kurang")
+
+    # Idempotency
+    if body.idempotency_key:
+        existing = await db.execute(
+            select(Payment).where(
+                Payment.idempotency_key == body.idempotency_key,
+                Payment.outlet_id == tab.outlet_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            tab = await _get_tab_or_404(db, tab.id)
+            return StandardResponse(
+                success=True, data=_tab_response(tab),
+                request_id=request.state.request_id, message="Sudah dibayar (idempotent)"
+            )
+
+    first_order_id = target_items[0][0].id if target_items else None
+    change = max(Decimal('0'), Decimal(str(body.amount_paid)) - total_due)
+
+    payment = Payment(
+        order_id=first_order_id,
+        tab_id=tab.id,
+        outlet_id=tab.outlet_id,
+        shift_session_id=tab.shift_session_id,
+        payment_method=body.payment_method,
+        amount_due=total_due,
+        amount_paid=Decimal(str(body.amount_paid)),
+        change_amount=change,
+        status='paid' if body.payment_method == 'cash' else 'pending',
+        idempotency_key=body.idempotency_key,
+        is_partial=True,
+        paid_at=_utc_now() if body.payment_method == 'cash' else None,
+        processed_by=current_user.id,
+    )
+    db.add(payment)
+    await db.flush()
+
+    # Mark items paid (cash only — QRIS wait webhook update via xendit reconciliation)
+    if body.payment_method == 'cash':
+        now = _utc_now()
+        affected_orders = set()
+        for order, item in target_items:
+            item.paid_at = now
+            item.paid_payment_id = payment.id
+            item.row_version = (item.row_version or 0) + 1
+            affected_orders.add(id(order))
+
+        # NOTE: SENGAJA gak increment tab.paid_amount di sini — items.paid_at
+        # itu sendiri jadi source of truth untuk pay-items. tab_remaining_after_items
+        # sum kedua kolom (tab.paid_amount + paid_via_items). Kalau increment dua-duanya
+        # → double-count → tab close prematurely (bug ditemukan smoke test).
+        # tab.paid_amount HANYA di-increment di pay_split / pay_full.
+
+        # Auto-complete orders yg semua items paid
+        completed_orders = []
+        for order, _ in target_items:
+            order_id_key = id(order)
+            if order_id_key in affected_orders:
+                # Process once per order
+                affected_orders.discard(order_id_key)
+                await _complete_order_if_fully_paid(db, order)
+                if (order.status.value if hasattr(order.status, 'value') else str(order.status)) == 'completed':
+                    completed_orders.append(order.id)
+
+        # Close tab kalau semua sudah paid (via items + splits + tab.paid_amount)
+        remaining = _tab_remaining_after_items(tab)
+        if remaining <= Decimal('0.01'):  # tolerance
+            tab.status = 'paid'
+            tab.closed_by = current_user.id
+            tab.closed_at = now
+            for o in tab.orders:
+                ostatus = o.status.value if hasattr(o.status, 'value') else str(o.status)
+                if ostatus not in ('completed', 'cancelled'):
+                    o.status = 'completed'
+                    o.row_version = (o.row_version or 0) + 1
+            # Release table (Rule #15 guard sudah implicit — tab.status='paid' satisfies)
+            if tab.table_id:
+                tbl = await db.get(Table, tab.table_id)
+                if tbl and tbl.status == 'occupied':
+                    tbl.status = 'available'
+                    tbl.row_version = (tbl.row_version or 0) + 1
+
+    tab.row_version = (tab.row_version or 0) + 1
+
+    _tab_event(db, tab, "tab.items_paid", {
+        "item_ids": [str(it.id) for _, it in target_items],
+        "item_count": len(target_items),
+        "amount": float(total_due),
+        "payment_method": body.payment_method,
+        "payment_id": str(payment.id),
+        "tab_closed": tab.status == 'paid',
+    }, current_user.id)
+    await log_audit(
+        db=db, action="UPDATE", entity="tab", entity_id=tab.id,
+        after_state={
+            "action": "pay_items",
+            "item_ids": [str(it.id) for _, it in target_items],
+            "amount": float(total_due),
+            "method": body.payment_method,
+        },
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+
+    tab = await _get_tab_or_404(db, tab.id)
+    return StandardResponse(
+        success=True, data=_tab_response(tab),
+        request_id=request.state.request_id,
+        message=f"{len(target_items)} item dibayar (Rp {int(total_due):,})".replace(',', '.')
     )
 
 
@@ -971,6 +1219,9 @@ async def get_tab_items(
             "quantity": i.quantity,
             "unit_price": float(i.unit_price),
             "total_price": float(i.total_price),
+            "paid_at": i.paid_at.isoformat() if i.paid_at else None,
+            "paid_payment_id": str(i.paid_payment_id) if i.paid_payment_id else None,
+            "notes": i.notes,
         }
         for i in items
     ]

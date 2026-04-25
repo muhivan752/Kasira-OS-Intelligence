@@ -22,6 +22,7 @@ import '../../../tables/presentation/pages/table_grid_page.dart';
 import '../../../products/presentation/widgets/product_detail_sheet.dart';
 import '../../providers/pos_mode_provider.dart';
 import '../../../tabs/providers/tab_provider.dart';
+import '../../../tabs/presentation/widgets/table_actions_sheet.dart';
 
 class PosPage extends ConsumerStatefulWidget {
   const PosPage({super.key});
@@ -213,10 +214,26 @@ class _PosPageState extends ConsumerState<PosPage> {
 
         final tabData = res.data['data'];
         if (tabData != null) {
-          // Tab aktif ditemukan — delegate ke tab detail page (yang punya
-          // tombol "Tambah Pesanan" buat add order ke tab existing properly).
+          // Tab aktif ditemukan — show bottom sheet warkop pattern (items pool
+          // + 3 actions: Bayar Sebagian / Tambah Pesanan / Lihat Tab).
+          // Beda dari direct push ke /tabs/{id} — sheet kasih akses cepat ke
+          // pay-items adhoc tanpa harus navigate ke tab detail page dulu.
           final tabId = tabData['id'] as String;
-          if (mounted) context.push('/tabs/$tabId');
+          if (mounted) {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: AppColors.surface,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              builder: (_) => TableActionsSheet(
+                tabId: tabId,
+                tableName: table.name,
+                tableId: table.id,
+              ),
+            );
+          }
           return;
         }
 

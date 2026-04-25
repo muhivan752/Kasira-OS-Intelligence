@@ -12,7 +12,8 @@ from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
 
 from backend.models.tab import Tab, TabSplit
-from backend.models.order import Order
+from backend.models.order import Order, OrderItem
+from backend.models.product import Product
 from backend.models.payment import Payment
 from backend.models.shift import Shift, ShiftStatus
 from backend.models.event import Event
@@ -47,9 +48,48 @@ def tab_event(db, tab: Tab, event_type: str, data: dict, user_id=None):
     ))
 
 
+def compute_paid_items_total(tab: Tab) -> Decimal:
+    """Sum total_price dari order_items yg paid_at NOT NULL (ad-hoc per-item payment).
+
+    WAJIB tab di-load dgn selectinload(Tab.orders).selectinload(Order.items).
+    Skip cancelled orders. Soft-deleted orders/items excluded.
+    """
+    total = Decimal('0')
+    if not tab.orders:
+        return total
+    for o in tab.orders:
+        # status bisa Enum atau string — handle both
+        order_status = o.status.value if hasattr(o.status, 'value') else str(o.status)
+        if order_status == 'cancelled' or o.deleted_at is not None:
+            continue
+        if not o.items:
+            continue
+        for item in o.items:
+            if item.deleted_at is not None:
+                continue
+            if item.paid_at is None:
+                continue
+            total += Decimal(str(item.total_price or 0))
+    return total
+
+
+def tab_remaining_after_items(tab: Tab) -> Decimal:
+    """Single source of truth utk tab remaining amount.
+
+    Formula: total_amount - paid_via_splits/full (tab.paid_amount) - paid_via_items_adhoc.
+    Min 0 (gak boleh negatif).
+
+    Pakai di pay_full / split / pay_items / receipt — biar konsisten.
+    """
+    total = Decimal(str(tab.total_amount or 0))
+    paid_via_tab = Decimal(str(tab.paid_amount or 0))
+    paid_via_items = compute_paid_items_total(tab)
+    return max(Decimal('0'), total - paid_via_tab - paid_via_items)
+
+
 def tab_response(tab: Tab) -> TabResponse:
-    """Build TabResponse with computed remaining_amount."""
-    remaining = max(Decimal('0'), Decimal(str(tab.total_amount)) - Decimal(str(tab.paid_amount)))
+    """Build TabResponse with computed remaining_amount (includes ad-hoc paid items)."""
+    remaining = tab_remaining_after_items(tab)
     order_ids = [o.id for o in tab.orders] if tab.orders else []
     resp = TabResponse.model_validate(tab)
     resp.remaining_amount = remaining
@@ -65,7 +105,7 @@ async def get_tab_or_404(
         select(Tab)
         .options(
             selectinload(Tab.splits),
-            selectinload(Tab.orders),
+            selectinload(Tab.orders).selectinload(Order.items).selectinload(OrderItem.product),
             selectinload(Tab.table),
         )
         .where(Tab.id == tab_id, Tab.deleted_at.is_(None))
