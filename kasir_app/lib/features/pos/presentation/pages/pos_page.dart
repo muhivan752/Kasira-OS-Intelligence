@@ -37,27 +37,17 @@ class _PosPageState extends ConsumerState<PosPage> {
   bool _isOffline = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   final _searchController = TextEditingController();
-  late Timer _clockTimer;
-  String _timeString = '';
+  // P2 Quick Win #2: clock fields PINDAH ke _PosClock widget bawah file.
+  // Pre-fix: Timer.periodic(1min) → setState() → rebuild SELURUH PosPage tree
+  // (897 lines, ProductGrid + cart + cat). 8 jam shift = 480x rebuild.
+  // Post-fix: clock isolated widget rebuild only itself per minute.
 
   @override
   void initState() {
     super.initState();
-    _updateClock();
-    _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) => _updateClock());
     _initConnectivity();
     _connectivitySub =
         Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
-  }
-
-  void _updateClock() {
-    final now = DateTime.now();
-    final days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
-    setState(() {
-      _timeString =
-          '${days[now.weekday % 7]}, ${now.day} ${months[now.month - 1]} · ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    });
   }
 
   Future<void> _initConnectivity() async {
@@ -108,7 +98,6 @@ class _PosPageState extends ConsumerState<PosPage> {
   void dispose() {
     _connectivitySub?.cancel();
     _searchController.dispose();
-    _clockTimer.cancel();
     super.dispose();
   }
 
@@ -600,14 +589,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    if (_timeString.isNotEmpty)
-                      Text(
-                        _timeString,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textTertiary,
-                        ),
-                      ),
+                    const _PosClock(),
                   ],
                 ),
               ),
@@ -891,6 +873,58 @@ class _AddOrderBanner extends ConsumerWidget {
             child: const Text('Batal', style: TextStyle(fontSize: 12)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Isolated clock widget — refresh per-minute SETSTATE hanya rebuild widget ini,
+/// bukan seluruh PosPage tree (897 lines). Pre-fix: setState clock di
+/// _PosPageState bikin full tree rebuild 480x per shift 8 jam.
+class _PosClock extends StatefulWidget {
+  const _PosClock();
+
+  @override
+  State<_PosClock> createState() => _PosClockState();
+}
+
+class _PosClockState extends State<_PosClock> {
+  static const _days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+
+  late Timer _timer;
+  String _text = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _update();
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _update());
+  }
+
+  void _update() {
+    final now = DateTime.now();
+    final next = '${_days[now.weekday % 7]}, ${now.day} ${_months[now.month - 1]} · '
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    if (next != _text && mounted) {
+      setState(() => _text = next);
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_text.isEmpty) return const SizedBox.shrink();
+    return Text(
+      _text,
+      style: const TextStyle(
+        fontSize: 11,
+        color: AppColors.textTertiary,
       ),
     );
   }

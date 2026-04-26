@@ -67,11 +67,14 @@ class _DapurDashboardPageState extends ConsumerState<DapurDashboardPage>
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(dapurProvider);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkNewOrders(state.activeOrders.length);
+    // P2 Quick Win #3: pakai ref.listen biar _checkNewOrders fired ONLY on
+    // state change (bukan tiap rebuild via addPostFrameCallback). Pre-fix:
+    // schedule callback baru tiap polling tick (8s) → potensi infinite
+    // rebuild loop kalau setState trigger callback chain.
+    ref.listen<DapurState>(dapurProvider, (prev, next) {
+      _checkNewOrders(next.activeOrders.length);
     });
+    final state = ref.watch(dapurProvider);
 
     final pendingOrders =
         state.activeOrders.where((o) => o.status == 'pending').toList();
