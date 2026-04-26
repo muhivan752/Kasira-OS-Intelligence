@@ -15,6 +15,7 @@ import '../../../dashboard/providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/tax_config_provider.dart';
+import '../../utils/post_payment_refresh.dart';
 import '../widgets/product_card.dart';
 import '../widgets/cart_panel.dart';
 import '../widgets/pos_mode_selector.dart';
@@ -37,6 +38,10 @@ class _PosPageState extends ConsumerState<PosPage> {
   bool _isOffline = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   final _searchController = TextEditingController();
+  // P3 Quick Win #6: debounce search 250ms — pre-fix tiap keystroke trigger
+  // products.where().toLowerCase() filter di build() = rebuild + alloc list +
+  // lowercase tiap product. 250ms < typing pause threshold = UX gak kerasa.
+  Timer? _searchDebounce;
   // P2 Quick Win #2: clock fields PINDAH ke _PosClock widget bawah file.
   // Pre-fix: Timer.periodic(1min) → setState() → rebuild SELURUH PosPage tree
   // (897 lines, ProductGrid + cart + cat). 8 jam shift = 480x rebuild.
@@ -62,10 +67,8 @@ class _PosPageState extends ConsumerState<PosPage> {
     if (_isOffline && !offline) {
       final syncSvc = ref.read(syncServiceProvider);
       syncSvc.sync().then((_) {
-        // Setelah sync selesai, invalidate semua provider supaya data fresh
-        ref.invalidate(dashboardProvider);
-        ref.invalidate(ordersProvider);
-        ref.invalidate(productsProvider);
+        // P3 Quick Win #1: defer cascade ke microtask via shared helper
+        schedulePostPaymentRefresh(ref);
         // Notify user if stock mode changed via dashboard
         if (syncSvc.stockModeChanged && mounted) {
           final mode = syncSvc.newStockMode == 'recipe' ? 'Resep & HPP' : 'Stok Sederhana';
@@ -98,6 +101,7 @@ class _PosPageState extends ConsumerState<PosPage> {
   void dispose() {
     _connectivitySub?.cancel();
     _searchController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -616,8 +620,17 @@ class _PosPageState extends ConsumerState<PosPage> {
                       isDense: true,
                     ),
                     style: const TextStyle(fontSize: 13),
-                    onChanged: (val) =>
-                        setState(() => _searchQuery = val.toLowerCase()),
+                    onChanged: (val) {
+                      _searchDebounce?.cancel();
+                      _searchDebounce = Timer(
+                        const Duration(milliseconds: 250),
+                        () {
+                          if (mounted) {
+                            setState(() => _searchQuery = val.toLowerCase());
+                          }
+                        },
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -627,6 +640,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                   child: IconButton(
                     padding: EdgeInsets.zero,
                     onPressed: () {
+                      _searchDebounce?.cancel();
                       _searchController.clear();
                       setState(() => _searchQuery = '');
                       ref.read(productsProvider.notifier).refresh();

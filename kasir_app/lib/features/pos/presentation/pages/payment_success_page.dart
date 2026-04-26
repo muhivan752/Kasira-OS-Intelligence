@@ -7,10 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/services/printer_service.dart';
-import '../../../dashboard/providers/dashboard_provider.dart';
-import '../../../orders/providers/orders_provider.dart';
-import '../../../products/providers/products_provider.dart';
 import '../../providers/tax_config_provider.dart';
+import '../../utils/post_payment_refresh.dart';
 import 'receipt_preview_page.dart';
 
 class PaymentSuccessPage extends ConsumerStatefulWidget {
@@ -235,9 +233,8 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
   }
 
   void _newTransaction() {
-    ref.invalidate(dashboardProvider);
-    ref.invalidate(ordersProvider);
-    ref.invalidate(productsProvider);
+    // P3 Quick Win #1: defer cascade ke microtask via shared helper
+    schedulePostPaymentRefresh(ref);
     context.go('/dashboard');
   }
 

@@ -15,6 +15,7 @@ import '../../../dashboard/providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../../products/providers/products_provider.dart';
 import '../../../tabs/providers/tab_provider.dart';
+import '../../utils/post_payment_refresh.dart';
 
 // Tier is now read from SessionCache (0ms, in-memory)
 
@@ -248,10 +249,9 @@ class CartPanel extends ConsumerWidget {
 
     ref.read(cartProvider.notifier).clearCart();
     ref.read(posModeProvider.notifier).state = PosMode.selection;
-    ref.invalidate(dashboardProvider);
-    ref.invalidate(ordersProvider);
-    ref.invalidate(productsProvider);
-    ref.invalidate(activeTabsCountProvider);
+    // P3 Quick Win #1: defer cascade invalidate ke microtask — paint navigation
+    // dulu (snackbar + UI return), provider refresh di background.
+    schedulePostPaymentRefresh(ref, includeTabs: true);
 
     // If this was a "tambah pesanan" flow (coming from tab detail), auto-return
     if (addOrderCtx != null && context.mounted) {
@@ -373,10 +373,8 @@ class CartPanel extends ConsumerWidget {
             final customerName = cart.customerName;
             ref.read(cartProvider.notifier).clearCart();
             ref.read(posModeProvider.notifier).state = PosMode.selection;
-            // Invalidate providers supaya dashboard & order list langsung update
-            ref.invalidate(dashboardProvider);
-            ref.invalidate(ordersProvider);
-            ref.invalidate(productsProvider);
+            // P3 Quick Win #1: defer ke microtask (helper) — paint UI dulu
+            schedulePostPaymentRefresh(ref);
             if (context.mounted) {
               context.push('/payment/success', extra: {
                 'totalAmount': totalAmount,
