@@ -188,7 +188,6 @@ async def cleanup_stale_orders_once() -> dict:
         # GUARD: SKIP heal kalau table punya tab yang masih aktif (open/asking_bill/
         # splitting). Order completed via Kitchen Display tidak otomatis = paid;
         # table harus stay occupied sampai tab.status = paid/cancelled.
-        from backend.models.tab import Tab
         orphan_healed = 0
         try:
             occupied_tables = (await db.execute(
