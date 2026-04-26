@@ -8,6 +8,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/send_wa_receipt_dialog.dart';
 import '../../providers/tab_provider.dart';
 
 /// Pay a single split or pay full remaining tab.
@@ -294,22 +295,60 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (result != null) {
-        // Auto-print struk per split untuk yang udah bayar (cash only — QRIS pending poll).
+        // Capture stable refs SEBELUM Navigator.pop — context modal ke-deactivate
+        // setelah pop, navigator + messenger tetap alive (parent page masih ada).
+        final messenger = ScaffoldMessenger.of(context);
+        final rootNav = Navigator.of(context, rootNavigator: true);
+
+        // Auto-print struk untuk pembayaran yg udah confirmed (cash only — QRIS pending poll).
         // Fail-silent (Rule #54) — print error gak boleh block snackbar success.
-        if (widget.split != null && _paymentMethod == 'cash') {
-          unawaited(_autoPrintSplitReceipt(widget.tab.id, widget.split!.id));
+        if (_paymentMethod == 'cash') {
+          if (widget.split != null) {
+            unawaited(_autoPrintSplitReceipt(widget.tab.id, widget.split!.id));
+          } else {
+            unawaited(_autoPrintFullReceipt(widget.tab.orderIds));
+          }
         }
 
         Navigator.pop(context);
         widget.onPaid(result);
 
+        // Tab lunas snackbar
         if (result.isPaid) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             const SnackBar(
               content: Text('Tab lunas! Semua pembayaran selesai.'),
               backgroundColor: AppColors.success,
             ),
           );
+        }
+
+        // Snackbar action "Kirim WA" — only for cash success (QRIS pending = jangan kirim)
+        if (_paymentMethod == 'cash' && widget.tab.orderIds.isNotEmpty) {
+          // Defer 700ms biar gak overlap sama snackbar "lunas" di atas
+          Future.delayed(const Duration(milliseconds: 700), () {
+            messenger.showSnackBar(
+              SnackBar(
+                content: const Text('Mau kirim struk via WA ke customer?'),
+                backgroundColor: AppColors.surfaceElevated,
+                duration: const Duration(seconds: 6),
+                action: SnackBarAction(
+                  label: '📱 Kirim WA',
+                  textColor: AppColors.primary,
+                  onPressed: () {
+                    showDialog<void>(
+                      context: rootNav.context,
+                      builder: (_) => SendWaReceiptDialog(
+                        orderId: widget.tab.orderIds.first,
+                        // pay-split + pay-full = full order receipt (subset gak supported
+                        // untuk pay_split — backend gak link items.paid_payment_id ke split)
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          });
         }
       } else {
         setState(() => _error = ref.read(tabProvider).error ?? 'Gagal memproses pembayaran');
@@ -336,6 +375,40 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
       await ref.read(printerProvider.notifier).printBytes(bytes);
     } catch (_) {
       // silent fail — print issue jangan block payment flow
+    }
+  }
+
+  /// Pay-full path: cetak 1 struk per order di tab.
+  /// Pakai endpoint reguler /orders/{id}/receipt + buildReceipt — orders udah
+  /// fully paid via pay-full settle items + tab close.
+  /// Fail-silent (Rule #54) — print issue jangan block payment flow.
+  Future<void> _autoPrintFullReceipt(List<String> orderIds) async {
+    if (orderIds.isEmpty) return;
+    try {
+      final cache = SessionCache.instance;
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 6),
+        receiveTimeout: const Duration(seconds: 6),
+      ));
+      final notifier = ref.read(printerProvider.notifier);
+      for (final orderId in orderIds) {
+        try {
+          final res = await dio.get(
+            '/orders/$orderId/receipt',
+            options: Options(headers: cache.authHeaders),
+          );
+          final data = res.data['data'] as Map<String, dynamic>?;
+          if (data == null) continue;
+          final receiptData = ReceiptData.fromJson(data);
+          final bytes = buildReceipt(receiptData);
+          await notifier.printBytes(bytes);
+        } catch (_) {
+          // skip order ini, lanjut ke berikutnya
+        }
+      }
+    } catch (_) {
+      // silent fail outer
     }
   }
 }

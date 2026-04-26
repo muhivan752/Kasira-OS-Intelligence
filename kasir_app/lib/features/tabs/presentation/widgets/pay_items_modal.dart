@@ -8,6 +8,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/send_wa_receipt_dialog.dart';
 import '../../providers/tab_provider.dart';
 
 /// Pay-items modal — warkop pattern: kasir centang items yg customer sebut → bayar.
@@ -349,25 +350,99 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (result != null) {
+        // Capture stable refs SEBELUM Navigator.pop
+        final messenger = ScaffoldMessenger.of(context);
+        final rootNav = Navigator.of(context, rootNavigator: true);
+        final selectedItemIds = _selected.toList();
+
         // Auto-print struk per items dipay (cash only — QRIS pending webhook)
         if (_paymentMethod == 'cash') {
-          unawaited(_autoPrintItemsReceipt(widget.tab.id, _selected.toList(), result));
+          unawaited(_autoPrintItemsReceipt(widget.tab.id, selectedItemIds, result));
         }
 
         Navigator.pop(context);
         widget.onPaid(result);
 
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text(result.isPaid
                 ? 'Tab lunas! Semua sudah dibayar.'
-                : '${_selected.length} item dibayar. Sisa: ${_currency.format(result.remainingAmount)}'),
+                : '${selectedItemIds.length} item dibayar. Sisa: ${_currency.format(result.remainingAmount)}'),
             backgroundColor: AppColors.success,
           ),
         );
+
+        // Snackbar action "Kirim WA" — subset receipt (cuma item dia bayar) untuk warkop privacy
+        if (_paymentMethod == 'cash') {
+          Future.delayed(const Duration(milliseconds: 700), () {
+            messenger.showSnackBar(
+              SnackBar(
+                content: const Text('Mau kirim struk via WA ke customer?'),
+                backgroundColor: AppColors.surfaceElevated,
+                duration: const Duration(seconds: 6),
+                action: SnackBarAction(
+                  label: '📱 Kirim WA',
+                  textColor: AppColors.primary,
+                  onPressed: () async {
+                    // Resolve paymentId + orderId dari items yg baru ke-pay
+                    final resolved = await _resolveWaReceiptTarget(widget.tab.id, selectedItemIds);
+                    if (resolved == null) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Gagal load info pembayaran — coba reprint dari menu order'),
+                          backgroundColor: AppColors.warning,
+                        ),
+                      );
+                      return;
+                    }
+                    showDialog<void>(
+                      context: rootNav.context,
+                      builder: (_) => SendWaReceiptDialog(
+                        orderId: resolved.$1,
+                        paymentId: resolved.$2,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          });
+        }
       } else {
         setState(() => _error = ref.read(tabProvider).error ?? 'Gagal memproses pembayaran');
       }
+    }
+  }
+
+  /// Resolve (orderId, paymentId) dari items yg baru ke-pay.
+  /// Returns null kalau gagal lookup. Pattern reuse dari `_autoPrintItemsReceipt`.
+  Future<(String, String)?> _resolveWaReceiptTarget(String tabId, List<String> itemIds) async {
+    if (itemIds.isEmpty) return null;
+    try {
+      final cache = SessionCache.instance;
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 6),
+        receiveTimeout: const Duration(seconds: 6),
+      ));
+      final res = await dio.get(
+        '/tabs/$tabId/items',
+        options: Options(headers: cache.authHeaders),
+      );
+      final list = (res.data['data'] as List?) ?? [];
+      String? paymentId;
+      String? orderId;
+      for (final it in list) {
+        if (itemIds.contains(it['id']?.toString()) && it['paid_payment_id'] != null) {
+          paymentId = it['paid_payment_id'].toString();
+          orderId = it['order_id']?.toString();
+          break;
+        }
+      }
+      if (paymentId == null || orderId == null) return null;
+      return (orderId, paymentId);
+    } catch (_) {
+      return null;
     }
   }
 

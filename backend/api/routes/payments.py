@@ -864,6 +864,8 @@ async def read_payment(
 class SendReceiptRequest(BaseModel):
     order_id: UUID
     phone: str
+    payment_id: Optional[UUID] = None  # subset receipt: cuma items yg paid_payment_id match
+    customer_name: Optional[str] = None  # auto-create customer dgn nama ini (default: "Customer 0812****")
 
 
 def _normalize_phone(phone: str) -> str:
@@ -876,22 +878,41 @@ def _normalize_phone(phone: str) -> str:
     return p
 
 
-def _build_receipt_text(order: Order, outlet_name: str, cashier_name: str, payment_method: str, payment_obj=None, outlet_slug: str = None) -> str:
+def _build_receipt_text(
+    order: Order,
+    outlet_name: str,
+    cashier_name: str,
+    payment_method: str,
+    payment_obj=None,
+    outlet_slug: str = None,
+    items_override: Optional[List] = None,
+    totals_override: Optional[Dict[str, float]] = None,
+) -> str:
+    """Build WA receipt text.
+
+    items_override: kalau dikasih, render items ini (bukan order.items penuh) — buat
+    subset receipt warkop pay-items.
+    totals_override: dict {subtotal, tax, service, discount, total} — wajib kalau pakai
+    items_override (untuk recompute totals proportional). Kalau None, pakai order totals.
+    """
     method_label = {"cash": "Tunai", "qris": "QRIS", "card": "Kartu", "transfer": "Transfer"}.get(payment_method, payment_method.upper())
     # WIB timezone
     from datetime import timezone as tz, timedelta
     wib = tz(timedelta(hours=7))
     order_time = order.created_at.astimezone(wib).strftime('%d/%m/%Y %H:%M') if order.created_at else '-'
 
+    is_subset = items_override is not None
+    items_to_render = items_override if is_subset else order.items
+
     lines = [
-        f"*Struk Pembayaran*",
+        f"*Struk Pembayaran*" + (" (Sebagian)" if is_subset else ""),
         f"📍 {outlet_name}",
         f"No. Order: #{order.display_number}",
         f"Tanggal: {order_time} WIB",
         f"Kasir: {cashier_name}",
         f"{'─' * 28}",
     ]
-    for item in order.items:
+    for item in items_to_render:
         name = item.product_name or 'Item'
         qty = item.quantity
         price = float(item.unit_price)
@@ -905,11 +926,18 @@ def _build_receipt_text(order: Order, outlet_name: str, cashier_name: str, payme
             lines.append(f"  {qty}x Rp{price:,.0f}  =  Rp{subtotal:,.0f}")
     lines.append(f"{'─' * 28}")
 
-    subtotal_val = float(order.subtotal or 0)
-    discount_val = float(order.discount_amount or 0)
-    service_val = float(order.service_charge_amount or 0)
-    tax_val = float(order.tax_amount or 0)
-    total_val = float(order.total_amount or 0)
+    if totals_override:
+        subtotal_val = float(totals_override.get('subtotal', 0))
+        discount_val = float(totals_override.get('discount', 0))
+        service_val = float(totals_override.get('service', 0))
+        tax_val = float(totals_override.get('tax', 0))
+        total_val = float(totals_override.get('total', 0))
+    else:
+        subtotal_val = float(order.subtotal or 0)
+        discount_val = float(order.discount_amount or 0)
+        service_val = float(order.service_charge_amount or 0)
+        tax_val = float(order.tax_amount or 0)
+        total_val = float(order.total_amount or 0)
 
     lines.append(f"Subtotal    : Rp{subtotal_val:,.0f}")
     if discount_val > 0:
@@ -948,10 +976,22 @@ async def send_receipt_whatsapp(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Any:
+    """Send receipt via WhatsApp + upsert customer untuk AI/KG/event store.
+
+    Behavior:
+    - Normalize phone, validate min length
+    - Upsert customer by (tenant_id, phone) — reuse existing or create new
+    - Auto-link order.customer_id kalau masih NULL (customer data capture)
+    - Optional payment_id → subset receipt (cuma items terkait payment, untuk pay-items)
+    - Send WA via Fonnte
+    - Emit event "receipt.wa_sent" untuk event store + AI context
+
+    Reused untuk POS reguler + tab payment (split/full/items).
     """
-    Send receipt via WhatsApp to a given phone number.
-    """
-    # Load order with items
+    from backend.models.customer import Customer
+    from sqlalchemy import or_
+
+    # Load order + items + product
     result = await db.execute(
         select(Order)
         .options(selectinload(Order.items).selectinload(OrderItem.product))
@@ -962,8 +1002,64 @@ async def send_receipt_whatsapp(
         raise HTTPException(status_code=404, detail="Order tidak ditemukan")
 
     outlet = await db.get(Outlet, order.outlet_id)
+    if not outlet or outlet.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Order bukan milik tenant Anda")
     outlet_name = outlet.name if outlet else "Kasira"
 
+    # Phone validation + normalization
+    phone = _normalize_phone(body.phone)
+    if len(phone) < 9:
+        raise HTTPException(status_code=400, detail="Nomor HP tidak valid")
+
+    # Determine target payment + items subset (mirror /orders/{id}/receipt logic)
+    items_override = None
+    totals_override = None
+    payment_for_receipt = None
+
+    if body.payment_id:
+        payment_for_receipt = await db.get(Payment, body.payment_id)
+        if not payment_for_receipt or payment_for_receipt.outlet_id != outlet.id:
+            raise HTTPException(status_code=404, detail="Payment tidak ditemukan")
+        filtered = [i for i in order.items if i.paid_payment_id == body.payment_id]
+        if not filtered:
+            raise HTTPException(
+                status_code=404,
+                detail="Tidak ada item terkait payment ini di order"
+            )
+        items_override = filtered
+        # Recompute subset totals proportional (mirror orders.py:get_order_receipt)
+        from decimal import Decimal as D
+        subset_subtotal = sum((D(str(it.total_price or 0)) for it in filtered), D('0'))
+        order_subtotal = D(str(order.subtotal or 0)) or D('1')
+        if order_subtotal > 0:
+            tax_share = (D(str(order.tax_amount or 0)) * subset_subtotal / order_subtotal).quantize(D('0.01'))
+            service_share = (D(str(order.service_charge_amount or 0)) * subset_subtotal / order_subtotal).quantize(D('0.01'))
+        else:
+            tax_share = D('0')
+            service_share = D('0')
+        total_val = float(payment_for_receipt.amount_due) if payment_for_receipt else float(subset_subtotal + tax_share + service_share)
+        totals_override = {
+            'subtotal': float(subset_subtotal),
+            'tax': float(tax_share),
+            'service': float(service_share),
+            'discount': 0.0,
+            'total': total_val,
+        }
+    else:
+        # Latest payment untuk method/amount/change
+        payment_for_receipt = (await db.execute(
+            select(Payment)
+            .where(Payment.order_id == order.id, Payment.deleted_at.is_(None))
+            .order_by(Payment.created_at.desc())
+            .limit(1)
+        )).scalar_one_or_none()
+
+    payment_method = "cash"
+    if payment_for_receipt:
+        pm = payment_for_receipt.payment_method
+        payment_method = pm.value if hasattr(pm, 'value') else str(pm)
+
+    # Cashier name
     cashier_name = "-"
     if order.user_id:
         from backend.models.user import User as UserModel
@@ -971,29 +1067,93 @@ async def send_receipt_whatsapp(
         if cashier:
             cashier_name = cashier.full_name
 
-    payment_method = "cash"
-    payment_result = await db.execute(
-        select(Payment)
-        .where(Payment.order_id == order.id, Payment.deleted_at.is_(None))
-        .order_by(Payment.created_at.desc())
-        .limit(1)
+    # ── Customer upsert (capture data for AI / KG / event store) ──
+    import hashlib, hmac as _hmac
+    phone_hmac = _hmac.new(b'kasira-phone-key', phone.encode(), hashlib.sha256).hexdigest()
+
+    # Lookup existing customer by tenant + phone (or phone_hmac as fallback)
+    existing_q = await db.execute(
+        select(Customer).where(
+            Customer.tenant_id == outlet.tenant_id,
+            or_(Customer.phone == phone, Customer.phone_hmac == phone_hmac),
+            Customer.deleted_at.is_(None),
+        )
     )
-    latest_payment = payment_result.scalar_one_or_none()
-    if latest_payment:
-        payment_method = latest_payment.payment_method
+    customer = existing_q.scalar_one_or_none()
 
-    phone = _normalize_phone(body.phone)
-    if len(phone) < 9:
-        raise HTTPException(status_code=400, detail="Nomor HP tidak valid")
+    customer_created = False
+    if not customer:
+        # Auto-name fallback "Customer 0812****" kalau body.customer_name empty
+        auto_name = body.customer_name.strip() if body.customer_name else None
+        if not auto_name:
+            auto_name = f"Customer {mask_phone(phone)}"
+        customer = Customer(
+            tenant_id=outlet.tenant_id,
+            name=auto_name,
+            phone=phone,
+            phone_hmac=phone_hmac,
+        )
+        db.add(customer)
+        await db.flush()
+        customer_created = True
+    elif body.customer_name and body.customer_name.strip() and not customer.name.startswith("Customer "):
+        # Existing customer punya nama proper — jangan overwrite. Kalau nama auto-generated
+        # ("Customer 0812****"), boleh upgrade dengan nama dari user.
+        pass
+    elif body.customer_name and body.customer_name.strip():
+        customer.name = body.customer_name.strip()
 
-    receipt_text = _build_receipt_text(order, outlet_name, cashier_name, payment_method, latest_payment, outlet_slug=getattr(outlet, 'slug', None))
+    # Auto-link order.customer_id kalau masih NULL (capture data point untuk AI)
+    if order.customer_id is None:
+        order.customer_id = customer.id
+
+    # Build receipt text
+    receipt_text = _build_receipt_text(
+        order, outlet_name, cashier_name, payment_method, payment_for_receipt,
+        outlet_slug=getattr(outlet, 'slug', None),
+        items_override=items_override,
+        totals_override=totals_override,
+    )
+
+    # Send WA — fail-aware (tetap return status, gak raise)
     sent = await send_whatsapp_message(phone, receipt_text)
+
+    # Emit event store entry (for AI context + KG ingestion downstream)
+    try:
+        db.add(Event(
+            outlet_id=outlet.id,
+            stream_id=f"order:{order.id}",
+            event_type="receipt.wa_sent",
+            event_data={
+                "order_id": str(order.id),
+                "payment_id": str(body.payment_id) if body.payment_id else None,
+                "customer_id": str(customer.id),
+                "customer_created": customer_created,
+                "phone_masked": mask_phone(phone),
+                "is_subset": items_override is not None,
+                "sent": sent,
+            },
+            event_metadata={
+                "actor": f"user:{current_user.id}",
+                "ts": datetime.now(timezone.utc).isoformat(),
+            },
+        ))
+    except Exception:
+        pass  # event log gagal jangan block payment flow
+
+    await db.commit()
 
     return StandardResponse(
         success=sent,
-        data={"phone": mask_phone(phone), "sent": sent},
+        data={
+            "phone": mask_phone(phone),
+            "sent": sent,
+            "customer_id": str(customer.id),
+            "customer_name": customer.name,
+            "customer_created": customer_created,
+        },
         request_id=request.state.request_id,
-        message="Struk berhasil dikirim via WhatsApp" if sent else "Gagal mengirim struk"
+        message="Struk berhasil dikirim via WhatsApp" if sent else "Gagal mengirim struk (WhatsApp tidak terhubung)"
     )
 
 

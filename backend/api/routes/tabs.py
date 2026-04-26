@@ -17,6 +17,7 @@ Endpoints:
   GET    /tabs/by-table/{table_id}  → get open tab for a table (for storefront)
   GET    /tabs/{tab_id}/items       → list items in tab (for per-item split UI)
 """
+import asyncio
 from typing import Any, List, Optional
 from uuid import UUID
 from decimal import Decimal
@@ -35,6 +36,8 @@ from backend.models.payment import Payment
 from backend.models.reservation import Table
 from backend.models.outlet import Outlet
 from backend.models.outlet_tax_config import OutletTaxConfig
+from backend.models.customer import Customer
+from backend.services.fonnte import send_whatsapp_message
 from backend.schemas.tab import (
     TabCreate, TabAddOrder, TabResponse,
     SplitEqualRequest, SplitPerItemRequest, SplitCustomRequest,
@@ -552,6 +555,9 @@ async def pay_tab_full(
                 tbl.status = 'available'
                 tbl.row_version += 1
 
+        # WA receipt ke customer linked di tab.orders (fail-silent)
+        await _send_tab_wa_receipts(db, tab, payment, body.payment_method)
+
     tab.row_version += 1
 
     _tab_event(db, tab, "tab.paid", {
@@ -679,6 +685,9 @@ async def pay_split(
                 if tbl and tbl.status == 'occupied':
                     tbl.status = 'available'
                     tbl.row_version += 1
+
+        # WA receipt ke customer linked di tab.orders (fail-silent)
+        await _send_tab_wa_receipts(db, tab, payment, body.payment_method)
     else:
         split.status = 'pending'
         split.payment_id = payment.id
@@ -727,6 +736,52 @@ async def _complete_order_if_fully_paid(db: AsyncSession, order: Order) -> None:
     if all_paid:
         order.status = 'completed'
         order.row_version = (order.row_version or 0) + 1
+
+
+async def _send_tab_wa_receipts(
+    db: AsyncSession,
+    tab: Tab,
+    payment: Payment,
+    payment_method: str,
+    *,
+    only_orders: Optional[List[Order]] = None,
+) -> None:
+    """Fire-and-forget WA receipt ke unique customers across tab.orders.
+
+    Mirror payments.py:373 pattern. Fail-silent (Rule #54): WA send issues
+    never block payment flow. Pakai asyncio.create_task — caller gak await.
+
+    only_orders: scope subset (untuk pay_items yg cuma settle sebagian order).
+    """
+    target_orders = only_orders if only_orders is not None else (tab.orders or [])
+    if not target_orders:
+        return
+
+    from backend.api.routes.payments import _build_receipt_text
+
+    sent_to_customers = set()
+    for order in target_orders:
+        if not order.customer_id or order.customer_id in sent_to_customers:
+            continue
+        sent_to_customers.add(order.customer_id)
+        try:
+            customer = await db.get(Customer, order.customer_id)
+            if not customer or not customer.phone:
+                continue
+            outlet = await db.get(Outlet, payment.outlet_id)
+            outlet_name = outlet.name if outlet else "Kasira"
+            cashier_name = "-"
+            if order.user_id:
+                cashier = await db.get(User, order.user_id)
+                if cashier:
+                    cashier_name = cashier.full_name
+            struk = _build_receipt_text(
+                order, outlet_name, cashier_name, payment_method, payment,
+                outlet_slug=getattr(outlet, 'slug', None),
+            )
+            asyncio.create_task(send_whatsapp_message(customer.phone, struk))
+        except Exception:
+            pass  # WA gagal tidak boleh block payment
 
 
 @router.post("/{tab_id}/pay-items", response_model=StandardResponse[TabResponse])
@@ -880,6 +935,12 @@ async def pay_items(
                 if tbl and tbl.status == 'occupied':
                     tbl.status = 'available'
                     tbl.row_version = (tbl.row_version or 0) + 1
+
+        # WA receipt scoped ke orders yg punya items dipay (fail-silent)
+        paid_orders = list({order.id: order for order, _ in target_items}.values())
+        await _send_tab_wa_receipts(
+            db, tab, payment, body.payment_method, only_orders=paid_orders,
+        )
 
     tab.row_version = (tab.row_version or 0) + 1
 
