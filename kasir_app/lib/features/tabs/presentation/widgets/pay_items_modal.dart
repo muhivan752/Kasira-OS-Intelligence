@@ -238,13 +238,32 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
                 ),
                 const SizedBox(height: 12),
 
-                // Payment method
+                // Payment method (cash-only — QRIS untuk tab belum support)
                 Row(
                   children: [
                     _buildMethodChip('cash', 'Cash', LucideIcons.banknote),
-                    const SizedBox(width: 8),
-                    _buildMethodChip('qris', 'QRIS', LucideIcons.qrCode),
                   ],
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.info, size: 12, color: AppColors.warning),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'QRIS belum tersedia untuk tab — pakai POS reguler.',
+                          style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
 

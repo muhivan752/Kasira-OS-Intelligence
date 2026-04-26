@@ -100,15 +100,34 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
             ),
             const SizedBox(height: 20),
 
-            // Payment method
+            // Payment method (cash-only — QRIS untuk tab belum support)
             Text('Metode Pembayaran', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
             const SizedBox(height: 8),
             Row(
               children: [
                 _buildMethodChip('cash', 'Cash', LucideIcons.banknote),
-                const SizedBox(width: 8),
-                _buildMethodChip('qris', 'QRIS', LucideIcons.qrCode),
               ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(LucideIcons.info, size: 14, color: AppColors.warning),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'QRIS untuk tab belum tersedia. Pakai POS reguler kalau customer mau bayar QRIS.',
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 20),
 

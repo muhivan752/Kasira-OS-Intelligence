@@ -448,6 +448,8 @@ async def pay_tab_full(
     if tab.row_version != body.row_version:
         raise HTTPException(status_code=409, detail="Data berubah, refresh dulu")
 
+    _enforce_tab_cash_only(body.payment_method)
+
     total = Decimal(str(tab.total_amount))
     if total <= 0:
         raise HTTPException(status_code=400, detail="Tab kosong")
@@ -617,6 +619,9 @@ async def pay_split(
     if split.row_version != body.row_version:
         raise HTTPException(status_code=409, detail="Data berubah, refresh dulu")
 
+    # Cash-only guard — early fail-fast sebelum amount calc
+    _enforce_tab_cash_only(body.payment_method)
+
     split_amount = Decimal(str(split.amount))
 
     if body.payment_method == 'cash' and body.amount_paid < split_amount:
@@ -738,6 +743,28 @@ async def _complete_order_if_fully_paid(db: AsyncSession, order: Order) -> None:
         order.row_version = (order.row_version or 0) + 1
 
 
+def _enforce_tab_cash_only(payment_method: str) -> None:
+    """Tab payment endpoints hanya support cash sampai QRIS tab integration ship.
+
+    Backend `pay_split`/`pay_full`/`pay_items` create Payment.status='pending'
+    untuk non-cash tapi gak generate Xendit invoice/QR → webhook gak akan fire
+    → tab settle gak akan happen → silent broken state.
+
+    Frontend tab modals udah hide tombol QRIS, ini defense-in-depth untuk
+    caller bypass UI (Postman, third-party, regression). Phase B2 proper
+    QRIS-tab integration akan unblock ini.
+    """
+    if payment_method != 'cash':
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "TAB_PAYMENT_CASH_ONLY",
+                "message": "Tab payment hanya support cash. Untuk QRIS/card/transfer, pakai POS reguler.",
+                "received_method": payment_method,
+            },
+        )
+
+
 async def _send_tab_wa_receipts(
     db: AsyncSession,
     tab: Tab,
@@ -814,6 +841,8 @@ async def pay_items(
             status_code=400,
             detail="Order di tab ini sudah dibatalkan otomatis oleh sistem (stale cleanup)."
         )
+
+    _enforce_tab_cash_only(body.payment_method)
 
     # Build map item_id → (order, item) dari tab.orders.items, skip cancelled/deleted
     items_in_tab = {}
