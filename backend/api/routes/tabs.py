@@ -128,7 +128,11 @@ async def list_tabs(
 ) -> Any:
     query = (
         select(Tab)
-        .options(selectinload(Tab.splits), selectinload(Tab.orders), selectinload(Tab.table))
+        .options(
+            selectinload(Tab.splits),
+            selectinload(Tab.orders).selectinload(Order.items),
+            selectinload(Tab.table),
+        )
         .where(Tab.outlet_id == outlet_id, Tab.deleted_at.is_(None))
         .execution_options(populate_existing=True)
     )
@@ -1163,7 +1167,11 @@ async def get_tab_by_table(
     """Get open tab for a specific table. Scoped to outlet for security."""
     query = (
         select(Tab)
-        .options(selectinload(Tab.splits), selectinload(Tab.orders), selectinload(Tab.table))
+        .options(
+            selectinload(Tab.splits),
+            selectinload(Tab.orders).selectinload(Order.items),
+            selectinload(Tab.table),
+        )
         .where(
             Tab.table_id == table_id,
             Tab.outlet_id == outlet_id,
