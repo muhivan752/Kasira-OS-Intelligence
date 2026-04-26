@@ -32,6 +32,31 @@ from backend.models.event import Event
 router = APIRouter()
 
 
+# Field yg WAJIB di-strip sebelum simpan Xendit response ke DB / log.
+# Defense-in-depth (Risk Hunt H1): Xendit response biasanya gak echo back API key,
+# TAPI 401/403 error response kadang echo Authorization header parts. Mencegah
+# leak via payment.xendit_raw column (persisted) + structured logging.
+_XENDIT_SENSITIVE_KEYS = frozenset({
+    "headers", "request", "request_headers",
+    "authorization", "Authorization",
+    "api_key", "apiKey", "secret_key", "secretKey",
+    "private_key", "privateKey",
+})
+
+
+def _sanitize_xendit_response(payload: Any) -> Dict[str, Any]:
+    """Strip sensitive fields recursively dari Xendit API response sebelum
+    persist ke DB. Hanya kembalikan structure dict-like — non-dict pass-through.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    return {
+        k: _sanitize_xendit_response(v) if isinstance(v, dict) else v
+        for k, v in payload.items()
+        if k not in _XENDIT_SENSITIVE_KEYS
+    }
+
+
 async def _try_earn_loyalty_points(db: AsyncSession, order: Order, outlet_id: UUID, user_id: UUID, tenant_id: UUID):
     """Auto-earn loyalty points setelah order fully paid. Pro+ only, silently skip jika gagal."""
     try:
@@ -231,19 +256,26 @@ async def create_payment(
     # bukan failed terminal.
     if payment_in.payment_method == PaymentMethod.qris:
         outlet = await db.get(Outlet, payment_in.outlet_id)
-        if not outlet or not outlet.xendit_business_id:
+        # BYOK pattern (mirror connect.py:528) — POS path harus konsisten dgn
+        # storefront: prefer outlet's own API key, fallback ke sub-account
+        # business_id (xenPlatform Phase 2). Outlet kosong both = config error.
+        if not outlet or not (outlet.xendit_api_key or outlet.xendit_business_id):
             payment.status = PaymentStatus.failed
-            payment.xendit_raw = {"error": "Outlet not configured for Xendit QRIS (Missing Sub-Account ID)"}
+            payment.xendit_raw = {"error": "Outlet belum terhubung Xendit (API Key atau Sub-Account ID)"}
         else:
             from backend.services.xendit import XenditTransientError, XenditPermanentError
             try:
                 xendit_res = await xendit_service.create_qris_transaction(
                     reference_id=f"{current_user.tenant_id}::{payment.id}",
                     amount=float(payment.amount_due),
-                    for_user_id=outlet.xendit_business_id
+                    # BYOK wins kalau ada — for_user_id dipake hanya kalau
+                    # outlet pakai sub-account model (no own key).
+                    for_user_id=outlet.xendit_business_id if not outlet.xendit_api_key else None,
+                    platform_fee_percent=0.2,
+                    merchant_api_key=outlet.xendit_api_key,
                 )
-                payment.qris_url = xendit_res.get("qr_string")
-                payment.xendit_raw = xendit_res
+                payment.qris_url = xendit_res.get("qr_string") or xendit_res.get("qr_url")
+                payment.xendit_raw = _sanitize_xendit_response(xendit_res)
                 expires_at = xendit_res.get("expires_at")
                 if expires_at:
                     try:

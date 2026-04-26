@@ -268,19 +268,39 @@ async def setup_payment_own_key(
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
 
     now = datetime.now(timezone.utc)
+    update_values = {
+        "xendit_api_key": setup_in.xendit_api_key,
+        "xendit_connected_at": now,
+        "row_version": Outlet.row_version + 1,
+    }
+    # Optional callback token — BYOK Phase 2 store-only (per-merchant webhook
+    # verify DEFERRED sampai 1 BYOK merchant onboard, defense-in-depth Risk
+    # Hunt #C1 — webhook handler tetap pakai master settings.XENDIT_WEBHOOK_TOKEN).
+    if setup_in.xendit_callback_token:
+        update_values["xendit_callback_token"] = setup_in.xendit_callback_token
+
     await db.execute(
         update(Outlet)
         .where(Outlet.id == outlet_id)
-        .values(xendit_api_key=setup_in.xendit_api_key, xendit_connected_at=now, row_version=Outlet.row_version + 1)
+        .values(**update_values)
     )
+    audit_after = {"xendit_mode": "own_key", "xendit_connected_at": now.isoformat()}
+    if setup_in.xendit_callback_token:
+        # Audit log gak include token value — cuma flag boolean (Risk Hunt M3 pattern).
+        audit_after["xendit_callback_token_set"] = True
     await log_audit(db=db, action="UPDATE", entity="outlets", entity_id=outlet_id,
-                    after_state={"xendit_mode": "own_key", "xendit_connected_at": now.isoformat()},
+                    after_state=audit_after,
                     user_id=current_user.id, tenant_id=outlet.tenant_id)
     await db.commit()
 
     return StandardResponse(
         success=True,
-        data=OutletPaymentStatus(is_connected=True, mode="own_key", connected_at=now),
+        data=OutletPaymentStatus(
+            is_connected=True,
+            mode="own_key",
+            connected_at=now,
+            has_callback_token=bool(setup_in.xendit_callback_token),
+        ),
         request_id=request.state.request_id,
         message="Xendit API key berhasil disimpan"
     )
@@ -301,9 +321,16 @@ async def remove_payment_own_key(
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
 
+    # Clear BOTH api_key + callback_token — kalau BYOK di-remove, callback
+    # token jadi gak relevant (per-merchant webhook udah gak di-verify ke
+    # token ini lagi).
     await db.execute(
         update(Outlet).where(Outlet.id == outlet_id)
-        .values(xendit_api_key=None, row_version=Outlet.row_version + 1)
+        .values(
+            xendit_api_key=None,
+            xendit_callback_token=None,
+            row_version=Outlet.row_version + 1,
+        )
     )
     await log_audit(db=db, action="UPDATE", entity="outlets", entity_id=outlet_id,
                     after_state={"xendit_mode": "removed_own_key"},
@@ -334,13 +361,16 @@ async def get_payment_status(
     has_own_key = outlet.xendit_api_key is not None
     has_platform = outlet.xendit_business_id is not None
     is_connected = has_own_key or has_platform
-    mode = "xenplatform" if has_platform else ("own_key" if has_own_key else "none")
+    # BYOK wins di mode display kalau merchant punya both — match resolution
+    # logic di payments.py + connect.py (api_key prefer over business_id).
+    mode = "own_key" if has_own_key else ("xenplatform" if has_platform else "none")
 
     status_data = OutletPaymentStatus(
         is_connected=is_connected,
         mode=mode,
         xendit_business_id=outlet.xendit_business_id,
-        connected_at=outlet.xendit_connected_at
+        connected_at=outlet.xendit_connected_at,
+        has_callback_token=outlet.xendit_callback_token is not None,
     )
     
     return StandardResponse(

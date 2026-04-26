@@ -26,12 +26,14 @@ class OutletPaymentSetup(BaseModel):
 
 class OutletPaymentSetupOwn(BaseModel):
     xendit_api_key: str  # merchant's own Xendit secret key
+    xendit_callback_token: Optional[str] = None  # webhook verify token (BYOK Phase 2 — store, actual per-merchant verify deferred sampai 1 BYOK merchant onboard)
 
 class OutletPaymentStatus(BaseModel):
     is_connected: bool
     mode: str = "none"  # "own_key" | "xenplatform" | "none"
     xendit_business_id: Optional[str] = None
     connected_at: Optional[datetime] = None
+    has_callback_token: bool = False  # info-only, gak expose token value
 
 class OutletStockModeUpdate(BaseModel):
     stock_mode: str  # 'simple' | 'recipe'

@@ -14,6 +14,8 @@ export default function PaymentSettingsPage() {
   const [success, setSuccess] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
+  const [callbackToken, setCallbackToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -40,10 +42,12 @@ export default function PaymentSettingsPage() {
     setSaving(true);
     setError('');
     setSuccess('');
-    const res = await setupPaymentOwnKey(outlet.id, apiKey.trim());
+    const res = await setupPaymentOwnKey(outlet.id, apiKey.trim(), callbackToken.trim() || undefined);
     if (res.success) {
-      setSuccess('API Key Xendit berhasil disimpan! QRIS sudah aktif.');
+      const tokenMsg = callbackToken.trim() ? ' (callback token tersimpan)' : '';
+      setSuccess(`API Key Xendit berhasil disimpan! QRIS sudah aktif${tokenMsg}.`);
       setApiKey('');
+      setCallbackToken('');
       loadData();
     } else {
       setError(res.message || 'Gagal menyimpan API key');
@@ -146,6 +150,33 @@ export default function PaymentSettingsPage() {
             <p className="text-xs text-gray-400 mt-1">Key disimpan terenkripsi dan tidak pernah ditampilkan ulang.</p>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Webhook Verification Token <span className="text-gray-400 font-normal">(opsional)</span>
+              {paymentStatus?.has_callback_token && (
+                <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                  <CheckCircle2 className="w-3 h-3" /> Tersimpan
+                </span>
+              )}
+            </label>
+            <div className="relative">
+              <input
+                type={showToken ? 'text' : 'password'}
+                value={callbackToken}
+                onChange={e => setCallbackToken(e.target.value)}
+                placeholder={paymentStatus?.has_callback_token ? 'Sudah tersimpan — kosongin untuk skip' : 'xnd_callback_token_...'}
+                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
+              />
+              <button type="button" onClick={() => setShowToken(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Untuk verifikasi webhook callback Xendit. Disimpan terenkripsi.
+              <span className="text-amber-600 ml-1">(Tahap awal pakai token global Kasira — token ini akan diaktifkan otomatis saat Anda merchant pertama yang request.)</span>
+            </p>
+          </div>
+
           <div className="flex items-center justify-between pt-2">
             {mode === 'own_key' && (
               <button
@@ -173,15 +204,25 @@ export default function PaymentSettingsPage() {
       </div>
 
       {/* Info box */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-        <p className="font-semibold mb-1">Cara mendapatkan Secret Key Xendit:</p>
-        <ol className="list-decimal list-inside space-y-1 text-amber-700">
-          <li>Buka <strong>dashboard.xendit.co</strong> dan login</li>
-          <li>Pergi ke <strong>Settings → API Keys</strong></li>
-          <li>Klik <strong>Generate Secret Key</strong></li>
-          <li>Copy key yang diawali <code className="bg-amber-100 px-1 rounded">xnd_production_</code></li>
-          <li>Paste di kolom di atas dan klik Simpan</li>
-        </ol>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 space-y-3">
+        <div>
+          <p className="font-semibold mb-1">Cara mendapatkan Secret Key Xendit:</p>
+          <ol className="list-decimal list-inside space-y-1 text-amber-700">
+            <li>Buka <strong>dashboard.xendit.co</strong> dan login</li>
+            <li>Pergi ke <strong>Settings → API Keys</strong></li>
+            <li>Klik <strong>Generate Secret Key</strong></li>
+            <li>Copy key yang diawali <code className="bg-amber-100 px-1 rounded">xnd_production_</code></li>
+            <li>Paste di kolom di atas dan klik Simpan</li>
+          </ol>
+        </div>
+        <div className="border-t border-amber-200 pt-3">
+          <p className="font-semibold mb-1">Webhook Token (opsional, untuk keamanan ekstra):</p>
+          <ol className="list-decimal list-inside space-y-1 text-amber-700">
+            <li>Pergi ke <strong>Settings → Webhooks</strong></li>
+            <li>Set Webhook URL ke: <code className="bg-amber-100 px-1 rounded text-xs">https://kasira.online/api/v1/payments/webhook/xendit</code></li>
+            <li>Copy <strong>Webhook Verification Token</strong> dan paste di kolom di atas</li>
+          </ol>
+        </div>
       </div>
     </div>
   );

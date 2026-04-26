@@ -269,11 +269,15 @@ export async function setupPayment(outletId: string, paymentData: any) {
   } catch { return { success: false, message: 'Gagal setup pembayaran' }; }
 }
 
-export async function setupPaymentOwnKey(outletId: string, xenditApiKey: string) {
+export async function setupPaymentOwnKey(outletId: string, xenditApiKey: string, xenditCallbackToken?: string) {
   try {
+    const body: Record<string, string> = { xendit_api_key: xenditApiKey };
+    if (xenditCallbackToken && xenditCallbackToken.trim()) {
+      body.xendit_callback_token = xenditCallbackToken.trim();
+    }
     const res = await fetchWithAuth(`/outlets/${outletId}/payment-setup/own-key/`, {
       method: 'POST',
-      body: JSON.stringify({ xendit_api_key: xenditApiKey }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     return { success: res.ok, data: data.data, message: data.message || data.detail };

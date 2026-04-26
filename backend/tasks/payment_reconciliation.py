@@ -95,14 +95,24 @@ async def _reconcile_qris_payment(
             )
         return
 
-    # Lookup outlet untuk sub-account API (xendit_business_id)
+    # Lookup outlet — BYOK aware (mirror payments.py + connect.py pattern).
+    # Existing bug fix (Risk Hunt CRITICAL #C2): kalau outlet pakai BYOK
+    # (xendit_api_key) tapi gak ada xendit_business_id, polling pakai master
+    # key → 404 (master key gak punya akses transaksi merchant) → payment
+    # stuck pending_manual_check selamanya.
     outlet = await db.get(Outlet, payment.outlet_id)
-    for_user_id = getattr(outlet, "xendit_business_id", None) if outlet else None
+    merchant_api_key = getattr(outlet, "xendit_api_key", None) if outlet else None
+    for_user_id = (
+        getattr(outlet, "xendit_business_id", None)
+        if outlet and not merchant_api_key
+        else None
+    )
 
     try:
         xres = await xendit_service.get_qr_code_status(
             qr_code_id=qr_code_id,
             for_user_id=for_user_id,
+            merchant_api_key=merchant_api_key,
         )
     except (XenditTransientError, XenditPermanentError) as e:
         # Xendit error — leave state unchanged, retry next cycle.
