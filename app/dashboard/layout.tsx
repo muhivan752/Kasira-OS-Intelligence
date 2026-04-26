@@ -18,6 +18,7 @@ import {
   Lock,
   Package,
   Smartphone,
+  ChefHat,
 } from 'lucide-react';
 import { logout } from '@/app/actions/auth';
 import { getCurrentUser, getOutlets } from '@/app/actions/api';
@@ -81,7 +82,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
 
   const bottomNav = [
-    { name: 'Download Kasir', href: '/download', icon: Smartphone },
+    { name: 'Download POS', href: '/download', icon: Smartphone },
+    ...(isPro ? [{ name: 'Download Dapur', href: '/download', icon: ChefHat }] : []),
     { name: 'Pengaturan', href: '/dashboard/settings', icon: Settings },
   ];
 
