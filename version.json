@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.0.50",
+    "version": "1.0.51",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.50/kasira-pos-v1.0.50.apk",
-    "release_notes": "Bug fixes and improvements"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.51/kasira-pos-v1.0.51.apk",
+    "release_notes": "Fix split-bill 'Bayar Sebagian': mismatch float vs Decimal precision saat tax-inclusive ratio non-integer (kasir input nominal pas tapi backend reject 'pembayaran kurang')."
   },
   "dapur": {
-    "version": "1.0.50",
+    "version": "1.0.51",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.50/kasira-dapur-v1.0.50.apk",
-    "release_notes": "Bug fixes and improvements"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.0.51/kasira-dapur-v1.0.51.apk",
+    "release_notes": "Fix split-bill 'Bayar Sebagian': mismatch float vs Decimal precision saat tax-inclusive ratio non-integer (kasir input nominal pas tapi backend reject 'pembayaran kurang')."
   }
 }
