@@ -49,11 +49,18 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
     super.dispose();
   }
 
+  /// Round half-away-from-zero ke 2 desimal — mirror Python `Decimal.quantize(0.01)`
+  /// yg dipake backend `items_proportional_due()`.
+  double _q2(double x) => (x * 100).roundToDouble() / 100;
+
   /// Total yg DI-CHARGE ke customer = subtotal items + proportional tax + service share.
   /// Mirror backend `items_proportional_due()` di tab_service.py — WAJIB konsisten
   /// supaya kasir nampilin nominal yg same dgn yg backend hitung saat submit.
-  /// Bug pre-fix: cuma sum item.totalPrice (subtotal level) → kasir bayar kurang
-  /// dari total tab → tab.remaining stuck (tax+SC orphan).
+  ///
+  /// Quantize per-share (bukan per-total) WAJIB match backend. Tanpa quantize,
+  /// double float drift bikin total < Decimal backend by ~Rp 0.0045 → backend
+  /// reject "Nominal pembayaran kurang" walau display match. Bug discovered
+  /// 2026-04-26 di tab cappucino real merchant (tax-inclusive 5K/55K = 0.0909..).
   double get _selectedTotal {
     final selectedSubtotal = widget.unpaidItems
         .where((i) => _selected.contains(i.id))
@@ -63,8 +70,8 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
     if (tabSubtotal == 0) return selectedSubtotal;
     final taxRate = widget.tab.taxAmount / tabSubtotal;
     final serviceRate = widget.tab.serviceChargeAmount / tabSubtotal;
-    final shareTax = selectedSubtotal * taxRate;
-    final shareService = selectedSubtotal * serviceRate;
+    final shareTax = _q2(selectedSubtotal * taxRate);
+    final shareService = _q2(selectedSubtotal * serviceRate);
     return selectedSubtotal + shareTax + shareService;
   }
 
