@@ -5,6 +5,8 @@ import {
   getOutlets,
   getReservations,
   getTables,
+  getReservationSettings,
+  updateReservationSettings,
   createReservation,
   confirmReservation,
   seatReservation,
@@ -27,6 +29,8 @@ import {
   UserX,
   Armchair,
   CalendarCheck,
+  PowerOff,
+  Zap,
 } from 'lucide-react';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
 import Link from 'next/link';
@@ -66,6 +70,8 @@ export default function ReservasiPage() {
   const [tables, setTables] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [statusFilter, setStatusFilter] = useState('');
+  const [settings, setSettings] = useState<any>(null);
+  const [activating, setActivating] = useState(false);
 
   // Modals
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -102,12 +108,14 @@ export default function ReservasiPage() {
         const id = outlets[0].id;
         setOutletId(id);
 
-        // Load today's reservations + tables
-        const [todayData, tableData] = await Promise.all([
+        // Load today's reservations + tables + settings (parallel)
+        const [todayData, tableData, settingsData] = await Promise.all([
           getReservations(id, formatDate(selectedDate), statusFilter || undefined),
           getTables(id),
+          getReservationSettings(id),
         ]);
         setTables(tableData || []);
+        setSettings(settingsData || null);
 
         // If no reservations today, check upcoming (no date filter)
         if (!todayData || todayData.length === 0) {
@@ -257,8 +265,68 @@ export default function ReservasiPage() {
     return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
   }
 
+  async function handleActivateReservation() {
+    if (!outletId) return;
+    setActivating(true);
+    try {
+      const payload = {
+        is_enabled: true,
+        opening_hour: settings?.opening_hour || '08:00:00',
+        closing_hour: settings?.closing_hour || '22:00:00',
+        slot_duration_minutes: settings?.slot_duration_minutes || 120,
+        max_advance_days: settings?.max_advance_days || 30,
+        min_advance_hours: settings?.min_advance_hours || 2,
+        require_deposit: settings?.require_deposit || false,
+        deposit_amount: settings?.deposit_amount || 0,
+        auto_confirm: settings?.auto_confirm ?? true,
+        max_reservations_per_slot: settings?.max_reservations_per_slot || 10,
+        reminder_hours_before: settings?.reminder_hours_before || 2,
+        row_version: settings?.row_version ?? 0,
+      };
+      const res = await updateReservationSettings(outletId, payload);
+      if (res.success) {
+        setSettings({ ...settings, ...payload, row_version: (settings?.row_version ?? 0) + 1 });
+      } else {
+        alert(res.message || 'Gagal mengaktifkan reservasi');
+      }
+    } finally {
+      setActivating(false);
+    }
+  }
+
+  const isReservationDisabled = settings && settings.is_enabled === false;
+
   return (
     <div className="space-y-6">
+      {/* Banner: Reservasi belum aktif */}
+      {isReservationDisabled && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4 shadow-sm">
+          <div className="flex items-start gap-3 flex-1">
+            <div className="bg-amber-100 rounded-full p-2 flex-shrink-0">
+              <PowerOff className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-amber-900">Reservasi belum aktif</h3>
+              <p className="text-sm text-amber-800 mt-0.5">
+                Customer belum bisa booking meja via storefront online. Aktifkan untuk mulai terima reservasi.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleActivateReservation}
+            disabled={activating}
+            className="flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap"
+          >
+            {activating ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Zap className="w-4 h-4" />
+            )}
+            {activating ? 'Mengaktifkan…' : 'Aktifkan Sekarang'}
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

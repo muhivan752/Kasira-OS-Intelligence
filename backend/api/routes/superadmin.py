@@ -338,10 +338,29 @@ async def update_tier(
     tenant.subscription_tier = new_tier
     tenant.row_version += 1
 
+    # Auto-provision Pro feature settings kalau upgrade starter→Pro+
+    # Mencegah onboarding gap: sebelumnya Pro tenant baru = reservation_settings row
+    # belum ada → storefront reservasi default OFF + UX confusing "tombol aktifkan dimana?"
+    provision_report = None
+    is_upgrade_to_pro = (
+        old_tier.lower() not in PRO_TIERS and new_tier.lower() in PRO_TIERS
+    )
+    if is_upgrade_to_pro:
+        from backend.services.pro_provisioning import provision_pro_features_for_tenant
+        try:
+            provision_report = await provision_pro_features_for_tenant(db, tenant.id)
+        except Exception as e:
+            # Provisioning gagal jangan block tier upgrade — log + flag, tier tetap flip
+            provision_report = {"error": str(e)}
+
     await log_audit(
         db=db, action="UPDATE_TIER", entity="tenants", entity_id=tenant.id,
         before_state={"tier": old_tier},
-        after_state={"tier": new_tier, "cascade_report": cascade_report},
+        after_state={
+            "tier": new_tier,
+            "cascade_report": cascade_report,
+            "provision_report": provision_report,
+        },
         user_id=admin.id, tenant_id=tenant.id,
     )
     await db.commit()
@@ -354,9 +373,18 @@ async def update_tier(
     response_data = {"id": str(tenant.id), "tier": new_tier}
     if cascade_report:
         response_data["cascade"] = cascade_report
+    if provision_report:
+        response_data["provision"] = provision_report
+    msg_suffix = ""
+    if is_downgrade:
+        msg_suffix = " (dengan cascade)"
+    elif is_upgrade_to_pro and provision_report and "error" not in provision_report:
+        created = provision_report.get("reservation_settings_created", 0)
+        if created > 0:
+            msg_suffix = f" (auto-aktif reservasi di {created} outlet)"
     return StandardResponse(
         data=response_data,
-        message=f"Tier diubah ke {new_tier}" + (" (dengan cascade)" if is_downgrade else ""),
+        message=f"Tier diubah ke {new_tier}{msg_suffix}",
     )
 
 
