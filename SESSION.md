@@ -437,10 +437,10 @@ APK v1.0.40 → v1.0.45:
 - Ops hardening 4-quick-wins sudah di list
 - Pisah Fonnte device dari owner nomor (gotcha self-send block)
 
-### PRIORITAS 3 — Xendit Live Activation
-- Daftar Xendit sub-account untuk live merchant
-- Set `xendit_business_id` di outlets table
-- E2E test QRIS production
+### PRIORITAS 3 — ~~Xendit Live Activation~~ → **BYOK Pivot DONE 2026-04-26**
+- ~~Daftar Xendit sub-account untuk live merchant~~ — DROPPED, replaced by BYOK
+- Merchant daftar Xendit sendiri lalu paste API key di Settings → Pengaturan Pembayaran
+- See `project_byok_pivot.md` (auto-memory) for full detail
 
 ### PRIORITAS 4 — Multi-Outlet (Business Tier)
 - Design + migration + tier gating
@@ -450,6 +450,94 @@ APK v1.0.40 → v1.0.45:
 - $300 credit expire 2026-05-11
 - Decision: hangus (per `project_vultr_credit.md`)
 - Reminder 10 Mei cek dashboard
+
+---
+
+## ✅ SESI 2026-04-26 (FULL DAY) — Massive Sprint Pre-Pilot Launch
+
+### Phase 1: Split-Bill Humanity Fix v1.0.46 → v1.0.47
+**Issue**: User report "kemarin gw benerin bug split-bill humanity, tapi pas test masih model lama".
+- **Backend hotfix `a95440f`**: `GET /tabs/` + `GET /tabs/by-table/` MissingGreenlet — `tab_response()` panggil `compute_paid_items_total()` iterate `o.items`, tapi 2 endpoint cuma `selectinload(Tab.orders)` tanpa chain `Order.items`. Fix: chain `.selectinload(Order.items)`.
+- **Flutter v2 fix `62ef99b`**: split-bill default mode pivot → "Bayar Sebagian" (warkop pattern Indonesia) jadi chip pertama default. Mode lama (Bagi Rata/Per Tamu/Custom) tetap ada tapi bukan default. Plus mini popup "Berapa orang?" saat tap meja kosong (replace hardcoded `guest_count: 1`).
+- APK v1.0.47 built + deployed ke kasira.online + bind-mount permanent (gotcha #9 mitigation).
+
+### Phase 2: BYOK Xendit Pivot (commit `289508b`)
+**Decision**: pivot dari sub-account model ke BYOK (Bring Your Own Key). Merchant daftar Xendit sendiri.
+- 3 agent paralel audit (Plan + Explore + general-purpose) reveal: BYOK infra UDAH READY 90% (Migration 061 + EncryptedString TypeDecorator). Cuma butuh wire active code path.
+- **Phase 1+1.5+2 SHIPPED** (~3 jam total bukan 1-2 hari):
+  - `payments.py:234` POS BYOK-aware (mirror connect.py:528 pattern)
+  - `payment_reconciliation.py:103` BYOK-aware (existing bug fix)
+  - Migration 086: `outlets.xendit_callback_token` (EncryptedString)
+  - Helper `_sanitize_xendit_response()` strip headers/auth (Risk Hunt #H1)
+  - Dashboard Settings tab "Payment Gateway" extend dgn callback token field
+- **Phase 3 DEFERRED** (per-merchant webhook verify) — sampai 1 BYOK merchant beneran onboard. Selama pilot pakai master callback token (acceptable per Risk Hunt #C1 mitigation).
+
+### Phase 3: Starter Pilot Readiness Smoke (commit `7737917`)
+**Issue**: User minta "spawn smoke tester scope Starter end-to-end".
+- Fresh merchant register → setup data → order → margin → refund → connect → cleanup. 10 scenarios.
+- **Initial verdict YELLOW** — 2 backend bug ditemukan:
+  1. `POST /products/` silently drop `buy_price` (margin tracking baru ship 2026-04-25 broken di create flow). Fix: 1-line add field di `Product()` constructor.
+  2. `GET /products/{id}` MissingGreenlet 500 (`validate_product_ownership` gak eager-load category). Fix: `selectinload(Product.category)` di shared helper (4 caller benefit).
+- **Post-fix verdict GREEN** — 10/10 scenarios PASS, tier gating bulletproof 5/5 Pro endpoint return 403.
+- Plus 3 doc gaps di CLAUDE.md API quirks (`/shifts/{id}/close` ending_cash, `/payments/` amount_due+amount_paid, `/connect/{slug}/order` order_type required).
+
+### Phase 4: Pay-Items Tax/Service Fix (commit `383c7e2`) — APK v1.0.48
+**Issue**: User report "split bill nominal kurang, terbayar 0, gak sinkron".
+- **3 bug terhubung, akar sama**: `OrderItem.total_price` itu subtotal level (qty × unit_price). Tax + service charge simpan di Order level. Pay-items pattern lupa apply proportional share — beda dgn `split_per_item:335` yg udah benar.
+  1. `tab_header.dart:49` display `tab.paidAmount` raw → "Dibayar Rp 0" stale (warkop pattern sengaja gak update field ini)
+  2. `tabs.py:791 pay_items` hitung `total_due = sum(item.total_price)` subtotal only → kasir bayar kurang
+  3. `tab_service.py:compute_paid_items_total` sum subtotal only → tab gak auto-close, tax/SC orphan stuck
+- **Fix architecture**: helper baru `items_proportional_due(tab, items_subtotal) -> Decimal` di `tab_service.py`. Single source of truth untuk hitung "berapa total + tax + service per subset items". Dipakai 2 caller WAJIB konsisten (`compute_paid_items_total` + `pay_items` endpoint).
+- Frontend `tab_header.dart` ganti display computed `tab.totalAmount - tab.remainingAmount`.
+- Frontend `pay_items_modal.dart:_selectedTotal` mirror backend logic.
+- **Verified math**: subtotal 20K → total_due 23K (10% tax + 5% service apply) ✅
+- APK v1.0.48 built + deployed ke kasira.online.
+
+### Phase 5: Flutter Performance Quick Wins (commit `efd82de`+`1f5b4d8`+`d959cac`+`3020c49`) — APK v1.0.50
+**Issue**: User report "loading lambat" (vague tapi sense ada issue real, 3 minggu nambah feature tanpa profiling).
+- **Audit 2 agent paralel** (Explore + general-purpose) konvergen pada CRITICAL findings:
+  - Post-payment cascade invalidate (1-2s freeze per transaksi)
+  - POS clock setState minute-ly (480x full tree rebuild per shift)
+  - Dapur addPostFrameCallback in build (potensi infinite loop)
+- **Plan agent design** 4-phase implementation dengan zero-break safety (rollback per phase, APK build 2x untuk catch issue early).
+- **9 quick wins SHIPPED across 4 commits**:
+  - **P1** Pure UI: splash 800ms delay removed, ListView.builder margin report, CachedNetworkImage product mgmt, force-update url_launcher fix
+  - **P2** Widget extraction: POS clock isolated `_PosClock`, Dapur `ref.listen` migration
+  - **P3** Behavior tweak: post-payment cascade defer microtask (helper baru `post_payment_refresh.dart`), POS search debounce 250ms
+  - **P4** Async deferral: splash version check timeout 5s→2s
+- APK v1.0.49 (P1+P2 internal validation) + v1.0.50 (full P1-P4 final ship) built + v1.0.50 deployed ke kasira.online.
+
+### 🎯 Tier Status Update (per 2026-04-26)
+| Tier | Status | Detail |
+|---|---|---|
+| **Starter** | ✅ READY pilot launch | Smoke 10/10 PASS, tier gating bulletproof, BYOK done. Sisa: Fonnte device + manual UX test |
+| **Pro** | ⚠️ NOT READY pilot | 3 bug split-bill humanity baru fix, perlu APK v1.0.50 manual verify + 2-3 minggu internal validate |
+
+### 🎯 NEXT ACTION (per 2026-04-26 EOD)
+1. ⏳ **Ivan manual test APK v1.0.50** integration (12 skenario per plan checklist)
+2. ⏳ **Fonnte device pisah** (1-2 hari kerja, beli SIM/device baru)
+3. ⏳ **Onboard cafe pilot pertama Starter** (cash-only mode dulu, BYOK enable later)
+4. ⏳ **Defer items dari quick wins**: singleton Dio, autoDispose mass migration, recipe stock cache, optimistic update payment
+
+### Memory updated this session:
+- ✅ `project_byok_pivot.md` (NEW) — full BYOK decision history + critical patterns
+- ✅ `project_starter_pilot_readiness.md` (UPDATED) — explicit ISOLATION Starter vs Pro
+- ✅ `project_warkop_pattern.md` (UPDATED) — Phase A post-ship bug fixes 2026-04-26
+- ✅ `project_perf_quickwins_2026_04_26.md` (NEW) — 4-phase quick wins reference
+
+### Commit list this session:
+```
+3020c49 perf(flutter): phase 4 quick win — splash version check timeout 5s→2s
+d959cac perf(flutter): phase 3 quick wins — search debounce + post-payment cascade defer
+1f5b4d8 perf(flutter): phase 2 quick wins — POS clock + Dapur listener isolation
+efd82de perf(flutter): phase 1 quick wins — splash boot + image cache + url launcher
+383c7e2 fix(tabs): pay-items tax+service charge konsistensi (3 bug terhubung)
+289508b feat(payment): wire BYOK Xendit di POS + reconciliation + dashboard UI
+7737917 fix(backend): Starter pilot blockers — buy_price drop + product detail 500
+6f6f804 chore(deploy): bind-mount APK volume di frontend
+62ef99b feat(flutter): split-bill humanity v2 — pay-items default + guest count input
+a95440f fix(backend): MissingGreenlet di list_tabs + get_tab_by_table
+```
 
 ### Cara reconnect:
 > "baca CLAUDE.md, MEMORY.md, SESSION.md di /var/www/kasira/ lalu lanjut dari NEXT ACTION"
