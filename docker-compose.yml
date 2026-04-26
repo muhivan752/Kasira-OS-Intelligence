@@ -80,6 +80,13 @@ services:
       - NEXT_PUBLIC_SECURE_COOKIES=true
       - NEXT_PUBLIC_GA_ID=${NEXT_PUBLIC_GA_ID:-}
       - NODE_OPTIONS=--max-old-space-size=384
+    volumes:
+      # APK files — bind mount supaya container recreate gak ngeilangin file
+      # (gotcha #9 CLAUDE.md). Route.ts baca dari kedua path: primary
+      # /app/public/apk + fallback /app/.next/standalone/public/apk.
+      # Read-only — APK update via host `./public/apk/` lalu otomatis kebaca container.
+      - ./public/apk:/app/public/apk:ro
+      - ./public/apk:/app/.next/standalone/public/apk:ro
     depends_on:
       backend:
         condition: service_healthy
