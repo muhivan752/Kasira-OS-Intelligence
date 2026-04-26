@@ -49,6 +49,7 @@ class CartState {
   final String? customerName;
   final String? tableId;
   final String? tableName;
+  final int guestCount;
   final bool isSubmitting;
   final String? error;
   final String? submittedOrderId;
@@ -65,6 +66,7 @@ class CartState {
     this.customerName,
     this.tableId,
     this.tableName,
+    this.guestCount = 1,
     this.isSubmitting = false,
     this.error,
     this.submittedOrderId,
@@ -94,6 +96,7 @@ class CartState {
     String? tableId,
     String? tableName,
     bool clearTable = false,
+    int? guestCount,
     bool? isSubmitting,
     String? error,
     bool clearError = false,
@@ -111,6 +114,7 @@ class CartState {
         customerName: clearCustomer ? null : (customerName ?? this.customerName),
         tableId: clearTable ? null : (tableId ?? this.tableId),
         tableName: clearTable ? null : (tableName ?? this.tableName),
+        guestCount: clearTable ? 1 : (guestCount ?? this.guestCount),
         isSubmitting: isSubmitting ?? this.isSubmitting,
         error: clearError ? null : (error ?? this.error),
         submittedOrderId: submittedOrderId ?? this.submittedOrderId,
@@ -245,12 +249,22 @@ class CartNotifier extends StateNotifier<CartState> {
       state = state.copyWith(customerId: id, customerName: name);
     }
   }
-  void setTable(String? id, {String? name}) {
+  void setTable(String? id, {String? name, int? guestCount}) {
     if (id == null) {
       state = state.copyWith(clearTable: true);
     } else {
-      state = state.copyWith(tableId: id, tableName: name);
+      state = state.copyWith(
+        tableId: id,
+        tableName: name,
+        guestCount: guestCount ?? state.guestCount,
+      );
     }
+  }
+
+  void setGuestCount(int n) {
+    if (n < 1) n = 1;
+    if (n > 50) n = 50;
+    state = state.copyWith(guestCount: n);
   }
   void clearCart() => state = const CartState();
 
@@ -319,7 +333,7 @@ class CartNotifier extends StateNotifier<CartState> {
               'outlet_id': outletId,
               'table_id': state.tableId,
               'customer_name': state.customerName,
-              'guest_count': 1,
+              'guest_count': state.guestCount,
             },
           );
           final tabData = createRes.data?['data'];

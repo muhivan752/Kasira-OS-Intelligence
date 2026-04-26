@@ -330,26 +330,126 @@
 
 ---
 
-## ⏭️ NEXT ACTION
+---
 
-### PRIORITAS 1 — Test Manual dari HP
-- Install APK v1.1.0 di Android → test full order flow
-- Test offline mode: matikan data → buat order → nyalain lagi → cek sync
-- Test storefront: buka kasira.online/dita-coffee dari HP lain → order
+## ✅ SESI 2026-04-19 — Senior Audit + 17 CRITICAL FIXES
+Role-swap ke auditor (`feedback_senior_audit_pattern.md`) → nemuin 17 CRITICAL bug yang gue miss sendiri. Semua fixed:
+- **#2 + #8 HPP unification** — 4 raw-multiply sites pake helper `unit_utils.py` (pricing_coach, menu_engineering, knowledge_graph, ai_service)
+- **#6 Sync idempotency dedup** di `/sync/` push (Migration 081)
+- **#7 Sync cursor-based pagination** (Migration 082) — fix offline 3-hari load
+- **#9 R2 restore automation** + disaster recovery runbook
+- **#10 Observability**: Prometheus metrics + structured logging + health aggregate
+- **#11 Async supervisor auto-restart** + health endpoint
+- **#12 Xendit retry backoff** + webhook idempotency + fail-safe (Migration 083)
+- **#13 Fonnte singleton** + retry + circuit breaker
+- **#14 PRICING_COACH fail-closed** Sonnet→Haiku fallback (preserve quota)
+- **#15 + #16 Subscription tier lifecycle** + cascade downgrade
 
-### PRIORITAS 2 — Xendit QRIS
-- Daftar Xendit sub-account untuk outlet
-- Set xendit_business_id di outlets table
-- Test QRIS payment end-to-end
+---
 
-### PRIORITAS 3 — Operational
-- UptimeRobot: monitor https://kasira.online/api/v1/auth/app/version
-- Sentry DSN: set di .env untuk error tracking
-- Backup testing: verify pg_dump cron jalan
+## ✅ SESI 2026-04-20 — Flutter UX Hardening Batch #14-#18
+APK v1.0.27 → v1.0.32. Close audit holes:
+- **Batch #14**: Rule #50 outlet scope verification + tax config + UI polish
+- **Batch #15**: Multi-outlet sync + phone normalize + modal protection
+- **Batch #16**: Printer lock + sync resilience + async boundary (`unawaited()` pattern)
+- **Batch #17**: Node ID isolation `sha256(device|user)` + orphan cleanup + hardened logout
+- **Batch #18**: Atomic batch.update + Dio CancelToken + performLogout orphan cleanup
+- **POS auto-print + WA customer save** di payment success path
 
-### PRIORITAS 4 — Nice to Have
-- Printer receipt queue (Rule #49) — pending_receipts SQLite di Flutter
-- PIN login offline untuk kasir (sekarang hanya OTP)
+---
+
+## ✅ SESI 2026-04-21 — AI Multi-Turn + Adaptive Domain
+APK v1.0.32 → v1.0.36:
+- **Batch #19-#21**: UUID attr error fix + dine-in table release (Rule #50 follow-up) + stale order janitor + close ghost race janitor↔payment settle
+- **Batch #22**: AI multi-turn chat via Redis-only session store
+- **Batch #23**: Flutter wire multi-turn + HLC merge + persistent idempotency
+- **Batch #24**: Backend hardening & hygiene
+- **Batch #25**: AI chat UX polish v1.0.35
+- **Batch #26**: Adaptive UI domain classify endpoint + Flutter infrastructure
+- **Batch #27**: Strategic positioning — waitlist + AI guardrail + adaptive upgrade sheet + coming soon
+
+---
+
+## ✅ SESI 2026-04-22 — Inventory Powerhouse + KG Price Events
+APK v1.0.36:
+- **Batch #28**: POS stock visual guard (isAvailable + isOutOfStock gate)
+- **Batch #29**: Inventory Powerhouse — tabbed Produk & Stok di Flutter
+- **Backend Batch #28**: superadmin waitlist monitoring endpoint
+- **Backend Batch #29**: KG Price Events (margin drift WA alert)
+- Hotfix: missing `sync_provider.dart` import + Dart-side filter low-stock count
+- Untrack `loadtest/` (contained JWT)
+
+---
+
+## ✅ SESI 2026-04-24 → 2026-04-25 — Starter Margin Tracking
+Fitur **Untung-Rugi** untuk Starter tier:
+- **Migration 084**: `products.buy_price`
+- **Backend Fase 2**: `restock` accept `unit_buy_price` + `GET /reports/margin`
+- **Flutter Fase 3**: Drift v5 + restock buy_price form + Untung-Rugi tab di laporan
+- **Dashboard**: buy_price form di product create/edit + `/laporan/margin` page
+- **UX clarity**: "modal" vs "stok" untuk merchant non-technical (`9538341`)
+- APK v1.0.39 published
+
+---
+
+## ✅ SESI 2026-04-25 — Pre-Launch Hardening
+Production hardening sebelum publish:
+- **Remove MASTER_OTP bypass** — production OTP WA only (`cbb833a`)
+- **Xendit reconciliation** hardening
+- **FIX #2 security audit**: Flutter QRIS polling 30s timeout + retry dialog
+- **FIX #3 follow-up**: RLS bypass added to `payment_reconciliation` background task — RLS gotcha (CLAUDE.md gotcha #16: background task tanpa `SET LOCAL app.current_tenant_id = ''` → silent broken)
+- APK v1.0.40 published
+
+---
+
+## ✅ SESI 2026-04-25 — Split-Bill Humanity + Warkop Ad-Hoc
+APK v1.0.40 → v1.0.45:
+- **Split-bill data integrity** (`9762674`): table release guard untuk active tab — kitchen mark order ready/completed → table di-release prematurely → janitor heal back. Fix: query `Tab.status` + skip release kalau active. 2 code path: `orders.py:519-533` + `stale_order_cleanup.py:185-220`. Reference: gotcha #15.
+- **v1.0.42**: split-bill UX gaps — table tap, info card, grid sub-badge
+- **v1.0.43**: split-bill flow & dashboard navigation gaps
+- **v1.0.44**: split-bill humanity — active list missing + per-split receipt
+- **v1.0.45**: chore version bump
+- **Migration 085**: warkop ad-hoc per-item payment (`order_items.paid_at`)
+- **Phase A SHIPPED**: pay_items_modal + table_actions_sheet di Flutter
+- **Source-of-truth split**: `tab.paid_amount` untuk split/full, `items.paid_at` untuk pay-items adhoc
+- APK v1.0.46 build pending deploy (warkop pattern)
+
+---
+
+## ✅ SESI 2026-04-25 — Telegram Healthcheck Cron
+- `/health` monitor → Telegram bot self-alert via cron (LIVE)
+- Replace healthchecks.io plan, pivot karena signup difficulty + Fonnte self-send block (`project_fonnte_otp_gotcha.md`)
+- State-change throttle (anti-spam)
+- Script: `scripts/healthcheck_ping.sh` (untracked)
+
+---
+
+## ⏭️ NEXT ACTION (per 2026-04-26)
+
+### PRIORITAS 1 — Build & Deploy APK v1.0.46
+- Warkop ad-hoc Phase A udah merge ke main, build APK pending
+- Cek gotcha #13: push commit terakhir dulu, verify `git log origin/main` match lokal, baru dispatch
+- Verify `head_sha` di workflow run match latest push
+
+### PRIORITAS 2 — Onboard Pilot Merchant
+- 25 tenant cap aman publish (90% confidence per `project_publish_readiness.md`)
+- 30 conservative cap
+- Ops hardening 4-quick-wins sudah di list
+- Pisah Fonnte device dari owner nomor (gotcha self-send block)
+
+### PRIORITAS 3 — Xendit Live Activation
+- Daftar Xendit sub-account untuk live merchant
+- Set `xendit_business_id` di outlets table
+- E2E test QRIS production
+
+### PRIORITAS 4 — Multi-Outlet (Business Tier)
+- Design + migration + tier gating
+- Belum mulai, paling besar untuk monetisation Business tier
+
+### PRIORITAS 5 — Vultr Credit Reminder
+- $300 credit expire 2026-05-11
+- Decision: hangus (per `project_vultr_credit.md`)
+- Reminder 10 Mei cek dashboard
 
 ### Cara reconnect:
 > "baca CLAUDE.md, MEMORY.md, SESSION.md di /var/www/kasira/ lalu lanjut dari NEXT ACTION"

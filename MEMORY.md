@@ -5,10 +5,10 @@
 - ✅ **FASE 0: Fondasi** (Semua Migration, Docker, VPS, Backend Core)
 - ✅ **FASE 1: Auth** (OTP WA, JWT, Device Binding, Role Check)
 - ✅ **FASE 2: Core POS Starter** (Products, Orders, Payment QRIS **Xendit xenPlatform**, Stock Deduct)
-- ✅ **FASE 3: Flutter Kasir App** (15 layar lengkap, GoRouter, Sync Engine, Offline Mode)
-- ✅ **FASE 4: Owner Dashboard Next.js** (Owner Login, Laporan, Menu, dll)
-- 🔴 **FASE 5: Pilot** (Pre-Pilot Checklist belum tuntas)
-- 🔴 **FASE 6: Pro Features** (Reservasi, Chatbot AI, dll)
+- ✅ **FASE 3: Flutter Kasir App** (15 layar + Inventory Powerhouse, GoRouter, Sync Engine, Offline Mode)
+- ✅ **FASE 4: Owner Dashboard Next.js** (Owner Login, Laporan, Menu, Margin Tracking)
+- 🟡 **FASE 5: Pilot** (Pre-launch hardening DONE 2026-04-25, monitoring DONE, Xendit live pending)
+- 🟡 **FASE 6: Pro Features** (AI Chatbot multi-turn, Tab/Bon split bill, Warkop ad-hoc, Reservasi, Loyalty, Recipe/HPP, Knowledge Graph DONE; Multi-outlet pending)
 
 ## ✅ SELESAI
 - [x] Migration Batch 1–8 (semua tabel, row_version, Golden Rules compliant)
@@ -156,9 +156,67 @@
   - pg_dump cron: sudah ada di kasira-setup.sh (tiap 6 jam ke /var/backups/kasira) — ✅ verified OK
   - UptimeRobot: manual setup di dashboard — monitor http://VPS_IP:8000/ dan http://VPS_IP:3000/
 
-## ⏳ IN PROGRESS
+## ⏳ IN PROGRESS (per 2026-04-26)
 - VPS sudah live: Ubuntu 22.04, semua container running (backend:8000, frontend:3000, db:5432, redis:6379)
-- Admin: phone 6285270782220, OTP dev: 123456, outlet slug: kasira-coffee
+- Admin: phone 6285270782220, outlet slug: kasira-coffee (MASTER_OTP sudah dihapus 2026-04-25 — production OTP WA only)
+- APK terbaru: **v1.0.45** (POS + Dapur), download via GitHub Releases
+- Migration terakhir: **085** (`order_item_payment` — warkop ad-hoc per-item payment)
+- Telegram healthcheck cron LIVE (state-change throttle, anti-spam)
+- 25 tenant siap pilot (90% confidence cap, 30 conservative cap per `project_publish_readiness.md`)
+
+## ✅ MAJOR MILESTONES 2026-04-12 → 2026-04-26
+
+### Senior Audit + 17 CRITICAL Fixes (2026-04-19)
+- 17/17 CRITICAL findings RESOLVED — sync idempotency dedup, HPP unification (4 raw-multiply sites), PRICING_COACH fail-closed Sonnet→Haiku fallback, Fonnte singleton + retry + circuit breaker, Xendit retry+webhook idempotency, async supervisor auto-restart, subscription tier lifecycle + cascade downgrade, sync cursor-based pagination
+- Disaster Recovery: R2 restore automation + runbook (CRITICAL #9)
+- Observability: Prometheus metrics + structured logging + health aggregate (#10)
+
+### Flutter UX Hardening Batch #14-#18 (2026-04-20)
+- Rule #50 outlet scope (anti cross-outlet leak)
+- Multi-outlet sync + phone normalize + modal protection
+- Printer lock + sync resilience + async boundary
+- Node ID isolation `sha256(device|user)` + orphan cleanup + hardened logout
+- v1.0.32 published
+
+### Adaptive UI + AI Multi-Turn (2026-04-21)
+- Batch #22-#23: AI multi-turn chat via Redis-only session store + Flutter wire + HLC merge + persistent idempotency
+- Batch #24: backend hardening & hygiene
+- Batch #25: AI chat UX polish v1.0.35
+- Batch #26-#27: Adaptive domain classify endpoint + waitlist + AI guardrail + adaptive upgrade sheet + coming soon
+- Migration 081 (`sync_idempotency`), 082 (`sync_pagination_indexes`), 083 (`xendit_reliability`)
+
+### Inventory Powerhouse + KG Price Events (2026-04-22)
+- Batch #28: POS stock visual guard (isAvailable + isOutOfStock gate)
+- Batch #29: Inventory Powerhouse — tabbed Produk & Stok (Flutter v1.0.36)
+- Backend: KG Price Events (margin drift WA alert)
+- Backend: superadmin waitlist monitoring endpoint
+
+### Starter Margin Tracking (2026-04-24 → 2026-04-25)
+- Migration 084: `products.buy_price` untuk Starter margin tracking
+- Backend Fase 2: restock unit_buy_price + `GET /reports/margin`
+- Flutter Fase 3: Drift v5 + restock buy_price + Untung-Rugi tab
+- Dashboard: buy_price form + `/laporan/margin` page (close margin tracking gap)
+- UX: clarify "modal" vs "stok" untuk merchant non-technical
+- v1.0.39 published
+
+### Pre-Launch Hardening (2026-04-25)
+- Remove MASTER_OTP bypass (production OTP WA only)
+- Xendit reconciliation hardening
+- Flutter QRIS polling 30s timeout + retry dialog (FIX #2 security audit)
+- RLS bypass added to payment_reconciliation (FIX #3 follow-up — RLS background task gotcha)
+- v1.0.40 published
+
+### Split-Bill Humanity + Warkop Ad-Hoc (2026-04-25)
+- Split-bill data integrity — table release guard untuk active tab (commit `9762674`, gotcha #15)
+- Flutter v1.0.42-v1.0.45: split-bill UX gaps — table tap, info card, grid sub-badge, flow & dashboard nav, active list missing, per-split receipt
+- **Migration 085**: warkop ad-hoc per-item payment (`order_items.paid_at` + pay-items endpoint)
+- Phase A SHIPPED: pay_items_modal + table_actions_sheet
+- Source-of-truth split: `tab.paid_amount` (split/full) vs `items.paid_at` (pay-items adhoc)
+
+### Telegram Healthcheck (2026-04-25)
+- `/health` monitor → Telegram bot self-alert via cron (LIVE)
+- Replace healthchecks.io plan, pivot karena signup difficulty + Fonnte self-send block
+- State-change throttle (anti-spam)
 
 ## ✅ AI CHATBOT OWNER (2026-04-09) — Pro Feature
 - [x] Chat UI: `app/dashboard/ai/page.tsx` (SSE streaming, suggestion buttons, purple theme)
@@ -218,12 +276,14 @@
 - [x] GoRouter: /tabs + /tabs/:tabId
 - [x] Dashboard: tombol "Tab / Bon" di header
 
-## ❌ BELUM MULAI (Prioritas sesuai urutan)
+## ❌ BELUM MULAI / OPEN (per 2026-04-26)
 1. ~~**ANTHROPIC_API_KEY**~~ — ✅ DONE 2026-04-09
-2. **Git commit + push** — semua perubahan sesi 2026-04-09 belum di-commit
-3. **UptimeRobot** — setup monitor http://103.189.235.164:8000/ dan http://103.189.235.164:3000/
-4. **Xendit sub-account** — daftarkan outlet di Xendit untuk aktifkan QRIS (outlets.xendit_business_id masih NULL)
-5. **IdCloudHost** — evaluasi pindah VPS jika masih error (backup sudah ada: /root/kasira-backup-20260409.tar.gz)
+2. ~~**UptimeRobot**~~ — REPLACED 2026-04-25 oleh Telegram healthcheck cron (signup HC.io susah, Fonnte self-send block)
+3. **Xendit sub-account** — daftarkan outlet di Xendit untuk aktifkan QRIS production (outlets.xendit_business_id masih NULL untuk live merchant)
+4. **Multi-outlet (Business tier)** — belum mulai, terakhir di FASE 6 belum disentuh
+5. **APK v1.0.46 deploy** — warkop pattern Phase A udah merge ke main, build APK pending dispatch
+6. **Vultr credit $300** — expire 2026-05-11 (`project_vultr_credit.md`), reminder 10 Mei cek dashboard
+7. **Fonnte device pisah** — owner nomor = device = WA block self-send (`project_fonnte_otp_gotcha.md`), pisahin sender vs admin nomor sebelum publish
 
 ## Keputusan Teknikal (JANGAN DIUBAH TANPA ALASAN)
 - ORM: SQLAlchemy async (bukan Tortoise)
@@ -250,13 +310,13 @@
 - Branch aktif: `main`
 - Semua commit langsung ke `main`, push ke `origin/main`
 
-## Lanjut Berikutnya
-VPS sudah live. Fokus: Pro features (AI chatbot done, tab/bon done, next: multi-outlet).
-- [x] Kategori CRUD di dashboard (tambah/edit/hapus/toggle aktif)
-- [x] Produk CRUD lengkap (tambah/edit/hapus/toggle aktif + upload foto dari device)
-- [x] Fix 307 redirect bug — trailing slash normalization di fetchWithAuth
-- [x] Fix event.py metadata reserved keyword (SQLAlchemy)
-- [x] Image upload: backend /media/upload + static /uploads/ + Next.js /api/upload proxy
+## Lanjut Berikutnya (per 2026-04-26)
+Production-ready. Fokus pivot ke **acquisition + monetisation**:
+1. **Build & deploy APK v1.0.46** — warkop ad-hoc pattern Phase A
+2. **Onboard pilot merchant** — 25 tenant cap aman, 30 conservative
+3. **Xendit live activation** — daftarkan sub-account untuk live QRIS (sandbox sudah test)
+4. **Multi-outlet (Business tier)** — design + migration + tier gating
+5. **Marketing landing page polish** — SEO sudah, tinggal copy + testimonial pilot
 
 ## Context Files Status
 - context/database.md    → ⏳ In Progress

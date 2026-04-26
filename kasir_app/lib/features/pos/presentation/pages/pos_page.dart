@@ -183,7 +183,17 @@ class _PosPageState extends ConsumerState<PosPage> {
   /// - Reserved/dirty: snackbar info, no action.
   Future<void> _onPosTableSelected(TableModel table) async {
     if (table.status == TableStatus.available) {
-      ref.read(cartProvider.notifier).setTable(table.id, name: table.name);
+      // Tanya jumlah tamu dulu sebelum masuk dine-in mode.
+      // Reality warkop/cafe Indonesia: tiap meja bisa 1-6+ orang, default 1
+      // bikin split bill humanity gak akurat (kasir lupa update guest_count
+      // sampai checkout → tab udah ke-create dengan guest_count=1 hardcoded).
+      final guestCount = await _askGuestCount(table.name);
+      if (guestCount == null) return; // user cancel
+      ref.read(cartProvider.notifier).setTable(
+            table.id,
+            name: table.name,
+            guestCount: guestCount,
+          );
       ref.read(posModeProvider.notifier).state = PosMode.dineInOrdering;
       return;
     }
@@ -278,6 +288,104 @@ class _PosPageState extends ConsumerState<PosPage> {
         ),
       );
     }
+  }
+
+  /// Quick popup numpad untuk input jumlah tamu saat kasir tap meja kosong.
+  /// 1 tap quick (1/2/4/6) atau ketik manual. Returns null kalau user cancel.
+  /// Default 1 (single seater). Capped 1-50.
+  Future<int?> _askGuestCount(String tableName) async {
+    int selected = 2; // default rekomendasi 2 — most common warkop scenario
+    final manualController = TextEditingController();
+    return showDialog<int>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          void pick(int n) {
+            setLocal(() {
+              selected = n;
+              manualController.text = n.toString();
+            });
+          }
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(LucideIcons.users, size: 22, color: AppColors.primary),
+                const SizedBox(width: 10),
+                Text('Berapa orang?', style: Theme.of(ctx).textTheme.titleMedium),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${BusinessLabels.getLabel('table')} $tableName',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [1, 2, 3, 4, 5, 6, 8, 10].map((n) {
+                    final active = selected == n;
+                    return SizedBox(
+                      width: 56,
+                      height: 56,
+                      child: FilledButton(
+                        onPressed: () => pick(n),
+                        style: FilledButton.styleFrom(
+                          backgroundColor:
+                              active ? AppColors.primary : AppColors.surfaceVariant,
+                          foregroundColor:
+                              active ? Colors.white : AppColors.textPrimary,
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: Text(
+                          '$n',
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: manualController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'atau ketik manual',
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onChanged: (v) {
+                    final parsed = int.tryParse(v);
+                    if (parsed != null && parsed >= 1 && parsed <= 50) {
+                      setLocal(() => selected = parsed);
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Batal'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(ctx, selected),
+                icon: const Icon(LucideIcons.arrowRight, size: 16),
+                label: Text('Lanjut ($selected org)'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   @override

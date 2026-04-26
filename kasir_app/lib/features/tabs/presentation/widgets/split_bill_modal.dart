@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/tab_provider.dart';
+import 'pay_items_modal.dart';
 
 class SplitBillModal extends ConsumerStatefulWidget {
   final TabModel tab;
@@ -17,7 +18,9 @@ class SplitBillModal extends ConsumerStatefulWidget {
 
 class _SplitBillModalState extends ConsumerState<SplitBillModal> {
   final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-  String _selectedMethod = 'equal'; // equal, per_item, custom
+  // Default: pay_items (warkop pattern Indonesia — centang item yg dibayar dulu).
+  // Mode lama (equal/per_item/custom) tetap tersedia tapi bukan default.
+  String _selectedMethod = 'pay_items';
   int _numPeople = 2;
   bool _isLoading = false;
   String? _error;
@@ -130,16 +133,20 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
             const SizedBox(height: 8),
             Row(
               children: [
-                _buildMethodChip('equal', 'Bagi Rata', LucideIcons.divide),
+                _buildMethodChip('pay_items', 'Bayar\nSebagian', LucideIcons.checkSquare),
                 const SizedBox(width: 6),
-                _buildMethodChip('per_item', 'Per Item', LucideIcons.listChecks),
+                _buildMethodChip('equal', 'Bagi\nRata', LucideIcons.divide),
                 const SizedBox(width: 6),
-                _buildMethodChip('custom', 'Custom', LucideIcons.penTool),
+                _buildMethodChip('per_item', 'Per\nTamu', LucideIcons.listChecks),
+                const SizedBox(width: 6),
+                _buildMethodChip('custom', 'Nominal\nCustom', LucideIcons.penTool),
               ],
             ),
             const SizedBox(height: 20),
 
-            if (_selectedMethod == 'equal') ...[
+            if (_selectedMethod == 'pay_items') ...[
+              _buildPayItemsIntro(),
+            ] else if (_selectedMethod == 'equal') ...[
               // Equal split
               Text('Jumlah Orang', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
               const SizedBox(height: 8),
@@ -279,20 +286,120 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
             ],
 
             const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: FilledButton.icon(
-                onPressed: _isLoading ? null : _submitSplit,
-                icon: _isLoading
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(LucideIcons.check, size: 18),
-                label: const Text('Konfirmasi Split'),
-                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            // Pay-items mode punya tombol bayar sendiri di PayItemsModal —
+            // sembunyiin "Konfirmasi Split" biar gak ambigu (nge-trigger 2 flow).
+            if (_selectedMethod != 'pay_items')
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: FilledButton.icon(
+                  onPressed: _isLoading ? null : _submitSplit,
+                  icon: _isLoading
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(LucideIcons.check, size: 18),
+                  label: const Text('Konfirmasi Split'),
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                ),
               ),
-            ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Intro section untuk mode "Bayar Sebagian" (warkop pattern Indonesia).
+  /// Beda dari 3 mode lain: gak butuh assign tamu / input nominal — kasir tinggal
+  /// centang item yg customer mau bayar duluan, sisa unpaid nempel di tab.
+  Widget _buildPayItemsIntro() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.success.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.success.withOpacity(0.3)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(LucideIcons.lightbulb, color: AppColors.success, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Cara warkop Indonesia',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Centang menu yang dia bayar, langsung bayar. Sisa nempel di tab — '
+                      'orang berikutnya nyusul tinggal centang punya dia.',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: FilledButton.icon(
+            onPressed: _isLoading ? null : _launchPayItems,
+            icon: _isLoading
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(LucideIcons.checkSquare, size: 20),
+            label: const Text(
+              'Mulai Pilih Item & Bayar',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Load tab items, filter unpaid, close current modal & push PayItemsModal
+  /// (warkop pattern). Edge case: kalau semua items udah paid → kasih notice +
+  /// fallback ke "Bagi Rata" mode (sisa amount dari paid_via_splits/full).
+  Future<void> _launchPayItems() async {
+    setState(() { _isLoading = true; _error = null; });
+    final items = await ref.read(tabProvider.notifier).getTabItems(widget.tab.id);
+    if (!mounted) return;
+
+    final unpaid = items.where((i) => i.paidAt == null).toList();
+
+    if (unpaid.isEmpty) {
+      setState(() {
+        _isLoading = false;
+        _selectedMethod = 'equal';
+        _error = 'Semua item sudah dibayar. Sisa tab bisa pakai mode lain.';
+      });
+      return;
+    }
+
+    setState(() => _isLoading = false);
+    Navigator.of(context).pop(); // close SplitBillModal
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => PayItemsModal(
+        tab: widget.tab,
+        unpaidItems: unpaid,
+        onPaid: widget.onSplitDone,
       ),
     );
   }
