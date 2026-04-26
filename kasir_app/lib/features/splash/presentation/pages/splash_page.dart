@@ -24,9 +24,13 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
   static const _versionJsonUrl =
       'https://raw.githubusercontent.com/muhivan752/Kasira-OS-Intelligence/main/version.json';
 
+  // P4 Quick Win #5: timeout 5s → 2s (conservative variant). raw.githubusercontent
+  // CDN umumnya <1s, 2s cukup generous untuk worst case. Pre-fix: kalau GitHub
+  // flaky/down, splash block 5s × 2 timeout (connect+receive) = 10s. Post-fix:
+  // max 2s blocking, fallback ke navigasi normal (try-catch silent).
   Dio get _dio => Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 5),
-    receiveTimeout: const Duration(seconds: 5),
+    connectTimeout: const Duration(seconds: 2),
+    receiveTimeout: const Duration(seconds: 2),
   ));
 
   @override
