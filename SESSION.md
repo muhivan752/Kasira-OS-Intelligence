@@ -541,3 +541,56 @@ a95440f fix(backend): MissingGreenlet di list_tabs + get_tab_by_table
 
 ### Cara reconnect:
 > "baca CLAUDE.md, MEMORY.md, SESSION.md di /var/www/kasira/ lalu lanjut dari NEXT ACTION"
+
+---
+
+## ✅ SESI 2026-04-26 (EOD+1) — Split-Bill Float-vs-Decimal Hotfix → APK v1.0.51
+
+### Bug Report
+Ivan manual test APK v1.0.50 → split-bill cappucino bug "pembayaran kurang" walau nominal pas. Sengaja pivot dari pay_split modal ke "Bayar Sebagian" pay-items pattern (post v1.0.47 default).
+
+### Root Cause
+`pay_items_modal.dart:_selectedTotal` (line 57-69) pake Dart `double` multiply tanpa per-share quantize:
+```dart
+final shareTax = selectedSubtotal * taxRate;  // 27000 * 0.0909... = 2454.5454545454546
+```
+
+Backend `tab_service.py:items_proportional_due()` (line 51-76) quantize tiap share:
+```python
+share_tax = (items_subtotal * tax_rate).quantize(Decimal('0.01'))  // = 2454.55
+```
+
+Total drift Rp 0.0045 → frontend send `amount_paid = 32424.5454...`, backend hitung `total_due = 32424.55` → 32424.5454 < 32424.55 = TRUE → 400 "Nominal pembayaran kurang".
+
+Reproduced di prod tab `6f78fc56-...`:
+- subtotal 55K (tax-inclusive scheme), tax 5K, service 6050
+- 3 item: Es Teh 10K (paid), Nasi Lele 18K (paid), Cappuccino 27K (unpaid)
+- tax_rate = 5K/55K = 0.0909... non-integer ratio = trigger float drift
+
+### Fix (commit `72f1fff`)
+1 file changed di `pay_items_modal.dart`:
+- Tambah `double _q2(double x) => (x * 100).roundToDouble() / 100;` helper
+- Apply quantize di shareTax + shareService sebelum sum
+- Frontend hasil now exact match backend (32424.55)
+
+### Deploy
+- Auto-bump CI commit `d1cf96c` (version.json → v1.0.51)
+- APK build run `24954460994` headSha `72f1fff` ✅ success
+- POS APK 67MB + Dapur APK 58MB di `/var/www/kasira/public/apk/` (bind-mount)
+- Backend container `version.json` synced via `docker cp`
+- Endpoint verified: `/api/download/{pos,dapur}` 200, `/api/v1/auth/app/version` returns 1.0.51
+
+### Scheduled Follow-up
+Routine `trig_01PsJEKFr2KEDJF5SBm8opu5` fires **Sun 2026-05-03T10:00:00Z (17:00 WIB)** — sweep audit precision mismatch di tab/payment endpoints, file GitHub issue kalau nemu sisa.
+Manage: https://claude.ai/code/routines/trig_01PsJEKFr2KEDJF5SBm8opu5
+
+### Commit list
+```
+d1cf96c chore: update version.json → v1.0.51 (CI auto)
+72f1fff fix(flutter): pay-items quantize-per-share match backend Decimal
+```
+
+### NEXT ACTION (per 2026-04-26 EOD+1)
+1. ⏳ Ivan re-test APK v1.0.51 — repro tab cappucino → bayar sebagian → harus sukses
+2. ⏳ Tunggu sweep agent 2026-05-03 → review GitHub issue kalau ada findings
+3. ⏳ Lanjut yg masih open (pre-existing): Fonnte device pisah, onboard cafe pilot pertama Starter, BYOK live merchant 1 onboard

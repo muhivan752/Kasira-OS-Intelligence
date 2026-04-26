@@ -159,8 +159,8 @@
 ## ⏳ IN PROGRESS (per 2026-04-26)
 - VPS sudah live: Ubuntu 22.04, semua container running (backend:8000, frontend:3000, db:5432, redis:6379)
 - Admin: phone 6285270782220, outlet slug: kasira-coffee (MASTER_OTP sudah dihapus 2026-04-25 — production OTP WA only)
-- APK terbaru: **v1.0.45** (POS + Dapur), download via GitHub Releases
-- Migration terakhir: **085** (`order_item_payment` — warkop ad-hoc per-item payment)
+- APK terbaru: **v1.0.51** (POS + Dapur, fix split-bill float vs Decimal), download via GitHub Releases
+- Migration terakhir: **086** (`outlets.xendit_callback_token` — BYOK Phase 2)
 - Telegram healthcheck cron LIVE (state-change throttle, anti-spam)
 - 25 tenant siap pilot (90% confidence cap, 30 conservative cap per `project_publish_readiness.md`)
 
@@ -198,6 +198,12 @@
 - Dashboard: buy_price form + `/laporan/margin` page (close margin tracking gap)
 - UX: clarify "modal" vs "stok" untuk merchant non-technical
 - v1.0.39 published
+
+### Split-Bill Float-vs-Decimal Hotfix (2026-04-26 EOD)
+- Bug: `pay_items_modal.dart:_selectedTotal` pake double float multiply tanpa quantize-per-share, sementara backend `tab_service.py:items_proportional_due()` quantize via `Decimal('0.01')`. Drift Rp 0.0045/share → backend reject "Nominal pembayaran kurang" walau display match.
+- Reproduced: tab cappucino real merchant tax-inclusive ratio non-integer (5K/55K=0.0909..)
+- Fix `72f1fff`: `_q2()` helper di Flutter mirror backend quantize. APK v1.0.51 built+deployed kasira.online.
+- Sweep agent scheduled: `trig_01PsJEKFr2KEDJF5SBm8opu5` fires 2026-05-03 — audit other proportional compute sites.
 
 ### Pre-Launch Hardening (2026-04-25)
 - Remove MASTER_OTP bypass (production OTP WA only)
