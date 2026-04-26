@@ -49,10 +49,23 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
     super.dispose();
   }
 
+  /// Total yg DI-CHARGE ke customer = subtotal items + proportional tax + service share.
+  /// Mirror backend `items_proportional_due()` di tab_service.py — WAJIB konsisten
+  /// supaya kasir nampilin nominal yg same dgn yg backend hitung saat submit.
+  /// Bug pre-fix: cuma sum item.totalPrice (subtotal level) → kasir bayar kurang
+  /// dari total tab → tab.remaining stuck (tax+SC orphan).
   double get _selectedTotal {
-    return widget.unpaidItems
+    final selectedSubtotal = widget.unpaidItems
         .where((i) => _selected.contains(i.id))
         .fold(0.0, (sum, i) => sum + i.totalPrice);
+    if (selectedSubtotal == 0) return 0;
+    final tabSubtotal = widget.tab.subtotal;
+    if (tabSubtotal == 0) return selectedSubtotal;
+    final taxRate = widget.tab.taxAmount / tabSubtotal;
+    final serviceRate = widget.tab.serviceChargeAmount / tabSubtotal;
+    final shareTax = selectedSubtotal * taxRate;
+    final shareService = selectedSubtotal * serviceRate;
+    return selectedSubtotal + shareTax + shareService;
   }
 
   void _toggle(String itemId) {

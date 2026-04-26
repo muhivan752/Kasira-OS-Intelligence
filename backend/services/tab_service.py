@@ -48,15 +48,49 @@ def tab_event(db, tab: Tab, event_type: str, data: dict, user_id=None):
     ))
 
 
+def items_proportional_due(tab: Tab, items_subtotal: Decimal) -> Decimal:
+    """Hitung total due (subtotal + proportional tax + proportional service charge)
+    untuk subset items dari tab. Mirror split_per_item logic (tabs.py:335).
+
+    Pakai di 2 tempat — WAJIB konsisten:
+    - `compute_paid_items_total()` — sum total udah dibayar via items.paid_at
+    - `pay_items` endpoint — `total_due` yg ditagih ke customer
+
+    Kalau 2 caller diverge → tab gak close 'paid' walau semua items lunas
+    (tax/SC orphan stuck di remaining). Bug discovery: 2026-04-26.
+
+    Formula:
+        share_tax     = items_subtotal * (tab.tax_amount / tab.subtotal)
+        share_service = items_subtotal * (tab.service_charge_amount / tab.subtotal)
+        total_due     = items_subtotal + share_tax + share_service
+    """
+    if items_subtotal == 0:
+        return Decimal('0')
+    subtotal = Decimal(str(tab.subtotal or 0))
+    if subtotal == 0:
+        return items_subtotal
+    tax_rate = Decimal(str(tab.tax_amount or 0)) / subtotal
+    service_rate = Decimal(str(tab.service_charge_amount or 0)) / subtotal
+    share_tax = (items_subtotal * tax_rate).quantize(Decimal('0.01'))
+    share_service = (items_subtotal * service_rate).quantize(Decimal('0.01'))
+    return items_subtotal + share_tax + share_service
+
+
 def compute_paid_items_total(tab: Tab) -> Decimal:
-    """Sum total_price dari order_items yg paid_at NOT NULL (ad-hoc per-item payment).
+    """Sum total_price (subtotal level) dari order_items yg paid_at NOT NULL,
+    PLUS proportional tax + service charge share via items_proportional_due().
+
+    Kenapa include tax+SC share: pay-items flow charge customer dengan total
+    full (subtotal + tax + service). Biar tab bisa close ke 'paid' saat semua
+    items lunas, paid_via_items HARUS match what was charged. Kalau cuma
+    subtotal, tab.remaining = tax+SC orphan stuck selamanya.
 
     WAJIB tab di-load dgn selectinload(Tab.orders).selectinload(Order.items).
     Skip cancelled orders. Soft-deleted orders/items excluded.
     """
-    total = Decimal('0')
     if not tab.orders:
-        return total
+        return Decimal('0')
+    paid_subtotal = Decimal('0')
     for o in tab.orders:
         # status bisa Enum atau string — handle both
         order_status = o.status.value if hasattr(o.status, 'value') else str(o.status)
@@ -69,8 +103,8 @@ def compute_paid_items_total(tab: Tab) -> Decimal:
                 continue
             if item.paid_at is None:
                 continue
-            total += Decimal(str(item.total_price or 0))
-    return total
+            paid_subtotal += Decimal(str(item.total_price or 0))
+    return items_proportional_due(tab, paid_subtotal)
 
 
 def tab_remaining_after_items(tab: Tab) -> Decimal:

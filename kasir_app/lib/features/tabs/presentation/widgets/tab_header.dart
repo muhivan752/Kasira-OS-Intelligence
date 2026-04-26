@@ -46,7 +46,13 @@ class TabHeader extends StatelessWidget {
                 children: [
                   _buildSummaryItem('Total', currency.format(tab.totalAmount), AppColors.textPrimary),
                   Container(width: 1, height: 32, color: AppColors.border),
-                  _buildSummaryItem('Dibayar', currency.format(tab.paidAmount), AppColors.success),
+                  // "Dibayar" = total - sisa. Pakai computed (bukan tab.paidAmount raw)
+                  // karena pay-items adhoc gak update tab.paid_amount (warkop pattern,
+                  // source of truth = items.paid_at). Backend remaining_amount sudah
+                  // include semua: split/full + items adhoc.
+                  _buildSummaryItem('Dibayar',
+                      currency.format(tab.totalAmount - tab.remainingAmount),
+                      AppColors.success),
                   Container(width: 1, height: 32, color: AppColors.border),
                   _buildSummaryItem('Sisa', currency.format(tab.remainingAmount),
                       tab.remainingAmount > 0 ? AppColors.warning : AppColors.success),

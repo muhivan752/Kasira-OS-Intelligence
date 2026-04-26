@@ -50,6 +50,7 @@ from backend.services.tab_service import (
     recalculate_tab as _recalculate_tab,
     tab_remaining_after_items as _tab_remaining_after_items,
     compute_paid_items_total as _compute_paid_items_total,
+    items_proportional_due as _items_proportional_due,
     find_active_shift as _find_active_shift,
 )
 
@@ -787,8 +788,12 @@ async def pay_items(
             )
         target_items.append((order, item))
 
-    # Compute total
-    total_due = sum((Decimal(str(it.total_price or 0)) for _, it in target_items), Decimal('0'))
+    # Compute total dgn proportional tax + service charge share.
+    # Mirror split_per_item logic + konsisten dgn compute_paid_items_total
+    # (tab_service.py) — kalau diverge, tab gak close 'paid' walau semua
+    # items lunas (tax/SC orphan stuck di remaining).
+    items_subtotal = sum((Decimal(str(it.total_price or 0)) for _, it in target_items), Decimal('0'))
+    total_due = _items_proportional_due(tab, items_subtotal)
     if total_due <= 0:
         raise HTTPException(status_code=400, detail="Total item Rp 0, tidak ada yg perlu dibayar")
 
