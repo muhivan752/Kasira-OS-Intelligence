@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 
@@ -44,7 +45,8 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
   }
 
   Future<void> _init() async {
-    await Future.delayed(const Duration(milliseconds: 800));
+    // P1 Quick Win #4: hapus 800ms artificial delay — animation controller
+    // 600ms udah jalan parallel via initState. Boot saves 800ms.
     await _checkVersion();
   }
 
@@ -101,9 +103,17 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
     return false;
   }
 
-  void _openUpdate(String? url) {
-    // In production: use url_launcher to open URL
-    // debugPrint('Open update URL: $url');
+  Future<void> _openUpdate(String? url) async {
+    // P1 Quick Win #9: was no-op pre-fix — force update tombol gak jalan.
+    // url_launcher dep udah ada di pubspec.
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Silent fail — kalau browser gak bisa buka, user manual download
+    }
   }
 
   Future<void> _navigate() async {

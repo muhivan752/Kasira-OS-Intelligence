@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/sync/sync_provider.dart';
@@ -319,12 +320,16 @@ class _ProductTileState extends State<_ProductTile> {
               child: product.imageUrl != null && product.imageUrl!.isNotEmpty
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: Image.network(
-                        product.imageUrl!,
+                      child: CachedNetworkImage(
+                        // P1 Quick Win #8: pre-fix Image.network = redownload
+                        // tiap buka page (50 produk = 50 download). Post-fix
+                        // disk+memory cache via cached_network_image package.
+                        imageUrl: product.imageUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
+                        errorWidget: (_, __, ___) => const Icon(
                             LucideIcons.coffee,
                             color: AppColors.textTertiary),
+                        placeholder: (_, __) => const SizedBox.shrink(),
                       ),
                     )
                   : const Icon(LucideIcons.coffee,

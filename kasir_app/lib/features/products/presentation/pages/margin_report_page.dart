@@ -123,25 +123,35 @@ class _MarginReportPageState extends ConsumerState<MarginReportPage> {
         }
 
         final report = snapshot.data!;
+        // P1 Quick Win #7: ganti ListView eager → ListView.builder lazy.
+        // Pre-fix: 100 produk = 100 _MarginTile materialize sekaligus saat
+        // buka page. Post-fix: lazy render hanya yg visible di viewport.
+        // Header items (SummaryCard, banner) di fixed indices.
+        final hasBanner = report.summary.missingBuyPrice > 0;
+        final headerCount = hasBanner ? 3 : 2; // SummaryCard + spacer (+ banner+spacer)
+        final isEmpty = report.products.isEmpty;
+
         return RefreshIndicator(
           onRefresh: _refresh,
-          child: ListView(
+          child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            children: [
-              _SummaryCard(report: report, currency: _currency),
-              const SizedBox(height: 16),
-              if (report.products.isEmpty)
-                const _EmptyState()
-              else ...[
-                if (report.summary.missingBuyPrice > 0) ...[
-                  _ActionFocusBanner(
-                    missingCount: report.summary.missingBuyPrice,
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                ...report.products.map((p) => _MarginTile(product: p, currency: _currency)),
-              ],
-            ],
+            itemCount: isEmpty ? 2 : headerCount + report.products.length,
+            itemBuilder: (context, idx) {
+              if (idx == 0) return _SummaryCard(report: report, currency: _currency);
+              if (idx == 1) return const SizedBox(height: 16);
+              if (isEmpty) return const _EmptyState();
+              if (hasBanner && idx == 2) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _ActionFocusBanner(missingCount: report.summary.missingBuyPrice),
+                    const SizedBox(height: 12),
+                  ],
+                );
+              }
+              final productIdx = idx - headerCount;
+              return _MarginTile(product: report.products[productIdx], currency: _currency);
+            },
           ),
         );
       },
