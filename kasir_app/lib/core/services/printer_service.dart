@@ -316,18 +316,7 @@ class ReceiptData {
     this.taxNumber,
     this.customFooter,
   });
-}
 
-class ReceiptLineItem {
-  final String name;
-  final int qty;
-  final double price;
-  final String? notes;
-  const ReceiptLineItem({required this.name, required this.qty, required this.price, this.notes});
-  double get subtotal => qty * price;
-}
-
-extension ReceiptDataJson on ReceiptData {
   static ReceiptData fromJson(Map<String, dynamic> j) {
     final itemsRaw = (j['items'] as List?) ?? const [];
     final items = itemsRaw.map((e) {
@@ -356,6 +345,15 @@ extension ReceiptDataJson on ReceiptData {
       customFooter: j['custom_footer']?.toString(),
     );
   }
+}
+
+class ReceiptLineItem {
+  final String name;
+  final int qty;
+  final double price;
+  final String? notes;
+  const ReceiptLineItem({required this.name, required this.qty, required this.price, this.notes});
+  double get subtotal => qty * price;
 }
 
 class SplitReceiptData {
