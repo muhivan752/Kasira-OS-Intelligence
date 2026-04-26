@@ -172,6 +172,7 @@ async def create_product(
         name=product_in.name,
         description=product_in.description,
         base_price=product_in.base_price,
+        buy_price=product_in.buy_price,
         image_url=product_in.image_url,
         is_active=product_in.is_active,
         stock_enabled=product_in.stock_enabled,

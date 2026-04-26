@@ -163,11 +163,18 @@ async def validate_brand_ownership(db: AsyncSession, brand_id, tenant_id) -> Non
 
 
 async def validate_product_ownership(db: AsyncSession, product_id, tenant_id):
-    """Fetch product dan validasi tenant ownership via brand. Return product atau raise."""
+    """Fetch product dan validasi tenant ownership via brand. Return product atau raise.
+
+    Eager-load `category` supaya `ProductResponse.model_validate()` aman di async
+    context (computed_field `category_name` lazy-load gak bisa dipake — bikin
+    MissingGreenlet di GET/PUT/POST/restock endpoint).
+    """
+    from sqlalchemy.orm import selectinload
     from backend.models.product import Product
     from backend.models.brand import Brand
     stmt = (
         select(Product)
+        .options(selectinload(Product.category))
         .join(Brand, Product.brand_id == Brand.id)
         .where(
             Product.id == product_id,

@@ -204,6 +204,9 @@ async with AsyncSessionLocal() as db:
 | `GET /ingredients/` | Pro-only (`require_pro_tier`), perlu brand_id + outlet_id |
 | `GET /auth/me` | Returns `subscription_tier` + `stock_mode` |
 | `POST /ingredients/{id}/restock` | Butuh `outlet_id` di body |
+| `POST /shifts/{id}/close` | Body field `ending_cash` (BUKAN `closing_cash`) |
+| `POST /payments/` | Body field `amount_due` + `amount_paid` (BUKAN single `amount`) |
+| `POST /connect/{slug}/order` | WAJIB `order_type` di body (selain `qty` + `idempotency_key`) — kalau gak kirim, 422 |
 
 ---
 
