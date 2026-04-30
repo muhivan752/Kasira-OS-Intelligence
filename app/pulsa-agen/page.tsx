@@ -66,8 +66,8 @@ const benefits = [
   },
   {
     icon: Sparkles,
-    title: 'Margin Jelas per Transaksi',
-    desc: 'Modal & harga jual transparan di aplikasi. Lo tahu untung berapa per transaksi sebelum klik bayar.',
+    title: 'Untung di Tangan Lo',
+    desc: 'Harga jual ke pelanggan kamu tentukan sendiri — lo lebih tahu kondisi pasar di area lo. Margin yang lo ambil = untung lo.',
   },
 ];
 
@@ -95,8 +95,8 @@ const faq = [
     a: 'Bukan. Itu modal kerja yang admin titipkan supaya kamu bisa mulai jualan tanpa setor sendiri. Cash dari customer kamu kumpulkan, lalu TF balik ke admin untuk isi saldo siklus berikutnya.',
   },
   {
-    q: 'Berapa margin per transaksi?',
-    a: 'Margin diatur admin. Tampil di aplikasi sebelum klik bayar — kamu bisa lihat modal & harga jual transparan. Biasanya Rp 200–1000 per transaksi tergantung produk.',
+    q: 'Berapa untung per transaksi?',
+    a: 'Untung kamu = harga jual ke pelanggan dikurangi harga beli dari KasiraPay. Harga beli dari kami tampil di aplikasi sebelum kamu klik bayar. Harga jual ke pelanggan kamu tentukan sendiri — lo yang lebih tahu kondisi pasar di area lo. Biasanya agen ambil margin Rp 1.000–3.000 per transaksi.',
   },
   {
     q: 'Top up saldo gimana?',
@@ -293,7 +293,7 @@ export default function PulsaAgenPage() {
           <div className="bg-white rounded-2xl p-6 lg:p-10 border border-emerald-100 shadow-sm">
             <div className="flex items-center gap-3 mb-5">
               <Clock className="w-5 h-5 text-emerald-600" />
-              <h3 className="text-xl font-bold text-gray-900">Contoh siklus saldo</h3>
+              <h3 className="text-xl font-bold text-gray-900">Contoh siklus jualan</h3>
             </div>
             <ol className="space-y-3 text-sm text-gray-600 leading-relaxed">
               <li className="flex gap-3">
@@ -309,7 +309,7 @@ export default function PulsaAgenPage() {
                   2
                 </span>
                 <span>
-                  Pelanggan mau pulsa Telkomsel 25K. Lo bayar pakai saldo (modal Rp 25.300, kamu jual Rp 25.500). Saldo tinggal Rp 174.500.
+                  Pelanggan kamu mau pulsa Telkomsel 25K. Lo cek di app KasiraPay — harga belinya misal <strong className="text-gray-900">Rp 25.500</strong>. Lo bayar pakai saldo. Saldo tinggal Rp 174.500.
                 </span>
               </li>
               <li className="flex gap-3">
@@ -317,7 +317,7 @@ export default function PulsaAgenPage() {
                   3
                 </span>
                 <span>
-                  Pelanggan kasih Rp 25.500 cash ke kamu. Itu uang masuk ke kantong kamu (margin Rp 200 + modal Rp 25.300 yang harus dibalikin).
+                  Lo jual ke pelanggan misal <strong className="text-gray-900">Rp 28.000</strong> (lo bebas tentukan harga jual sesuai kondisi pasar di area lo). Pelanggan bayar cash Rp 28.000 ke kamu.
                 </span>
               </li>
               <li className="flex gap-3">
@@ -325,12 +325,12 @@ export default function PulsaAgenPage() {
                   4
                 </span>
                 <span>
-                  Saldo aplikasi habis? TF cash kumpulan kamu balik ke admin via BCA/SeaBank, kirim bukti via WA → saldo aktif lagi, siklus baru mulai.
+                  Untung kamu = <strong className="text-gray-900">Rp 28.000 − Rp 25.500 = Rp 2.500</strong> per transaksi. Cash hasil jualan kamu kumpulkan, sebagian besar untuk TF balik ke admin (isi saldo siklus berikutnya), sisanya untung kamu.
                 </span>
               </li>
             </ol>
             <div className="mt-6 rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-sm text-emerald-900">
-              <strong>Inti:</strong> saldo awal dagang itu modal kerja (revolving), bukan freebie. Untung kamu = margin per transaksi × volume.
+              <strong>Inti:</strong> Lo yang tentukan harga jual ke pelanggan — lo paling tahu pasar di area lo. KasiraPay sediakan modal kerja + harga beli yang competitive, untung di tangan lo.
             </div>
           </div>
         </div>
