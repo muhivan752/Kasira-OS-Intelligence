@@ -16,7 +16,23 @@ export const metadata: Metadata = {
     description:
       'Modal dari kami, jualan pulsa harian, top up gampang via TF. Daftar online 5 menit.',
     url: 'https://kasira.online/pulsa-agen',
+    type: 'website',
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Jadi Agen Pulsa KasiraPay',
+    description: 'Modal dari kami, jualan pulsa harian, top up gampang via TF.',
+  },
+  keywords: [
+    'agen pulsa',
+    'daftar agen pulsa online',
+    'KasiraPay',
+    'jualan pulsa',
+    'agen e-wallet',
+    'modal jualan pulsa',
+    'agen pulsa Sumatera',
+    'reseller pulsa Indonesia',
+  ],
 };
 
 const REGISTER_URL = 'https://pulsa.kasira.online/app/register';
@@ -96,9 +112,60 @@ const faq = [
   },
 ];
 
+// JSON-LD structured data for Google rich results.
+// Service = KasiraPay sebagai layanan agen pulsa.
+// FAQPage = 5 pertanyaan di section FAQ.
+// BreadcrumbList = kasira.online > pulsa-agen.
+const serviceLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Service',
+  serviceType: 'Agen Pulsa & E-Wallet Digital',
+  provider: {
+    '@type': 'Organization',
+    name: 'KasiraPay',
+    url: 'https://kasira.online/pulsa-agen',
+    parentOrganization: {
+      '@type': 'Organization',
+      name: 'Kasira',
+      url: 'https://kasira.online',
+    },
+  },
+  areaServed: { '@type': 'Country', name: 'Indonesia' },
+  description:
+    'Layanan agen pulsa digital dengan saldo awal dagang dari admin. Agen jualan pulsa, e-money, token PLN, dan top-up game via aplikasi HP.',
+  offers: {
+    '@type': 'Offer',
+    description: 'Saldo Awal Dagang gratis untuk mulai jualan setelah KTP disetujui',
+    availability: 'https://schema.org/InStock',
+    eligibleRegion: { '@type': 'Country', name: 'Indonesia' },
+  },
+};
+
+const faqLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faq.map((item) => ({
+    '@type': 'Question',
+    name: item.q,
+    acceptedAnswer: { '@type': 'Answer', text: item.a },
+  })),
+};
+
+const breadcrumbLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Kasira', item: 'https://kasira.online' },
+    { '@type': 'ListItem', position: 2, name: 'Agen Pulsa', item: 'https://kasira.online/pulsa-agen' },
+  ],
+};
+
 export default function PulsaAgenPage() {
   return (
     <div className="min-h-screen bg-white font-sans">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(serviceLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       <Navbar />
 
       {/* HERO */}
