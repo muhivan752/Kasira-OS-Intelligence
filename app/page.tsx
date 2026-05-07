@@ -640,6 +640,15 @@ export default function LandingPage() {
             <p className="text-gray-500 text-sm">&copy; 2026 Kasira. All rights reserved.</p>
             <p className="text-gray-600 text-sm">POS digital untuk UMKM Indonesia</p>
           </div>
+          <div className="pt-6 mt-6 border-t border-gray-900">
+            <p className="text-gray-600 text-xs leading-relaxed max-w-3xl mx-auto text-center">
+              Layanan disediakan dengan upaya terbaik (best-effort uptime). Tidak ada jaminan SLA tertulis.
+              Jika gangguan di luar pemeliharaan terjadwal melebihi 24 jam berturut, kompensasi prorate
+              akan diberikan untuk hari yang terdampak. Pembatalan langganan dapat dilakukan kapan saja
+              via WhatsApp; sisa periode aktif tetap berlaku hingga akhir bulan tagihan.
+              Dengan menggunakan layanan, Anda menyetujui ketentuan ini.
+            </p>
+          </div>
         </div>
       </footer>
     </div>
