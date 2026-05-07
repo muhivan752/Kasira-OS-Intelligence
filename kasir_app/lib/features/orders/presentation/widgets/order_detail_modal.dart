@@ -367,7 +367,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
         options: Options(headers: cache.authHeaders),
       );
       final data = resp.data['data'] as Map<String, dynamic>;
-      receiptData = ReceiptDataJson.fromJson(data);
+      receiptData = ReceiptData.fromJson(data);
       // Cache outlet info untuk offline fallback next time
       await _cacheOutletInfo(
         name: receiptData.outletName,
