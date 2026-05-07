@@ -10,6 +10,7 @@ import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/send_wa_receipt_dialog.dart';
 import '../../providers/tab_provider.dart';
+import 'qris_waiting_modal.dart';
 
 /// Pay a single split or pay full remaining tab.
 /// If [split] is null, pays the full remaining amount.
@@ -100,34 +101,15 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
             ),
             const SizedBox(height: 20),
 
-            // Payment method (cash-only — QRIS untuk tab belum support)
+            // Payment method
             Text('Metode Pembayaran', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
             const SizedBox(height: 8),
             Row(
               children: [
                 _buildMethodChip('cash', 'Cash', LucideIcons.banknote),
+                const SizedBox(width: 8),
+                _buildMethodChip('qris', 'QRIS', LucideIcons.qrCode),
               ],
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.warning.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(LucideIcons.info, size: 14, color: AppColors.warning),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'QRIS untuk tab belum tersedia. Pakai POS reguler kalau customer mau bayar QRIS.',
-                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                    ),
-                  ),
-                ],
-              ),
             ),
             const SizedBox(height: 20),
 
@@ -318,6 +300,53 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
         // setelah pop, navigator + messenger tetap alive (parent page masih ada).
         final messenger = ScaffoldMessenger.of(context);
         final rootNav = Navigator.of(context, rootNavigator: true);
+
+        // QRIS branch — backend created Payment(pending) + Xendit QR. Switch to
+        // waiting modal that polls /payments/{id}/status. Caller refresh tab on
+        // close; autoprint fires inside waiting modal callback (race-safe via
+        // claim-print).
+        if (_paymentMethod == 'qris' && result.pendingQris != null) {
+          // Capture non-null refs before any await/closure boundary
+          final qris = result.pendingQris!;
+          final tabIdSnap = widget.tab.id;
+          final orderIdsSnap = widget.tab.orderIds;
+          final splitIdSnap = widget.split?.id;
+          Navigator.pop(context);
+          widget.onPaid(result); // refresh parent tab state — split now status=pending
+          final wasPaid = await showModalBottomSheet<bool>(
+            context: rootNav.context,
+            isScrollControlled: true,
+            isDismissible: false,
+            enableDrag: false,
+            builder: (_) => QrisWaitingModal(
+              tabId: tabIdSnap,
+              pendingQris: qris,
+              onPaidAndClaimedPrint: (paymentId) async {
+                // Race-safe autoprint — only fires if backend claim-print
+                // returned claimed=true (mutex via receipt_printed_at column).
+                if (splitIdSnap != null) {
+                  await _autoPrintSplitReceipt(tabIdSnap, splitIdSnap);
+                } else {
+                  await _autoPrintFullReceipt(orderIdsSnap);
+                }
+              },
+            ),
+          );
+          // After waiting modal closes, refetch tab to get latest state
+          // (paid → tab closed; cancelled → split unlocked).
+          final notifier2 = ref.read(tabProvider.notifier);
+          final refreshed = await notifier2.getTab(widget.tab.id);
+          if (refreshed != null) widget.onPaid(refreshed);
+          if (wasPaid == true && refreshed?.isPaid == true) {
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text('Tab lunas! Pembayaran QRIS confirmed.'),
+                backgroundColor: AppColors.success,
+              ),
+            );
+          }
+          return;
+        }
 
         // Auto-print struk untuk pembayaran yg udah confirmed (cash only — QRIS pending poll).
         // Fail-silent (Rule #54) — print error gak boleh block snackbar success.

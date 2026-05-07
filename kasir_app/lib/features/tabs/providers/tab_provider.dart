@@ -41,6 +41,38 @@ class TabSplitModel {
   bool get isUnpaid => status == 'unpaid';
 }
 
+class PendingQrisModel {
+  final String paymentId;
+  final double amountDue;
+  final String? qrisUrl;
+  final DateTime? qrisExpiredAt;
+  final String status; // 'pending' | 'pending_manual_check' | 'failed'
+
+  const PendingQrisModel({
+    required this.paymentId,
+    required this.amountDue,
+    this.qrisUrl,
+    this.qrisExpiredAt,
+    required this.status,
+  });
+
+  bool get isReady => status == 'pending' && qrisUrl != null;
+  bool get isFailed => status == 'failed';
+  bool get isManualCheck => status == 'pending_manual_check';
+
+  factory PendingQrisModel.fromJson(Map<String, dynamic> j) => PendingQrisModel(
+        paymentId: j['payment_id'] as String,
+        amountDue: j['amount_due'] is num
+            ? (j['amount_due'] as num).toDouble()
+            : double.tryParse(j['amount_due']?.toString() ?? '') ?? 0,
+        qrisUrl: j['qris_url'] as String?,
+        qrisExpiredAt: j['qris_expired_at'] != null
+            ? DateTime.tryParse(j['qris_expired_at'] as String)
+            : null,
+        status: j['status'] as String? ?? 'pending',
+      );
+}
+
 class TabModel {
   final String id;
   final String outletId;
@@ -63,6 +95,7 @@ class TabModel {
   final List<TabSplitModel> splits;
   final List<String> orderIds;
   final DateTime createdAt;
+  final PendingQrisModel? pendingQris;
 
   const TabModel({
     required this.id,
@@ -86,6 +119,7 @@ class TabModel {
     this.splits = const [],
     this.orderIds = const [],
     required this.createdAt,
+    this.pendingQris,
   });
 
   static double _toDouble(dynamic v) =>
@@ -116,6 +150,9 @@ class TabModel {
             [],
         orderIds: (json['order_ids'] as List?)?.map((e) => e.toString()).toList() ?? [],
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+        pendingQris: json['pending_qris'] != null
+            ? PendingQrisModel.fromJson(json['pending_qris'] as Map<String, dynamic>)
+            : null,
       );
 
   bool get isOpen => status == 'open' || status == 'asking_bill';

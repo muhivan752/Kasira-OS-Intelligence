@@ -20,6 +20,8 @@ from backend.models.payment import Payment
 from backend.models.order import Order, OrderItem
 from backend.models.outlet import Outlet
 from backend.models.shift import Shift, ShiftStatus
+from backend.models.tab import Tab, TabSplit
+from backend.models.table import Table
 from backend.schemas.payment import PaymentCreate, PaymentResponse, PaymentStatus, PaymentMethod, RefundRequest, RefundApproval, RefundResponse
 from backend.schemas.order import OrderStatus
 from backend.schemas.response import StandardResponse
@@ -30,6 +32,219 @@ from backend.services.fonnte import send_whatsapp_message
 from backend.models.event import Event
 
 router = APIRouter()
+
+
+async def _handle_tab_payment_webhook_paid(db: AsyncSession, payment: Payment) -> None:
+    """Settle tab-side state when QRIS webhook arrives with status=paid.
+    Mirrors cash path in tabs.py pay_full/pay_split/pay_items.
+
+    Branches on which kind of tab payment this is:
+      - Has TabSplit with payment_id=this.id → split or full path
+        (pay-tab-full creates a single 'full' split too)
+      - No TabSplit but has items with paid_payment_id=this.id → pay-items path
+
+    Locks Tab via SELECT FOR UPDATE to serialize concurrent split webhooks.
+    """
+    from backend.models.event import Event as _Event
+
+    paid_at = datetime.now(timezone.utc)
+
+    # Lock tab row
+    tab_q = (
+        select(Tab)
+        .options(
+            selectinload(Tab.splits),
+            selectinload(Tab.orders).selectinload(Order.items),
+            selectinload(Tab.table),
+        )
+        .where(Tab.id == payment.tab_id)
+        .with_for_update()
+    )
+    tab_res = await db.execute(tab_q)
+    tab = tab_res.scalar_one_or_none()
+    if not tab:
+        logger.warning("tab_id %s not found for payment %s", payment.tab_id, payment.id)
+        return
+
+    tab_status = tab.status.value if hasattr(tab.status, 'value') else str(tab.status)
+    if tab_status in ('paid', 'cancelled'):
+        # Already settled by an earlier webhook OR cashier cancelled — idempotent skip.
+        return
+
+    # Find related TabSplit
+    related_split = None
+    for s in tab.splits:
+        if s.payment_id == payment.id:
+            related_split = s
+            break
+
+    if related_split is not None:
+        # Split or pay-tab-full path
+        related_split.status = 'paid'
+        related_split.paid_at = paid_at
+        related_split.row_version = (related_split.row_version or 0) + 1
+
+        split_amount = float(related_split.amount or 0)
+        tab.paid_amount = float(tab.paid_amount or 0) + split_amount
+
+        # For pay-tab-full: settle remaining items (paid_at=now where paid_payment_id=this)
+        # For pay-split: items not directly tied to split — only settle items where paid_payment_id=this.id
+        for o in tab.orders:
+            ostatus = o.status.value if hasattr(o.status, 'value') else str(o.status)
+            if ostatus == 'cancelled' or o.deleted_at is not None:
+                continue
+            for item in (o.items or []):
+                if item.deleted_at is None and item.paid_at is None and item.paid_payment_id == payment.id:
+                    item.paid_at = paid_at
+                    item.row_version = (item.row_version or 0) + 1
+
+        # Check if all splits paid → close tab
+        all_splits_paid = all(
+            (s.status.value if hasattr(s.status, 'value') else str(s.status)) == 'paid'
+            for s in tab.splits
+        )
+        if all_splits_paid:
+            tab.status = 'paid'
+            tab.closed_at = paid_at
+            for o in tab.orders:
+                ostatus = o.status.value if hasattr(o.status, 'value') else str(o.status)
+                if ostatus not in ('completed', 'cancelled'):
+                    o.status = 'completed'
+                    o.row_version = (o.row_version or 0) + 1
+            if tab.table_id:
+                tbl = await db.get(Table, tab.table_id)
+                if tbl and (tbl.status.value if hasattr(tbl.status, 'value') else str(tbl.status)) == 'occupied':
+                    tbl.status = 'available'
+                    tbl.row_version = (tbl.row_version or 0) + 1
+    else:
+        # pay-items path — settle items claimed by this payment
+        affected_orders = []
+        for o in tab.orders:
+            ostatus = o.status.value if hasattr(o.status, 'value') else str(o.status)
+            if ostatus == 'cancelled' or o.deleted_at is not None:
+                continue
+            order_touched = False
+            for item in (o.items or []):
+                if item.deleted_at is None and item.paid_at is None and item.paid_payment_id == payment.id:
+                    item.paid_at = paid_at
+                    item.row_version = (item.row_version or 0) + 1
+                    order_touched = True
+            if order_touched:
+                affected_orders.append(o)
+
+        # Auto-complete any orders where all items now paid
+        for o in affected_orders:
+            all_items_paid = all(
+                (it.deleted_at is not None) or (it.paid_at is not None)
+                for it in (o.items or [])
+            )
+            if all_items_paid:
+                ostatus = o.status.value if hasattr(o.status, 'value') else str(o.status)
+                if ostatus not in ('completed', 'cancelled'):
+                    o.status = 'completed'
+                    o.row_version = (o.row_version or 0) + 1
+
+        # Close tab if remaining ≤ 0
+        # Compute remaining inline (mirror tab_service.tab_remaining_after_items)
+        from decimal import Decimal as _D
+        total = _D(str(tab.total_amount or 0))
+        paid_via_tab = _D(str(tab.paid_amount or 0))
+        paid_via_items = _D('0')
+        for o in tab.orders:
+            ostatus = o.status.value if hasattr(o.status, 'value') else str(o.status)
+            if ostatus == 'cancelled' or o.deleted_at is not None:
+                continue
+            for item in (o.items or []):
+                if item.deleted_at is None and item.paid_at is not None:
+                    paid_via_items += _D(str(item.total_price or 0))
+        remaining = max(_D('0'), total - paid_via_tab - paid_via_items)
+        if remaining <= _D('0.01'):
+            tab.status = 'paid'
+            tab.closed_at = paid_at
+            for o in tab.orders:
+                ostatus = o.status.value if hasattr(o.status, 'value') else str(o.status)
+                if ostatus not in ('completed', 'cancelled'):
+                    o.status = 'completed'
+                    o.row_version = (o.row_version or 0) + 1
+            if tab.table_id:
+                tbl = await db.get(Table, tab.table_id)
+                if tbl and (tbl.status.value if hasattr(tbl.status, 'value') else str(tbl.status)) == 'occupied':
+                    tbl.status = 'available'
+                    tbl.row_version = (tbl.row_version or 0) + 1
+
+    tab.row_version = (tab.row_version or 0) + 1
+
+    # WA receipt — fail-silent (Rule #54). Mirror tabs._send_tab_wa_receipts but
+    # inline because webhook context can't easily call tab route helper.
+    sent_to_customers = set()
+    for order in (tab.orders or []):
+        if not order.customer_id or order.customer_id in sent_to_customers:
+            continue
+        sent_to_customers.add(order.customer_id)
+        try:
+            from backend.models.customer import Customer as _Customer
+            from backend.models.user import User as _UserModel
+            customer = await db.get(_Customer, order.customer_id)
+            if not customer or not customer.phone:
+                continue
+            outlet = await db.get(Outlet, payment.outlet_id)
+            outlet_name = outlet.name if outlet else "Kasira"
+            cashier_name = "-"
+            if order.user_id:
+                cashier = await db.get(_UserModel, order.user_id)
+                if cashier:
+                    cashier_name = cashier.full_name
+            struk = _build_receipt_text(
+                order, outlet_name, cashier_name, payment.payment_method, payment,
+                outlet_slug=getattr(outlet, 'slug', None),
+            )
+            asyncio.create_task(send_whatsapp_message(customer.phone, struk))
+        except Exception as e:
+            logger.warning("tab webhook WA receipt fail-silent: %s", e)
+
+
+async def _handle_tab_payment_webhook_failed(db: AsyncSession, payment: Payment) -> None:
+    """Release locks taken at QRIS init time when webhook arrives with status
+    failed/expired/cancelled. So kasir can retry pay-split/pay-items.
+
+      - TabSplit with payment_id=this → split.status='unpaid', payment_id=NULL
+      - Items with paid_payment_id=this AND paid_at IS NULL → clear paid_payment_id
+    """
+    # Lock tab row
+    tab_q = (
+        select(Tab)
+        .options(
+            selectinload(Tab.splits),
+            selectinload(Tab.orders).selectinload(Order.items),
+        )
+        .where(Tab.id == payment.tab_id)
+        .with_for_update()
+    )
+    tab_res = await db.execute(tab_q)
+    tab = tab_res.scalar_one_or_none()
+    if not tab:
+        return
+
+    tab_status = tab.status.value if hasattr(tab.status, 'value') else str(tab.status)
+    if tab_status in ('paid', 'cancelled'):
+        # Tab already closed via another path — nothing to release.
+        return
+
+    for s in tab.splits:
+        if s.payment_id == payment.id:
+            s_status = s.status.value if hasattr(s.status, 'value') else str(s.status)
+            if s_status != 'paid':  # Don't undo a paid split (paranoia)
+                s.status = 'unpaid'
+                s.payment_id = None
+                s.row_version = (s.row_version or 0) + 1
+
+    for o in (tab.orders or []):
+        for item in (o.items or []):
+            if item.paid_payment_id == payment.id and item.paid_at is None:
+                item.paid_payment_id = None
+                item.row_version = (item.row_version or 0) + 1
+
+    tab.row_version = (tab.row_version or 0) + 1
 
 
 # Field yg WAJIB di-strip sebelum simpan Xendit response ke DB / log.
@@ -647,9 +862,14 @@ async def xendit_webhook(
         if new_status == PaymentStatus.paid:
             payment.paid_at = datetime.now(timezone.utc)
             payment.amount_paid = float(gross_amount) # Use actual paid amount
-            
-            # Update related order if exists
-            if payment.order_id:
+
+            # Tab payment branch — handles split/full/items reconciliation +
+            # close logic + WA receipts. Skip order-only branch below to avoid
+            # mis-completing the first order (payment.order_id is just an anchor
+            # for tab payments; tab branch completes ALL orders correctly).
+            if payment.tab_id:
+                await _handle_tab_payment_webhook_paid(db, payment)
+            elif payment.order_id:
                 # Calculate total paid
                 paid_query = select(func.sum(Payment.amount_paid)).where(
                     Payment.order_id == payment.order_id,
@@ -726,6 +946,12 @@ async def xendit_webhook(
                             order.user_id or payment.outlet_id,  # fallback if no user
                             outlet_for_loyalty.tenant_id,
                         )
+        elif new_status == PaymentStatus.failed:
+            # Tab QRIS init expired/failed via Xendit — release locks so kasir
+            # can retry pay-split/pay-items. (Order-only payments don't need
+            # release; cashier just creates a new Payment row.)
+            if payment.tab_id:
+                await _handle_tab_payment_webhook_failed(db, payment)
 
         # Append payment event from webhook
         wh_event_type = "payment.completed" if new_status == PaymentStatus.paid else "payment.failed"
@@ -765,16 +991,67 @@ async def get_payment_status(
     payment = await db.get(Payment, payment_id)
     if not payment or payment.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Pembayaran tidak ditemukan")
-        
+
+    status_val = payment.status.value if hasattr(payment.status, 'value') else str(payment.status)
+    method_val = payment.payment_method.value if hasattr(payment.payment_method, 'value') else str(payment.payment_method)
     return StandardResponse(
         success=True,
         data={
             "id": str(payment.id),
-            "status": payment.status,
+            "status": status_val,
+            "payment_method": method_val,
             "paid_at": payment.paid_at,
-            "qris_url": payment.qris_url
+            "qris_url": payment.qris_url,
+            "qris_expired_at": payment.qris_expired_at,
+            "amount_due": payment.amount_due,
+            "amount_paid": payment.amount_paid,
+            "tab_id": str(payment.tab_id) if payment.tab_id else None,
+            "order_id": str(payment.order_id) if payment.order_id else None,
+            "receipt_printed_at": payment.receipt_printed_at,
         },
         request_id=request.state.request_id
+    )
+
+
+@router.post("/{payment_id}/claim-print", response_model=StandardResponse[Dict[str, Any]])
+async def claim_print_receipt(
+    request: Request,
+    payment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Atomic claim of "I'm about to print receipt". Returns claimed=true if
+    receipt_printed_at was NULL and we just set it. Returns claimed=false if
+    another caller already printed (received a webhook + raced to print first,
+    or cashier double-tap, etc.).
+
+    Use case: Flutter autoprint path calls this BEFORE building+sending bytes
+    to printer. If claimed=false → skip (someone else handled it). Manual
+    reprint button bypasses this — uses /receipt endpoints + always prints.
+
+    Race-safe via single UPDATE WHERE receipt_printed_at IS NULL.
+    """
+    from sqlalchemy import update as _sql_update
+    now = datetime.now(timezone.utc)
+    res = await db.execute(
+        _sql_update(Payment)
+        .where(Payment.id == payment_id, Payment.receipt_printed_at.is_(None))
+        .values(receipt_printed_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    await db.commit()
+    claimed = res.rowcount > 0
+    # Re-read after commit so caller sees authoritative timestamp.
+    payment = await db.get(Payment, payment_id)
+    if not payment or payment.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Pembayaran tidak ditemukan")
+    return StandardResponse(
+        success=True,
+        data={
+            "claimed": claimed,
+            "receipt_printed_at": payment.receipt_printed_at,
+        },
+        request_id=request.state.request_id,
     )
 
 @router.get("/refunds", response_model=StandardResponse[list[RefundResponse]])

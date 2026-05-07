@@ -30,6 +30,7 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 → BACA section "Tab/Split Bill" di ARCHITECTURE.md
 → `row_version` di pay_split itu milik **split**, bukan tab
 → Setelah set `order.tab_id`, HARUS `await db.flush()` sebelum recalculate
+→ Tab pay endpoints support **cash + QRIS** (B2 — Mei 2026). QRIS pakai async settle via webhook (`payments.py:_handle_tab_payment_webhook_paid` + `_handle_tab_payment_webhook_failed`). Card/transfer masih unsupported di tab path.
 
 **Recipe / Ingredient:**
 → Ingredient yang sudah `deleted_at IS NOT NULL` TETAP bisa di-reference oleh recipe lama
@@ -62,6 +63,8 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 14. **Jangan rebuild frontend tanpa cek image Created time vs commit time** — `docker inspect kasira-frontend-1 --format '{{.Created}}'` harus LEBIH BARU dari commit terakhir yg mau di-deploy. Gap → fitur belum aktif di prod.
 15. **Jangan release table di order completion path tanpa cek tab.status** — kalau `order.tab_id IS NOT NULL` AND `tab.status NOT IN ('paid', 'cancelled')`, JANGAN release table. Tab era: order completed = kitchen done, BUKAN "all paid". 2 code path yang HARUS pakai guard ini: `orders.py:519-533` (PUT /orders/status) + `stale_order_cleanup.py:185-220` (janitor orphan heal). Bug ke-discover 2026-04-25 saat split-bill testing — kitchen mark order ready/completed → table di-release prematurely → janitor heal back kalau di-recover manual. Fix: query `Tab.status` + skip release kalau active. Reference: commit `9762674`.
 16. **Jangan write background task yang query RLS table tanpa `SET LOCAL app.current_tenant_id = ''`** — RLS policy `tenants` cek `current_setting(..., true) = ''`, dan `current_setting(unset)` return NULL ≠ ''. Background tasks gak ada middleware set context, jadi default unset → query return 0 rows silently. Pattern wajib di awal session: `await db.execute(text("SET LOCAL app.current_tenant_id = ''"))`. Reference: `stale_order_cleanup.py:57`, `payment_reconciliation.py` (fixed 2026-04-25 commit `01910f5` — sebelumnya silent broken). Untuk RLS policy `sync_idempotency_keys` yang hard-cast UUID tanpa bypass clause, pakai per-tenant iteration pattern di `sync_idempotency_cleanup.py`.
+17. **Jangan trigger order_id branch di webhook untuk Payment yg punya `tab_id`** — tab payments selalu set `payment.order_id = first_order.id` sebagai anchor, tapi `payment.amount_due` itu sisa TAB (bukan first order's total). Webhook order branch akan salah-complete first order based on per-order total comparison. Pattern wajib: `if payment.tab_id: ... handle_tab(); elif payment.order_id: ... handle_order()`. Tab branch handles SEMUA orders, items, splits, tab close, table release, WA receipts. Reference: `payments.py:_handle_tab_payment_webhook_paid/_failed` (B2 ship Mei 2026).
+18. **Jangan print autoprint tanpa atomic claim via `POST /payments/{id}/claim-print`** — webhook + Flutter poll bisa race ke autoprint, double-print struk. `receipt_printed_at` column (migration 087) jadi mutex. Endpoint `claim-print` returns `claimed=true` only if was NULL → set timestamp. Manual reprint button bypass (intentional cashier action).
 
 ---
 

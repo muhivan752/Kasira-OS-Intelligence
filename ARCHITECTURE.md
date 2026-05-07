@@ -395,6 +395,13 @@ cancelled           (auto-close when all splits paid)
 - Saat semua splits paid → tab auto-close ke `paid`
 - Semua linked orders auto-complete
 
+### Tab Payment Methods (B2 — Mei 2026)
+- **Cash**: instant settle inline (existing behavior)
+- **QRIS**: backend create Payment(pending) + Xendit QR → response includes `pending_qris{payment_id, qris_url, qris_expired_at, status}`. Webhook async settle via `payments.py:_handle_tab_payment_webhook_paid` (split + items + tab close + WA receipt) atau `_handle_tab_payment_webhook_failed` (release locks pada expired/failed)
+- **Card / Transfer**: tidak didukung di tab path (HTTP 400 `TAB_PAYMENT_METHOD_UNSUPPORTED`). Pakai POS reguler untuk method ini.
+- **Race lock**: pay-items + pay-tab-full claim items via `order_items.paid_payment_id` (paid_at masih NULL). Validasi pay-items reject items yg `paid_payment_id` ditujukan ke Payment pending. Webhook gagal/expire clear `paid_payment_id` agar items bisa dipay ulang.
+- **Receipt idempotency**: Flutter autoprint via atomic `POST /payments/{id}/claim-print` — backend cek `receipt_printed_at IS NULL`. Cegah double-print saat webhook + Flutter poll race.
+
 ### ⚠️ KNOWN: Tab Add Order Needs Flush
 `tabs.py` — setelah `order.tab_id = tab.id`, **HARUS `await db.flush()`** sebelum `_recalculate_tab()`. Tanpa flush, query gak lihat order baru → total=0.
 

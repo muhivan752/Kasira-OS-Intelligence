@@ -448,7 +448,7 @@ async def pay_tab_full(
     if tab.row_version != body.row_version:
         raise HTTPException(status_code=409, detail="Data berubah, refresh dulu")
 
-    _enforce_tab_cash_only(body.payment_method)
+    _enforce_tab_supported_method(body.payment_method)
 
     total = Decimal(str(tab.total_amount))
     if total <= 0:
@@ -482,10 +482,17 @@ async def pay_tab_full(
                 Payment.outlet_id == tab.outlet_id,
             )
         )
-        if existing.scalar_one_or_none():
+        existing_payment = existing.scalar_one_or_none()
+        if existing_payment:
             tab = await _get_tab_or_404(db, tab.id)
+            tab_resp = _tab_response(tab)
+            # If existing payment is QRIS pending, surface it back so client can resume waiting modal
+            existing_method = existing_payment.payment_method.value if hasattr(existing_payment.payment_method, 'value') else str(existing_payment.payment_method)
+            existing_status = existing_payment.status.value if hasattr(existing_payment.status, 'value') else str(existing_payment.status)
+            if existing_method == 'qris' and existing_status in ('pending', 'pending_manual_check'):
+                tab_resp.pending_qris = _build_qris_info(existing_payment)
             return StandardResponse(
-                success=True, data=_tab_response(tab),
+                success=True, data=tab_resp,
                 request_id=request.state.request_id, message="Sudah dibayar (idempotent)"
             )
 
@@ -559,13 +566,34 @@ async def pay_tab_full(
 
         # WA receipt ke customer linked di tab.orders (fail-silent)
         await _send_tab_wa_receipts(db, tab, payment, body.payment_method)
+    elif body.payment_method == 'qris':
+        # Init Xendit QRIS — async settle via webhook (payments.py:652 tab branch)
+        outlet = await db.get(Outlet, tab.outlet_id)
+        await _create_qris_for_tab_payment(db, outlet, payment, current_user.tenant_id)
+        # Mark split_method so subsequent reads see this is a pay-full intent.
+        tab.split_method = 'full'
+        # Race protection: claim all unpaid items via paid_payment_id (no paid_at —
+        # CHECK constraint allows that). Webhook on success sets paid_at; on
+        # failure clears paid_payment_id to release the claim. Skip if QRIS init
+        # itself failed (status='failed') — payment is dead, no claim needed.
+        payment_status = payment.status.value if hasattr(payment.status, 'value') else str(payment.status)
+        if payment_status in ('pending', 'pending_manual_check'):
+            for o in tab.orders:
+                ostatus = o.status.value if hasattr(o.status, 'value') else str(o.status)
+                if ostatus == 'cancelled' or o.deleted_at is not None:
+                    continue
+                for item in (o.items or []):
+                    if item.deleted_at is None and item.paid_at is None and item.paid_payment_id is None:
+                        item.paid_payment_id = payment.id
+                        item.row_version = (item.row_version or 0) + 1
 
     tab.row_version += 1
 
-    _tab_event(db, tab, "tab.paid", {
+    _tab_event(db, tab, "tab.paid" if body.payment_method == 'cash' else "tab.pay_full_pending", {
         "method": "full", "amount": float(total),
         "payment_method": body.payment_method, "payment_id": str(payment.id),
         "order_ids": [str(o.id) for o in tab.orders],
+        "payment_status": payment.status.value if hasattr(payment.status, 'value') else str(payment.status),
     }, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
@@ -575,9 +603,13 @@ async def pay_tab_full(
     await db.commit()
 
     tab = await _get_tab_or_404(db, tab.id)
+    tab_resp = _tab_response(tab)
+    if body.payment_method == 'qris':
+        tab_resp.pending_qris = _build_qris_info(payment)
     return StandardResponse(
-        success=True, data=_tab_response(tab),
-        request_id=request.state.request_id, message="Tab dibayar penuh"
+        success=True, data=tab_resp,
+        request_id=request.state.request_id,
+        message=("Tab dibayar penuh" if body.payment_method == 'cash' else "QRIS digenerate — tunggu pembayaran")
     )
 
 
@@ -619,8 +651,8 @@ async def pay_split(
     if split.row_version != body.row_version:
         raise HTTPException(status_code=409, detail="Data berubah, refresh dulu")
 
-    # Cash-only guard — early fail-fast sebelum amount calc
-    _enforce_tab_cash_only(body.payment_method)
+    # Method allowlist guard — fail-fast sebelum amount calc
+    _enforce_tab_supported_method(body.payment_method)
 
     split_amount = Decimal(str(split.amount))
 
@@ -635,10 +667,16 @@ async def pay_split(
                 Payment.outlet_id == tab.outlet_id,
             )
         )
-        if existing.scalar_one_or_none():
+        existing_payment = existing.scalar_one_or_none()
+        if existing_payment:
             tab = await _get_tab_or_404(db, tab.id)
+            tab_resp = _tab_response(tab)
+            existing_method = existing_payment.payment_method.value if hasattr(existing_payment.payment_method, 'value') else str(existing_payment.payment_method)
+            existing_status = existing_payment.status.value if hasattr(existing_payment.status, 'value') else str(existing_payment.status)
+            if existing_method == 'qris' and existing_status in ('pending', 'pending_manual_check'):
+                tab_resp.pending_qris = _build_qris_info(existing_payment)
             return StandardResponse(
-                success=True, data=_tab_response(tab),
+                success=True, data=tab_resp,
                 request_id=request.state.request_id, message="Sudah dibayar (idempotent)"
             )
 
@@ -694,16 +732,21 @@ async def pay_split(
         # WA receipt ke customer linked di tab.orders (fail-silent)
         await _send_tab_wa_receipts(db, tab, payment, body.payment_method)
     else:
+        # QRIS — claim split + init Xendit QR. Webhook settles split + tab close.
         split.status = 'pending'
         split.payment_id = payment.id
         split.row_version += 1
 
+        outlet = await db.get(Outlet, tab.outlet_id)
+        await _create_qris_for_tab_payment(db, outlet, payment, current_user.tenant_id)
+
     tab.row_version += 1
 
-    _tab_event(db, tab, "tab.split_paid", {
+    _tab_event(db, tab, "tab.split_paid" if body.payment_method == 'cash' else "tab.split_pay_pending", {
         "split_id": str(split_id), "split_label": split.label,
         "amount": float(split_amount), "payment_method": body.payment_method,
         "payment_id": str(payment.id), "all_paid": tab.status == 'paid',
+        "payment_status": payment.status.value if hasattr(payment.status, 'value') else str(payment.status),
     }, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
@@ -713,10 +756,16 @@ async def pay_split(
     await db.commit()
 
     tab = await _get_tab_or_404(db, tab.id)
+    tab_resp = _tab_response(tab)
+    if body.payment_method == 'qris':
+        tab_resp.pending_qris = _build_qris_info(payment)
     return StandardResponse(
-        success=True, data=_tab_response(tab),
+        success=True, data=tab_resp,
         request_id=request.state.request_id,
-        message=f"Split '{split.label}' dibayar"
+        message=(
+            f"Split '{split.label}' dibayar" if body.payment_method == 'cash'
+            else f"QRIS digenerate untuk split '{split.label}' — tunggu pembayaran"
+        )
     )
 
 
@@ -743,26 +792,95 @@ async def _complete_order_if_fully_paid(db: AsyncSession, order: Order) -> None:
         order.row_version = (order.row_version or 0) + 1
 
 
-def _enforce_tab_cash_only(payment_method: str) -> None:
-    """Tab payment endpoints hanya support cash sampai QRIS tab integration ship.
+def _enforce_tab_supported_method(payment_method: str) -> None:
+    """Tab pay endpoints support cash + QRIS. Card/transfer not yet — those
+    legacy methods don't have async settle infra (no webhook, no waiting UI).
 
-    Backend `pay_split`/`pay_full`/`pay_items` create Payment.status='pending'
-    untuk non-cash tapi gak generate Xendit invoice/QR → webhook gak akan fire
-    → tab settle gak akan happen → silent broken state.
-
-    Frontend tab modals udah hide tombol QRIS, ini defense-in-depth untuk
-    caller bypass UI (Postman, third-party, regression). Phase B2 proper
-    QRIS-tab integration akan unblock ini.
+    QRIS path creates Payment(pending) + Xendit QR upfront, settles async via
+    webhook (payments.py:652 tab branch). Cash path settles inline.
     """
-    if payment_method != 'cash':
+    if payment_method not in ('cash', 'qris'):
         raise HTTPException(
             status_code=400,
             detail={
-                "code": "TAB_PAYMENT_CASH_ONLY",
-                "message": "Tab payment hanya support cash. Untuk QRIS/card/transfer, pakai POS reguler.",
+                "code": "TAB_PAYMENT_METHOD_UNSUPPORTED",
+                "message": "Tab payment hanya support cash & QRIS. Untuk card/transfer, pakai POS reguler.",
                 "received_method": payment_method,
             },
         )
+
+
+async def _create_qris_for_tab_payment(
+    db: AsyncSession,
+    outlet: Outlet,
+    payment: Payment,
+    tenant_id: UUID,
+) -> None:
+    """Generate Xendit QRIS for a pending tab Payment. Mirror payments.py
+    POS QRIS flow. Mutates payment in-place:
+      - Success → set qris_url, qris_expired_at, xendit_raw
+      - PermanentError (4xx) → status='failed'
+      - TransientError exhausted → status='pending_manual_check'
+    Caller must commit. BYOK key wins over sub-account business_id.
+    """
+    if not (outlet.xendit_api_key or outlet.xendit_business_id):
+        payment.status = 'failed'
+        payment.xendit_raw = {
+            "error": "Outlet belum terhubung Xendit (API Key atau Sub-Account ID)"
+        }
+        return
+
+    from backend.services.xendit import (
+        xendit_service,
+        XenditTransientError,
+        XenditPermanentError,
+    )
+    from backend.api.routes.payments import _sanitize_xendit_response
+    from datetime import datetime as _dt
+
+    try:
+        xendit_res = await xendit_service.create_qris_transaction(
+            reference_id=f"{tenant_id}::{payment.id}",
+            amount=float(payment.amount_due),
+            for_user_id=outlet.xendit_business_id if not outlet.xendit_api_key else None,
+            platform_fee_percent=0.2,
+            merchant_api_key=outlet.xendit_api_key,
+        )
+        payment.qris_url = xendit_res.get("qr_string") or xendit_res.get("qr_url")
+        payment.xendit_raw = _sanitize_xendit_response(xendit_res)
+        expires_at = xendit_res.get("expires_at")
+        if expires_at:
+            try:
+                payment.qris_expired_at = _dt.fromisoformat(
+                    expires_at.replace("Z", "+00:00")
+                )
+            except (ValueError, AttributeError):
+                pass
+    except XenditPermanentError as e:
+        payment.status = 'failed'
+        payment.xendit_raw = {"error": str(e), "error_type": "permanent"}
+    except XenditTransientError as e:
+        payment.status = 'pending_manual_check'
+        payment.xendit_raw = {
+            "error": str(e),
+            "error_type": "transient_exhausted",
+            "admin_action": (
+                "Verify manually via Xendit dashboard — "
+                "transaction might have been created."
+            ),
+        }
+
+
+def _build_qris_info(payment: Payment) -> dict:
+    """Build QrisPaymentInfo dict for TabResponse.pending_qris."""
+    status_val = payment.status.value if hasattr(payment.status, 'value') else str(payment.status)
+    return {
+        "payment_id": payment.id,
+        "amount_due": payment.amount_due,
+        "qris_url": payment.qris_url,
+        "qris_expired_at": payment.qris_expired_at,
+        "status": status_val,
+    }
 
 
 async def _send_tab_wa_receipts(
@@ -842,7 +960,7 @@ async def pay_items(
             detail="Order di tab ini sudah dibatalkan otomatis oleh sistem (stale cleanup)."
         )
 
-    _enforce_tab_cash_only(body.payment_method)
+    _enforce_tab_supported_method(body.payment_method)
 
     # Build map item_id → (order, item) dari tab.orders.items, skip cancelled/deleted
     items_in_tab = {}
@@ -854,7 +972,24 @@ async def pay_items(
             if it.deleted_at is None:
                 items_in_tab[it.id] = (o, it)
 
-    # Validate semua requested item_ids exist + unpaid
+    # Pre-fetch any pending QRIS payments referenced by items.paid_payment_id —
+    # used to detect "claimed but unpaid" items (race protection: another
+    # concurrent pay-items QRIS already claimed these).
+    referenced_payment_ids = {
+        it.paid_payment_id for _, it in items_in_tab.values()
+        if it.paid_at is None and it.paid_payment_id is not None
+    }
+    pending_claim_payment_ids: set = set()
+    if referenced_payment_ids:
+        claim_q = await db.execute(
+            select(Payment.id, Payment.status).where(Payment.id.in_(referenced_payment_ids))
+        )
+        for pid, pstatus in claim_q.all():
+            pstatus_val = pstatus.value if hasattr(pstatus, 'value') else str(pstatus)
+            if pstatus_val in ('pending', 'pending_manual_check'):
+                pending_claim_payment_ids.add(pid)
+
+    # Validate semua requested item_ids exist + unpaid + tidak diclaim payment lain
     target_items = []
     for iid in body.order_item_ids:
         pair = items_in_tab.get(iid)
@@ -869,6 +1004,15 @@ async def pay_items(
             raise HTTPException(
                 status_code=400,
                 detail={"code": "ITEM_ALREADY_PAID", "message": f"Item '{item_name}' sudah dibayar sebelumnya"}
+            )
+        if item.paid_payment_id is not None and item.paid_payment_id in pending_claim_payment_ids:
+            item_name = item.product_name or 'Unknown'
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "ITEM_PAYMENT_PENDING",
+                    "message": f"Item '{item_name}' sedang dalam proses pembayaran QRIS. Tunggu selesai atau batal dulu.",
+                }
             )
         target_items.append((order, item))
 
@@ -892,10 +1036,16 @@ async def pay_items(
                 Payment.outlet_id == tab.outlet_id,
             )
         )
-        if existing.scalar_one_or_none():
+        existing_payment = existing.scalar_one_or_none()
+        if existing_payment:
             tab = await _get_tab_or_404(db, tab.id)
+            tab_resp = _tab_response(tab)
+            existing_method = existing_payment.payment_method.value if hasattr(existing_payment.payment_method, 'value') else str(existing_payment.payment_method)
+            existing_status = existing_payment.status.value if hasattr(existing_payment.status, 'value') else str(existing_payment.status)
+            if existing_method == 'qris' and existing_status in ('pending', 'pending_manual_check'):
+                tab_resp.pending_qris = _build_qris_info(existing_payment)
             return StandardResponse(
-                success=True, data=_tab_response(tab),
+                success=True, data=tab_resp,
                 request_id=request.state.request_id, message="Sudah dibayar (idempotent)"
             )
 
@@ -920,7 +1070,7 @@ async def pay_items(
     db.add(payment)
     await db.flush()
 
-    # Mark items paid (cash only — QRIS wait webhook update via xendit reconciliation)
+    # Mark items paid (cash) atau claim items via paid_payment_id (QRIS pending)
     if body.payment_method == 'cash':
         now = _utc_now()
         affected_orders = set()
@@ -970,16 +1120,30 @@ async def pay_items(
         await _send_tab_wa_receipts(
             db, tab, payment, body.payment_method, only_orders=paid_orders,
         )
+    elif body.payment_method == 'qris':
+        # Init Xendit QRIS — claim items via paid_payment_id (no paid_at yet,
+        # CHECK constraint allows that). Webhook on success sets paid_at +
+        # may close tab. Webhook on failure clears paid_payment_id (B2.2).
+        outlet = await db.get(Outlet, tab.outlet_id)
+        await _create_qris_for_tab_payment(db, outlet, payment, current_user.tenant_id)
+        # Only claim items if QRIS init succeeded — failed init = dead payment,
+        # don't lock items (kasir retries with new idempotency_key).
+        payment_status = payment.status.value if hasattr(payment.status, 'value') else str(payment.status)
+        if payment_status in ('pending', 'pending_manual_check'):
+            for order, item in target_items:
+                item.paid_payment_id = payment.id
+                item.row_version = (item.row_version or 0) + 1
 
     tab.row_version = (tab.row_version or 0) + 1
 
-    _tab_event(db, tab, "tab.items_paid", {
+    _tab_event(db, tab, "tab.items_paid" if body.payment_method == 'cash' else "tab.items_pay_pending", {
         "item_ids": [str(it.id) for _, it in target_items],
         "item_count": len(target_items),
         "amount": float(total_due),
         "payment_method": body.payment_method,
         "payment_id": str(payment.id),
         "tab_closed": tab.status == 'paid',
+        "payment_status": payment.status.value if hasattr(payment.status, 'value') else str(payment.status),
     }, current_user.id)
     await log_audit(
         db=db, action="UPDATE", entity="tab", entity_id=tab.id,
@@ -994,10 +1158,17 @@ async def pay_items(
     await db.commit()
 
     tab = await _get_tab_or_404(db, tab.id)
+    tab_resp = _tab_response(tab)
+    if body.payment_method == 'qris':
+        tab_resp.pending_qris = _build_qris_info(payment)
     return StandardResponse(
-        success=True, data=_tab_response(tab),
+        success=True, data=tab_resp,
         request_id=request.state.request_id,
-        message=f"{len(target_items)} item dibayar (Rp {int(total_due):,})".replace(',', '.')
+        message=(
+            f"{len(target_items)} item dibayar (Rp {int(total_due):,})".replace(',', '.')
+            if body.payment_method == 'cash'
+            else f"QRIS digenerate untuk {len(target_items)} item — tunggu pembayaran"
+        )
     )
 
 

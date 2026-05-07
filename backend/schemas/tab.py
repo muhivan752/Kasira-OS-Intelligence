@@ -58,6 +58,17 @@ class TabSplitResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class QrisPaymentInfo(BaseModel):
+    """QRIS payment metadata returned alongside TabResponse when tab payment
+    is initiated with payment_method='qris'. Flutter shows waiting modal,
+    polls GET /payments/{id} until status=paid → trigger autoprint."""
+    payment_id: UUID
+    amount_due: Decimal
+    qris_url: Optional[str] = None
+    qris_expired_at: Optional[datetime] = None
+    status: str  # 'pending' | 'pending_manual_check' | 'failed'
+
+
 class TabResponse(BaseModel):
     id: UUID
     outlet_id: UUID
@@ -85,6 +96,7 @@ class TabResponse(BaseModel):
     updated_at: datetime
     splits: List[TabSplitResponse] = []
     order_ids: List[UUID] = []
+    pending_qris: Optional[QrisPaymentInfo] = None
 
     model_config = ConfigDict(from_attributes=True)
 
