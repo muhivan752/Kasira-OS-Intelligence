@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/config/app_config.dart';

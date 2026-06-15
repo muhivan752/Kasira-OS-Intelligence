@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
