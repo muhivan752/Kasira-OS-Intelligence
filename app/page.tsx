@@ -633,6 +633,8 @@ export default function LandingPage() {
               <Link href="/download" className="text-gray-400 hover:text-white transition-colors">Download</Link>
               <Link href="/kasira-coffee" className="text-gray-400 hover:text-white transition-colors">Demo</Link>
               <Link href="/login" className="text-gray-400 hover:text-white transition-colors">Login</Link>
+              <Link href="/privacy" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="text-gray-400 hover:text-white transition-colors">Terms of Service</Link>
               <a href={waLink} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 transition-colors">WhatsApp</a>
             </div>
           </div>

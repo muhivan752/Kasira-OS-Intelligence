@@ -749,13 +749,25 @@ async def xendit_webhook(
     berulang (retry policy mereka) = kita process sekali.
     """
     xendit_callback_token = request.headers.get("x-callback-token")
-    if not xendit_callback_token or not xendit_service.verify_webhook(xendit_callback_token):
-        raise HTTPException(status_code=400, detail="Invalid Verification Token")
-
+    xendit_signature = request.headers.get("x-xendit-signature")
+    xendit_timestamp = request.headers.get("x-xendit-timestamp")
+    
     try:
+        body_bytes = await request.body()
         payload = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    is_valid = False
+    if xendit_signature and xendit_timestamp:
+        is_valid = xendit_service.verify_webhook_signature(body_bytes, xendit_signature, xendit_timestamp)
+    
+    if not is_valid and xendit_callback_token:
+        is_valid = xendit_service.verify_webhook(xendit_callback_token)
+        
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="Invalid Verification Token")
+
 
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Payload must be a JSON object")

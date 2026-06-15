@@ -261,6 +261,9 @@ function RegisterContent() {
                   {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                   Buat Akun
                 </button>
+                <p className="text-center text-xs text-gray-500 pt-2">
+                  Dengan mendaftar, Anda menyetujui <Link href="/terms" className="text-emerald-600 hover:underline">Syarat & Ketentuan</Link> dan <Link href="/privacy" className="text-emerald-600 hover:underline">Kebijakan Privasi</Link> Kasira.
+                </p>
               </form>
             </>
           )}

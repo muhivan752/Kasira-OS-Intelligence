@@ -291,6 +291,35 @@ class XenditService:
             return False
         return hmac.compare_digest(received_token, expected)
 
+    def verify_webhook_signature(self, payload_bytes: bytes, received_signature: str, received_timestamp: str) -> bool:
+        """
+        Verify Xendit webhook dgn HMAC-SHA256 + 5-min tolerance (CRITICAL #4).
+        """
+        import time
+        import hashlib
+        
+        expected_secret = settings.XENDIT_WEBHOOK_TOKEN or ""
+        if not expected_secret or not received_signature or not received_timestamp:
+            return False
+            
+        try:
+            ts = float(received_timestamp)
+            now = time.time()
+            if abs(now - ts) > 300: # 5 minutes tolerance
+                return False
+        except ValueError:
+            return False
+            
+        message = payload_bytes
+        # Some webhook versions append timestamp to payload, let's try both to be safe
+        message_with_ts = payload_bytes + str(received_timestamp).encode('utf-8')
+        
+        expected_sig1 = hmac.new(expected_secret.encode('utf-8'), message, hashlib.sha256).hexdigest()
+        expected_sig2 = hmac.new(expected_secret.encode('utf-8'), message_with_ts, hashlib.sha256).hexdigest()
+        
+        return hmac.compare_digest(received_signature, expected_sig1) or hmac.compare_digest(received_signature, expected_sig2)
+
+
 
 # Singleton global — di-share oleh seluruh request FastAPI
 xendit_service = XenditService()

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
@@ -62,7 +63,12 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
 
       final response = await _dio.get(_versionJsonUrl);
       final appKey = info.packageName.contains('dapur') ? 'dapur' : 'pos';
-      final data = response.data[appKey] as Map<String, dynamic>;
+      
+      final Map<String, dynamic> responseData = response.data is String 
+          ? jsonDecode(response.data) 
+          : response.data;
+          
+      final data = responseData[appKey] as Map<String, dynamic>;
 
       final latestVersion = data['version'] as String;
       final isMandatory = data['is_mandatory'] as bool;
