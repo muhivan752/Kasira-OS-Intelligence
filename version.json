@@ -3,12 +3,12 @@
     "version": "1.5.1",
     "is_mandatory": false,
     "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.1/kasira-pos-v1.5.1.apk",
-    "release_notes": "First launch release"
+    "release_notes": "First launch release (with Lucide Icons fix)"
   },
   "dapur": {
     "version": "1.5.1",
     "is_mandatory": false,
     "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.1/kasira-dapur-v1.5.1.apk",
-    "release_notes": "First launch release"
+    "release_notes": "First launch release (with Lucide Icons fix)"
   }
 }
