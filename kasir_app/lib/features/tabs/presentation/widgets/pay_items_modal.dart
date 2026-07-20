@@ -7,7 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/widgets/send_wa_receipt_dialog.dart';
 import '../../providers/tab_provider.dart';
 import 'qris_waiting_modal.dart';
@@ -126,7 +126,7 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
               // Header
               Row(
                 children: [
-                  const Icon(LucideIcons.checkSquare, color: AppColors.primary),
+                  const Icon(LucideIcons.checkSquare, color: KasiraDS.brandPrimary),
                   const SizedBox(width: 8),
                   Text('Bayar Sebagian', style: Theme.of(context).textTheme.titleLarge),
                   const Spacer(),
@@ -135,7 +135,7 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
               ),
               Text(
                 'Centang items yang dibayar customer',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                style: TextStyle(color: KasiraDS.textMuted, fontSize: 13),
               ),
               const SizedBox(height: 12),
 
@@ -148,7 +148,7 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
                     children: [
                       Icon(
                         allSelected ? LucideIcons.checkSquare : LucideIcons.square,
-                        size: 18, color: AppColors.primary,
+                        size: 18, color: KasiraDS.brandPrimary,
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -175,7 +175,7 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
                         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                         decoration: BoxDecoration(
                           border: Border(
-                            bottom: BorderSide(color: AppColors.border.withOpacity(0.3)),
+                            bottom: BorderSide(color: KasiraDS.borderSubtle.withOpacity(0.3)),
                           ),
                         ),
                         child: Row(
@@ -183,7 +183,7 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
                             Icon(
                               selected ? LucideIcons.checkSquare : LucideIcons.square,
                               size: 20,
-                              color: selected ? AppColors.primary : AppColors.textTertiary,
+                              color: selected ? KasiraDS.brandPrimary : KasiraDS.textMuted,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -196,7 +196,7 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
                                   ),
                                   Text(
                                     '${item.quantity} x ${_currency.format(item.unitPrice)}',
-                                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                    style: TextStyle(color: KasiraDS.textMuted, fontSize: 12),
                                   ),
                                 ],
                               ),
@@ -218,20 +218,20 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.05),
+                    color: KasiraDS.brandPrimary.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('${_selected.length} item dipilih',
-                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                          style: const TextStyle(fontSize: 13, color: KasiraDS.textMuted)),
                       Text(
                         _currency.format(selectedTotal),
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 20,
-                          color: AppColors.primary,
+                          color: KasiraDS.brandPrimary,
                         ),
                       ),
                     ],
@@ -269,7 +269,7 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
                         'Kembalian: ${_currency.format(change)}',
-                        style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w600),
+                        style: const TextStyle(color: KasiraDS.success, fontWeight: FontWeight.w600),
                       ),
                     ),
                   const SizedBox(height: 8),
@@ -278,7 +278,7 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                    child: Text(_error!, style: const TextStyle(color: KasiraDS.danger, fontSize: 12)),
                   ),
 
                 SizedBox(
@@ -292,7 +292,7 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
                         ? 'Memproses...'
                         : 'Bayar ${_currency.format(selectedTotal)}'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: KasiraDS.brandPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
@@ -313,17 +313,17 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primary.withOpacity(0.08) : null,
-            border: Border.all(color: selected ? AppColors.primary : AppColors.border),
+            color: selected ? KasiraDS.brandPrimary.withOpacity(0.08) : null,
+            border: Border.all(color: selected ? KasiraDS.brandPrimary : KasiraDS.borderSubtle),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Column(
             children: [
-              Icon(icon, color: selected ? AppColors.primary : AppColors.textSecondary, size: 18),
+              Icon(icon, color: selected ? KasiraDS.brandPrimary : KasiraDS.textMuted, size: 18),
               const SizedBox(height: 2),
               Text(label,
                   style: TextStyle(
-                    color: selected ? AppColors.primary : AppColors.textSecondary,
+                    color: selected ? KasiraDS.brandPrimary : KasiraDS.textMuted,
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   )),
@@ -396,7 +396,7 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
             content: Text(result.isPaid
                 ? 'Tab lunas! Semua sudah dibayar.'
                 : '${selectedItemIds.length} item dibayar. Sisa: ${_currency.format(result.remainingAmount)}'),
-            backgroundColor: AppColors.success,
+            backgroundColor: KasiraDS.success,
           ),
         );
 
@@ -406,11 +406,11 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
             messenger.showSnackBar(
               SnackBar(
                 content: const Text('Mau kirim struk via WA ke customer?'),
-                backgroundColor: AppColors.surfaceElevated,
+                backgroundColor: KasiraDS.surfaceCard,
                 duration: const Duration(seconds: 6),
                 action: SnackBarAction(
                   label: '📱 Kirim WA',
-                  textColor: AppColors.primary,
+                  textColor: KasiraDS.brandPrimary,
                   onPressed: () async {
                     // Resolve paymentId + orderId dari items yg baru ke-pay
                     final resolved = await _resolveWaReceiptTarget(widget.tab.id, selectedItemIds);
@@ -418,7 +418,7 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
                       messenger.showSnackBar(
                         const SnackBar(
                           content: Text('Gagal load info pembayaran — coba reprint dari menu order'),
-                          backgroundColor: AppColors.warning,
+                          backgroundColor: KasiraDS.warning,
                         ),
                       );
                       return;

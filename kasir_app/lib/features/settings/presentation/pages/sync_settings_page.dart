@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/sync/sync_provider.dart';
 
 class SyncSettingsPage extends ConsumerStatefulWidget {
@@ -48,7 +48,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal sinkronisasi: ${syncService.lastError ?? e}'),
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
           ),
         );
       }
@@ -64,18 +64,18 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
     });
 
     final (msg, color) = switch (syncService.status) {
-      SyncStatus.success => ('Sinkronisasi data berhasil.', AppColors.success),
+      SyncStatus.success => ('Sinkronisasi data berhasil.', KasiraDS.success),
       SyncStatus.networkError => (
           'Offline / jaringan bermasalah. Data akan sync otomatis saat online.',
-          AppColors.error,
+          KasiraDS.danger,
         ),
       SyncStatus.serverError => (
           'Server error: ${syncService.lastError ?? "tidak diketahui"}',
-          AppColors.error,
+          KasiraDS.danger,
         ),
       _ => (
           'Status: ${syncService.status.name}${syncService.lastError != null ? " — ${syncService.lastError}" : ""}',
-          AppColors.error,
+          KasiraDS.danger,
         ),
     };
     ScaffoldMessenger.of(context).showSnackBar(
@@ -86,11 +86,11 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        title: const Text('Sinkronisasi Data', style: TextStyle(color: AppColors.textPrimary)),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        backgroundColor: KasiraDS.surfaceCard,
+        title: const Text('Sinkronisasi Data', style: TextStyle(color: KasiraDS.textStrong)),
+        iconTheme: const IconThemeData(color: KasiraDS.textStrong),
         elevation: 0,
       ),
       body: ListView(
@@ -100,16 +100,16 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: KasiraDS.surfaceCard,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: KasiraDS.borderSubtle),
             ),
             child: Column(
               children: [
                 Icon(
                   _isSyncing ? LucideIcons.refreshCw : LucideIcons.checkCircle,
                   size: 48,
-                  color: _isSyncing ? AppColors.primary : AppColors.success,
+                  color: _isSyncing ? KasiraDS.brandPrimary : KasiraDS.success,
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -119,7 +119,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                 const SizedBox(height: 8),
                 Text(
                   'Terakhir sinkron: $_lastSyncTime',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: const TextStyle(color: KasiraDS.textMuted),
                 ),
                 const SizedBox(height: 24),
                 SizedBox(
@@ -149,7 +149,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
             child: Text(
               'PENGATURAN SINKRONISASI',
               style: const TextStyle(
-                color: AppColors.textSecondary,
+                color: KasiraDS.textMuted,
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
                 letterSpacing: 1.2,
@@ -164,9 +164,9 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
               children: [
                 SwitchListTile(
                   title: const Text('Sinkronisasi Otomatis', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Sinkronisasi data di latar belakang saat terhubung ke internet', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  subtitle: const Text('Sinkronisasi data di latar belakang saat terhubung ke internet', style: TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
                   value: _isAutoSyncEnabled,
-                  activeColor: AppColors.primary,
+                  activeColor: KasiraDS.brandPrimary,
                   onChanged: (value) {
                     setState(() {
                       _isAutoSyncEnabled = value;
@@ -176,8 +176,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                 const Divider(height: 1),
                 ListTile(
                   title: const Text('Interval Sinkronisasi', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Setiap 5 menit', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                  trailing: const Icon(LucideIcons.chevronRight, color: AppColors.textTertiary),
+                  subtitle: const Text('Setiap 5 menit', style: TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
+                  trailing: const Icon(LucideIcons.chevronRight, color: KasiraDS.textMuted),
                   onTap: () {
                     // Show interval picker
                   },
@@ -185,10 +185,10 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                 const Divider(height: 1),
                 ListTile(
                   title: const Text('Sinkronisasi Hanya via Wi-Fi', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Menghemat kuota data seluler', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  subtitle: const Text('Menghemat kuota data seluler', style: TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
                   trailing: Switch(
                     value: false,
-                    activeColor: AppColors.primary,
+                    activeColor: KasiraDS.brandPrimary,
                     onChanged: (value) {},
                   ),
                 ),
@@ -204,7 +204,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
             child: Text(
               'DIAGNOSTIK',
               style: const TextStyle(
-                color: AppColors.textSecondary,
+                color: KasiraDS.textMuted,
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
                 letterSpacing: 1.2,
@@ -218,22 +218,22 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(LucideIcons.database, color: AppColors.textSecondary),
+                  leading: const Icon(LucideIcons.database, color: KasiraDS.textMuted),
                   title: const Text('Data Belum Tersinkronisasi', style: TextStyle(fontWeight: FontWeight.bold)),
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
+                      color: KasiraDS.surfaceSunken,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Text('0 Item', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                    child: const Text('0 Item', style: TextStyle(fontWeight: FontWeight.bold, color: KasiraDS.textMuted)),
                   ),
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(LucideIcons.fileText, color: AppColors.textSecondary),
+                  leading: const Icon(LucideIcons.fileText, color: KasiraDS.textMuted),
                   title: const Text('Log Sinkronisasi', style: TextStyle(fontWeight: FontWeight.bold)),
-                  trailing: const Icon(LucideIcons.chevronRight, color: AppColors.textTertiary),
+                  trailing: const Icon(LucideIcons.chevronRight, color: KasiraDS.textMuted),
                   onTap: () {},
                 ),
               ],

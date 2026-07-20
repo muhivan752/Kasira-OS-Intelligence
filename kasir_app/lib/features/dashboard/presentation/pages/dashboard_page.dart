@@ -6,7 +6,7 @@ import '../../../../core/services/waitlist_service.dart';
 import '../../../../core/localization/business_labels.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../pos/presentation/pages/pos_page.dart';
 import '../../../orders/presentation/pages/order_list_page.dart';
 import '../../../shift/presentation/pages/shift_page.dart';
@@ -106,7 +106,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   static void _showFnbUpgradeSheet(BuildContext context, String featureName) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: KasiraDS.surfaceCard,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -118,29 +118,29 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           children: [
             Container(
               width: 40, height: 4,
-              decoration: BoxDecoration(color: AppColors.borderLight, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(color: KasiraDS.borderDefault, borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: KasiraDS.gradientFrekuensi,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(LucideIcons.lock, color: Colors.white, size: 32),
             ),
             const SizedBox(height: 16),
-            const Text('Upgrade ke Pro', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            const Text('Upgrade ke Pro', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: KasiraDS.textStrong)),
             const SizedBox(height: 8),
             Text(
               '$featureName hanya tersedia di paket Pro.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              style: const TextStyle(color: KasiraDS.textMuted, fontSize: 14),
             ),
             const SizedBox(height: 4),
             const Text(
               'Rp 299.000/bulan',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: KasiraDS.brandPrimary),
             ),
             const SizedBox(height: 12),
             // F&B hero features
@@ -148,9 +148,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.06),
+                color: KasiraDS.brandPrimary.withOpacity(0.06),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                border: Border.all(color: KasiraDS.brandPrimary.withOpacity(0.2)),
               ),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,19 +171,19 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: KasiraDS.surfaceSunken,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: KasiraDS.borderSubtle),
               ),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Transfer ke:', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  Text('Transfer ke:', style: TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
                   SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Bank', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      Text('Bank', style: TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
                       Text('Mandiri', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     ],
                   ),
@@ -191,7 +191,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('No. Rek', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      Text('No. Rek', style: TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
                       Text('1060021987147', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'monospace')),
                     ],
                   ),
@@ -199,7 +199,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('a.n.', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      Text('a.n.', style: TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
                       Text('MIRFAN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     ],
                   ),
@@ -209,7 +209,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             const SizedBox(height: 6),
             const Text(
               'Konfirmasi via WhatsApp setelah transfer',
-              style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+              style: TextStyle(color: KasiraDS.textMuted, fontSize: 11),
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -222,8 +222,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 icon: const Icon(LucideIcons.messageCircle, size: 18),
                 label: const Text('Konfirmasi via WhatsApp'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.background,
+                  backgroundColor: KasiraDS.brandPrimary,
+                  foregroundColor: KasiraDS.bgBase,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
@@ -232,7 +232,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             const SizedBox(height: 10),
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Nanti saja', style: TextStyle(color: AppColors.textTertiary)),
+              child: const Text('Nanti saja', style: TextStyle(color: KasiraDS.textMuted)),
             ),
           ],
         ),
@@ -264,7 +264,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: KasiraDS.surfaceCard,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -276,7 +276,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           children: [
             Container(
               width: 40, height: 4,
-              decoration: BoxDecoration(color: AppColors.borderLight, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(color: KasiraDS.borderDefault, borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 20),
             Text(emoji, style: const TextStyle(fontSize: 44)),
@@ -284,22 +284,22 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             Text(
               'Kasira Pro untuk $domainLabel\nsedang disiapkan!',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary, height: 1.3),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: KasiraDS.textStrong, height: 1.3),
             ),
             const SizedBox(height: 8),
             Text(
               '$featureName adalah fitur F&B — tapi kami lagi ngebangun versi $domainLabel yang khusus buat kamu:',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+              style: const TextStyle(color: KasiraDS.textMuted, fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 16),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
+                color: KasiraDS.brandPrimary.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                border: Border.all(color: KasiraDS.brandPrimary.withOpacity(0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -317,18 +317,18 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.12),
+                color: KasiraDS.success.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.success.withOpacity(0.4)),
+                border: Border.all(color: KasiraDS.success.withOpacity(0.4)),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(LucideIcons.percent, size: 16, color: AppColors.success),
+                  Icon(LucideIcons.percent, size: 16, color: KasiraDS.success),
                   SizedBox(width: 6),
                   Text(
                     'Waitlist dapet diskon 50% saat launch',
-                    style: TextStyle(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: KasiraDS.success, fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -338,12 +338,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             const SizedBox(height: 6),
             const Text(
               'Kami kabari via WhatsApp saat fiturnya rilis.',
-              style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+              style: TextStyle(color: KasiraDS.textMuted, fontSize: 11),
             ),
             const SizedBox(height: 10),
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Nanti saja', style: TextStyle(color: AppColors.textTertiary)),
+              child: const Text('Nanti saja', style: TextStyle(color: KasiraDS.textMuted)),
             ),
           ],
         ),
@@ -390,22 +390,22 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   Widget _buildTabletLayout() {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       body: Row(
         children: [
           Container(
             width: 100,
-            color: AppColors.surface,
+            color: KasiraDS.surfaceCard,
             child: Column(
               children: [
                 const SizedBox(height: 24),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: KasiraDS.brandPrimary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Icon(Icons.point_of_sale_rounded, color: AppColors.primary, size: 32),
+                  child: const Icon(Icons.point_of_sale_rounded, color: KasiraDS.brandPrimary, size: 32),
                 ),
                 const SizedBox(height: 48),
                 ...List.generate(_navItems.length - 1, (i) => _buildSideNavItem(i)),
@@ -423,22 +423,30 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   Widget _buildPhoneLayout() {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       body: _pages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onNavTap,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textTertiary,
-        selectedFontSize: 11,
-        unselectedFontSize: 11,
-        items: _navItems
-            .map((item) => BottomNavigationBarItem(
-                  icon: Icon(item.icon),
-                  label: item.label,
-                ))
-            .toList(),
+      bottomNavigationBar: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: KasiraDS.surfaceCard,
+          border: Border(top: BorderSide(color: KasiraDS.borderSubtle)),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: _onNavTap,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          selectedItemColor: KasiraDS.brandPrimary,
+          unselectedItemColor: KasiraDS.textMuted,
+          selectedFontSize: 11,
+          unselectedFontSize: 11,
+          items: _navItems
+              .map((item) => BottomNavigationBarItem(
+                    icon: Icon(item.icon),
+                    label: item.label,
+                  ))
+              .toList(),
+        ),
       ),
     );
   }
@@ -455,7 +463,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         decoration: BoxDecoration(
           border: Border(
             right: BorderSide(
-              color: isSelected ? AppColors.primary : Colors.transparent,
+              color: isSelected ? KasiraDS.brandPrimary : Colors.transparent,
               width: 4,
             ),
           ),
@@ -466,7 +474,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               clipBehavior: Clip.none,
               children: [
                 Icon(item.icon,
-                    color: isLocked ? Colors.grey[350] : (isSelected ? AppColors.primary : AppColors.textTertiary),
+                    color: isLocked ? Colors.grey[350] : (isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted),
                     size: 28),
                 if (isLocked)
                   Positioned(
@@ -479,7 +487,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             Text(
               item.label,
               style: TextStyle(
-                color: isLocked ? Colors.grey[400] : (isSelected ? AppColors.primary : AppColors.textTertiary),
+                color: isLocked ? Colors.grey[400] : (isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted),
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
@@ -531,27 +539,275 @@ class _DashboardContent extends ConsumerWidget {
     );
   }
 
+  // ── BERANDA (Aurora) — greeting + shift + sales hero + quick stats + CTA ──
   Widget _buildPhone(BuildContext context, WidgetRef ref,
       AsyncValue<DashboardStats> statsAsync, OrdersState ordersState) {
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(context, ref, statsAsync, isWide: false),
-            const SizedBox(height: 16),
-            const _ComingSoonBanner(),
-            statsAsync.when(
-              loading: () => const LinearProgressIndicator(),
-              error: (_, __) => _buildStatsError(ref),
-              data: (stats) => _buildStatsColumn(context, stats),
+      child: RefreshIndicator(
+        color: KasiraDS.brandPrimary,
+        onRefresh: () async {
+          ref.read(dashboardProvider.notifier).refresh();
+          ref.read(ordersProvider.notifier).fetch();
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _berandaHeader(context, ref),
+              const SizedBox(height: 14),
+              statsAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(child: CircularProgressIndicator(color: KasiraDS.brandPrimary)),
+                ),
+                error: (_, __) => _buildStatsError(ref),
+                data: (stats) => Column(
+                  children: [
+                    _shiftCard(context, stats),
+                    const SizedBox(height: 14),
+                    _salesHero(context, stats),
+                    const SizedBox(height: 14),
+                    _quickStats(context, ref, stats),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              _bukaKasirCta(ref),
+              const SizedBox(height: 26),
+              Text('Transaksi Terakhir',
+                  style: KasiraDS.display(size: 16, color: KasiraDS.textStrong)),
+              const SizedBox(height: 12),
+              _buildOrderList(context, ordersState, ref),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const _days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+
+  Widget _berandaHeader(BuildContext context, WidgetRef ref) {
+    final now = DateTime.now();
+    final dateLabel = '${_days[now.weekday % 7]}, ${now.day} ${_months[now.month - 1]} ${now.year}';
+    final outlet = SessionCache.instance.outletName ?? 'Toko kamu';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('// $dateLabel'.toUpperCase(),
+                  style: KasiraDS.eyebrow(color: KasiraDS.textMuted)),
+              const SizedBox(height: 3),
+              Text('Halo 👋', style: KasiraDS.display(size: 24, color: KasiraDS.textStrong)),
+              const SizedBox(height: 1),
+              Text(outlet,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        _circleBtn(LucideIcons.refreshCw, () {
+          ref.read(dashboardProvider.notifier).refresh();
+          ref.read(ordersProvider.notifier).fetch();
+          if (SessionCache.instance.isPro) {
+            ref.read(tabProvider.notifier).fetchTabs();
+          }
+        }),
+      ],
+    );
+  }
+
+  Widget _circleBtn(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 44,
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: KasiraDS.surfaceCard,
+          shape: BoxShape.circle,
+          border: Border.all(color: KasiraDS.borderSubtle),
+          boxShadow: KasiraDS.shadowSm,
+        ),
+        child: Icon(icon, size: 20, color: KasiraDS.textStrong),
+      ),
+    );
+  }
+
+  Widget _shiftCard(BuildContext context, DashboardStats stats) {
+    final isOpen = stats.shiftStatus == 'open';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: KasiraDS.surfaceCard,
+        borderRadius: KasiraDS.brLg,
+        border: Border.all(color: KasiraDS.borderSubtle),
+        boxShadow: KasiraDS.shadowSm,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: (isOpen ? KasiraDS.success : KasiraDS.textMuted).withOpacity(0.13),
+              borderRadius: KasiraDS.brMd,
             ),
-            const SizedBox(height: 24),
-            Text('Transaksi Terakhir', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            _buildOrderList(context, ordersState, ref),
-          ],
+            child: Container(
+              width: 11,
+              height: 11,
+              decoration: BoxDecoration(
+                color: isOpen ? KasiraDS.success : KasiraDS.textMuted,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(isOpen ? 'Shift aktif' : 'Shift tertutup',
+                    style: KasiraDS.sans(size: 13.5, weight: FontWeight.w700, color: KasiraDS.textStrong)),
+                const SizedBox(height: 2),
+                Text(isOpen ? 'Kasir sedang buka' : 'Buka kasir buat mulai transaksi',
+                    style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted)),
+              ],
+            ),
+          ),
+          OutlinedButton(
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ShiftPage()));
+            },
+            style: OutlinedButton.styleFrom(
+              foregroundColor: KasiraDS.textStrong,
+              side: const BorderSide(color: KasiraDS.borderDefault),
+              shape: RoundedRectangleBorder(borderRadius: KasiraDS.brPill),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            ),
+            child: Text(isOpen ? 'Tutup kasir' : 'Buka',
+                style: KasiraDS.sans(size: 12.5, weight: FontWeight.w700, color: KasiraDS.textStrong)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _salesHero(BuildContext context, DashboardStats stats) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        gradient: KasiraDS.gradientAurora,
+        borderRadius: KasiraDS.brXl,
+        boxShadow: KasiraDS.glowBrand,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('// PENJUALAN HARI INI',
+              style: KasiraDS.eyebrow(color: Colors.white).copyWith(color: Colors.white70)),
+          const SizedBox(height: 6),
+          Text(_currencyFmt.format(stats.revenueToday),
+              style: KasiraDS.display(size: 36, color: Colors.white, height: 1.0)),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: KasiraDS.brPill,
+              border: Border.all(color: Colors.white.withOpacity(0.25)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(LucideIcons.receipt, size: 13, color: Colors.white),
+                const SizedBox(width: 5),
+                Text('${stats.orderCount} transaksi',
+                    style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: Colors.white)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickStats(BuildContext context, WidgetRef ref, DashboardStats stats) {
+    final isPro = SessionCache.instance.isPro;
+    final tabs = isPro ? ref.watch(activeTabsCountProvider) : 0;
+    return Row(
+      children: [
+        Expanded(child: _statTile('${stats.orderCount}', 'Transaksi')),
+        const SizedBox(width: 10),
+        Expanded(child: _statTile(_currencyFmt.format(stats.avgOrderValue), 'Rata-rata')),
+        if (isPro) ...[
+          const SizedBox(width: 10),
+          Expanded(child: _statTile('$tabs', 'Tab aktif')),
+        ],
+      ],
+    );
+  }
+
+  Widget _statTile(String value, String label) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 13),
+      decoration: BoxDecoration(
+        color: KasiraDS.surfaceCard,
+        borderRadius: KasiraDS.brLg,
+        border: Border.all(color: KasiraDS.borderSubtle),
+        boxShadow: KasiraDS.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: KasiraDS.display(size: 18, color: KasiraDS.textStrong)),
+          const SizedBox(height: 2),
+          Text(label, style: KasiraDS.sans(size: 11, weight: FontWeight.w600, color: KasiraDS.textMuted)),
+        ],
+      ),
+    );
+  }
+
+  Widget _bukaKasirCta(WidgetRef ref) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: KasiraDS.gradientFrekuensi,
+          borderRadius: KasiraDS.brMd,
+          boxShadow: KasiraDS.glowBrand,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => ref.read(pendingNavigateToPosProvider.notifier).state = true,
+            borderRadius: KasiraDS.brMd,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(LucideIcons.shoppingCart, size: 19, color: Colors.white),
+                const SizedBox(width: 9),
+                Text('Buka Kasir',
+                    style: KasiraDS.sans(size: 15, weight: FontWeight.w800, color: Colors.white)),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -574,12 +830,12 @@ class _DashboardContent extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               statsAsync.when(
-                loading: () => const Text('Memuat...', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                loading: () => const Text('Memuat...', style: TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
                 error: (_, __) => const SizedBox.shrink(),
                 data: (stats) => Text(
                   'Shift: ${stats.shiftStatus == "open" ? "Buka" : "Tutup"}',
                   style: TextStyle(
-                    color: stats.shiftStatus == 'open' ? AppColors.success : AppColors.textSecondary,
+                    color: stats.shiftStatus == 'open' ? KasiraDS.success : KasiraDS.textMuted,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -598,7 +854,7 @@ class _DashboardContent extends ConsumerWidget {
                   ref.read(tabProvider.notifier).fetchTabs();
                 }
               },
-              icon: const Icon(LucideIcons.refreshCw, color: AppColors.textSecondary),
+              icon: const Icon(LucideIcons.refreshCw, color: KasiraDS.textMuted),
               tooltip: 'Refresh',
             ),
             const SizedBox(width: 8),
@@ -611,7 +867,7 @@ class _DashboardContent extends ConsumerWidget {
               icon: const Icon(LucideIcons.logOut, size: 16),
               label: Text(isWide ? 'Tutup Shift' : 'Shift'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error,
+                backgroundColor: KasiraDS.danger,
                 padding: isWide
                     ? const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
                     : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -635,13 +891,13 @@ class _DashboardContent extends ConsumerWidget {
     return Row(
       children: [
         _buildStatCard(context, 'Pendapatan', _currencyFmt.format(stats.revenueToday),
-            LucideIcons.wallet, AppColors.success),
+            LucideIcons.wallet, KasiraDS.success),
         const SizedBox(width: 24),
         _buildStatCard(context, 'Transaksi', '${stats.orderCount}',
-            LucideIcons.receipt, AppColors.info),
+            LucideIcons.receipt, KasiraDS.info),
         const SizedBox(width: 24),
         _buildStatCard(context, 'Rata-rata', _currencyFmt.format(stats.avgOrderValue),
-            LucideIcons.barChart2, AppColors.warning),
+            LucideIcons.barChart2, KasiraDS.warning),
       ],
     );
   }
@@ -652,15 +908,15 @@ class _DashboardContent extends ConsumerWidget {
         Row(
           children: [
             Expanded(child: _buildStatCard(context, 'Pendapatan',
-                _currencyFmt.format(stats.revenueToday), LucideIcons.wallet, AppColors.success)),
+                _currencyFmt.format(stats.revenueToday), LucideIcons.wallet, KasiraDS.success)),
             const SizedBox(width: 12),
             Expanded(child: _buildStatCard(context, 'Transaksi',
-                '${stats.orderCount}', LucideIcons.receipt, AppColors.info)),
+                '${stats.orderCount}', LucideIcons.receipt, KasiraDS.info)),
           ],
         ),
         const SizedBox(height: 12),
         _buildStatCard(context, 'Rata-rata Transaksi',
-            _currencyFmt.format(stats.avgOrderValue), LucideIcons.barChart2, AppColors.warning),
+            _currencyFmt.format(stats.avgOrderValue), LucideIcons.barChart2, KasiraDS.warning),
       ],
     );
   }
@@ -670,9 +926,9 @@ class _DashboardContent extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: KasiraDS.surfaceCard,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border, width: 0.5),
+          border: Border.all(color: KasiraDS.borderSubtle, width: 0.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -690,7 +946,7 @@ class _DashboardContent extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(title,
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ),
@@ -727,40 +983,40 @@ class _DashboardContent extends ConsumerWidget {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: KasiraDS.surfaceCard,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border, width: 0.5),
+          border: Border.all(color: KasiraDS.borderSubtle, width: 0.5),
         ),
         child: const Center(child: Text('Belum ada transaksi hari ini')),
       );
     }
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: KasiraDS.surfaceCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: KasiraDS.borderSubtle),
       ),
       child: ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: recent.length,
-        separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
+        separatorBuilder: (_, __) => const Divider(height: 1, color: KasiraDS.borderSubtle),
         itemBuilder: (context, index) {
           final order = recent[index];
           final statusColor = order.status == 'completed'
-              ? AppColors.success
+              ? KasiraDS.success
               : order.status == 'cancelled'
-                  ? AppColors.error
-                  : AppColors.warning;
+                  ? KasiraDS.danger
+                  : KasiraDS.warning;
           return ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             leading: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: KasiraDS.surfaceSunken,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(LucideIcons.receipt, color: AppColors.textSecondary, size: 20),
+              child: const Icon(LucideIcons.receipt, color: KasiraDS.textMuted, size: 20),
             ),
             title: Text(order.orderNumber,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -826,10 +1082,10 @@ class _ActiveTabsBadgeState extends ConsumerState<_ActiveTabsBadge> {
             ? const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
             : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: hasActive ? AppColors.success.withOpacity(0.12) : AppColors.surfaceVariant,
+          color: hasActive ? KasiraDS.success.withOpacity(0.12) : KasiraDS.surfaceSunken,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: hasActive ? AppColors.success : AppColors.border,
+            color: hasActive ? KasiraDS.success : KasiraDS.borderSubtle,
             width: hasActive ? 1.2 : 0.5,
           ),
         ),
@@ -842,7 +1098,7 @@ class _ActiveTabsBadgeState extends ConsumerState<_ActiveTabsBadge> {
                 Icon(
                   LucideIcons.coffee,
                   size: 16,
-                  color: hasActive ? AppColors.success : AppColors.textSecondary,
+                  color: hasActive ? KasiraDS.success : KasiraDS.textMuted,
                 ),
                 if (hasActive)
                   Positioned(
@@ -852,7 +1108,7 @@ class _ActiveTabsBadgeState extends ConsumerState<_ActiveTabsBadge> {
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                       constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
                       decoration: BoxDecoration(
-                        color: AppColors.success,
+                        color: KasiraDS.success,
                         borderRadius: BorderRadius.circular(7),
                       ),
                       child: Text(
@@ -877,7 +1133,7 @@ class _ActiveTabsBadgeState extends ConsumerState<_ActiveTabsBadge> {
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
-                color: hasActive ? AppColors.success : AppColors.textSecondary,
+                color: hasActive ? KasiraDS.success : KasiraDS.textMuted,
               ),
             ),
           ],
@@ -898,12 +1154,12 @@ class _ProFeatureRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 15, color: AppColors.primary),
+        Icon(icon, size: 15, color: KasiraDS.brandPrimary),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+            style: const TextStyle(fontSize: 13, color: KasiraDS.textStrong),
           ),
         ),
       ],
@@ -950,7 +1206,7 @@ class _WaitlistJoinButtonState extends State<_WaitlistJoinButton> {
               ? 'Mantap! Kamu masuk antrean prioritas. Kami kabari via WhatsApp saat fiturnya rilis.'
               : 'Kamu sudah ada di waitlist — tunggu kabar dari kami ya.',
         ),
-        backgroundColor: AppColors.success,
+        backgroundColor: KasiraDS.success,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
       ),
@@ -973,7 +1229,7 @@ class _WaitlistJoinButtonState extends State<_WaitlistJoinButton> {
               : 'Daftar Waitlist & Dapatkan Diskon 50%',
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: KasiraDS.brandPrimary,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -1018,9 +1274,9 @@ class _ComingSoonBannerState extends State<_ComingSoonBanner> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.07),
+        color: KasiraDS.brandPrimary.withOpacity(0.07),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
+        border: Border.all(color: KasiraDS.brandPrimary.withOpacity(0.25)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -1050,7 +1306,7 @@ class _ComingSoonBannerState extends State<_ComingSoonBanner> {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
+                              color: KasiraDS.brandPrimary,
                               letterSpacing: 0.4,
                             ),
                           ),
@@ -1059,12 +1315,12 @@ class _ComingSoonBannerState extends State<_ComingSoonBanner> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                               decoration: BoxDecoration(
-                                color: AppColors.success.withOpacity(0.2),
+                                color: KasiraDS.success.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(
                                 '✓ Waitlist',
-                                style: TextStyle(fontSize: 9, color: AppColors.success, fontWeight: FontWeight.w700),
+                                style: TextStyle(fontSize: 9, color: KasiraDS.success, fontWeight: FontWeight.w700),
                               ),
                             ),
                           ],
@@ -1073,19 +1329,19 @@ class _ComingSoonBannerState extends State<_ComingSoonBanner> {
                       const SizedBox(height: 2),
                       Text(
                         featureTitle,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: KasiraDS.textStrong),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         _joined
                             ? 'Kami kabari saat fiturnya rilis'
                             : 'Daftar waitlist → dapet diskon 50% saat launch',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        style: const TextStyle(fontSize: 11, color: KasiraDS.textMuted),
                       ),
                     ],
                   ),
                 ),
-                const Icon(LucideIcons.chevronRight, size: 18, color: AppColors.textTertiary),
+                const Icon(LucideIcons.chevronRight, size: 18, color: KasiraDS.textMuted),
               ],
             ),
           ),

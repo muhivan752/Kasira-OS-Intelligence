@@ -4,7 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 
 enum TableStatus { available, occupied, reserved, dirty }
 
@@ -136,22 +136,22 @@ class _TableGridPageState extends State<TableGridPage> {
     final dirty = _tables.where((t) => t.status == TableStatus.dirty).length;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       body: Column(
         children: [
           // Header
           Container(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-            color: AppColors.surface,
+            color: KasiraDS.surfaceCard,
             child: Row(
               children: [
-                const Icon(LucideIcons.layoutGrid, color: AppColors.primary),
+                const Icon(LucideIcons.layoutGrid, color: KasiraDS.brandPrimary),
                 const SizedBox(width: 12),
                 Text('Denah Meja', style: Theme.of(context).textTheme.titleLarge),
                 const Spacer(),
                 Text(
                   '$available tersedia • $occupied terisi',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                  style: const TextStyle(color: KasiraDS.textMuted, fontSize: 14),
                 ),
               ],
             ),
@@ -160,20 +160,20 @@ class _TableGridPageState extends State<TableGridPage> {
           // Status filter chips
           Container(
             height: 60,
-            color: AppColors.surface,
+            color: KasiraDS.surfaceCard,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               children: [
-                _buildFilterChip(null, 'Semua', AppColors.primary),
+                _buildFilterChip(null, 'Semua', KasiraDS.brandPrimary),
                 const SizedBox(width: 8),
-                _buildFilterChip(TableStatus.available, 'Tersedia ($available)', AppColors.success),
+                _buildFilterChip(TableStatus.available, 'Tersedia ($available)', KasiraDS.success),
                 const SizedBox(width: 8),
-                _buildFilterChip(TableStatus.occupied, 'Terisi ($occupied)', AppColors.error),
+                _buildFilterChip(TableStatus.occupied, 'Terisi ($occupied)', KasiraDS.danger),
                 const SizedBox(width: 8),
-                _buildFilterChip(TableStatus.reserved, 'Reservasi ($reserved)', AppColors.warning),
+                _buildFilterChip(TableStatus.reserved, 'Reservasi ($reserved)', KasiraDS.warning),
                 const SizedBox(width: 8),
-                _buildFilterChip(TableStatus.dirty, 'Perlu Dibersihkan ($dirty)', AppColors.textSecondary),
+                _buildFilterChip(TableStatus.dirty, 'Perlu Dibersihkan ($dirty)', KasiraDS.textMuted),
               ],
             ),
           ),
@@ -185,13 +185,13 @@ class _TableGridPageState extends State<TableGridPage> {
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
             child: Row(
               children: [
-                _buildStatBadge('Tersedia', available, AppColors.success),
+                _buildStatBadge('Tersedia', available, KasiraDS.success),
                 const SizedBox(width: 12),
-                _buildStatBadge('Terisi', occupied, AppColors.error),
+                _buildStatBadge('Terisi', occupied, KasiraDS.danger),
                 const SizedBox(width: 12),
-                _buildStatBadge('Reservasi', reserved, AppColors.warning),
+                _buildStatBadge('Reservasi', reserved, KasiraDS.warning),
                 const SizedBox(width: 12),
-                _buildStatBadge('Kotor', dirty, AppColors.textSecondary),
+                _buildStatBadge('Kotor', dirty, KasiraDS.textMuted),
               ],
             ),
           ),
@@ -201,7 +201,7 @@ class _TableGridPageState extends State<TableGridPage> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _tables.isEmpty
-                    ? const Center(child: Text('Belum ada meja. Tambah di Owner Dashboard.', style: TextStyle(color: AppColors.textSecondary)))
+                    ? const Center(child: Text('Belum ada meja. Tambah di Owner Dashboard.', style: TextStyle(color: KasiraDS.textMuted)))
                     : Padding(
                         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
                         child: GridView.builder(
@@ -232,12 +232,12 @@ class _TableGridPageState extends State<TableGridPage> {
         decoration: BoxDecoration(
           color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? color : AppColors.border),
+          border: Border.all(color: isSelected ? color : KasiraDS.borderSubtle),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? color : AppColors.textSecondary,
+            color: isSelected ? color : KasiraDS.textMuted,
             fontSize: 13,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
@@ -270,9 +270,9 @@ class _TableGridPageState extends State<TableGridPage> {
   ({Color color, String label, IconData icon})? _tabSubBadge(String? tabStatus) {
     switch (tabStatus) {
       case 'splitting':
-        return (color: AppColors.info, label: 'Split Bill', icon: LucideIcons.split);
+        return (color: KasiraDS.info, label: 'Split Bill', icon: LucideIcons.split);
       case 'asking_bill':
-        return (color: AppColors.warning, label: 'Minta Bill', icon: LucideIcons.receipt);
+        return (color: KasiraDS.warning, label: 'Minta Bill', icon: LucideIcons.receipt);
       default:
         return null;
     }
@@ -411,7 +411,7 @@ class _TableGridPageState extends State<TableGridPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: isUrgent ? AppColors.error : AppColors.warning,
+        color: isUrgent ? KasiraDS.danger : KasiraDS.warning,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -425,42 +425,42 @@ class _TableGridPageState extends State<TableGridPage> {
     switch (status) {
       case TableStatus.available:
         return _TableStatusConfig(
-          bgColor: AppColors.success.withOpacity(0.10),
-          borderColor: AppColors.success,
+          bgColor: KasiraDS.success.withOpacity(0.10),
+          borderColor: KasiraDS.success,
           icon: LucideIcons.checkCircle2,
-          iconColor: AppColors.success,
-          textColor: AppColors.success,
-          badgeColor: AppColors.success.withOpacity(0.18),
+          iconColor: KasiraDS.success,
+          textColor: KasiraDS.success,
+          badgeColor: KasiraDS.success.withOpacity(0.18),
           statusLabel: 'Tersedia',
         );
       case TableStatus.occupied:
         return _TableStatusConfig(
-          bgColor: AppColors.error.withOpacity(0.10),
-          borderColor: AppColors.error,
+          bgColor: KasiraDS.danger.withOpacity(0.10),
+          borderColor: KasiraDS.danger,
           icon: LucideIcons.users,
-          iconColor: AppColors.error,
-          textColor: AppColors.error,
-          badgeColor: AppColors.error.withOpacity(0.18),
+          iconColor: KasiraDS.danger,
+          textColor: KasiraDS.danger,
+          badgeColor: KasiraDS.danger.withOpacity(0.18),
           statusLabel: 'Terisi',
         );
       case TableStatus.reserved:
         return _TableStatusConfig(
-          bgColor: AppColors.warning.withOpacity(0.10),
-          borderColor: AppColors.warning,
+          bgColor: KasiraDS.warning.withOpacity(0.10),
+          borderColor: KasiraDS.warning,
           icon: LucideIcons.calendarCheck2,
-          iconColor: AppColors.warning,
-          textColor: AppColors.warning,
-          badgeColor: AppColors.warning.withOpacity(0.18),
+          iconColor: KasiraDS.warning,
+          textColor: KasiraDS.warning,
+          badgeColor: KasiraDS.warning.withOpacity(0.18),
           statusLabel: 'Reservasi',
         );
       case TableStatus.dirty:
         return _TableStatusConfig(
-          bgColor: AppColors.surfaceVariant,
-          borderColor: AppColors.border,
+          bgColor: KasiraDS.surfaceSunken,
+          borderColor: KasiraDS.borderSubtle,
           icon: LucideIcons.alertTriangle,
-          iconColor: AppColors.textSecondary,
-          textColor: AppColors.textSecondary,
-          badgeColor: AppColors.surfaceElevated,
+          iconColor: KasiraDS.textMuted,
+          textColor: KasiraDS.textMuted,
+          badgeColor: KasiraDS.surfaceCard,
           statusLabel: 'Perlu Dibersihkan',
         );
     }
@@ -495,7 +495,7 @@ class _TableGridPageState extends State<TableGridPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Tidak ada tab aktif di ${table.name}'),
-              backgroundColor: AppColors.warning,
+              backgroundColor: KasiraDS.warning,
             ),
           );
         }
@@ -507,7 +507,7 @@ class _TableGridPageState extends State<TableGridPage> {
       if (mounted) Navigator.of(context, rootNavigator: true).pop();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat tab: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Gagal memuat tab: $e'), backgroundColor: KasiraDS.danger),
         );
       }
     }

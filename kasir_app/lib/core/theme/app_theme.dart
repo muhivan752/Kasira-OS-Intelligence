@@ -2,8 +2,184 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
+import 'kasira_ds.dart';
 
 class AppTheme {
+  /// KASIRA "Aurora" light theme — POS redesign (SEFREKUENSI DS via [KasiraDS]).
+  /// Gabarito display + Plus Jakarta body on warm plum-tinted white. Pink→violet
+  /// brand. Wired as the POS app theme (main.dart). Dapur app tetap pakai
+  /// [darkTheme]/[lightTheme] — jangan campur.
+  static ThemeData get auroraTheme {
+    final baseText = GoogleFonts.plusJakartaSansTextTheme(ThemeData.light().textTheme);
+    TextStyle display(TextStyle s) => GoogleFonts.gabarito(
+          textStyle: s,
+          color: KasiraDS.textStrong,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.02 * (s.fontSize ?? 20),
+        );
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      colorScheme: const ColorScheme.light(
+        primary: KasiraDS.brandPrimary,
+        onPrimary: Colors.white,
+        secondary: KasiraDS.brandSecondary,
+        onSecondary: Colors.white,
+        surface: KasiraDS.surfaceCard,
+        onSurface: KasiraDS.textStrong,
+        error: KasiraDS.danger,
+        onError: Colors.white,
+      ),
+      scaffoldBackgroundColor: KasiraDS.bgBase,
+
+      appBarTheme: AppBarTheme(
+        backgroundColor: KasiraDS.bgBase,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarBrightness: Brightness.light,
+          statusBarIconBrightness: Brightness.dark,
+          systemNavigationBarColor: KasiraDS.surfaceCard,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        ),
+        titleTextStyle: GoogleFonts.gabarito(
+          color: KasiraDS.textStrong,
+          fontSize: 20,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.4,
+        ),
+        iconTheme: const IconThemeData(color: KasiraDS.textStrong),
+      ),
+
+      textTheme: baseText.copyWith(
+        displayLarge: display(baseText.displayLarge!),
+        displayMedium: display(baseText.displayMedium!),
+        displaySmall: display(baseText.displaySmall!),
+        headlineMedium: display(baseText.headlineMedium!),
+        headlineSmall: display(baseText.headlineSmall!),
+        titleLarge: display(baseText.titleLarge!),
+        titleMedium: GoogleFonts.plusJakartaSans(
+            textStyle: baseText.titleMedium, color: KasiraDS.textStrong, fontWeight: FontWeight.w700),
+        bodyLarge: GoogleFonts.plusJakartaSans(textStyle: baseText.bodyLarge, color: KasiraDS.textStrong),
+        bodyMedium: GoogleFonts.plusJakartaSans(textStyle: baseText.bodyMedium, color: KasiraDS.textBody),
+        bodySmall: GoogleFonts.plusJakartaSans(textStyle: baseText.bodySmall, color: KasiraDS.textMuted),
+      ),
+
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: KasiraDS.brandPrimary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: KasiraDS.brMd),
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          textStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, fontSize: 15),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: KasiraDS.textStrong,
+          side: const BorderSide(color: KasiraDS.borderDefault),
+          shape: RoundedRectangleBorder(borderRadius: KasiraDS.brMd),
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          textStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 15),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: KasiraDS.brandPrimary,
+          textStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 14),
+        ),
+      ),
+
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: KasiraDS.surfaceCard,
+        border: OutlineInputBorder(
+          borderRadius: KasiraDS.brMd,
+          borderSide: const BorderSide(color: KasiraDS.borderDefault, width: 1.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: KasiraDS.brMd,
+          borderSide: const BorderSide(color: KasiraDS.borderDefault, width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: KasiraDS.brMd,
+          borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: KasiraDS.brMd,
+          borderSide: const BorderSide(color: KasiraDS.danger),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        hintStyle: GoogleFonts.plusJakartaSans(color: KasiraDS.textMuted),
+        labelStyle: GoogleFonts.plusJakartaSans(color: KasiraDS.textMuted),
+      ),
+
+      cardTheme: CardThemeData(
+        color: KasiraDS.surfaceCard,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: KasiraDS.brLg,
+          side: const BorderSide(color: KasiraDS.borderSubtle),
+        ),
+        margin: EdgeInsets.zero,
+      ),
+
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: KasiraDS.surfaceCard,
+        selectedItemColor: KasiraDS.brandPrimary,
+        unselectedItemColor: KasiraDS.textMuted,
+        type: BottomNavigationBarType.fixed,
+        elevation: 0,
+        selectedLabelStyle: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w800),
+        unselectedLabelStyle: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+
+      dividerTheme: const DividerThemeData(color: KasiraDS.borderSubtle, thickness: 1),
+
+      dialogTheme: DialogThemeData(
+        backgroundColor: KasiraDS.surfaceCard,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: KasiraDS.brXl),
+      ),
+
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: KasiraDS.surfaceCard,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+      ),
+
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: KasiraDS.surfaceInverse,
+        contentTextStyle: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 14),
+        shape: RoundedRectangleBorder(borderRadius: KasiraDS.brMd),
+        behavior: SnackBarBehavior.floating,
+      ),
+
+      tabBarTheme: TabBarThemeData(
+        labelColor: KasiraDS.brandPrimary,
+        unselectedLabelColor: KasiraDS.textMuted,
+        indicatorColor: KasiraDS.brandPrimary,
+        dividerColor: KasiraDS.borderSubtle,
+        labelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 14),
+        unselectedLabelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: 14),
+      ),
+
+      chipTheme: ChipThemeData(
+        backgroundColor: KasiraDS.surfaceSunken,
+        selectedColor: KasiraDS.brandTint,
+        labelStyle: GoogleFonts.plusJakartaSans(color: KasiraDS.textBody, fontSize: 13),
+        shape: RoundedRectangleBorder(
+          borderRadius: KasiraDS.brSm,
+          side: const BorderSide(color: KasiraDS.borderSubtle),
+        ),
+      ),
+    );
+  }
+
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,

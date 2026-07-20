@@ -3,7 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/utils/phone_normalize.dart';
 
 class AddCustomerModal extends StatefulWidget {
@@ -31,7 +31,7 @@ class _AddCustomerModalState extends State<AddCustomerModal> {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nama pelanggan wajib diisi'), backgroundColor: AppColors.error),
+        const SnackBar(content: Text('Nama pelanggan wajib diisi'), backgroundColor: KasiraDS.danger),
       );
       return;
     }
@@ -68,14 +68,14 @@ class _AddCustomerModalState extends State<AddCustomerModal> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(detail.toString()), backgroundColor: AppColors.error),
+          SnackBar(content: Text(detail.toString()), backgroundColor: KasiraDS.danger),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Terjadi kesalahan: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Terjadi kesalahan: $e'), backgroundColor: KasiraDS.danger),
         );
       }
     }
@@ -129,11 +129,11 @@ class _AddCustomerModalState extends State<AddCustomerModal> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: KasiraDS.textMuted)),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.surfaceVariant,
+            color: KasiraDS.surfaceSunken,
             borderRadius: BorderRadius.circular(12),
           ),
           child: TextField(
@@ -141,7 +141,7 @@ class _AddCustomerModalState extends State<AddCustomerModal> {
             keyboardType: keyboardType,
             decoration: InputDecoration(
               hintText: hint,
-              prefixIcon: Icon(icon, color: AppColors.textTertiary),
+              prefixIcon: Icon(icon, color: KasiraDS.textMuted),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(vertical: 16),
             ),

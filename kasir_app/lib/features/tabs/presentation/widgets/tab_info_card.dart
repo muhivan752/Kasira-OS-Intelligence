@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
 
 class TabInfoCard extends StatelessWidget {
@@ -20,7 +20,7 @@ class TabInfoCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(LucideIcons.info, size: 18, color: AppColors.primary),
+                const Icon(LucideIcons.info, size: 18, color: KasiraDS.brandPrimary),
                 const SizedBox(width: 8),
                 const Text('Info Tab', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ],
@@ -36,7 +36,7 @@ class TabInfoCard extends StatelessWidget {
                 LucideIcons.split,
                 'Pembayaran',
                 _buildPaymentSummary(tab),
-                valueColor: tab.splits.any((s) => !s.isPaid) ? AppColors.warning : AppColors.success,
+                valueColor: tab.splits.any((s) => !s.isPaid) ? KasiraDS.warning : KasiraDS.success,
               ),
             ] else if (tab.splitMethod != null)
               _buildInfoRow(LucideIcons.split, 'Metode Split', _splitLabel(tab.splitMethod!)),
@@ -53,16 +53,16 @@ class TabInfoCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: AppColors.textSecondary),
+          Icon(icon, size: 16, color: KasiraDS.textMuted),
           const SizedBox(width: 8),
-          Text('$label: ', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          Text('$label: ', style: const TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
           Expanded(
             child: Text(
               value,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
-                color: valueColor ?? AppColors.textPrimary,
+                color: valueColor ?? KasiraDS.textStrong,
               ),
             ),
           ),

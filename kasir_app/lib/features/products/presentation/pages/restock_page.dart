@@ -9,7 +9,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/sync/sync_provider.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 
 /// Restock page — support simple & recipe mode.
 /// Simple mode: list product stock_enabled, tap → restock product.
@@ -105,7 +105,7 @@ class _RestockPageState extends ConsumerState<RestockPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Stok ${item.name} berhasil ditambah'),
-            backgroundColor: AppColors.success,
+            backgroundColor: KasiraDS.success,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -121,15 +121,15 @@ class _RestockPageState extends ConsumerState<RestockPage> {
           Container(
             width: double.infinity,
             color: _stockMode == 'recipe'
-                ? AppColors.primary.withOpacity(0.06)
-                : AppColors.surface,
+                ? KasiraDS.brandPrimary.withOpacity(0.06)
+                : KasiraDS.surfaceCard,
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
             child: Row(
               children: [
                 Icon(
                   _stockMode == 'recipe' ? LucideIcons.package : LucideIcons.box,
                   size: 16,
-                  color: AppColors.textSecondary,
+                  color: KasiraDS.textMuted,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -139,7 +139,7 @@ class _RestockPageState extends ConsumerState<RestockPage> {
                         : 'Mode Sederhana — restock produk langsung',
                     style: const TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: KasiraDS.textMuted,
                     ),
                   ),
                 ),
@@ -157,9 +157,9 @@ class _RestockPageState extends ConsumerState<RestockPage> {
                     ? 'Cari bahan baku...'
                     : 'Cari produk...',
                 prefixIcon: const Icon(LucideIcons.search,
-                    color: AppColors.textTertiary, size: 18),
+                    color: KasiraDS.textMuted, size: 18),
                 filled: true,
-                fillColor: AppColors.surfaceVariant,
+                fillColor: KasiraDS.surfaceSunken,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide.none,
@@ -197,7 +197,7 @@ class _RestockPageState extends ConsumerState<RestockPage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Icon(LucideIcons.packageSearch,
-                            size: 40, color: AppColors.textTertiary),
+                            size: 40, color: KasiraDS.textMuted),
                         const SizedBox(height: 12),
                         Text(
                           _searchQuery.isNotEmpty
@@ -206,7 +206,7 @@ class _RestockPageState extends ConsumerState<RestockPage> {
                                   ? 'Belum ada bahan baku'
                                   : 'Belum ada produk dengan stok aktif',
                           style: const TextStyle(
-                              color: AppColors.textSecondary),
+                              color: KasiraDS.textMuted),
                         ),
                       ],
                     ),
@@ -237,13 +237,13 @@ class _RestockPageState extends ConsumerState<RestockPage> {
       return body;
     }
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
         title: const Text('Restock Stok'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: KasiraDS.surfaceCard,
+        foregroundColor: KasiraDS.textStrong,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        iconTheme: const IconThemeData(color: KasiraDS.textStrong),
       ),
       body: body,
     );
@@ -299,12 +299,12 @@ class _RestockTile extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
+                  color: KasiraDS.brandPrimary.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   item.isRecipe ? LucideIcons.package : LucideIcons.box,
-                  color: AppColors.primary,
+                  color: KasiraDS.brandPrimary,
                   size: 18,
                 ),
               ),
@@ -324,8 +324,8 @@ class _RestockTile extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         color: lowStock
-                            ? AppColors.error
-                            : AppColors.textSecondary,
+                            ? KasiraDS.danger
+                            : KasiraDS.textMuted,
                         fontWeight:
                             lowStock ? FontWeight.w600 : FontWeight.normal,
                       ),
@@ -337,7 +337,7 @@ class _RestockTile extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
+                  color: KasiraDS.brandPrimary,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Row(
@@ -506,7 +506,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(
         decoration: const BoxDecoration(
-          color: AppColors.surface,
+          color: KasiraDS.surfaceCard,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
@@ -517,7 +517,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.border,
+                color: KasiraDS.borderSubtle,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -539,7 +539,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
                             Text(
                               'Stok sekarang: $stockStr ${widget.item.unit}',
                               style: const TextStyle(
-                                  color: AppColors.textSecondary, fontSize: 13),
+                                  color: KasiraDS.textMuted, fontSize: 13),
                             ),
                           ],
                         ),
@@ -558,7 +558,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
                     style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary),
+                        color: KasiraDS.textMuted),
                   ),
                   const SizedBox(height: 6),
                   TextField(
@@ -580,7 +580,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
                       hintText: '0',
                       suffixText: widget.item.unit,
                       filled: true,
-                      fillColor: AppColors.surfaceVariant,
+                      fillColor: KasiraDS.surfaceSunken,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
@@ -601,7 +601,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
                       style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary),
+                          color: KasiraDS.textMuted),
                     ),
                     const SizedBox(height: 6),
                     TextField(
@@ -618,9 +618,9 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
                             'Diisi = update modal & track margin. Kosong = harga modal lama tetap.',
                         helperMaxLines: 2,
                         helperStyle: const TextStyle(
-                            fontSize: 11, color: AppColors.textTertiary),
+                            fontSize: 11, color: KasiraDS.textMuted),
                         filled: true,
-                        fillColor: AppColors.surfaceVariant,
+                        fillColor: KasiraDS.surfaceSunken,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -637,7 +637,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
                     style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary),
+                        color: KasiraDS.textMuted),
                   ),
                   const SizedBox(height: 6),
                   TextField(
@@ -646,7 +646,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
                     decoration: InputDecoration(
                       hintText: 'Misal: terima dari supplier A',
                       filled: true,
-                      fillColor: AppColors.surfaceVariant,
+                      fillColor: KasiraDS.surfaceSunken,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
@@ -660,19 +660,19 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                        color: KasiraDS.danger.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         children: [
                           const Icon(LucideIcons.alertCircle,
-                              size: 14, color: AppColors.error),
+                              size: 14, color: KasiraDS.danger),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               _error!,
                               style: const TextStyle(
-                                  color: AppColors.error, fontSize: 12),
+                                  color: KasiraDS.danger, fontSize: 12),
                             ),
                           ),
                         ],
@@ -685,7 +685,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
                     child: ElevatedButton(
                       onPressed: _submitting ? null : _submit,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: KasiraDS.brandPrimary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(

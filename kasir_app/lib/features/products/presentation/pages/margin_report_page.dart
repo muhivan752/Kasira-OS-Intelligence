@@ -6,7 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 
 /// Laporan Untung-Rugi — Starter margin tracking.
 /// Sumber data: GET /api/v1/reports/margin?outlet_id=...
@@ -100,14 +100,14 @@ class _MarginReportPageState extends ConsumerState<MarginReportPage> {
                 Icon(
                   isRecipe ? LucideIcons.book : LucideIcons.wifiOff,
                   size: 48,
-                  color: AppColors.textTertiary,
+                  color: KasiraDS.textMuted,
                 ),
                 const SizedBox(height: 16),
                 Text(
                   msg,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 14, height: 1.4),
+                      color: KasiraDS.textMuted, fontSize: 14, height: 1.4),
                 ),
                 const SizedBox(height: 16),
                 Center(
@@ -159,11 +159,11 @@ class _MarginReportPageState extends ConsumerState<MarginReportPage> {
 
     if (widget.embedded) return body;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
         title: const Text('Laporan Untung-Rugi'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: KasiraDS.surfaceCard,
+        foregroundColor: KasiraDS.textStrong,
         elevation: 0,
       ),
       body: body,
@@ -185,9 +185,9 @@ class _SummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.06),
+        color: KasiraDS.brandPrimary.withOpacity(0.06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+        border: Border.all(color: KasiraDS.brandPrimary.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,14 +195,14 @@ class _SummaryCard extends StatelessWidget {
           Row(
             children: [
               const Icon(LucideIcons.trendingUp,
-                  size: 18, color: AppColors.primary),
+                  size: 18, color: KasiraDS.brandPrimary),
               const SizedBox(width: 8),
               const Text(
                 'Ringkasan Margin',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
-                  color: AppColors.textPrimary,
+                  color: KasiraDS.textStrong,
                 ),
               ),
             ],
@@ -252,15 +252,15 @@ class _SummaryStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color valueColor = AppColors.textPrimary;
-    if (highlight) valueColor = AppColors.primary;
-    if (warn) valueColor = AppColors.error;
+    Color valueColor = KasiraDS.textStrong;
+    if (highlight) valueColor = KasiraDS.brandPrimary;
+    if (warn) valueColor = KasiraDS.danger;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          style: const TextStyle(fontSize: 11, color: KasiraDS.textMuted),
         ),
         const SizedBox(height: 4),
         Text(
@@ -353,11 +353,11 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         children: [
           Icon(LucideIcons.packageSearch,
-              size: 40, color: AppColors.textTertiary),
+              size: 40, color: KasiraDS.textMuted),
           SizedBox(height: 12),
           Text(
             'Belum ada produk',
-            style: TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: KasiraDS.textMuted),
           ),
         ],
       ),
@@ -375,15 +375,15 @@ class _MarginTile extends StatelessWidget {
     final missing = product.missingBuyPrice;
     final negative = product.negativeMargin;
 
-    Color borderColor = AppColors.border;
+    Color borderColor = KasiraDS.borderSubtle;
     if (missing) borderColor = const Color(0xFFFDE68A);
-    else if (negative) borderColor = AppColors.error.withOpacity(0.4);
+    else if (negative) borderColor = KasiraDS.danger.withOpacity(0.4);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: KasiraDS.surfaceCard,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: borderColor, width: missing || negative ? 1.2 : 0.5),
       ),
@@ -398,7 +398,7 @@ class _MarginTile extends StatelessWidget {
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
-                    color: AppColors.textPrimary,
+                    color: KasiraDS.textStrong,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -407,7 +407,7 @@ class _MarginTile extends StatelessWidget {
                   '${product.buyPrice != null ? '   •   Modal: ${currency.format(product.buyPrice)}' : ''}',
                   style: const TextStyle(
                     fontSize: 11,
-                    color: AppColors.textSecondary,
+                    color: KasiraDS.textMuted,
                   ),
                 ),
                 if (missing) ...[
@@ -434,7 +434,7 @@ class _MarginTile extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
-                    color: negative ? AppColors.error : AppColors.success,
+                    color: negative ? KasiraDS.danger : KasiraDS.success,
                   ),
                 ),
                 if (product.marginPct != null) ...[
@@ -443,7 +443,7 @@ class _MarginTile extends StatelessWidget {
                     '${product.marginPct!.toStringAsFixed(0)}%',
                     style: TextStyle(
                       fontSize: 11,
-                      color: negative ? AppColors.error : AppColors.success,
+                      color: negative ? KasiraDS.danger : KasiraDS.success,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -453,7 +453,7 @@ class _MarginTile extends StatelessWidget {
                   '—',
                   style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.textTertiary,
+                    color: KasiraDS.textMuted,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

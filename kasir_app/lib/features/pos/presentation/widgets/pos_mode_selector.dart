@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/pos_mode_provider.dart';
@@ -20,10 +20,10 @@ class PosModeSelector extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: KasiraDS.brandPrimary.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(LucideIcons.store, size: 40, color: AppColors.primary),
+              child: const Icon(LucideIcons.store, size: 40, color: KasiraDS.brandPrimary),
             ),
             const SizedBox(height: 24),
             const Text(
@@ -31,13 +31,13 @@ class PosModeSelector extends ConsumerWidget {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+                color: KasiraDS.textStrong,
               ),
             ),
             const SizedBox(height: 8),
             const Text(
               'Tentukan tipe pesanan untuk memulai',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 13, color: KasiraDS.textMuted),
             ),
             const SizedBox(height: 32),
             Row(
@@ -47,7 +47,7 @@ class PosModeSelector extends ConsumerWidget {
                     icon: LucideIcons.shoppingBag,
                     label: 'Takeaway',
                     subtitle: 'Bawa pulang',
-                    color: AppColors.accent,
+                    color: KasiraDS.brandSecondary,
                     onTap: () {
                       ref.read(cartProvider.notifier).setOrderType('Takeaway');
                       ref.read(posModeProvider.notifier).state = PosMode.takeaway;
@@ -60,7 +60,7 @@ class PosModeSelector extends ConsumerWidget {
                     icon: LucideIcons.utensils,
                     label: 'Dine In',
                     subtitle: 'Makan di tempat',
-                    color: AppColors.primary,
+                    color: KasiraDS.brandPrimary,
                     onTap: () {
                       ref.read(cartProvider.notifier).setOrderType('Dine In');
                       final isPro = SessionCache.instance.isPro;
@@ -131,7 +131,7 @@ class _ModeCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: const TextStyle(fontSize: 12, color: KasiraDS.textMuted),
             ),
           ],
         ),

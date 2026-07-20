@@ -3,7 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import 'add_customer_modal.dart';
 
 class CustomerSelectionModal extends StatefulWidget {
@@ -100,14 +100,14 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
 
             Container(
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: KasiraDS.surfaceSunken,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TextField(
                 controller: _searchController,
                 decoration: const InputDecoration(
                   hintText: 'Cari nama atau nomor telepon...',
-                  prefixIcon: Icon(LucideIcons.search, color: AppColors.textTertiary),
+                  prefixIcon: Icon(LucideIcons.search, color: KasiraDS.textMuted),
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(vertical: 16),
                 ),
@@ -122,8 +122,8 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
               label: const Text('Tambah Pelanggan Baru'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 56),
-                side: const BorderSide(color: AppColors.primary),
-                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: KasiraDS.brandPrimary),
+                foregroundColor: KasiraDS.brandPrimary,
               ),
             ),
             const SizedBox(height: 24),
@@ -139,9 +139,9 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(LucideIcons.alertCircle, color: AppColors.error, size: 40),
+                              const Icon(LucideIcons.alertCircle, color: KasiraDS.danger, size: 40),
                               const SizedBox(height: 12),
-                              Text(_error!, style: const TextStyle(color: AppColors.textSecondary)),
+                              Text(_error!, style: const TextStyle(color: KasiraDS.textMuted)),
                               const SizedBox(height: 12),
                               TextButton(onPressed: _fetchCustomers, child: const Text('Coba lagi')),
                             ],
@@ -149,11 +149,11 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
                         )
                       : _customers.isEmpty
                           ? const Center(
-                              child: Text('Belum ada pelanggan', style: TextStyle(color: AppColors.textSecondary)),
+                              child: Text('Belum ada pelanggan', style: TextStyle(color: KasiraDS.textMuted)),
                             )
                           : ListView.separated(
                               itemCount: _customers.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
+                              separatorBuilder: (_, __) => const Divider(height: 1, color: KasiraDS.borderSubtle),
                               itemBuilder: (context, index) {
                                 final c = _customers[index];
                                 final name = c['name'] as String;
@@ -162,10 +162,10 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
                                 return ListTile(
                                   contentPadding: const EdgeInsets.symmetric(vertical: 8),
                                   leading: CircleAvatar(
-                                    backgroundColor: AppColors.primary.withOpacity(0.1),
+                                    backgroundColor: KasiraDS.brandPrimary.withOpacity(0.1),
                                     child: Text(
                                       name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(color: KasiraDS.brandPrimary, fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                   title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),

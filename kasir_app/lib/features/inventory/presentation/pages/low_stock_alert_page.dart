@@ -4,7 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 
 enum StockLevel { out, critical, low }
 
@@ -98,16 +98,16 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
     final lowCount = _items.where((i) => i.level == StockLevel.low).length;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        title: const Text('Peringatan Stok', style: TextStyle(color: AppColors.textPrimary)),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        backgroundColor: KasiraDS.surfaceCard,
+        title: const Text('Peringatan Stok', style: TextStyle(color: KasiraDS.textStrong)),
+        iconTheme: const IconThemeData(color: KasiraDS.textStrong),
         elevation: 0,
         actions: [
           IconButton(
             onPressed: _load,
-            icon: const Icon(LucideIcons.refreshCw, color: AppColors.primary),
+            icon: const Icon(LucideIcons.refreshCw, color: KasiraDS.brandPrimary),
             tooltip: 'Refresh',
           ),
           const SizedBox(width: 8),
@@ -123,15 +123,15 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        color: AppColors.error.withOpacity(0.1),
+                        color: KasiraDS.danger.withOpacity(0.1),
                         child: Row(
                           children: [
-                            const Icon(LucideIcons.alertCircle, color: AppColors.error, size: 18),
+                            const Icon(LucideIcons.alertCircle, color: KasiraDS.danger, size: 18),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '$outCount produk habis — otomatis disembunyikan dari kasir',
-                                style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w600, fontSize: 13),
+                                style: const TextStyle(color: KasiraDS.danger, fontWeight: FontWeight.w600, fontSize: 13),
                               ),
                             ),
                           ],
@@ -140,18 +140,18 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
                     Container(
                       height: 60,
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      color: AppColors.surface,
+                      color: KasiraDS.surfaceCard,
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            _buildChip(null, 'Semua (${_items.length})', AppColors.textSecondary),
+                            _buildChip(null, 'Semua (${_items.length})', KasiraDS.textMuted),
                             const SizedBox(width: 8),
-                            _buildChip(StockLevel.out, 'Habis ($outCount)', AppColors.error),
+                            _buildChip(StockLevel.out, 'Habis ($outCount)', KasiraDS.danger),
                             const SizedBox(width: 8),
-                            _buildChip(StockLevel.critical, 'Kritis ($criticalCount)', AppColors.warning),
+                            _buildChip(StockLevel.critical, 'Kritis ($criticalCount)', KasiraDS.warning),
                             const SizedBox(width: 8),
-                            _buildChip(StockLevel.low, 'Rendah ($lowCount)', AppColors.info),
+                            _buildChip(StockLevel.low, 'Rendah ($lowCount)', KasiraDS.info),
                           ],
                         ),
                       ),
@@ -175,9 +175,9 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(LucideIcons.wifiOff, size: 48, color: AppColors.textSecondary),
+          const Icon(LucideIcons.wifiOff, size: 48, color: KasiraDS.textMuted),
           const SizedBox(height: 16),
-          Text(_error!, style: const TextStyle(color: AppColors.textSecondary)),
+          Text(_error!, style: const TextStyle(color: KasiraDS.textMuted)),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _load,
@@ -198,12 +198,12 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
         decoration: BoxDecoration(
           color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? color : AppColors.border),
+          border: Border.all(color: isSelected ? color : KasiraDS.borderSubtle),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? color : AppColors.textSecondary,
+            color: isSelected ? color : KasiraDS.textMuted,
             fontSize: 13,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
@@ -218,7 +218,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: KasiraDS.surfaceCard,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: config.color.withOpacity(0.3)),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))],
@@ -238,7 +238,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
               children: [
                 Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                 const SizedBox(height: 2),
-                Text(item.category, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                Text(item.category, style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
                 const SizedBox(height: 6),
                 Row(
                   children: [
@@ -250,7 +250,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
                     const SizedBox(width: 8),
                     Text(
                       'Stok: ${item.currentStock} (min: ${item.minStock})',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -261,7 +261,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
             onPressed: () => _showRestockDialog(item),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              side: const BorderSide(color: AppColors.primary),
+              side: const BorderSide(color: KasiraDS.brandPrimary),
             ),
             child: const Text('Restock', style: TextStyle(fontSize: 12)),
           ),
@@ -277,13 +277,13 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
         children: [
           Container(
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: AppColors.success.withOpacity(0.1), shape: BoxShape.circle),
-            child: const Icon(LucideIcons.checkCircle2, size: 48, color: AppColors.success),
+            decoration: BoxDecoration(color: KasiraDS.success.withOpacity(0.1), shape: BoxShape.circle),
+            child: const Icon(LucideIcons.checkCircle2, size: 48, color: KasiraDS.success),
           ),
           const SizedBox(height: 16),
           const Text('Semua stok aman', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 8),
-          const Text('Tidak ada produk dengan stok rendah', style: TextStyle(color: AppColors.textSecondary)),
+          const Text('Tidak ada produk dengan stok rendah', style: TextStyle(color: KasiraDS.textMuted)),
         ],
       ),
     );
@@ -292,11 +292,11 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
   _LevelConfig _levelConfig(StockLevel level) {
     switch (level) {
       case StockLevel.out:
-        return _LevelConfig(color: AppColors.error, icon: LucideIcons.xCircle, label: 'HABIS');
+        return _LevelConfig(color: KasiraDS.danger, icon: LucideIcons.xCircle, label: 'HABIS');
       case StockLevel.critical:
-        return _LevelConfig(color: AppColors.warning, icon: LucideIcons.alertTriangle, label: 'KRITIS');
+        return _LevelConfig(color: KasiraDS.warning, icon: LucideIcons.alertTriangle, label: 'KRITIS');
       case StockLevel.low:
-        return _LevelConfig(color: AppColors.info, icon: LucideIcons.alertCircle, label: 'RENDAH');
+        return _LevelConfig(color: KasiraDS.info, icon: LucideIcons.alertCircle, label: 'RENDAH');
     }
   }
 
@@ -348,7 +348,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Restock ${item.name} +$qty berhasil'),
-            backgroundColor: AppColors.success,
+            backgroundColor: KasiraDS.success,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -358,13 +358,13 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
       final msg = e.response?.data?['detail'] ?? 'Gagal restock';
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg.toString()), backgroundColor: AppColors.error, behavior: SnackBarBehavior.floating),
+          SnackBar(content: Text(msg.toString()), backgroundColor: KasiraDS.danger, behavior: SnackBarBehavior.floating),
         );
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gagal restock'), backgroundColor: AppColors.error, behavior: SnackBarBehavior.floating),
+          const SnackBar(content: Text('Gagal restock'), backgroundColor: KasiraDS.danger, behavior: SnackBarBehavior.floating),
         );
       }
     }
@@ -400,7 +400,7 @@ class _RestockDialogState extends State<_RestockDialog> {
         children: [
           Text(
             'Stok saat ini: ${widget.item.currentStock} (min: ${widget.item.minStock})',
-            style: const TextStyle(color: AppColors.textSecondary),
+            style: const TextStyle(color: KasiraDS.textMuted),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -413,7 +413,7 @@ class _RestockDialogState extends State<_RestockDialog> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 2),
               ),
             ),
           ),
@@ -426,7 +426,7 @@ class _RestockDialogState extends State<_RestockDialog> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 2),
               ),
             ),
           ),

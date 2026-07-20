@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/sync/sync_provider.dart';
 import '../../../../core/services/session_cache.dart';
@@ -76,7 +76,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal mengubah status: $e'),
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -91,13 +91,13 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: KasiraDS.bgBase,
         body: Column(
           children: [
             // Header
             Container(
               padding: const EdgeInsets.all(20),
-              color: AppColors.surface,
+              color: KasiraDS.surfaceCard,
               child: Row(
                 children: [
                   Text('Produk & Stok',
@@ -110,9 +110,9 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
                       decoration: InputDecoration(
                         hintText: 'Cari produk...',
                         prefixIcon: const Icon(LucideIcons.search,
-                            color: AppColors.textTertiary, size: 18),
+                            color: KasiraDS.textMuted, size: 18),
                         filled: true,
-                        fillColor: AppColors.surfaceVariant,
+                        fillColor: KasiraDS.surfaceSunken,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -132,7 +132,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
                       _loadLowStockCount();
                     },
                     icon: const Icon(LucideIcons.refreshCw,
-                        color: AppColors.textSecondary, size: 18),
+                        color: KasiraDS.textMuted, size: 18),
                     tooltip: 'Refresh',
                   ),
                 ],
@@ -141,11 +141,11 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
 
             // TabBar — Produk | Stok (dengan badge low-stock kalau ada)
             Material(
-              color: AppColors.surface,
+              color: KasiraDS.surfaceCard,
               child: TabBar(
-                labelColor: AppColors.primary,
-                unselectedLabelColor: AppColors.textSecondary,
-                indicatorColor: AppColors.primary,
+                labelColor: KasiraDS.brandPrimary,
+                unselectedLabelColor: KasiraDS.textMuted,
+                indicatorColor: KasiraDS.brandPrimary,
                 indicatorWeight: 2.5,
                 labelStyle: const TextStyle(
                     fontWeight: FontWeight.w600, fontSize: 13),
@@ -165,7 +165,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppColors.error,
+                              color: KasiraDS.danger,
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
@@ -211,17 +211,17 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(LucideIcons.wifiOff,
-                size: 40, color: AppColors.textTertiary),
+                size: 40, color: KasiraDS.textMuted),
             const SizedBox(height: 12),
             const Text('Gagal memuat produk',
-                style: TextStyle(color: AppColors.textSecondary)),
+                style: TextStyle(color: KasiraDS.textMuted)),
             const SizedBox(height: 12),
             ElevatedButton.icon(
               onPressed: () => ref.read(productsProvider.notifier).refresh(),
               icon: const Icon(LucideIcons.refreshCw, size: 16),
               label: const Text('Coba lagi'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: KasiraDS.brandPrimary,
               ),
             ),
           ],
@@ -240,13 +240,13 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(LucideIcons.packageSearch,
-                    size: 40, color: AppColors.textTertiary),
+                    size: 40, color: KasiraDS.textMuted),
                 const SizedBox(height: 12),
                 Text(
                   _searchQuery.isNotEmpty
                       ? 'Produk "$_searchQuery" tidak ditemukan'
                       : 'Belum ada produk',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: const TextStyle(color: KasiraDS.textMuted),
                 ),
               ],
             ),
@@ -314,7 +314,7 @@ class _ProductTileState extends State<_ProductTile> {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: KasiraDS.surfaceSunken,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: product.imageUrl != null && product.imageUrl!.isNotEmpty
@@ -328,12 +328,12 @@ class _ProductTileState extends State<_ProductTile> {
                         fit: BoxFit.cover,
                         errorWidget: (_, __, ___) => const Icon(
                             LucideIcons.coffee,
-                            color: AppColors.textTertiary),
+                            color: KasiraDS.textMuted),
                         placeholder: (_, __) => const SizedBox.shrink(),
                       ),
                     )
                   : const Icon(LucideIcons.coffee,
-                      color: AppColors.textTertiary),
+                      color: KasiraDS.textMuted),
             ),
             const SizedBox(width: 16),
 
@@ -352,7 +352,7 @@ class _ProductTileState extends State<_ProductTile> {
                     Text(
                       product.categoryName!,
                       style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 12),
+                          color: KasiraDS.textMuted, fontSize: 12),
                     ),
                   const SizedBox(height: 2),
                   Row(
@@ -362,8 +362,8 @@ class _ProductTileState extends State<_ProductTile> {
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: product.stock > 0
-                              ? AppColors.success.withOpacity(0.1)
-                              : AppColors.error.withOpacity(0.1),
+                              ? KasiraDS.success.withOpacity(0.1)
+                              : KasiraDS.danger.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -371,8 +371,8 @@ class _ProductTileState extends State<_ProductTile> {
                           style: TextStyle(
                             fontSize: 11,
                             color: product.stock > 0
-                                ? AppColors.success
-                                : AppColors.error,
+                                ? KasiraDS.success
+                                : KasiraDS.danger,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -401,8 +401,8 @@ class _ProductTileState extends State<_ProductTile> {
                     style: TextStyle(
                       fontSize: 10,
                       color: product.margin! < 0
-                          ? AppColors.error
-                          : AppColors.textTertiary,
+                          ? KasiraDS.danger
+                          : KasiraDS.textMuted,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -418,8 +418,8 @@ class _ProductTileState extends State<_ProductTile> {
                   product.isAvailable ? 'Tersedia' : 'Nonaktif',
                   style: TextStyle(
                     color: product.isAvailable
-                        ? AppColors.success
-                        : AppColors.error,
+                        ? KasiraDS.success
+                        : KasiraDS.danger,
                     fontWeight: FontWeight.bold,
                     fontSize: 11,
                   ),
@@ -444,7 +444,7 @@ class _ProductTileState extends State<_ProductTile> {
                           await widget.onToggle();
                           if (mounted) setState(() => _isToggling = false);
                         },
-                        activeColor: AppColors.success,
+                        activeColor: KasiraDS.success,
                       ),
               ],
             ),

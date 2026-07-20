@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/auth/logout_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import 'printer_settings_page.dart';
 import 'sync_settings_page.dart';
 import 'profile_page.dart';
@@ -16,13 +16,13 @@ class SettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       body: Column(
         children: [
           // Header
           Container(
             padding: const EdgeInsets.all(24),
-            color: AppColors.surface,
+            color: KasiraDS.surfaceCard,
             width: double.infinity,
             child: Text('Pengaturan', style: Theme.of(context).textTheme.headlineMedium),
           ),
@@ -156,7 +156,7 @@ class SettingsPage extends ConsumerWidget {
                 context.go('/login');
               }
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(foregroundColor: KasiraDS.danger),
             child: const Text('Keluar'),
           ),
         ],
@@ -170,7 +170,7 @@ class SettingsPage extends ConsumerWidget {
       child: Text(
         title.toUpperCase(),
         style: const TextStyle(
-          color: AppColors.textSecondary,
+          color: KasiraDS.textMuted,
           fontWeight: FontWeight.bold,
           fontSize: 12,
           letterSpacing: 1.2,
@@ -193,14 +193,14 @@ class SettingsPage extends ConsumerWidget {
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: AppColors.surfaceVariant,
+            color: KasiraDS.surfaceSunken,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: AppColors.textSecondary),
+          child: Icon(icon, color: KasiraDS.textMuted),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(subtitle, style: const TextStyle(color: AppColors.textSecondary)),
-        trailing: const Icon(LucideIcons.chevronRight, color: AppColors.textTertiary),
+        subtitle: Text(subtitle, style: const TextStyle(color: KasiraDS.textMuted)),
+        trailing: const Icon(LucideIcons.chevronRight, color: KasiraDS.textMuted),
         onTap: onTap,
       ),
     );

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
 
 class TabSplitCard extends StatelessWidget {
@@ -24,15 +24,15 @@ class TabSplitCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: isPaid ? AppColors.success.withOpacity(0.3) : AppColors.border),
+        side: BorderSide(color: isPaid ? KasiraDS.success.withOpacity(0.3) : KasiraDS.borderSubtle),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         leading: CircleAvatar(
-          backgroundColor: isPaid ? AppColors.success.withOpacity(0.1) : AppColors.primary.withOpacity(0.1),
+          backgroundColor: isPaid ? KasiraDS.success.withOpacity(0.1) : KasiraDS.brandPrimary.withOpacity(0.1),
           child: Icon(
             isPaid ? LucideIcons.checkCircle2 : LucideIcons.user,
-            color: isPaid ? AppColors.success : AppColors.primary,
+            color: isPaid ? KasiraDS.success : KasiraDS.brandPrimary,
             size: 20,
           ),
         ),
@@ -41,22 +41,22 @@ class TabSplitCard extends StatelessWidget {
           currency.format(split.amount),
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: isPaid ? AppColors.success : AppColors.textPrimary,
+            color: isPaid ? KasiraDS.success : KasiraDS.textStrong,
           ),
         ),
         trailing: isPaid
             ? Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.success.withOpacity(0.1),
+                  color: KasiraDS.success.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text('Lunas', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 12)),
+                child: const Text('Lunas', style: TextStyle(color: KasiraDS.success, fontWeight: FontWeight.bold, fontSize: 12)),
               )
             : FilledButton(
                 onPressed: onPay,
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: KasiraDS.brandPrimary,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                 ),
                 child: const Text('Bayar', style: TextStyle(fontSize: 13)),

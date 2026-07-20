@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/app_config.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -146,7 +146,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
     }
 
     return Scaffold(
-      backgroundColor: AppColors.primary,
+      backgroundColor: KasiraDS.brandPrimary,
       body: FadeTransition(
         opacity: _fadeAnim,
         child: Center(
@@ -200,20 +200,20 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
 
   Widget _buildForceUpdateScreen() {
     return Scaffold(
-      backgroundColor: AppColors.primary,
+      backgroundColor: KasiraDS.brandPrimary,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 400),
           child: Container(
             padding: const EdgeInsets.all(40),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: KasiraDS.surfaceCard,
               borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.system_update_alt_rounded, size: 64, color: AppColors.primary),
+                const Icon(Icons.system_update_alt_rounded, size: 64, color: KasiraDS.brandPrimary),
                 const SizedBox(height: 24),
                 Text(
                   'Update Wajib',
@@ -223,7 +223,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                 const Text(
                   'Versi baru Kasira tersedia. Silakan update untuk melanjutkan.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: KasiraDS.textMuted),
                 ),
                 const SizedBox(height: 32),
                 SizedBox(

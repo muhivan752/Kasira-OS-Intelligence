@@ -5,7 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/config/app_config.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/services/session_cache.dart';
 
 class PaymentModal extends StatefulWidget {
@@ -185,7 +185,7 @@ class _PaymentModalState extends State<PaymentModal> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(LucideIcons.wifiOff, color: AppColors.error, size: 22),
+            Icon(LucideIcons.wifiOff, color: KasiraDS.danger, size: 22),
             SizedBox(width: 10),
             Expanded(child: Text('Koneksi Bermasalah', style: TextStyle(fontSize: 16))),
           ],
@@ -201,7 +201,7 @@ class _PaymentModalState extends State<PaymentModal> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogCtx).pop(),
-            child: const Text('Tutup', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text('Tutup', style: TextStyle(color: KasiraDS.textMuted)),
           ),
           ElevatedButton.icon(
             onPressed: () {
@@ -212,7 +212,7 @@ class _PaymentModalState extends State<PaymentModal> {
             icon: const Icon(LucideIcons.refreshCw, size: 16),
             label: const Text('Coba Lagi'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: KasiraDS.brandPrimary,
               foregroundColor: Colors.white,
             ),
           ),
@@ -304,7 +304,7 @@ class _PaymentModalState extends State<PaymentModal> {
               content: Text(
                 'Pembayaran sedang diproses. Tap tombol X di atas kalau mau batal.',
               ),
-              backgroundColor: AppColors.error,
+              backgroundColor: KasiraDS.danger,
               behavior: SnackBarBehavior.floating,
               duration: Duration(seconds: 3),
             ),
@@ -337,7 +337,7 @@ class _PaymentModalState extends State<PaymentModal> {
             child: Container(
               padding: const EdgeInsets.all(28),
               decoration: const BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: KasiraDS.surfaceSunken,
                 borderRadius: BorderRadius.horizontal(left: Radius.circular(24)),
               ),
               child: Column(
@@ -360,7 +360,7 @@ class _PaymentModalState extends State<PaymentModal> {
             child: Container(
               padding: const EdgeInsets.all(28),
               decoration: const BoxDecoration(
-                color: AppColors.surface,
+                color: KasiraDS.surfaceCard,
                 borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
               ),
               child: Column(
@@ -370,7 +370,7 @@ class _PaymentModalState extends State<PaymentModal> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Total Tagihan',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.textSecondary)),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(color: KasiraDS.textMuted)),
                       IconButton(
                           onPressed: () => Navigator.pop(context),
                           icon: const Icon(LucideIcons.x)),
@@ -380,11 +380,11 @@ class _PaymentModalState extends State<PaymentModal> {
                   Text(
                     currencyFormatter.format(widget.totalAmount),
                     style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                          color: AppColors.primary,
+                          color: KasiraDS.brandPrimary,
                           fontWeight: FontWeight.bold,
                         ),
                   ),
-                  const Divider(height: 40, color: AppColors.border),
+                  const Divider(height: 40, color: KasiraDS.borderSubtle),
                   if (isCash) ..._buildCashDetails(context, change)
                   else if (_paymentMethod == 'QRIS')
                     Expanded(child: _buildQrisDetails(context))
@@ -417,7 +417,7 @@ class _PaymentModalState extends State<PaymentModal> {
           Container(
             padding: const EdgeInsets.fromLTRB(20, 20, 8, 16),
             decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
+              border: Border(bottom: BorderSide(color: KasiraDS.borderSubtle)),
             ),
             child: Row(
               children: [
@@ -426,11 +426,11 @@ class _PaymentModalState extends State<PaymentModal> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Total Tagihan',
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          style: TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
                       Text(
                         currencyFormatter.format(widget.totalAmount),
                         style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              color: AppColors.primary,
+                              color: KasiraDS.brandPrimary,
                               fontWeight: FontWeight.bold,
                             ),
                       ),
@@ -446,7 +446,7 @@ class _PaymentModalState extends State<PaymentModal> {
           ),
           // Method selector chips
           Container(
-            color: AppColors.surfaceVariant,
+            color: KasiraDS.surfaceSunken,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
@@ -520,7 +520,7 @@ class _PaymentModalState extends State<PaymentModal> {
           Text(
             currencyFormatter.format(change > 0 ? change : 0),
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: change >= 0 ? AppColors.success : AppColors.error,
+                  color: change >= 0 ? KasiraDS.success : KasiraDS.danger,
                   fontWeight: FontWeight.bold,
                 ),
           ),
@@ -531,18 +531,18 @@ class _PaymentModalState extends State<PaymentModal> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.error.withOpacity(0.08),
+            color: KasiraDS.danger.withOpacity(0.08),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.error.withOpacity(0.3)),
+            border: Border.all(color: KasiraDS.danger.withOpacity(0.3)),
           ),
           child: Row(
             children: [
-              const Icon(LucideIcons.alertCircle, color: AppColors.error, size: 16),
+              const Icon(LucideIcons.alertCircle, color: KasiraDS.danger, size: 16),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   _cashError!,
-                  style: const TextStyle(color: AppColors.error, fontSize: 13),
+                  style: const TextStyle(color: KasiraDS.danger, fontSize: 13),
                 ),
               ),
             ],
@@ -560,7 +560,7 @@ class _PaymentModalState extends State<PaymentModal> {
               ? Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.error),
+                    const Icon(LucideIcons.alertCircle, size: 48, color: KasiraDS.danger),
                     const SizedBox(height: 16),
                     Text(_qrisError!,
                         style: Theme.of(context).textTheme.titleMedium,
@@ -576,13 +576,13 @@ class _PaymentModalState extends State<PaymentModal> {
                   ? Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(LucideIcons.checkCircle2, size: 64, color: AppColors.success),
+                        const Icon(LucideIcons.checkCircle2, size: 64, color: KasiraDS.success),
                         const SizedBox(height: 16),
                         Text('Pembayaran Berhasil',
                             style: Theme.of(context)
                                 .textTheme
                                 .titleLarge
-                                ?.copyWith(color: AppColors.success)),
+                                ?.copyWith(color: KasiraDS.success)),
                       ],
                     )
                   : Column(
@@ -592,9 +592,9 @@ class _PaymentModalState extends State<PaymentModal> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: AppColors.surface,
+                              color: KasiraDS.surfaceCard,
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.border),
+                              border: Border.all(color: KasiraDS.borderSubtle),
                             ),
                             child: QrImageView(
                               data: _qrisUrl!,
@@ -610,12 +610,12 @@ class _PaymentModalState extends State<PaymentModal> {
                           Text(
                             '${(_qrisTimerSeconds ~/ 60).toString().padLeft(2, '0')}:${(_qrisTimerSeconds % 60).toString().padLeft(2, '0')}',
                             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                  color: AppColors.error,
+                                  color: KasiraDS.danger,
                                   fontWeight: FontWeight.bold,
                                 ),
                           ),
                         ] else ...[
-                          const Text('Waktu habis', style: TextStyle(color: AppColors.error)),
+                          const Text('Waktu habis', style: TextStyle(color: KasiraDS.danger)),
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: () => setState(() => _paymentMethod = 'Cash'),
@@ -636,7 +636,7 @@ class _PaymentModalState extends State<PaymentModal> {
       child: ElevatedButton(
         onPressed: isDisabled ? null : () async => _submitCashPayment(_amountReceived),
         style: ElevatedButton.styleFrom(
-          backgroundColor: isDisabled ? AppColors.border : AppColors.primary,
+          backgroundColor: isDisabled ? KasiraDS.borderSubtle : KasiraDS.brandPrimary,
         ),
         child: _isLoadingQris
             ? const SizedBox(
@@ -664,23 +664,23 @@ class _PaymentModalState extends State<PaymentModal> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withOpacity(0.1) : AppColors.surface,
+          color: isSelected ? KasiraDS.brandPrimary.withOpacity(0.1) : KasiraDS.surfaceCard,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
+            color: isSelected ? KasiraDS.brandPrimary : KasiraDS.borderSubtle,
             width: 2,
           ),
         ),
         child: Row(
           children: [
-            Icon(icon, color: isSelected ? AppColors.primary : AppColors.textSecondary),
+            Icon(icon, color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted),
             const SizedBox(width: 12),
             Text(
               label,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textStrong,
               ),
             ),
           ],
@@ -707,22 +707,22 @@ class _PaymentModalState extends State<PaymentModal> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : AppColors.surface,
+            color: isSelected ? KasiraDS.brandPrimary : KasiraDS.surfaceCard,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: isSelected ? AppColors.primary : AppColors.border),
+            border: Border.all(color: isSelected ? KasiraDS.brandPrimary : KasiraDS.borderSubtle),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 18,
-                  color: isSelected ? Colors.white : AppColors.textSecondary),
+                  color: isSelected ? Colors.white : KasiraDS.textMuted),
               const SizedBox(height: 2),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                  color: isSelected ? Colors.white : KasiraDS.textMuted,
                 ),
               ),
             ],

@@ -3,7 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../auth/presentation/pages/login_page.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -75,11 +75,11 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        title: const Text('Profil', style: TextStyle(color: AppColors.textPrimary)),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        backgroundColor: KasiraDS.surfaceCard,
+        title: const Text('Profil', style: TextStyle(color: KasiraDS.textStrong)),
+        iconTheme: const IconThemeData(color: KasiraDS.textStrong),
         elevation: 0,
       ),
       body: _isLoading
@@ -92,25 +92,25 @@ class _ProfilePageState extends State<ProfilePage> {
                   padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [AppColors.primary.withOpacity(0.05), AppColors.surface],
+                      colors: [KasiraDS.brandPrimary.withOpacity(0.05), KasiraDS.surfaceCard],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                     ),
-                    color: AppColors.surface,
+                    color: KasiraDS.surfaceCard,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: KasiraDS.borderSubtle),
                   ),
                   child: Column(
                     children: [
                       CircleAvatar(
                         radius: 48,
-                        backgroundColor: AppColors.primary.withOpacity(0.12),
+                        backgroundColor: KasiraDS.brandPrimary.withOpacity(0.12),
                         child: Text(
                           _initial,
                           style: const TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
+                            color: KasiraDS.brandPrimary,
                           ),
                         ),
                       ),
@@ -120,12 +120,12 @@ class _ProfilePageState extends State<ProfilePage> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                         decoration: BoxDecoration(
-                          color: AppColors.info.withOpacity(0.1),
+                          color: KasiraDS.info.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
                           _role,
-                          style: const TextStyle(color: AppColors.info, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: KasiraDS.info, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
@@ -139,7 +139,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: Text(
                     'INFORMASI AKUN',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: KasiraDS.textMuted,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                       letterSpacing: 1.2,
@@ -168,7 +168,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: Text(
                     'KEAMANAN',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: KasiraDS.textMuted,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                       letterSpacing: 1.2,
@@ -180,9 +180,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   margin: EdgeInsets.zero,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: ListTile(
-                    leading: const Icon(LucideIcons.lock, color: AppColors.textSecondary),
+                    leading: const Icon(LucideIcons.lock, color: KasiraDS.textMuted),
                     title: const Text('Ubah PIN', style: TextStyle(fontWeight: FontWeight.bold)),
-                    trailing: const Icon(LucideIcons.chevronRight, color: AppColors.textTertiary),
+                    trailing: const Icon(LucideIcons.chevronRight, color: KasiraDS.textMuted),
                     onTap: () {},
                   ),
                 ),
@@ -194,13 +194,13 @@ class _ProfilePageState extends State<ProfilePage> {
                   height: 56,
                   child: OutlinedButton.icon(
                     onPressed: () => _showLogoutConfirmation(context),
-                    icon: const Icon(LucideIcons.logOut, color: AppColors.error),
+                    icon: const Icon(LucideIcons.logOut, color: KasiraDS.danger),
                     label: const Text(
                       'Keluar Akun',
-                      style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: KasiraDS.danger, fontWeight: FontWeight.bold),
                     ),
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.error),
+                      side: const BorderSide(color: KasiraDS.danger),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -215,14 +215,14 @@ class _ProfilePageState extends State<ProfilePage> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.textSecondary, size: 20),
+          Icon(icon, color: KasiraDS.textMuted, size: 20),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
                 const SizedBox(height: 4),
                 Text(value,
                     style:
@@ -245,7 +245,7 @@ class _ProfilePageState extends State<ProfilePage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text('Batal', style: TextStyle(color: KasiraDS.textMuted)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -255,7 +255,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 (route) => false,
               );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            style: ElevatedButton.styleFrom(backgroundColor: KasiraDS.danger),
             child: const Text('Keluar'),
           ),
         ],

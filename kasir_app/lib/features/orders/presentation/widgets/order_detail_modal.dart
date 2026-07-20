@@ -11,7 +11,7 @@ import '../../../../core/database/app_database.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../../core/sync/sync_provider.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/orders_provider.dart';
 
 final _currencyFmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -53,7 +53,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Status diubah ke ${_statusLabel(newStatus)}'),
-          backgroundColor: AppColors.success,
+          backgroundColor: KasiraDS.success,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -61,7 +61,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMsg ?? 'Gagal ubah status'),
-          backgroundColor: AppColors.error,
+          backgroundColor: KasiraDS.danger,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 4),
         ),
@@ -102,7 +102,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(LucideIcons.alertCircle, color: AppColors.error, size: 32),
+                  const Icon(LucideIcons.alertCircle, color: KasiraDS.danger, size: 32),
                   const SizedBox(height: 12),
                   const Text('Gagal memuat detail pesanan'),
                   const SizedBox(height: 8),
@@ -122,10 +122,10 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
 
   Widget _buildContent(BuildContext context, OrderModel order) {
     final statusColor = switch (order.status) {
-      'completed' => AppColors.success,
-      'cancelled' => AppColors.error,
-      'ready' => AppColors.info,
-      _ => AppColors.warning,
+      'completed' => KasiraDS.success,
+      'cancelled' => KasiraDS.danger,
+      'ready' => KasiraDS.info,
+      _ => KasiraDS.warning,
     };
 
     return Column(
@@ -143,7 +143,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
                 const SizedBox(height: 4),
                 Text(order.orderNumber,
                     style: const TextStyle(
-                        color: AppColors.textSecondary,
+                        color: KasiraDS.textMuted,
                         fontWeight: FontWeight.bold)),
               ],
             ),
@@ -158,12 +158,12 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
           children: [
             _buildBadge('Status', order.statusLabel, statusColor),
             const SizedBox(width: 12),
-            _buildBadge('Tipe', order.orderTypeLabel, AppColors.info),
+            _buildBadge('Tipe', order.orderTypeLabel, KasiraDS.info),
           ],
         ),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 16),
-          child: Divider(height: 1, color: AppColors.border),
+          child: Divider(height: 1, color: KasiraDS.borderSubtle),
         ),
         const Text('Daftar Item',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -192,13 +192,13 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
         ),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
-          child: Divider(height: 1, color: AppColors.border),
+          child: Divider(height: 1, color: KasiraDS.borderSubtle),
         ),
         _buildSummaryRow('Subtotal', _currencyFmt.format(order.subtotal)),
         if (order.discountAmount > 0) ...[
           const SizedBox(height: 6),
           _buildSummaryRow('Diskon', '- ${_currencyFmt.format(order.discountAmount)}',
-              valueColor: AppColors.error),
+              valueColor: KasiraDS.danger),
         ],
         if (order.serviceChargeAmount > 0) ...[
           const SizedBox(height: 6),
@@ -219,7 +219,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
               style: Theme.of(context)
                   .textTheme
                   .titleLarge
-                  ?.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold),
+                  ?.copyWith(color: KasiraDS.brandPrimary, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -227,7 +227,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
         // ── Action Buttons ──
         if (order.status != 'cancelled') ...[
           const SizedBox(height: 20),
-          const Divider(height: 1, color: AppColors.border),
+          const Divider(height: 1, color: KasiraDS.borderSubtle),
           const SizedBox(height: 16),
           if (_updating)
             const Center(child: CircularProgressIndicator())
@@ -253,8 +253,8 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
                 icon: const Icon(LucideIcons.x, size: 18),
                 label: const Text('Tolak'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.error,
-                  side: const BorderSide(color: AppColors.error),
+                  foregroundColor: KasiraDS.danger,
+                  side: const BorderSide(color: KasiraDS.danger),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
@@ -267,7 +267,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
                 icon: const Icon(LucideIcons.chefHat, size: 18),
                 label: const Text('Terima & Proses'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: KasiraDS.brandPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
@@ -282,7 +282,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
             icon: const Icon(LucideIcons.check, size: 18),
             label: const Text('Tandai Siap'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.info,
+              backgroundColor: KasiraDS.info,
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           ),
@@ -295,7 +295,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
             icon: const Icon(LucideIcons.checkCircle, size: 18),
             label: const Text('Selesai'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
+              backgroundColor: KasiraDS.success,
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           ),
@@ -308,7 +308,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
             icon: const Icon(LucideIcons.checkCircle, size: 18),
             label: const Text('Selesai'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
+              backgroundColor: KasiraDS.success,
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           ),
@@ -329,8 +329,8 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
                 icon: const Icon(LucideIcons.printer, size: 18),
                 label: const Text('Cetak Ulang'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary),
+                  foregroundColor: KasiraDS.brandPrimary,
+                  side: const BorderSide(color: KasiraDS.brandPrimary),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
@@ -342,8 +342,8 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
                 icon: const Icon(LucideIcons.rotateCcw, size: 18),
                 label: const Text('Refund'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.warning,
-                  side: const BorderSide(color: AppColors.warning),
+                  foregroundColor: KasiraDS.warning,
+                  side: const BorderSide(color: KasiraDS.warning),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
@@ -383,14 +383,14 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
       } catch (dbErr) {
         if (!mounted) return;
         messenger.showSnackBar(
-          SnackBar(content: Text('Offline + data lokal tidak lengkap: $dbErr'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Offline + data lokal tidak lengkap: $dbErr'), backgroundColor: KasiraDS.danger),
         );
         return;
       }
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal ambil data struk: $e'), backgroundColor: AppColors.error),
+        SnackBar(content: Text('Gagal ambil data struk: $e'), backgroundColor: KasiraDS.danger),
       );
       return;
     }
@@ -405,7 +405,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
         content: Text(ok
             ? (offline ? 'Struk dicetak ulang (offline)' : 'Struk dicetak ulang')
             : 'Gagal cetak — cek printer'),
-        backgroundColor: ok ? AppColors.success : AppColors.error,
+        backgroundColor: ok ? KasiraDS.success : KasiraDS.danger,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -573,7 +573,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Order ${order.orderNumber}', style: const TextStyle(color: AppColors.textSecondary)),
+              Text('Order ${order.orderNumber}', style: const TextStyle(color: KasiraDS.textMuted)),
               const SizedBox(height: 16),
               TextField(
                 controller: amountCtrl,
@@ -603,7 +603,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
                 final reason = reasonCtrl.text.trim();
                 if (reason.length < 3) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Alasan refund wajib diisi (min 3 karakter)'), backgroundColor: AppColors.error),
+                    const SnackBar(content: Text('Alasan refund wajib diisi (min 3 karakter)'), backgroundColor: KasiraDS.danger),
                   );
                   return;
                 }
@@ -622,7 +622,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
                     if (ctx.mounted) Navigator.pop(ctx);
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Payment tidak ditemukan'), backgroundColor: AppColors.error),
+                        const SnackBar(content: Text('Payment tidak ditemukan'), backgroundColor: KasiraDS.danger),
                       );
                     }
                     return;
@@ -640,7 +640,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
                   if (mounted) {
                     final msg = refundRes.data['message'] ?? 'Refund diajukan';
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(msg), backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating),
+                      SnackBar(content: Text(msg), backgroundColor: KasiraDS.success, behavior: SnackBarBehavior.floating),
                     );
                     // Auto-print struk refund (best-effort, jangan block)
                     unawaited(_printRefundReceipt(order, amount, reason));
@@ -650,12 +650,12 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
                   final detail = e.response?.data?['detail'] ?? 'Gagal mengajukan refund';
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(detail.toString()), backgroundColor: AppColors.error),
+                      SnackBar(content: Text(detail.toString()), backgroundColor: KasiraDS.danger),
                     );
                   }
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
+              style: ElevatedButton.styleFrom(backgroundColor: KasiraDS.warning),
               child: isSubmitting
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Text('Ajukan Refund'),
@@ -671,7 +671,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
         const SizedBox(height: 4),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -691,7 +691,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: AppColors.textSecondary)),
+        Text(label, style: const TextStyle(color: KasiraDS.textMuted)),
         Text(value, style: TextStyle(fontWeight: FontWeight.w600, color: valueColor)),
       ],
     );

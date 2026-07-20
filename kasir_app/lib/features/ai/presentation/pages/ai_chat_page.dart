@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/ai_chat_provider.dart';
 
 const _suggestions = [
@@ -63,25 +63,25 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     });
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: KasiraDS.surfaceCard,
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.15),
+                color: KasiraDS.brandPrimary.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(LucideIcons.bot, color: AppColors.primary, size: 20),
+              child: const Icon(LucideIcons.bot, color: KasiraDS.brandPrimary, size: 20),
             ),
             const SizedBox(width: 10),
             const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('AI Asisten', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text('Kasira Intelligence', style: TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+                Text('Kasira Intelligence', style: TextStyle(fontSize: 11, color: KasiraDS.textMuted)),
               ],
             ),
           ],
@@ -121,8 +121,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 8, 8, 16),
             decoration: const BoxDecoration(
-              color: AppColors.surface,
-              border: Border(top: BorderSide(color: AppColors.border)),
+              color: KasiraDS.surfaceCard,
+              border: Border(top: BorderSide(color: KasiraDS.borderSubtle)),
             ),
             child: SafeArea(
               top: false,
@@ -136,9 +136,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                       style: const TextStyle(fontSize: 14),
                       decoration: InputDecoration(
                         hintText: 'Tanya sesuatu ke Kasira AI...',
-                        hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
+                        hintStyle: const TextStyle(color: KasiraDS.textMuted, fontSize: 14),
                         filled: true,
-                        fillColor: AppColors.surfaceVariant,
+                        fillColor: KasiraDS.surfaceSunken,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -150,7 +150,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                   const SizedBox(width: 8),
                   Container(
                     decoration: BoxDecoration(
-                      color: chat.isLoading ? AppColors.surfaceVariant : AppColors.primary,
+                      color: chat.isLoading ? KasiraDS.surfaceSunken : KasiraDS.brandPrimary,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
@@ -159,7 +159,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textSecondary),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: KasiraDS.textMuted),
                             )
                           : const Icon(LucideIcons.send, size: 18, color: Colors.white),
                     ),
@@ -182,10 +182,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: KasiraDS.brandPrimary.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(LucideIcons.bot, size: 48, color: AppColors.primary),
+            child: const Icon(LucideIcons.bot, size: 48, color: KasiraDS.brandPrimary),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -196,12 +196,12 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           const Text(
             'Tanya apa saja tentang bisnis kamu.\nOmzet, stok, produk terlaris, dan lainnya.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            style: TextStyle(color: KasiraDS.textMuted, fontSize: 13),
           ),
           const SizedBox(height: 32),
           const Align(
             alignment: Alignment.centerLeft,
-            child: Text('Coba tanya:', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+            child: Text('Coba tanya:', style: TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -209,8 +209,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             runSpacing: 8,
             children: _suggestions.map((s) => ActionChip(
               label: Text(s, style: const TextStyle(fontSize: 12)),
-              backgroundColor: AppColors.surfaceVariant,
-              side: const BorderSide(color: AppColors.border),
+              backgroundColor: KasiraDS.surfaceSunken,
+              side: const BorderSide(color: KasiraDS.borderSubtle),
               onPressed: () {
                 _controller.text = s;
                 _send();
@@ -252,13 +252,13 @@ class _MessageBubble extends StatelessWidget {
               margin: const EdgeInsets.only(top: 4),
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: isError ? AppColors.error.withOpacity(0.15) : AppColors.primary.withOpacity(0.15),
+                color: isError ? KasiraDS.danger.withOpacity(0.15) : KasiraDS.brandPrimary.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 isError ? LucideIcons.alertCircle : LucideIcons.bot,
                 size: 16,
-                color: isError ? AppColors.error : AppColors.primary,
+                color: isError ? KasiraDS.danger : KasiraDS.brandPrimary,
               ),
             ),
             const SizedBox(width: 8),
@@ -271,10 +271,10 @@ class _MessageBubble extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: isUser
-                        ? AppColors.primary.withOpacity(0.15)
+                        ? KasiraDS.brandPrimary.withOpacity(0.15)
                         : isError
-                            ? AppColors.error.withOpacity(0.08)
-                            : AppColors.surfaceVariant,
+                            ? KasiraDS.danger.withOpacity(0.08)
+                            : KasiraDS.surfaceSunken,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
@@ -286,14 +286,14 @@ class _MessageBubble extends StatelessWidget {
                       ? const _TypingIndicator()
                       : _MarkdownText(
                           content: message.content,
-                          color: isError ? AppColors.error : AppColors.textPrimary,
+                          color: isError ? KasiraDS.danger : KasiraDS.textStrong,
                         ),
                 ),
                 if (message.model != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     '${message.model} · ${message.tokens ?? 0} tokens',
-                    style: const TextStyle(fontSize: 10, color: AppColors.textTertiary),
+                    style: const TextStyle(fontSize: 10, color: KasiraDS.textMuted),
                   ),
                 ],
               ],
@@ -359,7 +359,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
                       width: 6,
                       height: 6,
                       decoration: const BoxDecoration(
-                        color: AppColors.primary,
+                        color: KasiraDS.brandPrimary,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -374,7 +374,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
           'Kasira AI sedang berpikir...',
           style: TextStyle(
             fontSize: 12.5,
-            color: AppColors.textSecondary,
+            color: KasiraDS.textMuted,
             fontStyle: FontStyle.italic,
           ),
         ),
@@ -393,9 +393,9 @@ class _ContextAwarenessBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.06),
+        color: KasiraDS.brandPrimary.withOpacity(0.06),
         border: const Border(
-          bottom: BorderSide(color: AppColors.border, width: 0.5),
+          bottom: BorderSide(color: KasiraDS.borderSubtle, width: 0.5),
         ),
       ),
       child: Row(
@@ -404,14 +404,14 @@ class _ContextAwarenessBanner extends StatelessWidget {
           Icon(
             LucideIcons.link,
             size: 11,
-            color: AppColors.primary.withOpacity(0.8),
+            color: KasiraDS.brandPrimary.withOpacity(0.8),
           ),
           const SizedBox(width: 6),
           Text(
             'Melanjutkan konteks obrolan...',
             style: TextStyle(
               fontSize: 11,
-              color: AppColors.primary.withOpacity(0.85),
+              color: KasiraDS.brandPrimary.withOpacity(0.85),
               fontWeight: FontWeight.w500,
               letterSpacing: 0.1,
             ),
@@ -494,7 +494,7 @@ class _MarkdownText extends StatelessWidget {
           text: codeContent,
           style: base.copyWith(
             fontFamily: 'monospace',
-            backgroundColor: AppColors.surfaceVariant,
+            backgroundColor: KasiraDS.surfaceSunken,
             fontSize: (base.fontSize ?? 13.5) - 0.5,
           ),
         ));

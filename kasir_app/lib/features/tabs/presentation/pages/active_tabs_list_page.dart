@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
 
 class ActiveTabsListPage extends ConsumerStatefulWidget {
@@ -33,7 +33,7 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
         title: const Text('Meja Aktif'),
         actions: [
@@ -68,20 +68,20 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.surfaceVariant,
+              color: KasiraDS.surfaceSunken,
               shape: BoxShape.circle,
             ),
-            child: const Icon(LucideIcons.coffee, size: 36, color: AppColors.textTertiary),
+            child: const Icon(LucideIcons.coffee, size: 36, color: KasiraDS.textMuted),
           ),
           const SizedBox(height: 16),
           const Text(
             'Belum ada meja aktif',
-            style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 15, color: KasiraDS.textMuted),
           ),
           const SizedBox(height: 6),
           const Text(
             'Mulai dine-in dari POS untuk membuka tab baru',
-            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+            style: TextStyle(fontSize: 12, color: KasiraDS.textMuted),
           ),
         ],
       ),
@@ -94,15 +94,15 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
     final String statusLabel;
     switch (tab.status) {
       case 'asking_bill':
-        statusColor = AppColors.warning;
+        statusColor = KasiraDS.warning;
         statusLabel = 'Minta Bill';
         break;
       case 'splitting':
-        statusColor = AppColors.info;
+        statusColor = KasiraDS.info;
         statusLabel = 'Split Bill';
         break;
       default:
-        statusColor = AppColors.success;
+        statusColor = KasiraDS.success;
         statusLabel = 'Aktif';
     }
     final elapsed = DateTime.now().difference(tab.createdAt);
@@ -116,9 +116,9 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: KasiraDS.surfaceCard,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border.withOpacity(0.5), width: 0.5),
+          border: Border.all(color: KasiraDS.borderSubtle.withOpacity(0.5), width: 0.5),
         ),
         child: Row(
           children: [
@@ -126,7 +126,7 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: KasiraDS.brandPrimary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
@@ -135,7 +135,7 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
-                    color: AppColors.primary,
+                    color: KasiraDS.brandPrimary,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -173,27 +173,27 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(LucideIcons.users, size: 12, color: AppColors.textTertiary),
+                      const Icon(LucideIcons.users, size: 12, color: KasiraDS.textMuted),
                       const SizedBox(width: 4),
                       Text(
                         '${tab.guestCount}',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        style: const TextStyle(fontSize: 11, color: KasiraDS.textMuted),
                       ),
                       const SizedBox(width: 10),
-                      const Icon(LucideIcons.clock, size: 12, color: AppColors.textTertiary),
+                      const Icon(LucideIcons.clock, size: 12, color: KasiraDS.textMuted),
                       const SizedBox(width: 4),
                       Text(
                         elapsedLabel,
-                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        style: const TextStyle(fontSize: 11, color: KasiraDS.textMuted),
                       ),
                       if (tab.customerName != null && tab.customerName!.isNotEmpty) ...[
                         const SizedBox(width: 10),
-                        const Icon(LucideIcons.user, size: 12, color: AppColors.textTertiary),
+                        const Icon(LucideIcons.user, size: 12, color: KasiraDS.textMuted),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             tab.customerName!,
-                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            style: const TextStyle(fontSize: 11, color: KasiraDS.textMuted),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -211,18 +211,18 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
-                    color: AppColors.textPrimary,
+                    color: KasiraDS.textStrong,
                   ),
                 ),
                 if (tab.remainingAmount < tab.totalAmount && tab.paidAmount > 0)
                   Text(
                     'Sisa ${_currency.format(tab.remainingAmount)}',
-                    style: const TextStyle(fontSize: 10, color: AppColors.warning),
+                    style: const TextStyle(fontSize: 10, color: KasiraDS.warning),
                   ),
               ],
             ),
             const SizedBox(width: 8),
-            const Icon(LucideIcons.chevronRight, size: 18, color: AppColors.textTertiary),
+            const Icon(LucideIcons.chevronRight, size: 18, color: KasiraDS.textMuted),
           ],
         ),
       ),

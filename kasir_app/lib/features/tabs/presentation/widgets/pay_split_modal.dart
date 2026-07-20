@@ -7,7 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/widgets/send_wa_receipt_dialog.dart';
 import '../../providers/tab_provider.dart';
 import 'qris_waiting_modal.dart';
@@ -66,13 +66,13 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
             // Header
             Row(
               children: [
-                const Icon(LucideIcons.banknote, color: AppColors.primary),
+                const Icon(LucideIcons.banknote, color: KasiraDS.brandPrimary),
                 const SizedBox(width: 12),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Bayar $_label', style: Theme.of(context).textTheme.titleLarge),
-                    Text(widget.tab.tabNumber, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    Text(widget.tab.tabNumber, style: TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
                   ],
                 ),
                 const Spacer(),
@@ -85,7 +85,7 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.05),
+                color: KasiraDS.brandPrimary.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -94,7 +94,7 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
                   const Text('Tagihan', style: TextStyle(fontSize: 15)),
                   Text(
                     _currency.format(_amountDue),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: AppColors.primary),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: KasiraDS.brandPrimary),
                   ),
                 ],
               ),
@@ -102,7 +102,7 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
             const SizedBox(height: 20),
 
             // Payment method
-            Text('Metode Pembayaran', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            Text('Metode Pembayaran', style: TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -115,7 +115,7 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
 
             if (_paymentMethod == 'cash') ...[
               // Cash input
-              Text('Uang Diterima', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              Text('Uang Diterima', style: TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
               const SizedBox(height: 8),
               TextField(
                 controller: _amountController,
@@ -152,7 +152,7 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
-                      color: change >= 0 ? AppColors.success : AppColors.error,
+                      color: change >= 0 ? KasiraDS.success : KasiraDS.danger,
                     ),
                   ),
                 ],
@@ -161,16 +161,16 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
+                  color: KasiraDS.surfaceSunken,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
                   children: [
-                    Icon(LucideIcons.qrCode, size: 48, color: AppColors.textSecondary),
+                    Icon(LucideIcons.qrCode, size: 48, color: KasiraDS.textMuted),
                     const SizedBox(height: 12),
                     Text(
                       'QRIS akan diproses setelah konfirmasi',
-                      style: TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: KasiraDS.textMuted),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -183,14 +183,14 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.08),
+                  color: KasiraDS.danger.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.alertCircle, color: AppColors.error, size: 16),
+                    const Icon(LucideIcons.alertCircle, color: KasiraDS.danger, size: 16),
                     const SizedBox(width: 8),
-                    Expanded(child: Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 13))),
+                    Expanded(child: Text(_error!, style: const TextStyle(color: KasiraDS.danger, fontSize: 13))),
                   ],
                 ),
               ),
@@ -208,8 +208,8 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
                 label: Text('Bayar ${_currency.format(_amountDue)}'),
                 style: FilledButton.styleFrom(
                   backgroundColor: (_paymentMethod == 'cash' && change < 0)
-                      ? AppColors.border
-                      : AppColors.success,
+                      ? KasiraDS.borderSubtle
+                      : KasiraDS.success,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
@@ -228,18 +228,18 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary.withOpacity(0.1) : AppColors.surface,
+            color: isSelected ? KasiraDS.brandPrimary.withOpacity(0.1) : KasiraDS.surfaceCard,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isSelected ? AppColors.primary : AppColors.border, width: 2),
+            border: Border.all(color: isSelected ? KasiraDS.brandPrimary : KasiraDS.borderSubtle, width: 2),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: isSelected ? AppColors.primary : AppColors.textSecondary),
+              Icon(icon, size: 18, color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted),
               const SizedBox(width: 8),
               Text(label, style: TextStyle(
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted,
               )),
             ],
           ),
@@ -341,7 +341,7 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
             messenger.showSnackBar(
               const SnackBar(
                 content: Text('Tab lunas! Pembayaran QRIS confirmed.'),
-                backgroundColor: AppColors.success,
+                backgroundColor: KasiraDS.success,
               ),
             );
           }
@@ -366,7 +366,7 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
           messenger.showSnackBar(
             const SnackBar(
               content: Text('Tab lunas! Semua pembayaran selesai.'),
-              backgroundColor: AppColors.success,
+              backgroundColor: KasiraDS.success,
             ),
           );
         }
@@ -378,11 +378,11 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
             messenger.showSnackBar(
               SnackBar(
                 content: const Text('Mau kirim struk via WA ke customer?'),
-                backgroundColor: AppColors.surfaceElevated,
+                backgroundColor: KasiraDS.surfaceCard,
                 duration: const Duration(seconds: 6),
                 action: SnackBarAction(
                   label: '📱 Kirim WA',
-                  textColor: AppColors.primary,
+                  textColor: KasiraDS.brandPrimary,
                   onPressed: () {
                     showDialog<void>(
                       context: rootNav.context,

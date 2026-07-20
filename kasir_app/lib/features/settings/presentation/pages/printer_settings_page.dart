@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/services/printer_service.dart';
 
 class PrinterSettingsPage extends ConsumerWidget {
@@ -19,7 +19,7 @@ class PrinterSettingsPage extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.error!),
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -28,15 +28,15 @@ class PrinterSettingsPage extends ConsumerWidget {
     });
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
-        title: const Text('Pengaturan Printer', style: TextStyle(color: AppColors.textPrimary)),
-        backgroundColor: AppColors.surface,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        title: const Text('Pengaturan Printer', style: TextStyle(color: KasiraDS.textStrong)),
+        backgroundColor: KasiraDS.surfaceCard,
+        iconTheme: const IconThemeData(color: KasiraDS.textStrong),
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: AppColors.border, height: 1),
+          child: Container(color: KasiraDS.borderSubtle, height: 1),
         ),
       ),
       body: ListView(
@@ -46,22 +46,22 @@ class PrinterSettingsPage extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: KasiraDS.surfaceCard,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: KasiraDS.borderSubtle),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: (state.isConnected ? AppColors.success : AppColors.textSecondary)
+                    color: (state.isConnected ? KasiraDS.success : KasiraDS.textMuted)
                         .withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     LucideIcons.printer,
-                    color: state.isConnected ? AppColors.success : AppColors.textSecondary,
+                    color: state.isConnected ? KasiraDS.success : KasiraDS.textMuted,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -79,7 +79,7 @@ class PrinterSettingsPage extends ConsumerWidget {
                             ? 'Terhubung'
                             : (state.savedDevice != null ? 'Tidak terhubung' : 'Scan untuk menemukan printer'),
                         style: TextStyle(
-                          color: state.isConnected ? AppColors.success : AppColors.textSecondary,
+                          color: state.isConnected ? KasiraDS.success : KasiraDS.textMuted,
                           fontSize: 13,
                         ),
                       ),
@@ -89,7 +89,7 @@ class PrinterSettingsPage extends ConsumerWidget {
                 if (state.isConnected)
                   TextButton(
                     onPressed: notifier.disconnect,
-                    child: const Text('Putus', style: TextStyle(color: AppColors.error)),
+                    child: const Text('Putus', style: TextStyle(color: KasiraDS.danger)),
                   ),
               ],
             ),
@@ -119,7 +119,7 @@ class PrinterSettingsPage extends ConsumerWidget {
           const SizedBox(height: 8),
           const Text(
             'Pastikan printer sudah di-pair via Pengaturan Bluetooth HP terlebih dahulu.',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            style: TextStyle(color: KasiraDS.textMuted, fontSize: 12),
             textAlign: TextAlign.center,
           ),
 
@@ -128,7 +128,7 @@ class PrinterSettingsPage extends ConsumerWidget {
             const SizedBox(height: 24),
             Text(
               'Perangkat Ditemukan (${state.scanResults.length})',
-              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+              style: const TextStyle(fontWeight: FontWeight.bold, color: KasiraDS.textMuted),
             ),
             const SizedBox(height: 12),
             ...state.scanResults.map((device) => _DeviceTile(
@@ -141,7 +141,7 @@ class PrinterSettingsPage extends ConsumerWidget {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('Terhubung ke ${device.name}'),
-                          backgroundColor: AppColors.success,
+                          backgroundColor: KasiraDS.success,
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
@@ -159,7 +159,7 @@ class PrinterSettingsPage extends ConsumerWidget {
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 12),
-                  Text('Mencari printer...', style: TextStyle(color: AppColors.textSecondary)),
+                  Text('Mencari printer...', style: TextStyle(color: KasiraDS.textMuted)),
                 ],
               ),
             ),
@@ -177,8 +177,8 @@ class PrinterSettingsPage extends ConsumerWidget {
               label: const Text('Cetak Struk Tes'),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                side: const BorderSide(color: AppColors.primary),
-                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: KasiraDS.brandPrimary),
+                foregroundColor: KasiraDS.brandPrimary,
               ),
             ),
           ],
@@ -210,7 +210,7 @@ class _DeviceTile extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         leading: Icon(
           LucideIcons.printer,
-          color: isConnected ? AppColors.primary : AppColors.textSecondary,
+          color: isConnected ? KasiraDS.brandPrimary : KasiraDS.textMuted,
         ),
         title: Text(
           device.name.isNotEmpty ? device.name : 'Unknown Device',
@@ -218,7 +218,7 @@ class _DeviceTile extends StatelessWidget {
         ),
         subtitle: Text(
           device.macAdress,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12),
         ),
         trailing: isConnected
             ? ElevatedButton(
@@ -234,8 +234,8 @@ class _DeviceTile extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  side: const BorderSide(color: AppColors.primary),
-                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: KasiraDS.brandPrimary),
+                  foregroundColor: KasiraDS.brandPrimary,
                 ),
                 child: const Text('HUBUNGKAN'),
               ),

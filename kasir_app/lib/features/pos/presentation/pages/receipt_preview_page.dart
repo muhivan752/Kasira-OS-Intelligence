@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../../core/utils/phone_normalize.dart';
 import '../../providers/tax_config_provider.dart';
@@ -97,24 +97,24 @@ class ReceiptPreviewPage extends ConsumerWidget {
     final subtotal = items.fold(0.0, (sum, item) => sum + item.subtotal);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        title: const Text('Preview Struk', style: TextStyle(color: AppColors.textPrimary)),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        backgroundColor: KasiraDS.surfaceCard,
+        title: const Text('Preview Struk', style: TextStyle(color: KasiraDS.textStrong)),
+        iconTheme: const IconThemeData(color: KasiraDS.textStrong),
         elevation: 0,
         actions: [
           IconButton(
             onPressed: () => _printReceipt(context, ref, now),
             icon: Icon(
               LucideIcons.printer,
-              color: printerState.isConnected ? AppColors.primary : AppColors.textSecondary,
+              color: printerState.isConnected ? KasiraDS.brandPrimary : KasiraDS.textMuted,
             ),
             tooltip: printerState.isConnected ? 'Cetak' : 'Printer belum terhubung',
           ),
           IconButton(
             onPressed: () => _shareViaWa(context),
-            icon: const Icon(LucideIcons.messageCircle, color: AppColors.primary),
+            icon: const Icon(LucideIcons.messageCircle, color: KasiraDS.brandPrimary),
             tooltip: 'Kirim WA',
           ),
           const SizedBox(width: 8),
@@ -129,7 +129,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
               Container(
                 width: 380,
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: KasiraDS.surfaceCard,
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: [
                     BoxShadow(
@@ -146,7 +146,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
                       decoration: const BoxDecoration(
-                        color: AppColors.primary,
+                        color: KasiraDS.brandPrimary,
                         borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
                       ),
                       child: Column(
@@ -187,7 +187,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('No. Order', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                              const Text('No. Order', style: TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
                               Text('#$displayNumber', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                             ],
                           ),
@@ -195,7 +195,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Tanggal', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                              const Text('Tanggal', style: TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
                               Text(dateFormat.format(now), style: const TextStyle(fontSize: 12)),
                             ],
                           ),
@@ -230,7 +230,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
                                       children: [
                                         Text(
                                           '${item.qty} x ${currency.format(item.price)}',
-                                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                          style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12),
                                         ),
                                       ],
                                     ),
@@ -238,7 +238,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
                                       Text(
                                         '* ${item.notes}',
                                         style: const TextStyle(
-                                          color: AppColors.textTertiary,
+                                          color: KasiraDS.textMuted,
                                           fontSize: 11,
                                           fontStyle: FontStyle.italic,
                                         ),
@@ -256,7 +256,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
                           _buildReceiptRow('Subtotal', currency.format(subtotal)),
                           if (discount != null && discount! > 0) ...[
                             const SizedBox(height: 4),
-                            _buildReceiptRow('Diskon', '-${currency.format(discount)}', valueColor: AppColors.error),
+                            _buildReceiptRow('Diskon', '-${currency.format(discount)}', valueColor: KasiraDS.danger),
                           ],
                           if (serviceCharge != null && serviceCharge! > 0) ...[
                             const SizedBox(height: 4),
@@ -270,7 +270,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
                             ),
                           ],
 
-                          const Divider(height: 24, color: AppColors.border),
+                          const Divider(height: 24, color: KasiraDS.borderSubtle),
 
                           _buildReceiptRow(
                             'TOTAL',
@@ -286,7 +286,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
                           _buildReceiptRow(
                             'Kembali',
                             currency.format(changeAmount > 0 ? changeAmount : 0),
-                            valueColor: AppColors.success,
+                            valueColor: KasiraDS.success,
                           ),
 
                           const SizedBox(height: 24),
@@ -296,7 +296,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
                                 : 'Terima kasih atas kunjungan Anda!\nPowered by Kasira',
                             textAlign: TextAlign.center,
                             style: const TextStyle(
-                              color: AppColors.textTertiary,
+                              color: KasiraDS.textMuted,
                               fontSize: 12,
                             ),
                           ),
@@ -361,7 +361,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
         Text(
           label,
           style: TextStyle(
-            color: isBold ? AppColors.textPrimary : AppColors.textSecondary,
+            color: isBold ? KasiraDS.textStrong : KasiraDS.textMuted,
             fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
             fontSize: fontSize,
           ),
@@ -369,7 +369,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
         Text(
           value,
           style: TextStyle(
-            color: valueColor ?? AppColors.textPrimary,
+            color: valueColor ?? KasiraDS.textStrong,
             fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
             fontSize: fontSize,
           ),
@@ -386,7 +386,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Printer belum terhubung. Hubungkan di Pengaturan > Printer.'),
-          backgroundColor: AppColors.error,
+          backgroundColor: KasiraDS.danger,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -424,7 +424,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(ok ? 'Struk dikirim ke printer' : 'Gagal mencetak, coba lagi'),
-          backgroundColor: ok ? AppColors.success : AppColors.error,
+          backgroundColor: ok ? KasiraDS.success : KasiraDS.danger,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -549,7 +549,7 @@ class _SendReceiptWaDialogState extends State<SendReceiptWaDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(msg),
-            backgroundColor: sent ? AppColors.success : AppColors.error,
+            backgroundColor: sent ? KasiraDS.success : KasiraDS.danger,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -568,7 +568,7 @@ class _SendReceiptWaDialogState extends State<SendReceiptWaDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: const Row(
         children: [
-          Icon(LucideIcons.messageCircle, color: AppColors.primary, size: 20),
+          Icon(LucideIcons.messageCircle, color: KasiraDS.brandPrimary, size: 20),
           SizedBox(width: 8),
           Text('Kirim Struk via WA'),
         ],
@@ -581,7 +581,7 @@ class _SendReceiptWaDialogState extends State<SendReceiptWaDialog> {
           children: [
             const Text(
               'Masukkan nomor WhatsApp customer',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: TextStyle(color: KasiraDS.textMuted, fontSize: 13),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -595,7 +595,7 @@ class _SendReceiptWaDialogState extends State<SendReceiptWaDialog> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                  borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 2),
                 ),
                 errorText: _error,
               ),
@@ -604,7 +604,7 @@ class _SendReceiptWaDialogState extends State<SendReceiptWaDialog> {
             const SizedBox(height: 6),
             const Text(
               'Format: 08xxx atau 628xxx',
-              style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+              style: TextStyle(color: KasiraDS.textMuted, fontSize: 11),
             ),
             // Save as customer opt-in — hanya kalau cart belum link ke customer
             if (widget.customerId == null) ...[
@@ -623,7 +623,7 @@ class _SendReceiptWaDialogState extends State<SendReceiptWaDialog> {
                 ),
                 subtitle: const Text(
                   'Nomor WA disimpan biar gak perlu input ulang next order',
-                  style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                  style: TextStyle(fontSize: 11, color: KasiraDS.textMuted),
                 ),
               ),
               if (_saveAsCustomer) ...[
@@ -674,7 +674,7 @@ class _DashedDivider extends StatelessWidget {
       return Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: List.generate(dashCount, (_) {
-          return Container(width: dashWidth, height: 1, color: AppColors.border);
+          return Container(width: dashWidth, height: 1, color: KasiraDS.borderSubtle);
         }),
       );
     });

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
 
 class TabHeader extends StatelessWidget {
@@ -14,7 +14,7 @@ class TabHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 8, 16, 16),
-      color: AppColors.surface,
+      color: KasiraDS.surfaceCard,
       child: SafeArea(
         bottom: false,
         child: Column(
@@ -29,7 +29,7 @@ class TabHeader extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                 if (tab.customerName != null) ...[
                   const SizedBox(width: 8),
-                  Text('• ${tab.customerName}', style: const TextStyle(color: AppColors.textSecondary)),
+                  Text('• ${tab.customerName}', style: const TextStyle(color: KasiraDS.textMuted)),
                 ],
                 const Spacer(),
                 TabStatusBadge(status: tab.status),
@@ -39,23 +39,23 @@ class TabHeader extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.05),
+                color: KasiraDS.brandPrimary.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
-                  _buildSummaryItem('Total', currency.format(tab.totalAmount), AppColors.textPrimary),
-                  Container(width: 1, height: 32, color: AppColors.border),
+                  _buildSummaryItem('Total', currency.format(tab.totalAmount), KasiraDS.textStrong),
+                  Container(width: 1, height: 32, color: KasiraDS.borderSubtle),
                   // "Dibayar" = total - sisa. Pakai computed (bukan tab.paidAmount raw)
                   // karena pay-items adhoc gak update tab.paid_amount (warkop pattern,
                   // source of truth = items.paid_at). Backend remaining_amount sudah
                   // include semua: split/full + items adhoc.
                   _buildSummaryItem('Dibayar',
                       currency.format(tab.totalAmount - tab.remainingAmount),
-                      AppColors.success),
-                  Container(width: 1, height: 32, color: AppColors.border),
+                      KasiraDS.success),
+                  Container(width: 1, height: 32, color: KasiraDS.borderSubtle),
                   _buildSummaryItem('Sisa', currency.format(tab.remainingAmount),
-                      tab.remainingAmount > 0 ? AppColors.warning : AppColors.success),
+                      tab.remainingAmount > 0 ? KasiraDS.warning : KasiraDS.success),
                 ],
               ),
             ),
@@ -69,7 +69,7 @@ class TabHeader extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          Text(label, style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
           const SizedBox(height: 4),
           Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: color)),
         ],
@@ -86,13 +86,13 @@ class TabStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final config = {
-      'open': ('Aktif', AppColors.info),
-      'asking_bill': ('Minta Bill', AppColors.warning),
-      'splitting': ('Split Bill', AppColors.primary),
-      'paid': ('Lunas', AppColors.success),
-      'cancelled': ('Batal', AppColors.error),
+      'open': ('Aktif', KasiraDS.info),
+      'asking_bill': ('Minta Bill', KasiraDS.warning),
+      'splitting': ('Split Bill', KasiraDS.brandPrimary),
+      'paid': ('Lunas', KasiraDS.success),
+      'cancelled': ('Batal', KasiraDS.danger),
     };
-    final c = config[status] ?? (status, AppColors.textSecondary);
+    final c = config[status] ?? (status, KasiraDS.textMuted);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(

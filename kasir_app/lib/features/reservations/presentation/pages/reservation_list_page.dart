@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/services/session_cache.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/reservation_provider.dart';
 import '../widgets/create_reservation_modal.dart';
 
@@ -31,7 +31,7 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Reservasi hanya tersedia di paket Pro'),
-          backgroundColor: AppColors.error,
+          backgroundColor: KasiraDS.danger,
         ),
       );
     }
@@ -68,29 +68,29 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
         .toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       body: Column(
         children: [
           // Header
           Container(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-            color: AppColors.surface,
+            color: KasiraDS.surfaceCard,
             child: Column(
               children: [
                 Row(
                   children: [
-                    const Icon(LucideIcons.calendarCheck, color: AppColors.primary),
+                    const Icon(LucideIcons.calendarCheck, color: KasiraDS.brandPrimary),
                     const SizedBox(width: 12),
                     Text('Reservasi', style: Theme.of(context).textTheme.titleLarge),
                     const Spacer(),
                     IconButton(
                       onPressed: () => context.push('/reservations/tables'),
-                      icon: const Icon(LucideIcons.layoutGrid, size: 20, color: AppColors.textSecondary),
+                      icon: const Icon(LucideIcons.layoutGrid, size: 20, color: KasiraDS.textMuted),
                       tooltip: 'Denah Meja',
                     ),
                     IconButton(
                       onPressed: () => ref.read(reservationProvider.notifier).fetchReservations(),
-                      icon: const Icon(LucideIcons.refreshCw, size: 20, color: AppColors.textSecondary),
+                      icon: const Icon(LucideIcons.refreshCw, size: 20, color: KasiraDS.textMuted),
                       tooltip: 'Refresh',
                     ),
                   ],
@@ -119,13 +119,13 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isToday ? AppColors.primary.withOpacity(0.1) : AppColors.surfaceVariant,
+                          color: isToday ? KasiraDS.brandPrimary.withOpacity(0.1) : KasiraDS.surfaceSunken,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           isToday ? 'Hari Ini' : _displayDate(state.selectedDate),
                           style: TextStyle(
-                            color: isToday ? AppColors.primary : AppColors.textPrimary,
+                            color: isToday ? KasiraDS.brandPrimary : KasiraDS.textStrong,
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
@@ -151,7 +151,7 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(state.error!, style: const TextStyle(color: AppColors.error)),
+                            Text(state.error!, style: const TextStyle(color: KasiraDS.danger)),
                             const SizedBox(height: 8),
                             TextButton.icon(
                               onPressed: () => ref.read(reservationProvider.notifier).fetchReservations(),
@@ -166,11 +166,11 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(LucideIcons.calendarOff, size: 48, color: AppColors.textTertiary),
+                                Icon(LucideIcons.calendarOff, size: 48, color: KasiraDS.textMuted),
                                 const SizedBox(height: 12),
                                 const Text(
                                   'Tidak ada reservasi',
-                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+                                  style: TextStyle(color: KasiraDS.textMuted, fontSize: 16),
                                 ),
                               ],
                             ),
@@ -179,22 +179,22 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
                             padding: const EdgeInsets.all(16),
                             children: [
                               if (pending.isNotEmpty) ...[
-                                _buildSectionHeader('Menunggu Konfirmasi', AppColors.warning, pending.length),
+                                _buildSectionHeader('Menunggu Konfirmasi', KasiraDS.warning, pending.length),
                                 ...pending.map((r) => _buildReservationCard(r)),
                                 const SizedBox(height: 16),
                               ],
                               if (confirmed.isNotEmpty) ...[
-                                _buildSectionHeader('Dikonfirmasi', AppColors.info, confirmed.length),
+                                _buildSectionHeader('Dikonfirmasi', KasiraDS.info, confirmed.length),
                                 ...confirmed.map((r) => _buildReservationCard(r)),
                                 const SizedBox(height: 16),
                               ],
                               if (seated.isNotEmpty) ...[
-                                _buildSectionHeader('Duduk', AppColors.success, seated.length),
+                                _buildSectionHeader('Duduk', KasiraDS.success, seated.length),
                                 ...seated.map((r) => _buildReservationCard(r)),
                                 const SizedBox(height: 16),
                               ],
                               if (others.isNotEmpty) ...[
-                                _buildSectionHeader('Lainnya', AppColors.textSecondary, others.length),
+                                _buildSectionHeader('Lainnya', KasiraDS.textMuted, others.length),
                                 ...others.map((r) => _buildReservationCard(r)),
                               ],
                             ],
@@ -204,7 +204,7 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showCreateModal(),
-        backgroundColor: AppColors.primary,
+        backgroundColor: KasiraDS.brandPrimary,
         icon: const Icon(LucideIcons.plus),
         label: const Text('Reservasi Baru'),
       ),
@@ -282,16 +282,16 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(LucideIcons.users, size: 13, color: AppColors.textSecondary),
+                        Icon(LucideIcons.users, size: 13, color: KasiraDS.textMuted),
                         const SizedBox(width: 4),
                         Text('${reservation.guestCount} tamu',
-                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                            style: const TextStyle(fontSize: 12, color: KasiraDS.textMuted)),
                         if (reservation.tableName != null) ...[
                           const SizedBox(width: 12),
-                          Icon(LucideIcons.layoutGrid, size: 13, color: AppColors.textSecondary),
+                          Icon(LucideIcons.layoutGrid, size: 13, color: KasiraDS.textMuted),
                           const SizedBox(width: 4),
                           Text(reservation.tableName!,
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                              style: const TextStyle(fontSize: 12, color: KasiraDS.textMuted)),
                         ],
                       ],
                     ),
@@ -320,19 +320,19 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
   Color _statusColor(String status) {
     switch (status) {
       case 'pending':
-        return AppColors.warning;
+        return KasiraDS.warning;
       case 'confirmed':
-        return AppColors.info;
+        return KasiraDS.info;
       case 'seated':
-        return AppColors.success;
+        return KasiraDS.success;
       case 'completed':
-        return AppColors.textSecondary;
+        return KasiraDS.textMuted;
       case 'cancelled':
-        return AppColors.error;
+        return KasiraDS.danger;
       case 'no_show':
-        return AppColors.error;
+        return KasiraDS.danger;
       default:
-        return AppColors.textSecondary;
+        return KasiraDS.textMuted;
     }
   }
 
@@ -340,7 +340,7 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: KasiraDS.surfaceCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -351,7 +351,7 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
   void _showDetailSheet(ReservationModel reservation) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: KasiraDS.surfaceCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -382,7 +382,7 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(success ? 'Status berhasil diubah' : 'Gagal mengubah status'),
-                backgroundColor: success ? AppColors.success : AppColors.error,
+                backgroundColor: success ? KasiraDS.success : KasiraDS.danger,
               ),
             );
           }
@@ -413,7 +413,7 @@ class _ReservationDetailSheet extends StatelessWidget {
             child: Container(
               width: 40,
               height: 4,
-              decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(color: KasiraDS.borderSubtle, borderRadius: BorderRadius.circular(2)),
             ),
           ),
           const SizedBox(height: 16),
@@ -449,11 +449,11 @@ class _ReservationDetailSheet extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: AppColors.textSecondary),
+          Icon(icon, size: 16, color: KasiraDS.textMuted),
           const SizedBox(width: 10),
           SizedBox(
             width: 100,
-            child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            child: Text(label, style: const TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
           ),
           Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14))),
         ],
@@ -465,19 +465,19 @@ class _ReservationDetailSheet extends StatelessWidget {
     final actions = <Widget>[];
 
     if (status == 'pending') {
-      actions.add(_buildActionButton('Konfirmasi', LucideIcons.checkCircle, AppColors.info, () => onAction('confirm')));
+      actions.add(_buildActionButton('Konfirmasi', LucideIcons.checkCircle, KasiraDS.info, () => onAction('confirm')));
       actions.add(const SizedBox(height: 8));
-      actions.add(_buildActionButton('Tidak Hadir', LucideIcons.userX, AppColors.warning, () => onAction('no-show')));
+      actions.add(_buildActionButton('Tidak Hadir', LucideIcons.userX, KasiraDS.warning, () => onAction('no-show')));
       actions.add(const SizedBox(height: 8));
-      actions.add(_buildActionButton('Batalkan', LucideIcons.xCircle, AppColors.error, () => onAction('cancel')));
+      actions.add(_buildActionButton('Batalkan', LucideIcons.xCircle, KasiraDS.danger, () => onAction('cancel')));
     } else if (status == 'confirmed') {
-      actions.add(_buildActionButton('Dudukkan', LucideIcons.armchair, AppColors.success, () => onAction('seat')));
+      actions.add(_buildActionButton('Dudukkan', LucideIcons.armchair, KasiraDS.success, () => onAction('seat')));
       actions.add(const SizedBox(height: 8));
-      actions.add(_buildActionButton('Tidak Hadir', LucideIcons.userX, AppColors.warning, () => onAction('no-show')));
+      actions.add(_buildActionButton('Tidak Hadir', LucideIcons.userX, KasiraDS.warning, () => onAction('no-show')));
       actions.add(const SizedBox(height: 8));
-      actions.add(_buildActionButton('Batalkan', LucideIcons.xCircle, AppColors.error, () => onAction('cancel')));
+      actions.add(_buildActionButton('Batalkan', LucideIcons.xCircle, KasiraDS.danger, () => onAction('cancel')));
     } else if (status == 'seated') {
-      actions.add(_buildActionButton('Selesai', LucideIcons.checkCircle2, AppColors.success, () => onAction('complete')));
+      actions.add(_buildActionButton('Selesai', LucideIcons.checkCircle2, KasiraDS.success, () => onAction('complete')));
     }
 
     return actions;

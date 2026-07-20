@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../pos/providers/cart_provider.dart';
 import '../../../pos/providers/pos_mode_provider.dart';
 import '../../providers/tab_provider.dart';
@@ -92,9 +92,9 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(LucideIcons.alertCircle, color: AppColors.error, size: 48),
+            const Icon(LucideIcons.alertCircle, color: KasiraDS.danger, size: 48),
             const SizedBox(height: 12),
-            Text(_error ?? 'Tab tidak ditemukan', style: const TextStyle(color: AppColors.error)),
+            Text(_error ?? 'Tab tidak ditemukan', style: const TextStyle(color: KasiraDS.danger)),
             const SizedBox(height: 12),
             FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
           ],
@@ -118,7 +118,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
           // Header — meja + tab number + status
           Row(
             children: [
-              const Icon(LucideIcons.armchair, color: AppColors.primary),
+              const Icon(LucideIcons.armchair, color: KasiraDS.brandPrimary),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -127,7 +127,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
                     Text(widget.tableName, style: Theme.of(context).textTheme.titleLarge),
                     Text(
                       tab.tabNumber,
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      style: TextStyle(color: KasiraDS.textMuted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -141,7 +141,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.05),
+              color: KasiraDS.brandPrimary.withOpacity(0.05),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
@@ -150,7 +150,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Total bill', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text('Total bill', style: TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
                     Text(_currency.format(tab.totalAmount),
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   ],
@@ -159,13 +159,13 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Sisa belum dibayar', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text('Sisa belum dibayar', style: TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
                     Text(
                       _currency.format(tab.remainingAmount),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
-                        color: AppColors.warning,
+                        color: KasiraDS.warning,
                       ),
                     ),
                   ],
@@ -175,7 +175,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       '$paidCount dari ${_items.length} item sudah dibayar',
-                      style: TextStyle(color: AppColors.success, fontSize: 11),
+                      style: TextStyle(color: KasiraDS.success, fontSize: 11),
                     ),
                   ),
               ],
@@ -197,14 +197,14 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
                   return Container(
                     padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
                     decoration: BoxDecoration(
-                      border: Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.3))),
+                      border: Border(bottom: BorderSide(color: KasiraDS.borderSubtle.withOpacity(0.3))),
                     ),
                     child: Row(
                       children: [
                         Icon(
                           it.isPaid ? LucideIcons.checkCircle2 : LucideIcons.circleDot,
                           size: 16,
-                          color: it.isPaid ? AppColors.success : AppColors.textTertiary,
+                          color: it.isPaid ? KasiraDS.success : KasiraDS.textMuted,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -213,7 +213,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
                             style: TextStyle(
                               fontSize: 13,
                               decoration: it.isPaid ? TextDecoration.lineThrough : null,
-                              color: it.isPaid ? AppColors.textTertiary : AppColors.textPrimary,
+                              color: it.isPaid ? KasiraDS.textMuted : KasiraDS.textStrong,
                             ),
                           ),
                         ),
@@ -223,7 +223,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             decoration: it.isPaid ? TextDecoration.lineThrough : null,
-                            color: it.isPaid ? AppColors.textTertiary : AppColors.textPrimary,
+                            color: it.isPaid ? KasiraDS.textMuted : KasiraDS.textStrong,
                           ),
                         ),
                       ],
@@ -244,7 +244,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
                 icon: const Icon(LucideIcons.checkSquare, size: 18),
                 label: Text('Bayar Sebagian (${unpaidItems.length} item)'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: KasiraDS.brandPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
@@ -285,7 +285,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: KasiraDS.surfaceCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

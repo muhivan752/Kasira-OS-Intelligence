@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 
 /// Muncul HANYA saat pertama kali install atau URL belum dikonfigurasi.
 /// Kasir cukup masukkan IP VPS — tidak perlu rebuild APK.
@@ -106,7 +106,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.primary,
+      backgroundColor: KasiraDS.brandPrimary,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -115,7 +115,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
               width: 420,
               padding: const EdgeInsets.all(40),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: KasiraDS.surfaceCard,
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
@@ -132,17 +132,17 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: KasiraDS.brandPrimary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(18),
                     ),
                     child: const Icon(Icons.point_of_sale_rounded,
-                        color: AppColors.primary, size: 36),
+                        color: KasiraDS.brandPrimary, size: 36),
                   ),
                   const SizedBox(height: 16),
                   const Text(
                     'KASIRA',
                     style: TextStyle(
-                      color: AppColors.primary,
+                      color: KasiraDS.brandPrimary,
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5,
@@ -152,7 +152,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                   const Text(
                     'Konfigurasi Server',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: KasiraDS.textMuted,
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                     ),
@@ -163,20 +163,20 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: AppColors.info.withOpacity(0.08),
+                      color: KasiraDS.info.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.info.withOpacity(0.3)),
+                      border: Border.all(color: KasiraDS.info.withOpacity(0.3)),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.info_outline, color: AppColors.info, size: 18),
+                        Icon(Icons.info_outline, color: KasiraDS.info, size: 18),
                         const SizedBox(width: 10),
                         const Expanded(
                           child: Text(
                             'Masukkan alamat IP server dari pemilik cafe.\n'
                             'Contoh: 103.123.45.67:8000',
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                            style: TextStyle(color: KasiraDS.textMuted, fontSize: 13),
                           ),
                         ),
                       ],
@@ -200,7 +200,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                        borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 2),
                       ),
                       errorText: _error,
                       errorMaxLines: 3,
@@ -214,19 +214,19 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.success.withOpacity(0.1),
+                        color: KasiraDS.success.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
                           const Icon(Icons.check_circle_rounded,
-                              color: AppColors.success, size: 20),
+                              color: KasiraDS.success, size: 20),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               'Terhubung! Kasira v$_serverVersion\nMasuk ke halaman login...',
                               style: const TextStyle(
-                                  color: AppColors.success,
+                                  color: KasiraDS.success,
                                   fontWeight: FontWeight.w600),
                             ),
                           ),

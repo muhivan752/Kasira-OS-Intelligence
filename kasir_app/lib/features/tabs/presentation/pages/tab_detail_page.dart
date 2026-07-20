@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
 import '../../../tables/presentation/pages/table_grid_page.dart';
 import '../../../pos/providers/cart_provider.dart';
@@ -44,7 +44,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: KasiraDS.bgBase,
         appBar: AppBar(title: const Text('Tab Detail')),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -52,7 +52,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
 
     if (_tab == null) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: KasiraDS.bgBase,
         appBar: AppBar(title: const Text('Tab Detail')),
         body: const Center(child: Text('Tab tidak ditemukan')),
       );
@@ -61,7 +61,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
     final tab = _tab!;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       body: Column(
         children: [
           TabHeader(tab: tab, currency: _currency),
@@ -76,7 +76,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                   if (tab.splits.isNotEmpty) ...[
                     Row(
                       children: [
-                        const Icon(LucideIcons.split, size: 18, color: AppColors.primary),
+                        const Icon(LucideIcons.split, size: 18, color: KasiraDS.brandPrimary),
                         const SizedBox(width: 8),
                         const Text('Split Bill', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       ],
@@ -199,7 +199,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                     onTableSelected: (table) async {
                       if (table.id == tab.tableId) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Sudah di meja ini'), backgroundColor: AppColors.warning),
+                          const SnackBar(content: Text('Sudah di meja ini'), backgroundColor: KasiraDS.warning),
                         );
                         return;
                       }
@@ -207,7 +207,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('Meja ${table.name} sedang ${table.status.name}'),
-                            backgroundColor: AppColors.error,
+                            backgroundColor: KasiraDS.danger,
                           ),
                         );
                         return;
@@ -221,7 +221,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('Pindah ke Meja ${table.name}'),
-                            backgroundColor: AppColors.success,
+                            backgroundColor: KasiraDS.success,
                           ),
                         );
                       }
@@ -244,7 +244,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
     if (!mounted) return;
     if (otherTabs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tidak ada tab aktif lain untuk digabung'), backgroundColor: AppColors.warning),
+        const SnackBar(content: Text('Tidak ada tab aktif lain untuk digabung'), backgroundColor: KasiraDS.warning),
       );
       return;
     }
@@ -266,7 +266,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
             children: [
               Row(
                 children: [
-                  const Icon(LucideIcons.merge, color: AppColors.warning),
+                  const Icon(LucideIcons.merge, color: KasiraDS.warning),
                   const SizedBox(width: 8),
                   const Text('Gabung Tab', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                   const Spacer(),
@@ -276,7 +276,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
               const SizedBox(height: 4),
               Text(
                 'Pilih tab yang mau digabung ke ${tab.tabNumber}:',
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                style: const TextStyle(color: KasiraDS.textMuted, fontSize: 13),
               ),
               const SizedBox(height: 16),
               Flexible(
@@ -290,12 +290,12 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                       margin: const EdgeInsets.only(bottom: 8),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: AppColors.border),
+                        side: BorderSide(color: KasiraDS.borderSubtle),
                       ),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: AppColors.primary.withOpacity(0.1),
-                          child: const Icon(LucideIcons.receipt, color: AppColors.primary, size: 20),
+                          backgroundColor: KasiraDS.brandPrimary.withOpacity(0.1),
+                          child: const Icon(LucideIcons.receipt, color: KasiraDS.brandPrimary, size: 20),
                         ),
                         title: Text(src.tabNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text(
@@ -313,13 +313,13 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('${src.tabNumber} digabung'),
-                                  backgroundColor: AppColors.success,
+                                  backgroundColor: KasiraDS.success,
                                 ),
                               );
                             }
                           },
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.warning,
+                            backgroundColor: KasiraDS.warning,
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                           ),
                           child: const Text('Gabung', style: TextStyle(fontSize: 13)),
@@ -352,11 +352,11 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
               if (result != null && mounted) {
                 setState(() => _tab = result);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Tab dibatalkan'), backgroundColor: AppColors.error),
+                  const SnackBar(content: Text('Tab dibatalkan'), backgroundColor: KasiraDS.danger),
                 );
               }
             },
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            style: FilledButton.styleFrom(backgroundColor: KasiraDS.danger),
             child: const Text('Batalkan'),
           ),
         ],

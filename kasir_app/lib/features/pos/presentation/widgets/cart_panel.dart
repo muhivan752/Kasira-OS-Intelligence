@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/localization/business_labels.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../providers/cart_provider.dart';
@@ -19,6 +19,9 @@ import '../../utils/post_payment_refresh.dart';
 
 // Tier is now read from SessionCache (0ms, in-memory)
 
+/// Cart panel — ports the "Kasira POS.dc.html" CART SHEET (Pesanan):
+/// item rows with icon tile + gradient stepper pill, dashed-border totals,
+/// and gradient-frekuensi checkout buttons. Aurora light theme (KasiraDS).
 class CartPanel extends ConsumerWidget {
   const CartPanel({super.key});
 
@@ -29,26 +32,27 @@ class CartPanel extends ConsumerWidget {
 
     return Column(
       children: [
-        // Header
+        // ── Header ──
         Container(
-          padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
+          padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
           decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppColors.border)),
+            color: KasiraDS.surfaceCard,
+            border: Border(bottom: BorderSide(color: KasiraDS.borderSubtle)),
           ),
           child: Row(
             children: [
-              Text(BusinessLabels.getLabel('order'), style: Theme.of(context).textTheme.titleLarge),
+              Text('Pesanan', style: KasiraDS.display(size: 19, color: KasiraDS.textStrong)),
               if (cart.items.isNotEmpty) ...[
-                const SizedBox(width: 8),
+                const SizedBox(width: 9),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(12),
+                    gradient: KasiraDS.gradientFrekuensi,
+                    borderRadius: KasiraDS.brPill,
                   ),
                   child: Text(
                     '${cart.items.length}',
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    style: KasiraDS.sans(size: 11.5, weight: FontWeight.w800, color: Colors.white),
                   ),
                 ),
               ],
@@ -56,7 +60,7 @@ class CartPanel extends ConsumerWidget {
               if (cart.items.isNotEmpty)
                 IconButton(
                   onPressed: () => _confirmClear(context, ref),
-                  icon: const Icon(LucideIcons.trash2, color: AppColors.error, size: 20),
+                  icon: const Icon(LucideIcons.trash2, color: KasiraDS.danger, size: 20),
                   tooltip: 'Kosongkan',
                 ),
             ],
@@ -68,7 +72,7 @@ class CartPanel extends ConsumerWidget {
 
         // Customer
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
           child: InkWell(
             onTap: () => showDialog(
               context: context,
@@ -78,28 +82,30 @@ class CartPanel extends ConsumerWidget {
                 },
               ),
             ),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: KasiraDS.brMd,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(12),
+                color: KasiraDS.surfaceSunken,
+                borderRadius: KasiraDS.brMd,
               ),
               child: Row(
                 children: [
-                  const Icon(LucideIcons.user, color: AppColors.textSecondary, size: 18),
+                  Icon(LucideIcons.user,
+                      color: cart.customerId != null ? KasiraDS.brandPrimary : KasiraDS.textMuted,
+                      size: 18),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       cart.customerName ?? (cart.customerId != null ? 'Pelanggan dipilih' : 'Pilih Pelanggan (opsional)'),
-                      style: TextStyle(
-                        color: cart.customerId != null ? AppColors.primary : AppColors.textSecondary,
-                        fontSize: 13,
-                        fontWeight: cart.customerId != null ? FontWeight.w600 : FontWeight.normal,
+                      style: KasiraDS.sans(
+                        size: 13,
+                        weight: cart.customerId != null ? FontWeight.w700 : FontWeight.w500,
+                        color: cart.customerId != null ? KasiraDS.brandPrimary : KasiraDS.textMuted,
                       ),
                     ),
                   ),
-                  const Icon(LucideIcons.chevronRight, color: AppColors.textSecondary, size: 16),
+                  const Icon(LucideIcons.chevronRight, color: KasiraDS.textMuted, size: 16),
                 ],
               ),
             ),
@@ -112,9 +118,10 @@ class CartPanel extends ConsumerWidget {
         Expanded(
           child: cart.items.isEmpty
               ? _buildEmptyCart()
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
                   itemCount: cart.items.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (_, i) => _CartItemTile(
                     item: cart.items[i],
                     currency: currency,
@@ -127,10 +134,10 @@ class CartPanel extends ConsumerWidget {
         // Footer
         if (cart.items.isNotEmpty)
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
             decoration: const BoxDecoration(
-              color: AppColors.surfaceVariant,
-              border: Border(top: BorderSide(color: AppColors.border, width: 0.5)),
+              color: KasiraDS.surfaceCard,
+              border: Border(top: BorderSide(color: KasiraDS.borderSubtle)),
             ),
             child: Column(
               children: [
@@ -151,17 +158,17 @@ class CartPanel extends ConsumerWidget {
                     label: cart.taxInclusive ? 'Pajak (inklusif)' : 'Pajak',
                     value: currency.format(cart.taxAmount),
                   ),
-                const Divider(height: 20, color: AppColors.border),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Divider(height: 1, thickness: 1, color: KasiraDS.borderSubtle),
+                ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Total', style: Theme.of(context).textTheme.titleLarge),
+                    Text('Total', style: KasiraDS.sans(size: 15, weight: FontWeight.w700, color: KasiraDS.textStrong)),
                     Text(
                       currency.format(cart.total),
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold),
+                      style: KasiraDS.display(size: 22, color: KasiraDS.textStrong),
                     ),
                   ],
                 ),
@@ -171,18 +178,18 @@ class CartPanel extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(11),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        color: KasiraDS.danger.withOpacity(0.1),
+                        borderRadius: KasiraDS.brSm,
                       ),
                       child: Row(
                         children: [
-                          const Icon(LucideIcons.alertCircle, color: AppColors.error, size: 16),
+                          const Icon(LucideIcons.alertCircle, color: KasiraDS.danger, size: 16),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(cart.error!,
-                                style: const TextStyle(color: AppColors.error, fontSize: 12),
+                                style: KasiraDS.sans(size: 12, color: KasiraDS.danger),
                                 textAlign: TextAlign.left),
                           ),
                         ],
@@ -217,7 +224,7 @@ class CartPanel extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal kirim pesanan: ${_shortError(e)}'),
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
           ),
@@ -234,7 +241,7 @@ class CartPanel extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errMsg),
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
           ),
@@ -259,7 +266,7 @@ class CartPanel extends ConsumerWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Pesanan ditambahkan ke ${addOrderCtx.tabNumber}'),
-          backgroundColor: AppColors.success,
+          backgroundColor: KasiraDS.success,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -272,8 +279,8 @@ class CartPanel extends ConsumerWidget {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          icon: const Icon(LucideIcons.chefHat, color: Color(0xFF059669), size: 40),
+          shape: RoundedRectangleBorder(borderRadius: KasiraDS.brLg),
+          icon: const Icon(LucideIcons.chefHat, color: KasiraDS.success, size: 40),
           title: const Text('Pesanan Dikirim!'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -287,7 +294,7 @@ class CartPanel extends ConsumerWidget {
               const Text(
                 'Pesanan sudah masuk ke dapur.\nBisa tambah pesanan lagi atau bayar nanti di Tab/Bon.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.grey),
+                style: TextStyle(fontSize: 13, color: KasiraDS.textMuted),
               ),
             ],
           ),
@@ -322,7 +329,7 @@ class CartPanel extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal proses pembayaran: ${_shortError(e)}'),
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
           ),
@@ -339,7 +346,7 @@ class CartPanel extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errMsg),
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
           ),
@@ -404,17 +411,19 @@ class CartPanel extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceVariant,
+            padding: const EdgeInsets.all(22),
+            decoration: const BoxDecoration(
+              color: KasiraDS.brandTint,
               shape: BoxShape.circle,
             ),
-            child: const Icon(LucideIcons.shoppingCart, size: 36, color: AppColors.textTertiary),
+            child: const Icon(LucideIcons.shoppingCart, size: 36, color: KasiraDS.brandPrimary),
           ),
           const SizedBox(height: 16),
-          const Text('Keranjang kosong', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+          Text('Keranjang kosong',
+              style: KasiraDS.sans(size: 15, weight: FontWeight.w700, color: KasiraDS.textStrong)),
           const SizedBox(height: 4),
-          const Text('Pilih produk untuk memulai', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+          Text('Pilih produk untuk memulai',
+              style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted)),
         ],
       ),
     );
@@ -433,7 +442,7 @@ class CartPanel extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: KasiraDS.brLg),
         title: const Text('Kosongkan Pesanan?'),
         content: const Text('Semua item akan dihapus dari keranjang.'),
         actions: [
@@ -443,7 +452,7 @@ class CartPanel extends ConsumerWidget {
               ref.read(cartProvider.notifier).clearCart();
               Navigator.pop(ctx);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            style: ElevatedButton.styleFrom(backgroundColor: KasiraDS.danger),
             child: const Text('Hapus'),
           ),
         ],
@@ -452,6 +461,7 @@ class CartPanel extends ConsumerWidget {
   }
 }
 
+/// Cart item row — icon tile + name/price + gradient stepper pill (design 522-535).
 class _CartItemTile extends StatelessWidget {
   final CartItem item;
   final NumberFormat currency;
@@ -467,52 +477,83 @@ class _CartItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Qty stepper
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.border),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              children: [
-                InkWell(
-                  onTap: onIncrement,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                  child: const Padding(padding: EdgeInsets.all(5), child: Icon(LucideIcons.plus, size: 14)),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  child: Text('${item.qty}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                ),
-                InkWell(
-                  onTap: onDecrement,
-                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
-                  child: const Padding(padding: EdgeInsets.all(5), child: Icon(LucideIcons.minus, size: 14)),
-                ),
-              ],
-            ),
+    return Row(
+      children: [
+        // icon tile
+        Container(
+          width: 42,
+          height: 42,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: KasiraDS.brandTint,
+            borderRadius: KasiraDS.brMd,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                const SizedBox(height: 2),
-                Text(currency.format(item.price), style: const TextStyle(color: AppColors.primary, fontSize: 12)),
-              ],
-            ),
+          child: const Icon(LucideIcons.coffee, size: 20, color: KasiraDS.brandPrimary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: KasiraDS.sans(size: 14, weight: FontWeight.w700, color: KasiraDS.textStrong)),
+              const SizedBox(height: 2),
+              Text(currency.format(item.subtotal),
+                  style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted)),
+            ],
           ),
-          Text(
-            currency.format(item.subtotal),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        ),
+        const SizedBox(width: 10),
+        // stepper pill
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: KasiraDS.surfaceSunken,
+            borderRadius: KasiraDS.brPill,
           ),
-        ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _stepBtn(
+                onTap: onDecrement,
+                filled: false,
+                child: const Text('−',
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700, color: KasiraDS.textStrong, height: 1)),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text('${item.qty}',
+                    style: KasiraDS.sans(size: 14, weight: FontWeight.w800, color: KasiraDS.textStrong)),
+              ),
+              _stepBtn(
+                onTap: onIncrement,
+                filled: true,
+                child: const Icon(LucideIcons.plus, size: 15, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _stepBtn({required VoidCallback onTap, required bool filled, required Widget child}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: filled ? KasiraDS.gradientFrekuensi : null,
+          color: filled ? null : KasiraDS.surfaceCard,
+          shape: BoxShape.circle,
+          boxShadow: filled ? null : KasiraDS.shadowSm,
+        ),
+        child: child,
       ),
     );
   }
@@ -532,24 +573,23 @@ class _PosModeBadge extends ConsumerWidget {
     // Don't show anything in selection mode
     if (posMode == PosMode.selection) return const SizedBox.shrink();
 
+    final accent = isDineIn ? KasiraDS.brandPrimary : KasiraDS.brandSecondary;
+    final tint = isDineIn ? KasiraDS.brandTint : KasiraDS.brandTint2;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
-          color: isDineIn
-              ? AppColors.primary.withOpacity(0.08)
-              : AppColors.accent.withOpacity(0.08),
-          border: Border.all(
-            color: isDineIn ? AppColors.primary : AppColors.accent,
-          ),
-          borderRadius: BorderRadius.circular(12),
+          color: tint,
+          border: Border.all(color: accent.withOpacity(0.4)),
+          borderRadius: KasiraDS.brMd,
         ),
         child: Row(
           children: [
             Icon(
               isDineIn ? LucideIcons.utensils : LucideIcons.shoppingBag,
-              color: isDineIn ? AppColors.primary : AppColors.accent,
+              color: accent,
               size: 16,
             ),
             const SizedBox(width: 10),
@@ -559,16 +599,12 @@ class _PosModeBadge extends ConsumerWidget {
                 children: [
                   Text(
                     isTakeaway ? 'Takeaway' : 'Dine In',
-                    style: TextStyle(
-                      color: isDineIn ? AppColors.primary : AppColors.accent,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: KasiraDS.sans(size: 13, weight: FontWeight.w700, color: accent),
                   ),
                   if (isDineIn && cart.tableName != null)
                     Text(
                       cart.tableName!,
-                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      style: KasiraDS.sans(size: 11, color: KasiraDS.textMuted),
                     ),
                 ],
               ),
@@ -579,7 +615,8 @@ class _PosModeBadge extends ConsumerWidget {
                   ref.read(cartProvider.notifier).setTable(null);
                   ref.read(posModeProvider.notifier).state = PosMode.dineInTableSelect;
                 },
-                child: const Text('Ganti', style: TextStyle(fontSize: 12, color: AppColors.primary)),
+                child: Text('Ganti',
+                    style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.brandPrimary)),
               ),
           ],
         ),
@@ -607,57 +644,106 @@ class _PaymentButtons extends ConsumerWidget {
     if (cart.isSubmitting) {
       return const SizedBox(
         width: double.infinity,
-        height: 50,
+        height: 54,
         child: Center(child: CircularProgressIndicator()),
       );
     }
 
-    // Pro Dine-In: two buttons side by side
+    // Pro Dine-In: soft "simpan ke meja" + gradient "bayar sekarang" (design 568-571)
     if (isDineInPro) {
-      return Row(
+      return Column(
         children: [
-          Expanded(
-            child: SizedBox(
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: onPayNow,
-                icon: const Icon(LucideIcons.creditCard, size: 16),
-                label: const Text('BAYAR\nLANGSUNG', textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-              ),
-            ),
+          _SoftButton(
+            label: 'Simpan ke meja (bayar nanti)',
+            icon: LucideIcons.utensils,
+            onTap: onPayLater,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: SizedBox(
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: onPayLater,
-                icon: const Icon(LucideIcons.chefHat, size: 16),
-                label: const Text('BAYAR\nNANTI', textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF059669),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-              ),
-            ),
+          const SizedBox(height: 10),
+          _GradientButton(
+            label: 'Bayar sekarang',
+            icon: LucideIcons.creditCard,
+            onTap: onPayNow,
           ),
         ],
       );
     }
 
-    // Takeaway or Starter dine-in: single pay button
+    // Takeaway or Starter dine-in: single gradient pay button
+    return _GradientButton(
+      label: 'BAYAR SEKARANG',
+      icon: LucideIcons.creditCard,
+      onTap: onPayNow,
+    );
+  }
+}
+
+/// Primary CTA — gradient-frekuensi pill with brand glow (design Button primary).
+class _GradientButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _GradientButton({required this.label, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: KasiraDS.gradientFrekuensi,
+          borderRadius: KasiraDS.brMd,
+          boxShadow: KasiraDS.glowBrand,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: KasiraDS.brMd,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(label,
+                    style: KasiraDS.sans(size: 15, weight: FontWeight.w800, color: Colors.white)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Soft secondary — brand-tinted fill, brand text (design Button variant="soft").
+class _SoftButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _SoftButton({required this.label, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
       height: 50,
-      child: ElevatedButton(
-        onPressed: onPayNow,
-        child: const Text('BAYAR SEKARANG', style: TextStyle(fontWeight: FontWeight.bold)),
+      child: Material(
+        color: KasiraDS.brandTint,
+        borderRadius: KasiraDS.brMd,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: KasiraDS.brMd,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 17, color: KasiraDS.brandPrimary),
+              const SizedBox(width: 8),
+              Text(label,
+                  style: KasiraDS.sans(size: 14, weight: FontWeight.w700, color: KasiraDS.brandPrimary)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -673,17 +759,17 @@ class _SummaryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          Text(label, style: KasiraDS.sans(size: 13.5, color: KasiraDS.textBody)),
           Text(
             value,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-              color: isDiscount ? AppColors.error : null,
+            style: KasiraDS.sans(
+              size: 13.5,
+              weight: FontWeight.w700,
+              color: isDiscount ? KasiraDS.success : KasiraDS.textStrong,
             ),
           ),
         ],

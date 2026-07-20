@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
 
 class OpenTabModal extends ConsumerStatefulWidget {
@@ -37,7 +37,7 @@ class _OpenTabModalState extends ConsumerState<OpenTabModal> {
         children: [
           Row(
             children: [
-              const Icon(LucideIcons.receipt, color: AppColors.primary),
+              const Icon(LucideIcons.receipt, color: KasiraDS.brandPrimary),
               const SizedBox(width: 12),
               Text('Buka Tab Baru', style: Theme.of(context).textTheme.titleLarge),
               const Spacer(),
@@ -58,7 +58,7 @@ class _OpenTabModalState extends ConsumerState<OpenTabModal> {
           const SizedBox(height: 16),
 
           // Guest count
-          Text('Jumlah Tamu', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+          Text('Jumlah Tamu', style: TextStyle(color: KasiraDS.textMuted, fontSize: 14)),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -66,8 +66,8 @@ class _OpenTabModalState extends ConsumerState<OpenTabModal> {
                 onPressed: _guestCount > 1 ? () => setState(() => _guestCount--) : null,
                 icon: const Icon(LucideIcons.minus, size: 18),
                 style: IconButton.styleFrom(
-                  backgroundColor: AppColors.surfaceVariant,
-                  foregroundColor: AppColors.textPrimary,
+                  backgroundColor: KasiraDS.surfaceSunken,
+                  foregroundColor: KasiraDS.textStrong,
                 ),
               ),
               const SizedBox(width: 16),
@@ -80,8 +80,8 @@ class _OpenTabModalState extends ConsumerState<OpenTabModal> {
                 onPressed: _guestCount < 50 ? () => setState(() => _guestCount++) : null,
                 icon: const Icon(LucideIcons.plus, size: 18),
                 style: IconButton.styleFrom(
-                  backgroundColor: AppColors.primary.withOpacity(0.1),
-                  foregroundColor: AppColors.primary,
+                  backgroundColor: KasiraDS.brandPrimary.withOpacity(0.1),
+                  foregroundColor: KasiraDS.brandPrimary,
                 ),
               ),
               const Spacer(),
@@ -93,7 +93,7 @@ class _OpenTabModalState extends ConsumerState<OpenTabModal> {
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         side: BorderSide(
-                          color: _guestCount == n ? AppColors.primary : AppColors.border,
+                          color: _guestCount == n ? KasiraDS.brandPrimary : KasiraDS.borderSubtle,
                         ),
                       ),
                       child: Text('$n'),
@@ -104,7 +104,7 @@ class _OpenTabModalState extends ConsumerState<OpenTabModal> {
 
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+            Text(_error!, style: const TextStyle(color: KasiraDS.danger, fontSize: 13)),
           ],
 
           const SizedBox(height: 24),
@@ -117,7 +117,7 @@ class _OpenTabModalState extends ConsumerState<OpenTabModal> {
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(LucideIcons.plus, size: 18),
               label: const Text('Buka Tab'),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              style: FilledButton.styleFrom(backgroundColor: KasiraDS.brandPrimary),
             ),
           ),
         ],

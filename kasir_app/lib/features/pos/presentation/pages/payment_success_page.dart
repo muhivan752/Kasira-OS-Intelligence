@@ -5,7 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../providers/tax_config_provider.dart';
 import '../../utils/post_payment_refresh.dart';
@@ -124,7 +124,7 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
             content: Text(isAutoPrint
                 ? 'Auto-print batal: printer belum terhubung. Hubungkan di Pengaturan > Printer.'
                 : 'Printer belum terhubung. Hubungkan di Pengaturan > Printer.'),
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
           ),
@@ -170,24 +170,24 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
     final (msg, color, seconds) = switch (outcome) {
       PrintOutcome.success => (
           isAutoPrint ? 'Struk otomatis dicetak' : 'Struk dikirim ke printer',
-          AppColors.success,
+          KasiraDS.success,
           2,
         ),
       PrintOutcome.busy => (
           'Printer masih sibuk, tunggu sebentar lalu coba lagi.',
-          AppColors.error,
+          KasiraDS.danger,
           3,
         ),
       PrintOutcome.notConnected => (
           'Printer belum terhubung. Hubungkan di Pengaturan > Printer.',
-          AppColors.error,
+          KasiraDS.danger,
           5,
         ),
       PrintOutcome.failed => (
           isAutoPrint
               ? 'Auto-print gagal. Tap "CETAK STRUK" untuk coba ulang.'
               : 'Gagal mencetak, coba lagi',
-          AppColors.error,
+          KasiraDS.danger,
           5,
         ),
     };
@@ -243,7 +243,7 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
     final printerState = ref.watch(printerProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.surfaceVariant,
+      backgroundColor: KasiraDS.surfaceSunken,
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnim,
@@ -253,11 +253,11 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
               width: 480,
               padding: const EdgeInsets.all(40),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: KasiraDS.surfaceCard,
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.success.withOpacity(0.15),
+                    color: KasiraDS.success.withOpacity(0.15),
                     blurRadius: 40,
                     offset: const Offset(0, 10),
                   ),
@@ -272,9 +272,10 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
                     child: Container(
                       width: 96,
                       height: 96,
-                      decoration: const BoxDecoration(
-                        color: AppColors.success,
+                      decoration: BoxDecoration(
+                        gradient: KasiraDS.gradientFrekuensi,
                         shape: BoxShape.circle,
+                        boxShadow: KasiraDS.glowBrand,
                       ),
                       child: const Icon(LucideIcons.check, color: Colors.white, size: 48),
                     ),
@@ -282,15 +283,12 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
                   const SizedBox(height: 24),
                   Text(
                     'Pembayaran Berhasil!',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.success,
-                        ),
+                    style: KasiraDS.display(size: 26, color: KasiraDS.textStrong),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     'Order #${widget.displayNumber}',
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 15),
+                    style: const TextStyle(color: KasiraDS.textMuted, fontSize: 15),
                   ),
                   const SizedBox(height: 24),
 
@@ -299,28 +297,28 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
+                      color: KasiraDS.surfaceSunken,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Column(
                       children: [
                         _buildRow('Total Tagihan', _currency.format(widget.totalAmount),
-                            isBold: true, valueColor: AppColors.textPrimary),
+                            isBold: true, valueColor: KasiraDS.textStrong),
                         const SizedBox(height: 10),
                         _buildRow(
                           'Metode Pembayaran',
                           widget.paymentMethod,
-                          valueColor: AppColors.primary,
+                          valueColor: KasiraDS.brandPrimary,
                         ),
                         if (widget.paymentMethod == 'Cash') ...[
                           const SizedBox(height: 10),
                           _buildRow('Uang Diterima', _currency.format(widget.amountPaid)),
-                          const Divider(height: 20, color: AppColors.border),
+                          const Divider(height: 20, color: KasiraDS.borderSubtle),
                           _buildRow(
                             'Kembalian',
                             _currency.format(_change > 0 ? _change : 0),
                             isBold: true,
-                            valueColor: AppColors.success,
+                            valueColor: KasiraDS.success,
                           ),
                         ],
                       ],
@@ -340,7 +338,7 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: KasiraDS.brandPrimary,
                         foregroundColor: Colors.white,
                         elevation: 2,
                       ),
@@ -401,14 +399,14 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
         Text(
           label,
           style: TextStyle(
-            color: AppColors.textSecondary,
+            color: KasiraDS.textMuted,
             fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
           ),
         ),
         Text(
           value,
           style: TextStyle(
-            color: valueColor ?? AppColors.textPrimary,
+            color: valueColor ?? KasiraDS.textStrong,
             fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
             fontSize: isBold ? 18 : 14,
           ),

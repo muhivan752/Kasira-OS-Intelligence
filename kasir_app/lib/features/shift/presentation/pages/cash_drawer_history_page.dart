@@ -4,7 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 
 class CashDrawerHistoryPage extends StatefulWidget {
   const CashDrawerHistoryPage({super.key});
@@ -103,14 +103,14 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        title: const Text('Riwayat Laci Kasir', style: TextStyle(color: AppColors.textPrimary)),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        backgroundColor: KasiraDS.surfaceCard,
+        title: const Text('Riwayat Laci Kasir', style: TextStyle(color: KasiraDS.textStrong)),
+        iconTheme: const IconThemeData(color: KasiraDS.textStrong),
         elevation: 0,
         actions: [
-          IconButton(icon: const Icon(LucideIcons.refreshCw, color: AppColors.primary), onPressed: _load),
+          IconButton(icon: const Icon(LucideIcons.refreshCw, color: KasiraDS.brandPrimary), onPressed: _load),
           const SizedBox(width: 8),
         ],
       ),
@@ -122,18 +122,18 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(24),
-                      color: AppColors.surface,
+                      color: KasiraDS.surfaceCard,
                       child: Row(
                         children: [
-                          Expanded(child: _buildSummaryCard('Total Penerimaan', _currency.format(_totalIn), LucideIcons.arrowDownLeft, AppColors.success)),
+                          Expanded(child: _buildSummaryCard('Total Penerimaan', _currency.format(_totalIn), LucideIcons.arrowDownLeft, KasiraDS.success)),
                           const SizedBox(width: 16),
-                          Expanded(child: _buildSummaryCard('Total Pengeluaran', _currency.format(_totalOut), LucideIcons.arrowUpRight, AppColors.error)),
+                          Expanded(child: _buildSummaryCard('Total Pengeluaran', _currency.format(_totalOut), LucideIcons.arrowUpRight, KasiraDS.danger)),
                         ],
                       ),
                     ),
                     Expanded(
                       child: _activities.isEmpty
-                          ? const Center(child: Text('Belum ada aktivitas kas shift ini', style: TextStyle(color: AppColors.textSecondary)))
+                          ? const Center(child: Text('Belum ada aktivitas kas shift ini', style: TextStyle(color: KasiraDS.textMuted)))
                           : ListView.builder(
                               padding: const EdgeInsets.all(24),
                               itemCount: _activities.length,
@@ -150,7 +150,7 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(_error!, style: const TextStyle(color: AppColors.textSecondary)),
+          Text(_error!, style: const TextStyle(color: KasiraDS.textMuted)),
           const SizedBox(height: 16),
           ElevatedButton.icon(onPressed: _load, icon: const Icon(LucideIcons.refreshCw, size: 16), label: const Text('Coba Lagi')),
         ],
@@ -161,7 +161,7 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
   Widget _buildTile(Map<String, dynamic> a) {
     final isIncome = a['activity_type'] == 'income';
     final amount = (a['amount'] as num?)?.toDouble() ?? 0;
-    final color = isIncome ? AppColors.success : AppColors.error;
+    final color = isIncome ? KasiraDS.success : KasiraDS.danger;
     final icon = isIncome ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight;
     final description = a['description'] as String? ?? '-';
     DateTime? createdAt;
@@ -183,7 +183,7 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
         subtitle: createdAt != null
             ? Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(_dateFormat.format(createdAt.toLocal()), style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                child: Text(_dateFormat.format(createdAt.toLocal()), style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
               )
             : null,
         trailing: Text(

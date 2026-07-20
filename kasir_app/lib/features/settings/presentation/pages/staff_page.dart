@@ -3,7 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 
 class StaffPage extends StatefulWidget {
   const StaffPage({super.key});
@@ -71,7 +71,7 @@ class _StaffPageState extends State<StaffPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Gagal mengubah status kasir'),
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
           ),
         );
       }
@@ -131,7 +131,7 @@ class _StaffPageState extends State<StaffPage> {
           actions: [
             TextButton(
               onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
-              child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+              child: const Text('Batal', style: TextStyle(color: KasiraDS.textMuted)),
             ),
             ElevatedButton(
               onPressed: isSubmitting
@@ -161,7 +161,7 @@ class _StaffPageState extends State<StaffPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Kasir berhasil ditambahkan'),
-                              backgroundColor: AppColors.success,
+                              backgroundColor: KasiraDS.success,
                             ),
                           );
                           _loadStaff();
@@ -173,13 +173,13 @@ class _StaffPageState extends State<StaffPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(msg.toString()),
-                              backgroundColor: AppColors.error,
+                              backgroundColor: KasiraDS.danger,
                             ),
                           );
                         }
                       }
                     },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style: ElevatedButton.styleFrom(backgroundColor: KasiraDS.brandPrimary),
               child: isSubmitting
                   ? const SizedBox(
                       width: 18,
@@ -197,17 +197,17 @@ class _StaffPageState extends State<StaffPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: KasiraDS.surfaceCard,
         title: const Text('Manajemen Kasir',
-            style: TextStyle(color: AppColors.textPrimary)),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+            style: TextStyle(color: KasiraDS.textStrong)),
+        iconTheme: const IconThemeData(color: KasiraDS.textStrong),
         elevation: 0,
         actions: [
           IconButton(
             onPressed: _loadStaff,
-            icon: const Icon(LucideIcons.refreshCw, color: AppColors.textSecondary),
+            icon: const Icon(LucideIcons.refreshCw, color: KasiraDS.textMuted),
           ),
         ],
       ),
@@ -215,7 +215,7 @@ class _StaffPageState extends State<StaffPage> {
         onPressed: _showAddKasirDialog,
         icon: const Icon(LucideIcons.userPlus),
         label: const Text('Tambah Kasir'),
-        backgroundColor: AppColors.primary,
+        backgroundColor: KasiraDS.brandPrimary,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -225,9 +225,9 @@ class _StaffPageState extends State<StaffPage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(LucideIcons.alertCircle,
-                          size: 40, color: AppColors.error),
+                          size: 40, color: KasiraDS.danger),
                       const SizedBox(height: 12),
-                      Text(_error!, style: const TextStyle(color: AppColors.textSecondary)),
+                      Text(_error!, style: const TextStyle(color: KasiraDS.textMuted)),
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: _loadStaff,
@@ -244,21 +244,21 @@ class _StaffPageState extends State<StaffPage> {
                           Container(
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceVariant,
+                              color: KasiraDS.surfaceSunken,
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(LucideIcons.users,
-                                size: 40, color: AppColors.textTertiary),
+                                size: 40, color: KasiraDS.textMuted),
                           ),
                           const SizedBox(height: 16),
                           const Text('Belum ada kasir',
                               style: TextStyle(
-                                  color: AppColors.textSecondary,
+                                  color: KasiraDS.textMuted,
                                   fontWeight: FontWeight.w500)),
                           const SizedBox(height: 4),
                           const Text('Tekan tombol + untuk menambahkan',
                               style: TextStyle(
-                                  color: AppColors.textTertiary, fontSize: 13)),
+                                  color: KasiraDS.textMuted, fontSize: 13)),
                         ],
                       ),
                     )
@@ -282,15 +282,15 @@ class _StaffPageState extends State<StaffPage> {
                                 horizontal: 16, vertical: 8),
                             leading: CircleAvatar(
                               backgroundColor: isActive
-                                  ? AppColors.primary.withOpacity(0.12)
-                                  : AppColors.surfaceVariant,
+                                  ? KasiraDS.brandPrimary.withOpacity(0.12)
+                                  : KasiraDS.surfaceSunken,
                               child: Text(
                                 initial,
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: isActive
-                                      ? AppColors.primary
-                                      : AppColors.textTertiary,
+                                      ? KasiraDS.brandPrimary
+                                      : KasiraDS.textMuted,
                                 ),
                               ),
                             ),
@@ -298,7 +298,7 @@ class _StaffPageState extends State<StaffPage> {
                                 style: const TextStyle(fontWeight: FontWeight.bold)),
                             subtitle: Text(phone,
                                 style: const TextStyle(
-                                    color: AppColors.textSecondary, fontSize: 13)),
+                                    color: KasiraDS.textMuted, fontSize: 13)),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -307,8 +307,8 @@ class _StaffPageState extends State<StaffPage> {
                                       horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: isActive
-                                        ? AppColors.success.withOpacity(0.1)
-                                        : AppColors.error.withOpacity(0.1),
+                                        ? KasiraDS.success.withOpacity(0.1)
+                                        : KasiraDS.danger.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
@@ -317,15 +317,15 @@ class _StaffPageState extends State<StaffPage> {
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                       color: isActive
-                                          ? AppColors.success
-                                          : AppColors.error,
+                                          ? KasiraDS.success
+                                          : KasiraDS.danger,
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Switch(
                                   value: isActive,
-                                  activeColor: AppColors.primary,
+                                  activeColor: KasiraDS.brandPrimary,
                                   onChanged: (_) =>
                                       _toggleStatus(userId, isActive),
                                 ),

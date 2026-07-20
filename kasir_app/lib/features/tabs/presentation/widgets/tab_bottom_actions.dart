@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
 
 class TabBottomActions extends StatelessWidget {
@@ -31,8 +31,8 @@ class TabBottomActions extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
+        color: KasiraDS.surfaceCard,
+        border: Border(top: BorderSide(color: KasiraDS.borderSubtle)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -44,12 +44,12 @@ class TabBottomActions extends StatelessWidget {
                 children: [
                   _buildActionChip(LucideIcons.plus, 'Tambah\nPesanan', const Color(0xFF059669), onAddOrder),
                   const SizedBox(width: 8),
-                  _buildActionChip(LucideIcons.arrowRightLeft, 'Pindah\nMeja', AppColors.info, onMoveTable),
+                  _buildActionChip(LucideIcons.arrowRightLeft, 'Pindah\nMeja', KasiraDS.info, onMoveTable),
                   const SizedBox(width: 8),
-                  _buildActionChip(LucideIcons.merge, 'Gabung\nMeja', AppColors.warning, onMergeTab),
+                  _buildActionChip(LucideIcons.merge, 'Gabung\nMeja', KasiraDS.warning, onMergeTab),
                   if (tab.paidAmount == 0) ...[
                     const SizedBox(width: 8),
-                    _buildActionChip(LucideIcons.x, 'Batalkan', AppColors.error, onCancel),
+                    _buildActionChip(LucideIcons.x, 'Batalkan', KasiraDS.danger, onCancel),
                   ],
                 ],
               ),
@@ -74,7 +74,7 @@ class TabBottomActions extends StatelessWidget {
                     icon: const Icon(LucideIcons.split, size: 18),
                     label: const Text('Split Bill'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: KasiraDS.brandPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
@@ -86,7 +86,7 @@ class TabBottomActions extends StatelessWidget {
                     icon: const Icon(LucideIcons.banknote, size: 18),
                     label: Text('Bayar Sisa ${currency.format(tab.remainingAmount)}'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.success,
+                      backgroundColor: KasiraDS.success,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),

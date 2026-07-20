@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
 
 /// Modal yang nungguin webhook Xendit settle QRIS payment.
@@ -201,7 +201,7 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
         children: [
           Row(
             children: [
-              const Icon(LucideIcons.qrCode, color: AppColors.primary),
+              const Icon(LucideIcons.qrCode, color: KasiraDS.brandPrimary),
               const SizedBox(width: 12),
               Text('Tunggu Pembayaran QRIS',
                   style: Theme.of(context).textTheme.titleLarge),
@@ -224,7 +224,7 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
           Text(
             'Tagihan: ${_currency.format(qris.amountDue)}',
             style: const TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary),
+                fontWeight: FontWeight.bold, fontSize: 18, color: KasiraDS.brandPrimary),
           ),
           const SizedBox(height: 20),
 
@@ -243,7 +243,7 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: KasiraDS.borderSubtle),
               ),
               child: Column(
                 children: [
@@ -262,7 +262,7 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
                   Text(
                     'String QR di atas — render via app Xendit/QRIS-compatible',
                     style: TextStyle(
-                      color: AppColors.textTertiary,
+                      color: KasiraDS.textMuted,
                       fontSize: 11,
                       fontStyle: FontStyle.italic,
                     ),
@@ -275,17 +275,17 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.warning.withOpacity(0.1),
+                color: KasiraDS.warning.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(LucideIcons.clock, size: 16, color: AppColors.warning),
+                  const Icon(LucideIcons.clock, size: 16, color: KasiraDS.warning),
                   const SizedBox(width: 8),
                   Text(
                     'Sisa waktu: ${_formatCountdown(_secondsLeft)}',
-                    style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.warning),
+                    style: const TextStyle(fontWeight: FontWeight.w600, color: KasiraDS.warning),
                   ),
                 ],
               ),
@@ -319,7 +319,7 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
             const SizedBox(height: 4),
             Text(
               'Webhook Xendit tetap update tab kalau customer akhirnya bayar — kamu bisa cek tab list nanti.',
-              style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+              style: TextStyle(fontSize: 11, color: KasiraDS.textMuted),
               textAlign: TextAlign.center,
             ),
           ] else ...[
@@ -341,22 +341,22 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.warning.withOpacity(0.1),
+        color: KasiraDS.warning.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.warning),
+        border: Border.all(color: KasiraDS.warning),
       ),
       child: Column(
         children: [
-          const Icon(LucideIcons.alertTriangle, size: 32, color: AppColors.warning),
+          const Icon(LucideIcons.alertTriangle, size: 32, color: KasiraDS.warning),
           const SizedBox(height: 8),
           const Text(
             'Verifikasi Manual',
-            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.warning),
+            style: TextStyle(fontWeight: FontWeight.bold, color: KasiraDS.warning),
           ),
           const SizedBox(height: 4),
           Text(
             'Xendit lambat respon. Admin akan cek dashboard Xendit untuk verify pembayaran.',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 12, color: KasiraDS.textMuted),
             textAlign: TextAlign.center,
           ),
         ],
@@ -368,17 +368,17 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.error.withOpacity(0.1),
+        color: KasiraDS.danger.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.error),
+        border: Border.all(color: KasiraDS.danger),
       ),
       child: Column(
         children: [
-          const Icon(LucideIcons.xCircle, size: 32, color: AppColors.error),
+          const Icon(LucideIcons.xCircle, size: 32, color: KasiraDS.danger),
           const SizedBox(height: 8),
           Text(
             msg,
-            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.error),
+            style: const TextStyle(fontWeight: FontWeight.w600, color: KasiraDS.danger),
             textAlign: TextAlign.center,
           ),
         ],
@@ -390,17 +390,17 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.success.withOpacity(0.1),
+        color: KasiraDS.success.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.success),
+        border: Border.all(color: KasiraDS.success),
       ),
       child: const Column(
         children: [
-          Icon(LucideIcons.checkCircle, size: 32, color: AppColors.success),
+          Icon(LucideIcons.checkCircle, size: 32, color: KasiraDS.success),
           SizedBox(height: 8),
           Text(
             'Pembayaran Sukses!',
-            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.success),
+            style: TextStyle(fontWeight: FontWeight.bold, color: KasiraDS.success),
           ),
         ],
       ),

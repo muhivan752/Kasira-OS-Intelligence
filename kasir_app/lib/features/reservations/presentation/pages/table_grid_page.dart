@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/table_provider.dart';
 import '../../providers/reservation_provider.dart';
 
@@ -43,16 +43,16 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       body: Column(
         children: [
           // Header
           Container(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-            color: AppColors.surface,
+            color: KasiraDS.surfaceCard,
             child: Row(
               children: [
-                const Icon(LucideIcons.layoutGrid, color: AppColors.primary),
+                const Icon(LucideIcons.layoutGrid, color: KasiraDS.brandPrimary),
                 const SizedBox(width: 12),
                 Text('Denah Meja & Reservasi', style: Theme.of(context).textTheme.titleLarge),
                 const Spacer(),
@@ -61,7 +61,7 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
                     ref.read(tableListProvider.notifier).fetchTables();
                     ref.read(reservationProvider.notifier).fetchReservations();
                   },
-                  icon: const Icon(LucideIcons.refreshCw, size: 20, color: AppColors.textSecondary),
+                  icon: const Icon(LucideIcons.refreshCw, size: 20, color: KasiraDS.textMuted),
                 ),
               ],
             ),
@@ -70,18 +70,18 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
           // Legend
           Container(
             height: 52,
-            color: AppColors.surface,
+            color: KasiraDS.surfaceCard,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               children: [
-                _buildLegend(AppColors.success, 'Tersedia'),
+                _buildLegend(KasiraDS.success, 'Tersedia'),
                 const SizedBox(width: 16),
-                _buildLegend(AppColors.info, 'Reservasi'),
+                _buildLegend(KasiraDS.info, 'Reservasi'),
                 const SizedBox(width: 16),
-                _buildLegend(AppColors.error, 'Terisi'),
+                _buildLegend(KasiraDS.danger, 'Terisi'),
                 const SizedBox(width: 16),
-                _buildLegend(AppColors.textTertiary, 'Tutup'),
+                _buildLegend(KasiraDS.textMuted, 'Tutup'),
               ],
             ),
           ),
@@ -100,7 +100,7 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
                       )
                     : sections.isEmpty
                         ? const Center(
-                            child: Text('Belum ada meja', style: TextStyle(color: AppColors.textSecondary)))
+                            child: Text('Belum ada meja', style: TextStyle(color: KasiraDS.textMuted)))
                         : ListView(
                             padding: const EdgeInsets.all(16),
                             children: sections.entries.map((entry) {
@@ -114,7 +114,7 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16,
-                                        color: AppColors.textPrimary,
+                                        color: KasiraDS.textStrong,
                                       ),
                                     ),
                                   ),
@@ -155,7 +155,7 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
           decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
         ),
         const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        Text(label, style: const TextStyle(fontSize: 12, color: KasiraDS.textMuted)),
       ],
     );
   }
@@ -167,37 +167,37 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
 
     if (table.status == 'occupied' || hasSeated) {
       return _TableDisplayConfig(
-        bgColor: AppColors.error.withOpacity(0.10),
-        borderColor: AppColors.error,
-        iconColor: AppColors.error,
-        textColor: AppColors.error,
+        bgColor: KasiraDS.danger.withOpacity(0.10),
+        borderColor: KasiraDS.danger,
+        iconColor: KasiraDS.danger,
+        textColor: KasiraDS.danger,
         statusLabel: 'Terisi',
         icon: LucideIcons.users,
       );
     } else if (hasReservation) {
       return _TableDisplayConfig(
-        bgColor: AppColors.info.withOpacity(0.10),
-        borderColor: AppColors.info,
-        iconColor: AppColors.info,
-        textColor: AppColors.info,
+        bgColor: KasiraDS.info.withOpacity(0.10),
+        borderColor: KasiraDS.info,
+        iconColor: KasiraDS.info,
+        textColor: KasiraDS.info,
         statusLabel: 'Reservasi',
         icon: LucideIcons.calendarCheck2,
       );
     } else if (table.status == 'closed' || !table.isActive) {
       return _TableDisplayConfig(
-        bgColor: AppColors.surfaceVariant,
-        borderColor: AppColors.border,
-        iconColor: AppColors.textTertiary,
-        textColor: AppColors.textTertiary,
+        bgColor: KasiraDS.surfaceSunken,
+        borderColor: KasiraDS.borderSubtle,
+        iconColor: KasiraDS.textMuted,
+        textColor: KasiraDS.textMuted,
         statusLabel: 'Tutup',
         icon: LucideIcons.lock,
       );
     } else {
       return _TableDisplayConfig(
-        bgColor: AppColors.success.withOpacity(0.10),
-        borderColor: AppColors.success,
-        iconColor: AppColors.success,
-        textColor: AppColors.success,
+        bgColor: KasiraDS.success.withOpacity(0.10),
+        borderColor: KasiraDS.success,
+        iconColor: KasiraDS.success,
+        textColor: KasiraDS.success,
         statusLabel: 'Tersedia',
         icon: LucideIcons.checkCircle2,
       );
@@ -292,7 +292,7 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
   void _showReservationDetail(ReservationModel reservation) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: KasiraDS.surfaceCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -305,7 +305,7 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
             Center(
               child: Container(
                 width: 40, height: 4,
-                decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(color: KasiraDS.borderSubtle, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
@@ -339,9 +339,9 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: AppColors.textSecondary),
+          Icon(icon, size: 16, color: KasiraDS.textMuted),
           const SizedBox(width: 10),
-          SizedBox(width: 80, child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13))),
+          SizedBox(width: 80, child: Text(label, style: const TextStyle(color: KasiraDS.textMuted, fontSize: 13))),
           Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14))),
         ],
       ),

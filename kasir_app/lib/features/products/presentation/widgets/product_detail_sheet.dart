@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/recipe_provider.dart';
 
 class ProductDetailSheet extends ConsumerWidget {
@@ -44,7 +44,7 @@ class ProductDetailSheet extends ConsumerWidget {
         maxHeight: MediaQuery.of(context).size.height * 0.7,
       ),
       decoration: const BoxDecoration(
-        color: AppColors.surface,
+        color: KasiraDS.surfaceCard,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
@@ -56,7 +56,7 @@ class ProductDetailSheet extends ConsumerWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: AppColors.border,
+              color: KasiraDS.borderSubtle,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -81,7 +81,7 @@ class ProductDetailSheet extends ConsumerWidget {
                       Text(
                         'Harga jual: ${currency.format(sellingPrice)}',
                         style: const TextStyle(
-                          color: AppColors.textSecondary,
+                          color: KasiraDS.textMuted,
                           fontSize: 14,
                         ),
                       ),
@@ -109,7 +109,7 @@ class ProductDetailSheet extends ConsumerWidget {
                 padding: const EdgeInsets.all(40),
                 child: Center(
                   child: Text('Error: $err',
-                      style: const TextStyle(color: AppColors.error)),
+                      style: const TextStyle(color: KasiraDS.danger)),
                 ),
               ),
               data: (recipe) {
@@ -121,12 +121,12 @@ class ProductDetailSheet extends ConsumerWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(LucideIcons.chefHat,
-                              size: 48, color: AppColors.textTertiary),
+                              size: 48, color: KasiraDS.textMuted),
                           const SizedBox(height: 12),
                           const Text(
                             'Belum ada resep',
                             style: TextStyle(
-                              color: AppColors.textSecondary,
+                              color: KasiraDS.textMuted,
                               fontSize: 15,
                             ),
                           ),
@@ -134,7 +134,7 @@ class ProductDetailSheet extends ConsumerWidget {
                           const Text(
                             'Tambah resep di dashboard untuk melihat HPP',
                             style: TextStyle(
-                              color: AppColors.textTertiary,
+                              color: KasiraDS.textMuted,
                               fontSize: 12,
                             ),
                           ),
@@ -156,7 +156,7 @@ class ProductDetailSheet extends ConsumerWidget {
                             label: 'HPP',
                             value: currency.format(recipe.totalHpp),
                             icon: LucideIcons.calculator,
-                            color: AppColors.primary,
+                            color: KasiraDS.brandPrimary,
                           ),
                           const SizedBox(width: 12),
                           _SummaryCard(
@@ -164,10 +164,10 @@ class ProductDetailSheet extends ConsumerWidget {
                             value: currency.format(recipe.marginAmount),
                             icon: LucideIcons.trendingUp,
                             color: recipe.marginPercent >= 30
-                                ? AppColors.success
+                                ? KasiraDS.success
                                 : recipe.marginPercent >= 15
                                     ? const Color(0xFFF59E0B)
-                                    : AppColors.error,
+                                    : KasiraDS.danger,
                           ),
                           const SizedBox(width: 12),
                           _SummaryCard(
@@ -175,10 +175,10 @@ class ProductDetailSheet extends ConsumerWidget {
                             value: '${recipe.marginPercent.toStringAsFixed(1)}%',
                             icon: LucideIcons.percent,
                             color: recipe.marginPercent >= 30
-                                ? AppColors.success
+                                ? KasiraDS.success
                                 : recipe.marginPercent >= 15
                                     ? const Color(0xFFF59E0B)
-                                    : AppColors.error,
+                                    : KasiraDS.danger,
                           ),
                         ],
                       ),
@@ -209,7 +209,7 @@ class ProductDetailSheet extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.06),
+                          color: KasiraDS.brandPrimary.withOpacity(0.06),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -227,7 +227,7 @@ class ProductDetailSheet extends ConsumerWidget {
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
-                                color: AppColors.primary,
+                                color: KasiraDS.brandPrimary,
                               ),
                             ),
                           ],
@@ -285,7 +285,7 @@ class _SummaryCard extends StatelessWidget {
             Text(
               label,
               style: const TextStyle(
-                color: AppColors.textSecondary,
+                color: KasiraDS.textMuted,
                 fontSize: 11,
               ),
             ),
@@ -325,7 +325,7 @@ class _IngredientRow extends StatelessWidget {
             width: 6,
             height: 6,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.4),
+              color: KasiraDS.brandPrimary.withOpacity(0.4),
               shape: BoxShape.circle,
             ),
           ),
@@ -339,7 +339,7 @@ class _IngredientRow extends StatelessWidget {
           Text(
             '$qtyStr $unit',
             style: const TextStyle(
-              color: AppColors.textSecondary,
+              color: KasiraDS.textMuted,
               fontSize: 12,
             ),
           ),

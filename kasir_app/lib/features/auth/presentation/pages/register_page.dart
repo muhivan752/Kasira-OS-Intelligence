@@ -7,7 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 
 enum RegStep { inputInfo, inputOtp, setPin }
 
@@ -358,7 +358,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       label: Text(label),
                       selected: selected,
                       onSelected: (_) => setState(() => _businessType = t),
-                      selectedColor: AppColors.primary,
+                      selectedColor: KasiraDS.brandPrimary,
                       labelStyle: TextStyle(color: selected ? Colors.white : Colors.grey[300]),
                       backgroundColor: const Color(0xFF1A1F2B),
                     );
@@ -384,7 +384,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _sendOtp,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: KasiraDS.brandPrimary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isLoading
@@ -417,7 +417,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 if (_isLoading)
                   const Padding(
                     padding: EdgeInsets.only(top: 16),
-                    child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                    child: Center(child: CircularProgressIndicator(color: KasiraDS.brandPrimary)),
                   ),
               ],
 
@@ -432,7 +432,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _setPin,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: KasiraDS.brandPrimary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isLoading
@@ -482,9 +482,9 @@ class _RegisterPageState extends State<RegisterPage> {
       margin: const EdgeInsets.only(top: 10, bottom: 4),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.09),
+        color: KasiraDS.brandPrimary.withOpacity(0.09),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.4), width: 1),
+        border: Border.all(color: KasiraDS.brandPrimary.withOpacity(0.4), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -525,8 +525,8 @@ class _RegisterPageState extends State<RegisterPage> {
                     _showDomainSuggestion = false;
                   }),
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: AppColors.primary.withOpacity(0.6)),
-                    foregroundColor: AppColors.primary,
+                    side: BorderSide(color: KasiraDS.brandPrimary.withOpacity(0.6)),
+                    foregroundColor: KasiraDS.brandPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 6),
                   ),
                   icon: const Icon(Icons.check, size: 16),

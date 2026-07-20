@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/reservation_provider.dart';
 import '../../providers/table_provider.dart';
 
@@ -70,12 +70,12 @@ class _CreateReservationModalState extends ConsumerState<CreateReservationModal>
     if (result != null) {
       Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reservasi berhasil dibuat'), backgroundColor: AppColors.success),
+        const SnackBar(content: Text('Reservasi berhasil dibuat'), backgroundColor: KasiraDS.success),
       );
     } else {
       final error = ref.read(reservationProvider).error;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error ?? 'Gagal membuat reservasi'), backgroundColor: AppColors.error),
+        SnackBar(content: Text(error ?? 'Gagal membuat reservasi'), backgroundColor: KasiraDS.danger),
       );
     }
   }
@@ -105,7 +105,7 @@ class _CreateReservationModalState extends ConsumerState<CreateReservationModal>
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.border,
+                    color: KasiraDS.borderSubtle,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -241,7 +241,7 @@ class _CreateReservationModalState extends ConsumerState<CreateReservationModal>
                       : const Icon(LucideIcons.calendarPlus, size: 18),
                   label: Text(_isSubmitting ? 'Menyimpan...' : 'Buat Reservasi'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: KasiraDS.brandPrimary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),

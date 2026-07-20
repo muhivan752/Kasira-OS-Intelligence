@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:intl/intl.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/orders_provider.dart';
 import '../widgets/order_detail_modal.dart';
 
@@ -58,12 +58,12 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
             .toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       body: Column(
         children: [
           Container(
             padding: EdgeInsets.all(isWide ? 24 : 16),
-            color: AppColors.surface,
+            color: KasiraDS.surfaceCard,
             child: SafeArea(
               bottom: false,
               child: Row(
@@ -77,14 +77,14 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
                     width: isWide ? 300 : 160,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceVariant,
+                        color: KasiraDS.surfaceSunken,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: TextField(
                         decoration: const InputDecoration(
                           hintText: 'Cari nomor pesanan...',
                           prefixIcon: Icon(LucideIcons.search,
-                              color: AppColors.textTertiary, size: 18),
+                              color: KasiraDS.textMuted, size: 18),
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(vertical: 10),
                         ),
@@ -99,7 +99,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
                       ref.read(ordersProvider.notifier).fetch(status: status);
                     },
                     icon: const Icon(LucideIcons.refreshCw,
-                        color: AppColors.textSecondary),
+                        color: KasiraDS.textMuted),
                     tooltip: 'Refresh',
                   ),
                 ],
@@ -107,12 +107,12 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
             ),
           ),
           Container(
-            color: AppColors.surface,
+            color: KasiraDS.surfaceCard,
             child: TabBar(
               controller: _tabController,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
+              labelColor: KasiraDS.brandPrimary,
+              unselectedLabelColor: KasiraDS.textMuted,
+              indicatorColor: KasiraDS.brandPrimary,
               tabs: _tabs
                   .map((t) => Tab(text: t.label))
                   .toList(),
@@ -137,9 +137,9 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(LucideIcons.wifiOff, size: 40, color: AppColors.textTertiary),
+          const Icon(LucideIcons.wifiOff, size: 40, color: KasiraDS.textMuted),
           const SizedBox(height: 12),
-          Text(msg, style: const TextStyle(color: AppColors.textSecondary)),
+          Text(msg, style: const TextStyle(color: KasiraDS.textMuted)),
           const SizedBox(height: 8),
           TextButton(
             onPressed: () {
@@ -158,9 +158,9 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(LucideIcons.clipboardList, size: 40, color: AppColors.textTertiary),
+          Icon(LucideIcons.clipboardList, size: 40, color: KasiraDS.textMuted),
           SizedBox(height: 12),
-          Text('Tidak ada pesanan', style: TextStyle(color: AppColors.textSecondary)),
+          Text('Tidak ada pesanan', style: TextStyle(color: KasiraDS.textMuted)),
         ],
       ),
     );
@@ -176,10 +176,10 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
 
   Widget _buildOrderCard(OrderModel order, bool isWide) {
     final statusColor = switch (order.status) {
-      'completed' => AppColors.success,
-      'cancelled' => AppColors.error,
-      'ready' => AppColors.info,
-      _ => AppColors.warning,
+      'completed' => KasiraDS.success,
+      'cancelled' => KasiraDS.danger,
+      'ready' => KasiraDS.info,
+      _ => KasiraDS.warning,
     };
 
     return Card(
@@ -192,10 +192,10 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: KasiraDS.brandPrimary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(LucideIcons.receipt, color: AppColors.primary, size: 20),
+              child: const Icon(LucideIcons.receipt, color: KasiraDS.brandPrimary, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -208,7 +208,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
                   const SizedBox(height: 4),
                   Text(
                     '${order.orderTypeLabel} • ${order.items.length} item',
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12),
                   ),
                 ],
               ),
@@ -242,7 +242,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
               const SizedBox(width: 8),
               IconButton(
                 onPressed: () => _showDetail(order.id),
-                icon: const Icon(LucideIcons.eye, size: 18, color: AppColors.primary),
+                icon: const Icon(LucideIcons.eye, size: 18, color: KasiraDS.brandPrimary),
               ),
             ],
           ],

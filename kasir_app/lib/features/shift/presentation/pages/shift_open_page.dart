@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 
 class ShiftOpenPage extends StatefulWidget {
   const ShiftOpenPage({super.key});
@@ -40,7 +40,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
         const SnackBar(
           content: Text('Masukkan jumlah uang modal awal'),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.error,
+          backgroundColor: KasiraDS.danger,
         ),
       );
       return;
@@ -86,7 +86,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
           SnackBar(
             content: Text(detail.toString()),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
           ),
         );
       }
@@ -97,7 +97,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
           SnackBar(
             content: Text('Gagal membuka shift: $e'),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
           ),
         );
       }
@@ -109,7 +109,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
     final now = DateTime.now();
 
     return Scaffold(
-      backgroundColor: AppColors.primary,
+      backgroundColor: KasiraDS.brandPrimary,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -118,7 +118,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
             child: Container(
             padding: const EdgeInsets.all(40),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: KasiraDS.surfaceCard,
               borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(
@@ -138,16 +138,16 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: KasiraDS.brandPrimary.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.point_of_sale_rounded, color: AppColors.primary, size: 28),
+                      child: const Icon(Icons.point_of_sale_rounded, color: KasiraDS.brandPrimary, size: 28),
                     ),
                     const SizedBox(width: 12),
                     const Text(
                       'KASIRA',
                       style: TextStyle(
-                        color: AppColors.primary,
+                        color: KasiraDS.brandPrimary,
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.5,
@@ -161,12 +161,12 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
+                    color: KasiraDS.surfaceSunken,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
-                      const Icon(LucideIcons.calendar, color: AppColors.primary, size: 20),
+                      const Icon(LucideIcons.calendar, color: KasiraDS.brandPrimary, size: 20),
                       const SizedBox(width: 12),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,7 +177,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
                           ),
                           Text(
                             'Shift dimulai pukul ${_timeFormat.format(now)}',
-                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                            style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12),
                           ),
                         ],
                       ),
@@ -194,7 +194,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
                 const Text(
                   'Masukkan jumlah uang modal awal di laci kasir',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: KasiraDS.textMuted),
                 ),
                 const SizedBox(height: 28),
 
@@ -210,7 +210,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                      borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 2),
                     ),
                   ),
                   onChanged: (val) {
@@ -239,17 +239,17 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             side: BorderSide(
-                              color: _openingCash == amount ? AppColors.primary : AppColors.border,
+                              color: _openingCash == amount ? KasiraDS.brandPrimary : KasiraDS.borderSubtle,
                             ),
                             backgroundColor: _openingCash == amount
-                                ? AppColors.primary.withOpacity(0.05)
+                                ? KasiraDS.brandPrimary.withOpacity(0.05)
                                 : null,
                           ),
                           child: Text(
                             _formatShort(amount),
                             style: TextStyle(
                               fontSize: 12,
-                              color: _openingCash == amount ? AppColors.primary : AppColors.textSecondary,
+                              color: _openingCash == amount ? KasiraDS.brandPrimary : KasiraDS.textMuted,
                               fontWeight: _openingCash == amount ? FontWeight.bold : FontWeight.normal,
                             ),
                           ),
@@ -270,7 +270,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                      borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 2),
                     ),
                   ),
                 ),
@@ -282,20 +282,20 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 20),
                     decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.05),
+                      color: KasiraDS.success.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.success.withOpacity(0.3)),
+                      border: Border.all(color: KasiraDS.success.withOpacity(0.3)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Modal awal shift', style: TextStyle(color: AppColors.textSecondary)),
+                        const Text('Modal awal shift', style: TextStyle(color: KasiraDS.textMuted)),
                         Text(
                           _currency.format(_openingCash),
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
-                            color: AppColors.success,
+                            color: KasiraDS.success,
                           ),
                         ),
                       ],

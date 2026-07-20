@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/localization/business_labels.dart';
 import '../../../../core/sync/sync_provider.dart';
 import '../../../products/providers/products_provider.dart';
@@ -89,7 +90,7 @@ class _PosPageState extends ConsumerState<PosPage> {
             ]),
             duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
           ));
         }
       });
@@ -116,18 +117,18 @@ class _PosPageState extends ConsumerState<PosPage> {
         minChildSize: 0.4,
         builder: (_, controller) => Container(
           decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            color: KasiraDS.surfaceCard,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             children: [
               const SizedBox(height: 12),
               Container(
-                width: 36,
-                height: 4,
+                width: 40,
+                height: 5,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2),
+                  color: KasiraDS.borderDefault,
+                  borderRadius: BorderRadius.circular(999),
                 ),
               ),
               const SizedBox(height: 8),
@@ -226,7 +227,7 @@ class _PosPageState extends ConsumerState<PosPage> {
             showModalBottomSheet(
               context: context,
               isScrollControlled: true,
-              backgroundColor: AppColors.surface,
+              backgroundColor: KasiraDS.surfaceCard,
               shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
@@ -248,7 +249,7 @@ class _PosPageState extends ConsumerState<PosPage> {
               content: Text(
                 '${BusinessLabels.getLabel('table')} ${table.name} ditandai terisi tapi tidak ada tab aktif. Lanjut buat order baru.',
               ),
-              backgroundColor: AppColors.warning,
+              backgroundColor: KasiraDS.warning,
               duration: const Duration(seconds: 4),
             ),
           );
@@ -262,7 +263,7 @@ class _PosPageState extends ConsumerState<PosPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Gagal cek tab di ${table.name}: ${e.toString()}'),
-              backgroundColor: AppColors.error,
+              backgroundColor: KasiraDS.danger,
             ),
           );
         }
@@ -277,7 +278,7 @@ class _PosPageState extends ConsumerState<PosPage> {
           content: Text(
             '${BusinessLabels.getLabel('table')} ${table.name} sedang ${table.status.name}',
           ),
-          backgroundColor: AppColors.error,
+          backgroundColor: KasiraDS.danger,
         ),
       );
     }
@@ -304,7 +305,7 @@ class _PosPageState extends ConsumerState<PosPage> {
           return AlertDialog(
             title: Row(
               children: [
-                const Icon(LucideIcons.users, size: 22, color: AppColors.primary),
+                const Icon(LucideIcons.users, size: 22, color: KasiraDS.brandPrimary),
                 const SizedBox(width: 10),
                 Text('Berapa orang?', style: Theme.of(ctx).textTheme.titleMedium),
               ],
@@ -315,7 +316,7 @@ class _PosPageState extends ConsumerState<PosPage> {
               children: [
                 Text(
                   '${BusinessLabels.getLabel('table')} $tableName',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                  style: TextStyle(color: KasiraDS.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 16),
                 Wrap(
@@ -330,9 +331,9 @@ class _PosPageState extends ConsumerState<PosPage> {
                         onPressed: () => pick(n),
                         style: FilledButton.styleFrom(
                           backgroundColor:
-                              active ? AppColors.primary : AppColors.surfaceVariant,
+                              active ? KasiraDS.brandPrimary : KasiraDS.surfaceSunken,
                           foregroundColor:
-                              active ? Colors.white : AppColors.textPrimary,
+                              active ? Colors.white : KasiraDS.textStrong,
                           padding: EdgeInsets.zero,
                         ),
                         child: Text(
@@ -395,7 +396,7 @@ class _PosPageState extends ConsumerState<PosPage> {
     final addOrderCtx = ref.watch(addOrderContextProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       body: Column(
         children: [
           if (addOrderCtx != null)
@@ -403,7 +404,7 @@ class _PosPageState extends ConsumerState<PosPage> {
           if (_isOffline)
             Container(
               width: double.infinity,
-              color: AppColors.warning,
+              color: KasiraDS.warning,
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -427,23 +428,76 @@ class _PosPageState extends ConsumerState<PosPage> {
           ),
         ],
       ),
-      floatingActionButton: showFab
-          ? FloatingActionButton.extended(
-              onPressed: () => _openCartSheet(context),
-              icon: Badge(
-                label: itemCount > 0 ? Text('$itemCount') : null,
-                isLabelVisible: itemCount > 0,
-                backgroundColor: Colors.white,
-                textColor: AppColors.primary,
-                child: const Icon(LucideIcons.shoppingCart),
-              ),
-              label: itemCount > 0
-                  ? Text('Keranjang ($itemCount)')
-                  : const Text('Keranjang'),
-              backgroundColor: AppColors.primary,
-              elevation: 4,
-            )
+      floatingActionButton: (showFab && itemCount > 0)
+          ? _buildCartBar(context, itemCount, cart.total)
           : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  /// Floating cart bar — ports the "Kasira POS.dc.html" Kasir bottom bar:
+  /// gradient-frekuensi pill, count badge + total + "Lihat pesanan →".
+  Widget _buildCartBar(BuildContext context, int itemCount, double total) {
+    final rp = NumberFormat.currency(
+        locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
+    return Container(
+      width: MediaQuery.of(context).size.width - 32,
+      decoration: BoxDecoration(
+        gradient: KasiraDS.gradientFrekuensi,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: KasiraDS.glowBrand,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _openCartSheet(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.22),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text('$itemCount',
+                          style: KasiraDS.sans(
+                              size: 13,
+                              weight: FontWeight.w800,
+                              color: Colors.white)),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(rp.format(total),
+                        style: KasiraDS.sans(
+                            size: 15,
+                            weight: FontWeight.w800,
+                            color: Colors.white)),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Text('Lihat pesanan',
+                        style: KasiraDS.sans(
+                            size: 14,
+                            weight: FontWeight.w700,
+                            color: Colors.white)),
+                    const SizedBox(width: 6),
+                    const Icon(LucideIcons.arrowRight,
+                        size: 18, color: Colors.white),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -459,16 +513,16 @@ class _PosPageState extends ConsumerState<PosPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: const BoxDecoration(
-                  color: AppColors.surface,
-                  border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+                  color: KasiraDS.surfaceCard,
+                  border: Border(bottom: BorderSide(color: KasiraDS.borderSubtle)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.utensils, size: 16, color: AppColors.primary),
+                    const Icon(LucideIcons.utensils, size: 16, color: KasiraDS.brandPrimary),
                     const SizedBox(width: 8),
                     Text(
                       '${BusinessLabels.getLabel('select_table')} — Dine In',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                      style: KasiraDS.sans(size: 14, weight: FontWeight.w700, color: KasiraDS.textStrong),
                     ),
                     const Spacer(),
                     TextButton.icon(
@@ -516,9 +570,9 @@ class _PosPageState extends ConsumerState<PosPage> {
         // Right: cart
         Container(
           width: 380,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            border: const Border(left: BorderSide(color: AppColors.border, width: 0.5)),
+          decoration: const BoxDecoration(
+            color: KasiraDS.surfaceCard,
+            border: Border(left: BorderSide(color: KasiraDS.borderSubtle)),
           ),
           child: const CartPanel(),
         ),
@@ -539,11 +593,12 @@ class _PosPageState extends ConsumerState<PosPage> {
   Widget _buildHeader({required bool isWide, required PosMode posMode}) {
     final showSearch = posMode == PosMode.takeaway || posMode == PosMode.dineInOrdering;
     final showBack = posMode != PosMode.selection;
+    final title = showSearch ? 'Kasir' : 'Kasira POS';
 
     return Container(
       decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+        color: KasiraDS.surfaceCard,
+        border: Border(bottom: BorderSide(color: KasiraDS.borderSubtle)),
       ),
       padding: EdgeInsets.only(
         top: isWide ? 0 : MediaQuery.of(context).padding.top,
@@ -553,107 +608,122 @@ class _PosPageState extends ConsumerState<PosPage> {
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: isWide ? 20 : 16,
-            vertical: isWide ? 14 : 10,
+            vertical: isWide ? 14 : 12,
           ),
-          child: Row(
+          child: Column(
             children: [
-              if (showBack) ...[
-                SizedBox(
-                  width: 36,
-                  height: 36,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: _goBackToModeSelection,
-                    icon: const Icon(LucideIcons.arrowLeft, color: AppColors.textSecondary, size: 18),
-                    tooltip: 'Kembali',
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              // Brand mark
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(LucideIcons.store, color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Kasira POS',
-                      style: TextStyle(
-                        fontSize: isWide ? 16 : 14,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+              Row(
+                children: [
+                  if (showBack) ...[
+                    _circleIconBtn(LucideIcons.arrowLeft, _goBackToModeSelection),
+                    const SizedBox(width: 10),
+                  ] else ...[
+                    // Aurora brand mark
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        gradient: KasiraDS.gradientAurora,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: KasiraDS.glowPink,
                       ),
+                      child: const Icon(LucideIcons.store,
+                          color: Colors.white, size: 18),
                     ),
-                    const _PosClock(),
+                    const SizedBox(width: 12),
                   ],
-                ),
-              ),
-              // Search bar (only in ordering modes)
-              if (showSearch) ...[
-                Container(
-                  width: isWide ? 260 : 150,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: const InputDecoration(
-                      hintText: 'Cari produk...',
-                      hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
-                      prefixIcon: Icon(LucideIcons.search,
-                          size: 16, color: AppColors.textTertiary),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 10),
-                      isDense: true,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title,
+                            style: KasiraDS.display(
+                                size: isWide ? 20 : 22,
+                                color: KasiraDS.textStrong)),
+                        const _PosClock(),
+                      ],
                     ),
-                    style: const TextStyle(fontSize: 13),
-                    onChanged: (val) {
-                      _searchDebounce?.cancel();
-                      _searchDebounce = Timer(
-                        const Duration(milliseconds: 250),
-                        () {
-                          if (mounted) {
-                            setState(() => _searchQuery = val.toLowerCase());
-                          }
-                        },
-                      );
-                    },
                   ),
-                ),
-                const SizedBox(width: 6),
-                SizedBox(
-                  width: 36,
-                  height: 36,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: () {
+                  if (showSearch)
+                    _circleIconBtn(LucideIcons.refreshCw, () {
                       _searchDebounce?.cancel();
                       _searchController.clear();
                       setState(() => _searchQuery = '');
                       ref.read(productsProvider.notifier).refresh();
-                    },
-                    icon: const Icon(LucideIcons.refreshCw,
-                        color: AppColors.textSecondary, size: 18),
-                    tooltip: 'Refresh',
+                    }),
+                ],
+              ),
+              // Full-width search field (design: surface-card, 1.5px border, r14)
+              if (showSearch) ...[
+                const SizedBox(height: 12),
+                Container(
+                  constraints: const BoxConstraints(minHeight: 46),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: KasiraDS.surfaceCard,
+                    borderRadius: KasiraDS.brMd,
+                    border: Border.all(color: KasiraDS.borderDefault, width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.search,
+                          size: 19, color: KasiraDS.textMuted),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          style: KasiraDS.sans(
+                              size: 15, color: KasiraDS.textStrong),
+                          decoration: InputDecoration(
+                            hintText: 'Cari menu...',
+                            hintStyle: KasiraDS.sans(
+                                size: 15, color: KasiraDS.textMuted),
+                            border: InputBorder.none,
+                            isCollapsed: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 13),
+                          ),
+                          onChanged: (val) {
+                            _searchDebounce?.cancel();
+                            _searchDebounce = Timer(
+                              const Duration(milliseconds: 250),
+                              () {
+                                if (mounted) {
+                                  setState(
+                                      () => _searchQuery = val.toLowerCase());
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Small circular icon button — surface-card + subtle border (design chrome).
+  Widget _circleIconBtn(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: KasiraDS.surfaceCard,
+          shape: BoxShape.circle,
+          border: Border.all(color: KasiraDS.borderSubtle),
+          boxShadow: KasiraDS.shadowSm,
+        ),
+        child: Icon(icon, size: 19, color: KasiraDS.textStrong),
       ),
     );
   }
@@ -669,8 +739,8 @@ class _PosPageState extends ConsumerState<PosPage> {
     });
 
     return Container(
-      height: 50,
-      color: AppColors.surface,
+      height: 54,
+      color: KasiraDS.bgBase,
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: ListView(
         scrollDirection: Axis.horizontal,
@@ -683,32 +753,27 @@ class _PosPageState extends ConsumerState<PosPage> {
                 setState(() => _selectedCategoryId = entry.key);
               },
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
+                duration: KasiraDS.durBase,
+                alignment: Alignment.center,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primary : AppColors.surfaceVariant,
-                  borderRadius: BorderRadius.circular(20),
+                  gradient: isSelected ? KasiraDS.gradientFrekuensi : null,
+                  color: isSelected ? null : KasiraDS.surfaceCard,
+                  borderRadius: KasiraDS.brPill,
                   border: Border.all(
-                    color: isSelected ? AppColors.primary : AppColors.border,
+                    color: isSelected
+                        ? Colors.transparent
+                        : KasiraDS.borderSubtle,
                   ),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: AppColors.primary.withOpacity(0.25),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          )
-                        ]
-                      : [],
+                  boxShadow: isSelected ? KasiraDS.glowPink : null,
                 ),
                 child: Text(
                   entry.value,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight:
-                        isSelected ? FontWeight.bold : FontWeight.w500,
-                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                  style: KasiraDS.sans(
+                    size: 13,
+                    weight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                    color: isSelected ? Colors.white : KasiraDS.textMuted,
                   ),
                 ),
               ),
@@ -732,22 +797,22 @@ class _PosPageState extends ConsumerState<PosPage> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: KasiraDS.surfaceSunken,
                 shape: BoxShape.circle,
               ),
               child: const Icon(LucideIcons.wifiOff,
-                  size: 32, color: AppColors.textTertiary),
+                  size: 32, color: KasiraDS.textMuted),
             ),
             const SizedBox(height: 16),
             const Text('Gagal memuat produk',
-                style: TextStyle(color: AppColors.textSecondary)),
+                style: TextStyle(color: KasiraDS.textMuted)),
             const SizedBox(height: 12),
             ElevatedButton.icon(
               onPressed: () => ref.read(productsProvider.notifier).refresh(),
               icon: const Icon(LucideIcons.refreshCw, size: 16),
               label: const Text('Coba lagi'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: KasiraDS.brandPrimary,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ),
@@ -771,14 +836,14 @@ class _PosPageState extends ConsumerState<PosPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(LucideIcons.packageSearch,
-                    size: 40, color: AppColors.textTertiary),
+                    size: 40, color: KasiraDS.textMuted),
                 const SizedBox(height: 12),
                 Text(
                   _searchQuery.isNotEmpty
                       ? 'Produk "$_searchQuery" tidak ditemukan'
                       : 'Belum ada produk',
                   style:
-                      const TextStyle(color: AppColors.textSecondary),
+                      const TextStyle(color: KasiraDS.textMuted),
                 ),
               ],
             ),
@@ -831,7 +896,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                         ),
                         duration: const Duration(milliseconds: 900),
                         behavior: SnackBarBehavior.floating,
-                        backgroundColor: AppColors.success,
+                        backgroundColor: KasiraDS.success,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                         margin: const EdgeInsets.fromLTRB(16, 0, 16, 90),
@@ -856,18 +921,18 @@ class _AddOrderBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       width: double.infinity,
-      color: AppColors.primary.withOpacity(0.12),
+      color: KasiraDS.brandPrimary.withOpacity(0.12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          const Icon(LucideIcons.plusCircle, size: 14, color: AppColors.primary),
+          const Icon(LucideIcons.plusCircle, size: 14, color: KasiraDS.brandPrimary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               'Tambah ${BusinessLabels.getLabel('order')} → ${context_.tabNumber}'
               '${context_.tableName != null ? " · ${BusinessLabels.getLabel('table')} ${context_.tableName}" : ""}',
               style: const TextStyle(
-                color: AppColors.primary,
+                color: KasiraDS.brandPrimary,
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
@@ -882,7 +947,7 @@ class _AddOrderBanner extends ConsumerWidget {
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
               minimumSize: const Size(0, 28),
-              foregroundColor: AppColors.primary,
+              foregroundColor: KasiraDS.brandPrimary,
             ),
             child: const Text('Batal', style: TextStyle(fontSize: 12)),
           ),
@@ -938,7 +1003,7 @@ class _PosClockState extends State<_PosClock> {
       _text,
       style: const TextStyle(
         fontSize: 11,
-        color: AppColors.textTertiary,
+        color: KasiraDS.textMuted,
       ),
     );
   }

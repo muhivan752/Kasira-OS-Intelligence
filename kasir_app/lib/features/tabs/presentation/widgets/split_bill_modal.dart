@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
 import 'pay_items_modal.dart';
 
@@ -104,7 +104,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
             // Header
             Row(
               children: [
-                const Icon(LucideIcons.split, color: AppColors.primary),
+                const Icon(LucideIcons.split, color: KasiraDS.brandPrimary),
                 const SizedBox(width: 12),
                 Text('Split Bill', style: Theme.of(context).textTheme.titleLarge),
                 const Spacer(),
@@ -115,7 +115,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.05),
+                color: KasiraDS.brandPrimary.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
@@ -129,7 +129,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
             const SizedBox(height: 20),
 
             // Method selector
-            Text('Metode Split', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            Text('Metode Split', style: TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -148,7 +148,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
               _buildPayItemsIntro(),
             ] else if (_selectedMethod == 'equal') ...[
               // Equal split
-              Text('Jumlah Orang', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              Text('Jumlah Orang', style: TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -156,8 +156,8 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                     onPressed: _numPeople > 2 ? () => setState(() => _numPeople--) : null,
                     icon: const Icon(LucideIcons.minus, size: 18),
                     style: IconButton.styleFrom(
-                      backgroundColor: AppColors.surfaceVariant,
-                      foregroundColor: AppColors.textPrimary,
+                      backgroundColor: KasiraDS.surfaceSunken,
+                      foregroundColor: KasiraDS.textStrong,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -167,8 +167,8 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                     onPressed: _numPeople < 20 ? () => setState(() => _numPeople++) : null,
                     icon: const Icon(LucideIcons.plus, size: 18),
                     style: IconButton.styleFrom(
-                      backgroundColor: AppColors.primary.withOpacity(0.1),
-                      foregroundColor: AppColors.primary,
+                      backgroundColor: KasiraDS.brandPrimary.withOpacity(0.1),
+                      foregroundColor: KasiraDS.brandPrimary,
                     ),
                   ),
                 ],
@@ -177,7 +177,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
+                  color: KasiraDS.surfaceSunken,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -186,7 +186,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                     const Text('Per orang', style: TextStyle(fontSize: 15)),
                     Text(
                       _currency.format(perPerson),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: KasiraDS.brandPrimary),
                     ),
                   ],
                 ),
@@ -229,7 +229,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                       ),
                       if (_customEntries.length > 2)
                         IconButton(
-                          icon: const Icon(LucideIcons.trash2, size: 18, color: AppColors.error),
+                          icon: const Icon(LucideIcons.trash2, size: 18, color: KasiraDS.danger),
                           onPressed: () {
                             setState(() {
                               _customEntries[i].nameController.dispose();
@@ -262,7 +262,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                 return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: diff.abs() < 1 ? AppColors.success.withOpacity(0.1) : AppColors.error.withOpacity(0.1),
+                    color: diff.abs() < 1 ? KasiraDS.success.withOpacity(0.1) : KasiraDS.danger.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
@@ -271,7 +271,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                       Text(diff.abs() < 1 ? 'Total cocok' : 'Selisih: ${_currency.format(diff.abs())}'),
                       Icon(
                         diff.abs() < 1 ? LucideIcons.checkCircle2 : LucideIcons.alertCircle,
-                        color: diff.abs() < 1 ? AppColors.success : AppColors.error,
+                        color: diff.abs() < 1 ? KasiraDS.success : KasiraDS.danger,
                         size: 20,
                       ),
                     ],
@@ -282,7 +282,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
 
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+              Text(_error!, style: const TextStyle(color: KasiraDS.danger, fontSize: 13)),
             ],
 
             const SizedBox(height: 20),
@@ -298,7 +298,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Icon(LucideIcons.check, size: 18),
                   label: const Text('Konfirmasi Split'),
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                  style: FilledButton.styleFrom(backgroundColor: KasiraDS.brandPrimary),
                 ),
               ),
           ],
@@ -317,14 +317,14 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.success.withOpacity(0.08),
+            color: KasiraDS.success.withOpacity(0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.success.withOpacity(0.3)),
+            border: Border.all(color: KasiraDS.success.withOpacity(0.3)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(LucideIcons.lightbulb, color: AppColors.success, size: 20),
+              const Icon(LucideIcons.lightbulb, color: KasiraDS.success, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -338,7 +338,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                     Text(
                       'Centang menu yang dia bayar, langsung bayar. Sisa nempel di tab — '
                       'orang berikutnya nyusul tinggal centang punya dia.',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5, height: 1.4),
+                      style: TextStyle(color: KasiraDS.textMuted, fontSize: 12.5, height: 1.4),
                     ),
                   ],
                 ),
@@ -360,7 +360,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: KasiraDS.brandPrimary,
             ),
           ),
         ),
@@ -392,7 +392,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: KasiraDS.surfaceCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -415,17 +415,17 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary.withOpacity(0.1) : AppColors.surface,
+            color: isSelected ? KasiraDS.brandPrimary.withOpacity(0.1) : KasiraDS.surfaceCard,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isSelected ? AppColors.primary : AppColors.border, width: 2),
+            border: Border.all(color: isSelected ? KasiraDS.brandPrimary : KasiraDS.borderSubtle, width: 2),
           ),
           child: Column(
             children: [
-              Icon(icon, color: isSelected ? AppColors.primary : AppColors.textSecondary),
+              Icon(icon, color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted),
               const SizedBox(height: 4),
               Text(label, style: TextStyle(
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted,
                 fontSize: 13,
               )),
             ],
@@ -447,7 +447,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
         padding: EdgeInsets.symmetric(vertical: 20),
         child: Center(
           child: Text('Belum ada item di tab ini',
-              style: TextStyle(color: AppColors.textSecondary)),
+              style: TextStyle(color: KasiraDS.textMuted)),
         ),
       );
     }
@@ -468,7 +468,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
         // Guest count control
         Row(
           children: [
-            const Text('Jumlah Orang:', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+            const Text('Jumlah Orang:', style: TextStyle(fontSize: 13, color: KasiraDS.textMuted)),
             const SizedBox(width: 12),
             IconButton.filled(
               onPressed: _numPeople > 2
@@ -483,8 +483,8 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                   : null,
               icon: const Icon(LucideIcons.minus, size: 16),
               style: IconButton.styleFrom(
-                backgroundColor: AppColors.surfaceVariant,
-                foregroundColor: AppColors.textPrimary,
+                backgroundColor: KasiraDS.surfaceSunken,
+                foregroundColor: KasiraDS.textStrong,
                 padding: EdgeInsets.zero,
                 minimumSize: const Size(32, 32),
               ),
@@ -503,8 +503,8 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                   : null,
               icon: const Icon(LucideIcons.plus, size: 16),
               style: IconButton.styleFrom(
-                backgroundColor: AppColors.primary.withOpacity(0.1),
-                foregroundColor: AppColors.primary,
+                backgroundColor: KasiraDS.brandPrimary.withOpacity(0.1),
+                foregroundColor: KasiraDS.brandPrimary,
                 padding: EdgeInsets.zero,
                 minimumSize: const Size(32, 32),
               ),
@@ -561,18 +561,18 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: AppColors.info.withOpacity(0.08),
+            color: KasiraDS.info.withOpacity(0.08),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             children: [
-              const Icon(LucideIcons.info, size: 14, color: AppColors.info),
+              const Icon(LucideIcons.info, size: 14, color: KasiraDS.info),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Tap item → pilih siapa yang bayar. '
                   '${unassignedCount > 0 ? "Sisa $unassignedCount item belum di-assign." : "Semua item sudah di-assign ✓"}',
-                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  style: const TextStyle(fontSize: 11, color: KasiraDS.textMuted),
                 ),
               ),
             ],
@@ -588,7 +588,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
   Widget _buildItemRow(TabItemModel item) {
     final guestIdx = _itemAssignments[item.id] ?? -1;
     final assigned = guestIdx >= 0;
-    final color = assigned ? _guestColor(guestIdx) : AppColors.textTertiary;
+    final color = assigned ? _guestColor(guestIdx) : KasiraDS.textMuted;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -598,10 +598,10 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
         child: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: assigned ? color.withOpacity(0.06) : AppColors.surfaceVariant,
+            color: assigned ? color.withOpacity(0.06) : KasiraDS.surfaceSunken,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: assigned ? color.withOpacity(0.4) : AppColors.border.withOpacity(0.5),
+              color: assigned ? color.withOpacity(0.4) : KasiraDS.borderSubtle.withOpacity(0.5),
               width: 1,
             ),
           ),
@@ -619,7 +619,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                               ? _guestNameControllers[guestIdx].text[0].toUpperCase()
                               : '${guestIdx + 1}',
                           style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold))
-                      : const Icon(LucideIcons.user, size: 14, color: AppColors.textTertiary),
+                      : const Icon(LucideIcons.user, size: 14, color: KasiraDS.textMuted),
                 ),
               ),
               const SizedBox(width: 10),
@@ -641,7 +641,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                     else
                       const Text(
                         'Belum di-assign',
-                        style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                        style: TextStyle(fontSize: 11, color: KasiraDS.textMuted),
                       ),
                   ],
                 ),
@@ -677,7 +677,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
               const SizedBox(height: 4),
               Text(
                 '${item.quantity}× ${item.productName} · ${_currency.format(item.totalPrice)}',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                style: const TextStyle(fontSize: 12, color: KasiraDS.textMuted),
               ),
               const SizedBox(height: 16),
               ...List.generate(_numPeople, (i) {
@@ -694,7 +694,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                   ),
                   title: Text(name, style: const TextStyle(fontSize: 14)),
                   trailing: (_itemAssignments[item.id] ?? -1) == i
-                      ? const Icon(LucideIcons.check, color: AppColors.success, size: 16)
+                      ? const Icon(LucideIcons.check, color: KasiraDS.success, size: 16)
                       : null,
                   onTap: () {
                     setState(() => _itemAssignments[item.id] = i);
@@ -706,9 +706,9 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                 const Divider(height: 20),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(LucideIcons.xCircle, color: AppColors.error, size: 18),
+                  leading: const Icon(LucideIcons.xCircle, color: KasiraDS.danger, size: 18),
                   title: const Text('Lepas assignment',
-                      style: TextStyle(fontSize: 13, color: AppColors.error)),
+                      style: TextStyle(fontSize: 13, color: KasiraDS.danger)),
                   onTap: () {
                     setState(() => _itemAssignments[item.id] = -1);
                     Navigator.pop(ctx);

@@ -7,7 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/session_cache.dart';
 
@@ -388,7 +388,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.error!),
-            backgroundColor: AppColors.error,
+            backgroundColor: KasiraDS.danger,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -397,7 +397,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     if (authState.isSuccess) {
       return Scaffold(
-        backgroundColor: AppColors.primary,
+        backgroundColor: KasiraDS.brandPrimary,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -417,13 +417,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     if (authState.isLoading && authState.step == AuthStep.pinLogin && _pinInput.isEmpty) {
       return const Scaffold(
-        backgroundColor: AppColors.primary,
+        backgroundColor: KasiraDS.brandPrimary,
         body: Center(child: CircularProgressIndicator(color: Colors.white)),
       );
     }
 
     return Scaffold(
-      backgroundColor: AppColors.primary,
+      backgroundColor: KasiraDS.brandPrimary,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -432,7 +432,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: KasiraDS.surfaceCard,
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
@@ -456,7 +456,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       Text('Belum punya akun? ', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
                       GestureDetector(
                         onTap: () => context.go('/register'),
-                        child: const Text('Daftar Gratis', style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                        child: const Text('Daftar Gratis', style: TextStyle(color: KasiraDS.brandPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
                       ),
                     ],
                   ),
@@ -476,12 +476,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: KasiraDS.brandPrimary.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(
             Icons.point_of_sale_rounded, 
-            color: AppColors.primary, 
+            color: KasiraDS.brandPrimary, 
             size: 32
           ),
         ),
@@ -489,7 +489,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         Text(
           'KASIRA',
           style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: AppColors.primary,
+                color: KasiraDS.brandPrimary,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -1,
               ),
@@ -521,7 +521,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         const SizedBox(height: 8),
         const Text(
           'Format: 628xxx',
-          style: TextStyle(color: AppColors.textSecondary),
+          style: TextStyle(color: KasiraDS.textMuted),
         ),
         const SizedBox(height: 4),
         Text(
@@ -571,7 +571,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         const SizedBox(height: 8),
         Text(
           'Kode dikirim ke ${state.phone}',
-          style: const TextStyle(color: AppColors.textSecondary),
+          style: const TextStyle(color: KasiraDS.textMuted),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
@@ -623,7 +623,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 } : null,
                 child: Text(
                   'Kirim Ulang OTP',
-                  style: TextStyle(color: state.canResendOtp ? AppColors.primary : Colors.grey),
+                  style: TextStyle(color: state.canResendOtp ? KasiraDS.brandPrimary : Colors.grey),
                 ),
               ),
             ],
@@ -638,15 +638,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: KasiraDS.brandPrimary.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.check_circle, color: AppColors.primary, size: 18),
+              Icon(Icons.check_circle, color: KasiraDS.brandPrimary, size: 18),
               SizedBox(width: 8),
-              Text('OTP terverifikasi', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+              Text('OTP terverifikasi', style: TextStyle(color: KasiraDS.brandPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
             ],
           ),
         ),
@@ -658,7 +658,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         const SizedBox(height: 8),
         Text(
           _isConfirmingPin ? 'Masukkan ulang PIN 6 digit Anda' : 'PIN digunakan untuk login cepat berikutnya',
-          style: const TextStyle(color: AppColors.textSecondary),
+          style: const TextStyle(color: KasiraDS.textMuted),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
@@ -710,7 +710,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         const SizedBox(height: 8),
         Text(
           state.isLocked ? 'Akun terkunci' : 'Masukkan PIN 6 digit Anda',
-          style: TextStyle(color: state.isLocked ? AppColors.error : AppColors.textSecondary),
+          style: TextStyle(color: state.isLocked ? KasiraDS.danger : KasiraDS.textMuted),
         ),
         const SizedBox(height: 24),
         _buildPinDots(_pinInput.length),
@@ -748,7 +748,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             },
             child: const Text(
               'Lupa PIN? Gunakan OTP',
-              style: TextStyle(color: AppColors.primary),
+              style: TextStyle(color: KasiraDS.brandPrimary),
             ),
           ),
       ],
@@ -765,7 +765,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           height: 16,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: index < length ? AppColors.primary : AppColors.border,
+            color: index < length ? KasiraDS.brandPrimary : KasiraDS.borderSubtle,
           ),
         );
       }),
@@ -795,13 +795,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surfaceVariant,
+          color: KasiraDS.surfaceSunken,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: KasiraDS.borderSubtle),
         ),
         child: Center(
           child: icon != null
-              ? Icon(icon, color: AppColors.textPrimary)
+              ? Icon(icon, color: KasiraDS.textStrong)
               : Text(
                   value,
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),

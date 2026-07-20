@@ -6,7 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/kasira_ds.dart';
 import 'cash_drawer_history_page.dart';
 
 class ShiftPage extends StatefulWidget {
@@ -65,7 +65,7 @@ class _ShiftPageState extends State<ShiftPage> {
     final actualCash = double.tryParse(_cashController.text.trim()) ?? 0;
     if (actualCash <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Masukkan jumlah uang aktual di laci'), backgroundColor: AppColors.error, behavior: SnackBarBehavior.floating),
+        const SnackBar(content: Text('Masukkan jumlah uang aktual di laci'), backgroundColor: KasiraDS.danger, behavior: SnackBarBehavior.floating),
       );
       return;
     }
@@ -95,20 +95,20 @@ class _ShiftPageState extends State<ShiftPage> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             icon: Icon(
               varianceStatus == 'balanced' ? LucideIcons.checkCircle2 : LucideIcons.alertTriangle,
-              color: varianceStatus == 'balanced' ? AppColors.success : AppColors.warning,
+              color: varianceStatus == 'balanced' ? KasiraDS.success : KasiraDS.warning,
               size: 48,
             ),
             title: Text(varianceStatus == 'balanced' ? 'Shift Ditutup' : 'Shift Ditutup — Ada Selisih'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary)),
+                Text(message, textAlign: TextAlign.center, style: const TextStyle(color: KasiraDS.textMuted)),
                 if (varianceStatus != 'balanced') ...[
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: (varianceStatus == 'surplus' ? AppColors.success : AppColors.error).withOpacity(0.1),
+                      color: (varianceStatus == 'surplus' ? KasiraDS.success : KasiraDS.danger).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -116,7 +116,7 @@ class _ShiftPageState extends State<ShiftPage> {
                       children: [
                         Icon(
                           varianceStatus == 'surplus' ? LucideIcons.trendingUp : LucideIcons.trendingDown,
-                          color: varianceStatus == 'surplus' ? AppColors.success : AppColors.error,
+                          color: varianceStatus == 'surplus' ? KasiraDS.success : KasiraDS.danger,
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -124,7 +124,7 @@ class _ShiftPageState extends State<ShiftPage> {
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: varianceStatus == 'surplus' ? AppColors.success : AppColors.error,
+                            color: varianceStatus == 'surplus' ? KasiraDS.success : KasiraDS.danger,
                           ),
                         ),
                       ],
@@ -151,7 +151,7 @@ class _ShiftPageState extends State<ShiftPage> {
       if (mounted) {
         setState(() => _isClosing = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg.toString()), backgroundColor: AppColors.error, behavior: SnackBarBehavior.floating),
+          SnackBar(content: Text(msg.toString()), backgroundColor: KasiraDS.danger, behavior: SnackBarBehavior.floating),
         );
       }
     } catch (_) {
@@ -162,17 +162,17 @@ class _ShiftPageState extends State<ShiftPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: KasiraDS.bgBase,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        title: const Text('Manajemen Shift', style: TextStyle(color: AppColors.textPrimary)),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        backgroundColor: KasiraDS.surfaceCard,
+        title: const Text('Manajemen Shift', style: TextStyle(color: KasiraDS.textStrong)),
+        iconTheme: const IconThemeData(color: KasiraDS.textStrong),
         elevation: 0,
         actions: [
           TextButton.icon(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CashDrawerHistoryPage())),
-            icon: const Icon(LucideIcons.history, color: AppColors.primary),
-            label: const Text('Riwayat Kas', style: TextStyle(color: AppColors.primary)),
+            icon: const Icon(LucideIcons.history, color: KasiraDS.brandPrimary),
+            label: const Text('Riwayat Kas', style: TextStyle(color: KasiraDS.brandPrimary)),
           ),
           const SizedBox(width: 16),
         ],
@@ -190,7 +190,7 @@ class _ShiftPageState extends State<ShiftPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(_error!, style: const TextStyle(color: AppColors.textSecondary)),
+          Text(_error!, style: const TextStyle(color: KasiraDS.textMuted)),
           const SizedBox(height: 16),
           ElevatedButton.icon(onPressed: _loadShift, icon: const Icon(LucideIcons.refreshCw, size: 16), label: const Text('Coba Lagi')),
         ],
@@ -200,7 +200,7 @@ class _ShiftPageState extends State<ShiftPage> {
 
   Widget _buildContent() {
     if (_shift == null) {
-      return const Center(child: Text('Tidak ada shift aktif', style: TextStyle(color: AppColors.textSecondary)));
+      return const Center(child: Text('Tidak ada shift aktif', style: TextStyle(color: KasiraDS.textMuted)));
     }
 
     final startingCash = (_shift!['starting_cash'] as num?)?.toDouble() ?? 0;
@@ -226,18 +226,18 @@ class _ShiftPageState extends State<ShiftPage> {
           child: Container(
           padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: KasiraDS.surfaceCard,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(LucideIcons.clock, size: 48, color: AppColors.primary),
+              const Icon(LucideIcons.clock, size: 48, color: KasiraDS.brandPrimary),
               const SizedBox(height: 24),
               Text('Tutup Shift Saat Ini', style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 8),
-              const Text('Pastikan jumlah uang di laci kasir sesuai dengan sistem.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary)),
+              const Text('Pastikan jumlah uang di laci kasir sesuai dengan sistem.', textAlign: TextAlign.center, style: TextStyle(color: KasiraDS.textMuted)),
               const SizedBox(height: 32),
               _buildRow('Uang Modal Awal', _currency.format(startingCash)),
               const SizedBox(height: 12),
@@ -261,7 +261,7 @@ class _ShiftPageState extends State<ShiftPage> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                    borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 2),
                   ),
                 ),
               ),
@@ -271,7 +271,7 @@ class _ShiftPageState extends State<ShiftPage> {
                 height: 56,
                 child: ElevatedButton(
                   onPressed: _isClosing ? null : _closeShift,
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                  style: ElevatedButton.styleFrom(backgroundColor: KasiraDS.danger),
                   child: _isClosing
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                       : const Text('TUTUP SHIFT & CETAK REKAP', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -289,8 +289,8 @@ class _ShiftPageState extends State<ShiftPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: isBold ? AppColors.textPrimary : AppColors.textSecondary, fontWeight: isBold ? FontWeight.bold : FontWeight.normal, fontSize: isBold ? 18 : 14)),
-        Text(value, style: TextStyle(color: isNegative ? AppColors.error : AppColors.textPrimary, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, fontSize: isBold ? 18 : 14)),
+        Text(label, style: TextStyle(color: isBold ? KasiraDS.textStrong : KasiraDS.textMuted, fontWeight: isBold ? FontWeight.bold : FontWeight.normal, fontSize: isBold ? 18 : 14)),
+        Text(value, style: TextStyle(color: isNegative ? KasiraDS.danger : KasiraDS.textStrong, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, fontSize: isBold ? 18 : 14)),
       ],
     );
   }
