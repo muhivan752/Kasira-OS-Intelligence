@@ -219,9 +219,14 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
         result[pid] = 0;
         continue;
       }
+      // Finding 2: bahan wajib qty<=0 (belum diisi jumlah) → deduct bakal gagal
+      // (RECIPE_ZERO_QTY) → display HARUS 0 biar konsisten sama checkout.
+      if (ingredients.any((ri) => ri.quantity <= 0)) {
+        result[pid] = 0;
+        continue;
+      }
       double minPortions = double.infinity;
       for (final ri in ingredients) {
-        if (ri.quantity <= 0) continue;
         final available = stockMap[ri.ingredientId] ?? 0.0;
         minPortions = math.min(minPortions, available / ri.quantity);
       }

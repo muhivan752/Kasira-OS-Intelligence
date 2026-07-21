@@ -68,11 +68,19 @@ async def compute_recipe_stock(db: AsyncSession, outlet_id: UUID, product_ids: L
         if not recipe:
             result[pid] = 0
             continue
-        active_ingredients = [
+        # Bahan wajib (non-optional, belum dihapus, ingredient masih ada)
+        required = [
             ri for ri in recipe.ingredients
-            if ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
+            if ri.deleted_at is None and not ri.is_optional
             and ri.ingredient is not None and ri.ingredient.deleted_at is None
         ]
+        # Finding 2 fix: kalau ada bahan wajib qty<=0 (belum diisi jumlah),
+        # deduct akan raise RECIPE_ZERO_QTY (checkout gagal). Display HARUS 0
+        # biar konsisten — jangan over-report stok dari bahan lain yg terisi.
+        if any((ri.quantity or 0) <= 0 for ri in required):
+            result[pid] = 0
+            continue
+        active_ingredients = required  # semua sudah qty > 0
         if not active_ingredients:
             result[pid] = 0
             continue

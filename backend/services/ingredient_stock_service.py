@@ -213,12 +213,16 @@ async def deduct_ingredients_for_product(
         )
         db.add(event)
 
-        # Update outlet_stock with optimistic lock + retry
+        # Update outlet_stock with optimistic lock + retry.
+        # Finding 4 fix: pakai stock.row_version (bukan + attempt) — abis
+        # db.refresh(stock) di bawah, row_version udah reload ke nilai terbaru,
+        # jadi "+ attempt" bikin overshoot & retry gak pernah match. Row juga
+        # udah with_for_update lock, tapi predikat retry harus tetap bener.
         for attempt in range(MAX_RETRIES):
             result = await db.execute(
                 update(OutletStock).where(
                     OutletStock.id == stock.id,
-                    OutletStock.row_version == stock.row_version + attempt,
+                    OutletStock.row_version == stock.row_version,
                 ).values(
                     computed_stock=OutletStock.computed_stock - deduct_qty,
                     row_version=OutletStock.row_version + 1,
@@ -267,6 +271,23 @@ async def restore_ingredients_on_cancel(
     Restore ingredient stock when order is cancelled in recipe mode.
     Mirrors deduct_ingredients_for_product but adds stock back.
     """
+    # Finding 3: Idempotency guard — skip kalau restore untuk order+product ini
+    # sudah pernah dicatat (event stock.ingredient_cancel_return). Cegah
+    # double-restore (inflate stok) kalau cancel ke-retry / dipanggil 2x.
+    already = (await db.execute(
+        select(Event.id).where(
+            Event.event_type == "stock.ingredient_cancel_return",
+            Event.event_data["order_id"].astext == str(order_id),
+            Event.event_data["product_id"].astext == str(product_id),
+        ).limit(1)
+    )).scalar_one_or_none()
+    if already:
+        logger.info(
+            "stock.ingredient_cancel_return already recorded for order %s product %s, skipping",
+            order_id, product_id,
+        )
+        return
+
     # Load active recipe
     recipe = (await db.execute(
         select(Recipe)

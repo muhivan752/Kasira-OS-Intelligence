@@ -57,7 +57,7 @@ Kalau lo edit salah satu, **cek semua yang lain**.
 |--------|-------------|-------------|------|
 | **Order create (online)** | `deduct_stock()` | `deduct_ingredients_for_product()` | `orders.py:182-203` |
 | **Order cancel** | `restore_stock_on_cancel()` | `restore_ingredients_on_cancel()` | `orders.py:432-451` |
-| **Sync offline order** | `svc_deduct_stock()` | ⚠️ calls `svc_deduct_stock` (simple only!) | `sync.py:76-89` |
+| **Sync offline order** | `svc_deduct_stock()` | ✅ `svc_deduct_ingredients()` (recipe) — branch by stock_mode | `sync.py:192-212` |
 | **Flutter offline order** | PNCounter on `products.crdtNegative` | Deduct `outletStocks.computedStock` | `cart_provider.dart:300-327` |
 | **Product restock** | `products.stock_qty += qty` | N/A (use ingredient restock) | `products.py:85-` |
 | **Ingredient restock** | N/A | `outlet_stock.computed_stock += qty` | `ingredients.py:295-383` |
@@ -65,17 +65,22 @@ Kalau lo edit salah satu, **cek semua yang lain**.
 | **Display stock (storefront)** | `products.stock_qty` | Inline recipe calc | `connect.py:140-199` |
 | **Display stock (Flutter offline)** | `products.stockQty` | `_computeRecipeStockLocal()` | `products_provider.dart:108-` |
 
-### ⚠️ KNOWN BUG: sync.py Offline Order Stock
+### ✅ RESOLVED: sync.py Offline Order Stock (recipe mode)
 
-`sync.py:76-89` — saat offline order di-sync ke server, hanya call `svc_deduct_stock` (simple mode). **Recipe mode deduction belum dihandle di sync path.** Ini karena Flutter offline sudah deduct locally, dan sync mengandalkan CRDT merge. Tapi kalau device lain juga transact, bisa drift.
+~~`sync.py` hanya call `svc_deduct_stock` (simple only)~~ — **SUDAH DIPERBAIKI**. `sync.py:192-212` branch by `stock_mode` → recipe pakai `svc_deduct_ingredients`, simple pakai `svc_deduct_stock`. (Audit 2026-07-21.)
 
-### ⚠️ DUPLICATE LOGIC: compute_recipe_stock
+### ✅ RESOLVED: compute_recipe_stock duplication
 
-Logic hitung "berapa porsi tersedia" ada di **2 tempat** yang harus identik:
-1. `backend/api/routes/products.py:26-81` — `compute_recipe_stock()`
-2. `backend/api/routes/connect.py:152-198` — inline di storefront
+~~Logic ada di 2 tempat yang harus identik~~ — **SUDAH SHARED**. `connect.py:27` import `compute_recipe_stock` dari `products.py` dan pakai fungsi yang sama (line 157 + 357). Gak ada drift risk lagi. **RULE baru**: edit CUMA di `products.py:compute_recipe_stock`, otomatis kena storefront.
 
-**RULE**: Kalau edit satu, edit yang lain. Atau lebih baik: refactor ke `services/ingredient_stock_service.py`.
+### 🔴 OPEN BUG: simple-mode stock server↔Flutter drift (Finding 1, audit 2026-07-21)
+
+Di **simple mode**, backend (`stock_service.py` deduct/restore/restock) update `products.stock_qty` TAPI **gak update `crdt_positive`/`crdt_negative`**. Flutter pas pull **recompute stok dari CRDT counter** (`sync_service.dart:363-376`, override `stock_qty`). Akibat: restock dashboard / online order / cancel-restore **gak kepantul** ke POS Flutter. **Recipe mode AMAN** (outlet_stock server-authoritative). Fix arah: backend bump product CRDT counter under node `server:{outlet}` + self-heal reconcile (stok_qty vs get_value), ATAU Flutter trust server stock_qty saat pull. **BELUM di-fix — butuh device+dashboard test.**
+
+### ✅ Audit fixes 2026-07-21 (compute/deduct consistency)
+- Finding 2: `compute_recipe_stock` (products.py + Flutter) sekarang return 0 kalau ada bahan wajib qty≤0 → konsisten sama deduct guard `RECIPE_ZERO_QTY` (dulu display over-report).
+- Finding 3: `restore_stock_on_cancel` (simple) + `restore_ingredients_on_cancel` (recipe) sekarang punya idempotency guard (cek event `stock.cancel_return`/`stock.ingredient_cancel_return`) → cegah double-restore.
+- Finding 4: retry loop `ingredient_stock_service.py` pakai `stock.row_version` (bukan `+ attempt`) — retry predicate bener.
 
 ### Recipe Ingredient Filter
 

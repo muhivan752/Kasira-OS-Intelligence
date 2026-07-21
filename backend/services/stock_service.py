@@ -226,6 +226,20 @@ async def restore_stock_on_cancel(
     """
     from fastapi import HTTPException
 
+    # Finding 3: Idempotency — skip kalau restore untuk order ini sudah dicatat
+    # (event stock.cancel_return). Cegah double-restore (inflate stok) kalau
+    # cancel ke-retry / dipanggil dua kali.
+    _already = await db.execute(
+        select(Event).where(
+            Event.stream_id == f"product:{product.id}",
+            Event.event_type == "stock.cancel_return",
+            Event.event_data["order_id"].astext == str(order_id),
+        ).limit(1)
+    )
+    if _already.scalar_one_or_none() is not None:
+        logger.info(f"stock.cancel_return already recorded for order {order_id}, skipping restore")
+        return product
+
     stock_before = product.stock_qty
     stock_after = stock_before + quantity
 
