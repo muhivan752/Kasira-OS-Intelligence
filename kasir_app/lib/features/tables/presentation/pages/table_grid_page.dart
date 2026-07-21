@@ -141,17 +141,16 @@ class _TableGridPageState extends State<TableGridPage> {
         children: [
           // Header
           Container(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
             color: KasiraDS.surfaceCard,
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                const Icon(LucideIcons.layoutGrid, color: KasiraDS.brandPrimary),
-                const SizedBox(width: 12),
-                Text('Denah Meja', style: Theme.of(context).textTheme.titleLarge),
+                Text('Meja', style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
                 const Spacer(),
                 Text(
-                  '$available tersedia • $occupied terisi',
-                  style: const TextStyle(color: KasiraDS.textMuted, fontSize: 14),
+                  '$occupied terisi · $available kosong',
+                  style: KasiraDS.sans(size: 12.5, weight: FontWeight.w600, color: KasiraDS.textMuted),
                 ),
               ],
             ),
@@ -285,6 +284,7 @@ class _TableGridPageState extends State<TableGridPage> {
         ? _tabSubBadge(_tabStatusByTable[table.id])
         : null;
 
+    final isOccupied = table.status == TableStatus.occupied;
     return GestureDetector(
       onTap: () {
         if (widget.onTableSelected != null) {
@@ -298,108 +298,79 @@ class _TableGridPageState extends State<TableGridPage> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: config.bgColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: config.borderColor, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          color: isOccupied ? config.bgColor : KasiraDS.surfaceCard,
+          borderRadius: KasiraDS.brLg,
+          border: Border.all(
+            color: isOccupied ? config.borderColor.withOpacity(0.5) : KasiraDS.borderSubtle,
+          ),
+          boxShadow: KasiraDS.shadowSm,
         ),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(15),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // name + status dot
             Row(
               children: [
-                Icon(config.icon, color: config.iconColor, size: 20),
-                const Spacer(),
-                if (table.status == TableStatus.occupied && table.eta != null)
+                Expanded(
+                  child: Text(
+                    table.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: KasiraDS.display(size: 16, color: KasiraDS.textStrong),
+                  ),
+                ),
+                Container(width: 7, height: 7,
+                    decoration: BoxDecoration(color: config.iconColor, shape: BoxShape.circle)),
+                const SizedBox(width: 5),
+                Text(config.statusLabel,
+                    style: KasiraDS.sans(size: 10.5, weight: FontWeight.w700, color: config.iconColor)),
+              ],
+            ),
+            const SizedBox(height: 9),
+            // seats
+            Row(
+              children: [
+                const Icon(LucideIcons.users, size: 13, color: KasiraDS.textMuted),
+                const SizedBox(width: 5),
+                Text('${table.capacity} kursi',
+                    style: KasiraDS.sans(size: 12, weight: FontWeight.w600, color: KasiraDS.textMuted)),
+                if (isOccupied && table.eta != null) ...[
+                  const Spacer(),
                   _buildEtaBadge(table.eta!),
+                ],
               ],
             ),
             const Spacer(),
-            Text(
-              table.name,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: config.textColor,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(LucideIcons.users, size: 12, color: config.textColor.withOpacity(0.6)),
-                const SizedBox(width: 4),
-                Text(
-                  '${table.capacity} kursi',
-                  style: TextStyle(color: config.textColor.withOpacity(0.6), fontSize: 12),
-                ),
-              ],
-            ),
-            if (table.status == TableStatus.occupied && table.occupiedSince != null) ...[
-              const SizedBox(height: 4),
+            // bottom affordance
+            if (isOccupied)
               Row(
                 children: [
-                  Icon(LucideIcons.clock, size: 12, color: config.textColor.withOpacity(0.6)),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Sejak ${table.occupiedSince}',
-                    style: TextStyle(color: config.textColor.withOpacity(0.6), fontSize: 11),
-                  ),
+                  if (subBadge != null) ...[
+                    Icon(subBadge.icon, size: 12, color: subBadge.color),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(subBadge.label,
+                          overflow: TextOverflow.ellipsis,
+                          style: KasiraDS.sans(size: 11, weight: FontWeight.w700, color: subBadge.color)),
+                    ),
+                  ] else if (table.occupiedSince != null)
+                    Text('Buka ${table.occupiedSince}',
+                        style: KasiraDS.sans(size: 11.5, weight: FontWeight.w600, color: KasiraDS.textMuted))
+                  else
+                    Text('Lihat pesanan',
+                        style: KasiraDS.sans(size: 11.5, weight: FontWeight.w700, color: config.iconColor)),
                 ],
-              ),
-            ],
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: config.badgeColor,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    config.statusLabel,
-                    style: TextStyle(
-                      color: config.iconColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                if (subBadge != null) ...[
-                  const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: subBadge.color.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: subBadge.color, width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(subBadge.icon, size: 10, color: subBadge.color),
-                        const SizedBox(width: 3),
-                        Text(
-                          subBadge.label,
-                          style: TextStyle(
-                            color: subBadge.color,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              )
+            else if (table.status == TableStatus.available)
+              Text('+ Buka meja',
+                  style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.brandPrimary))
+            else if (table.status == TableStatus.reserved)
+              Text('Reservasi',
+                  style: KasiraDS.sans(size: 11.5, weight: FontWeight.w700, color: KasiraDS.warning))
+            else
+              Text('Perlu dibersihkan',
+                  style: KasiraDS.sans(size: 11.5, weight: FontWeight.w600, color: KasiraDS.textMuted)),
           ],
         ),
       ),

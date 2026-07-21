@@ -139,6 +139,12 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
               ),
             ),
 
+            // Stok value summary (design: Nilai stok modal + Perlu restok)
+            productsAsync.maybeWhen(
+              data: (products) => _stockSummary(products),
+              orElse: () => const SizedBox.shrink(),
+            ),
+
             // TabBar — Produk | Stok (dengan badge low-stock kalau ada)
             Material(
               color: KasiraDS.surfaceCard,
@@ -199,6 +205,49 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _stockSummary(List<ProductModel> products) {
+    final fmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    double value = 0;
+    for (final p in products) {
+      if (p.stockEnabled && p.buyPrice != null) value += p.stock * p.buyPrice!;
+    }
+    return Container(
+      color: KasiraDS.surfaceCard,
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+      child: Row(
+        children: [
+          Expanded(child: _valueCard('NILAI STOK (MODAL)', fmt.format(value), KasiraDS.textStrong)),
+          const SizedBox(width: 10),
+          Expanded(child: _valueCard('PERLU RESTOK', '$_lowStockCount item',
+              _lowStockCount > 0 ? KasiraDS.warning : KasiraDS.textStrong)),
+        ],
+      ),
+    );
+  }
+
+  Widget _valueCard(String label, String value, Color valueColor) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+      decoration: BoxDecoration(
+        color: KasiraDS.surfaceCard,
+        borderRadius: KasiraDS.brMd,
+        border: Border.all(color: KasiraDS.borderSubtle),
+        boxShadow: KasiraDS.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: KasiraDS.eyebrow(color: KasiraDS.textMuted)),
+          const SizedBox(height: 4),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: KasiraDS.display(size: 17, color: valueColor)),
+        ],
       ),
     );
   }
