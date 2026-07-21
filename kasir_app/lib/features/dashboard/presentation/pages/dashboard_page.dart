@@ -559,26 +559,14 @@ class _DashboardContent extends ConsumerWidget {
         : _buildPhone(context, ref, statsAsync, ordersState);
   }
 
+  // Tablet/lebar: pakai layout Aurora yang sama kayak HP, di-center max 760px.
+  // (layout lama _buildHeader/_buildStatsRow/_ComingSoonBanner tidak dipakai lagi.)
   Widget _buildWide(BuildContext context, WidgetRef ref,
       AsyncValue<DashboardStats> statsAsync, OrdersState ordersState) {
-    return Padding(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader(context, ref, statsAsync, isWide: true),
-          const SizedBox(height: 20),
-          const _ComingSoonBanner(),
-          statsAsync.when(
-            loading: () => const LinearProgressIndicator(),
-            error: (_, __) => _buildStatsError(ref),
-            data: (stats) => _buildStatsRow(context, stats),
-          ),
-          const SizedBox(height: 40),
-          Text('Transaksi Terakhir', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 16),
-          Expanded(child: _buildOrderList(context, ordersState, ref)),
-        ],
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: _buildPhone(context, ref, statsAsync, ordersState),
       ),
     );
   }
@@ -648,12 +636,10 @@ class _DashboardContent extends ConsumerWidget {
               Text('// $dateLabel'.toUpperCase(),
                   style: KasiraDS.eyebrow(color: KasiraDS.textMuted)),
               const SizedBox(height: 3),
-              Text('Halo 👋', style: KasiraDS.display(size: 24, color: KasiraDS.textStrong)),
-              const SizedBox(height: 1),
-              Text(outlet,
+              Text('Halo, $outlet 👋',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
+                  style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
             ],
           ),
         ),
