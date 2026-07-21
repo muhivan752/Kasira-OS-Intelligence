@@ -69,19 +69,30 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: KasiraDS.brandPrimary.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8),
+                gradient: KasiraDS.gradientFrekuensi,
+                borderRadius: KasiraDS.brSm,
+                boxShadow: KasiraDS.glowPink,
               ),
-              child: const Icon(LucideIcons.bot, color: KasiraDS.brandPrimary, size: 20),
+              child: const Icon(LucideIcons.sparkles, color: Colors.white, size: 19),
             ),
-            const SizedBox(width: 10),
-            const Column(
+            const SizedBox(width: 11),
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text('AI Asisten', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text('Kasira Intelligence', style: TextStyle(fontSize: 11, color: KasiraDS.textMuted)),
+                Text('Asisten Kasira',
+                    style: KasiraDS.display(size: 16, color: KasiraDS.textStrong)),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(width: 6, height: 6,
+                      decoration: const BoxDecoration(color: KasiraDS.success, shape: BoxShape.circle)),
+                  const SizedBox(width: 5),
+                  Text('Tahu data tokomu · online',
+                      style: KasiraDS.sans(size: 10.5, weight: FontWeight.w600, color: KasiraDS.textMuted)),
+                ]),
               ],
             ),
           ],
@@ -150,8 +161,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                   const SizedBox(width: 8),
                   Container(
                     decoration: BoxDecoration(
-                      color: chat.isLoading ? KasiraDS.surfaceSunken : KasiraDS.brandPrimary,
+                      gradient: chat.isLoading ? null : KasiraDS.gradientFrekuensi,
+                      color: chat.isLoading ? KasiraDS.surfaceSunken : null,
                       shape: BoxShape.circle,
+                      boxShadow: chat.isLoading ? null : KasiraDS.glowPink,
                     ),
                     child: IconButton(
                       onPressed: chat.isLoading ? null : _send,
@@ -161,7 +174,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2, color: KasiraDS.textMuted),
                             )
-                          : const Icon(LucideIcons.send, size: 18, color: Colors.white),
+                          : const Icon(LucideIcons.arrowUp, size: 20, color: Colors.white),
                     ),
                   ),
                 ],
