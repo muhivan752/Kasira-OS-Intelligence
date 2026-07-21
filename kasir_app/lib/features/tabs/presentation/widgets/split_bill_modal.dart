@@ -412,22 +412,28 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
           setState(() => _selectedMethod = method);
           if (method == 'per_item') _loadItems();
         },
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? KasiraDS.brandPrimary.withOpacity(0.1) : KasiraDS.surfaceCard,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isSelected ? KasiraDS.brandPrimary : KasiraDS.borderSubtle, width: 2),
+            gradient: isSelected ? KasiraDS.gradientFrekuensi : null,
+            color: isSelected ? null : KasiraDS.surfaceCard,
+            borderRadius: KasiraDS.brMd,
+            border: Border.all(
+                color: isSelected ? Colors.transparent : KasiraDS.borderSubtle, width: 1.5),
+            boxShadow: isSelected ? KasiraDS.glowPink : null,
           ),
           child: Column(
             children: [
-              Icon(icon, color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted),
-              const SizedBox(height: 4),
-              Text(label, style: TextStyle(
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted,
-                fontSize: 13,
-              )),
+              Icon(icon, size: 20, color: isSelected ? Colors.white : KasiraDS.textMuted),
+              const SizedBox(height: 5),
+              Text(label,
+                  textAlign: TextAlign.center,
+                  style: KasiraDS.sans(
+                    size: 11.5,
+                    weight: FontWeight.w700,
+                    color: isSelected ? Colors.white : KasiraDS.textMuted,
+                  )),
             ],
           ),
         ),
