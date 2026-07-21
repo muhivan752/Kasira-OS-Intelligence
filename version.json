@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.5.13",
+    "version": "1.5.14",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.13/kasira-pos-v1.5.13.apk",
-    "release_notes": "Stok simple mode sinkron dashboard-HP (server-authoritative)."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.14/kasira-pos-v1.5.14.apk",
+    "release_notes": "Bayar meja lebih simpel (Bayar Semua) + pindah tab instan (tanpa loading)."
   },
   "dapur": {
-    "version": "1.5.13",
+    "version": "1.5.14",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.13/kasira-dapur-v1.5.13.apk",
-    "release_notes": "Stok simple mode sinkron dashboard-HP (server-authoritative)."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.14/kasira-dapur-v1.5.14.apk",
+    "release_notes": "Bayar meja lebih simpel (Bayar Semua) + pindah tab instan (tanpa loading)."
   }
 }
