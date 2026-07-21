@@ -55,6 +55,13 @@ jobs:
           rm -rf test/widget_test.dart
         working-directory: kasir_app
 
+      - name: Generate Ikon Aplikasi
+        # WAJIB sesudah `flutter create` — perintah itu selalu nulis ulang
+        # mipmap dengan ikon Flutter bawaan (logo biru). Tanpa langkah ini,
+        # APK rilis keluar dengan ikon Flutter, bukan ikon Kasira.
+        run: dart run flutter_launcher_icons
+        working-directory: kasir_app
+
       - name: Patch AndroidManifest — wajib INTERNET permission
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"

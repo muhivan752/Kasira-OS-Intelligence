@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="#10b981"/>
-  <text x="16" y="23" font-family="system-ui,sans-serif" font-size="20" font-weight="900" fill="white" text-anchor="middle">K</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Kasira">
+  <rect width="48" height="48" rx="11" fill="#0B7A55"/>
+  <path d="M13.5 13a2.5 2.5 0 0 1 2.5-2.5h16a2.5 2.5 0 0 1 2.5 2.5v18l-2.625 6-2.625-6-2.625 6-2.625-6-2.625 6-2.625-6-2.625 6-2.625-6z" fill="#fff"/>
+  <rect x="18" y="16.5" width="12" height="3.1" rx="1.55" fill="#0B7A55"/>
+  <rect x="18" y="22.5" width="7.5" height="3.1" rx="1.55" fill="#0B7A55"/>
 </svg>

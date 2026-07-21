@@ -40,6 +40,20 @@ dev_dependencies:
   flutter_lints: ^3.0.0
   build_runner: ^2.4.8
   drift_dev: ^2.14.0
+  flutter_launcher_icons: ^0.13.1
+
+# Ikon aplikasi. Folder android/ TIDAK disimpan di repo — CI bikin ulang lewat
+# `flutter create`, yang selalu ngasih ikon Flutter bawaan (logo biru). Jadi
+# ikon Kasira HARUS di-generate ulang tiap build, sesudah `flutter create`.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/kasira_icon.png"
+  adaptive_icon_background: "#0B7A55"
+  # Foreground dibikin terpisah tanpa background dan isinya dikecilin ke ~62%,
+  # supaya nggak kepotong waktu Android nge-mask jadi bulat di sebagian HP.
+  adaptive_icon_foreground: "assets/icon/kasira_icon_fg.png"
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: true
