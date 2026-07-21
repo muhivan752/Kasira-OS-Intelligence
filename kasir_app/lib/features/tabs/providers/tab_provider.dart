@@ -361,21 +361,6 @@ class TabNotifier extends StateNotifier<TabListState> {
     }
   }
 
-  Future<TabModel?> splitPerItem(
-      String tabId, List<Map<String, dynamic>> assignments, int rowVersion) async {
-    try {
-      final res = await _dio.post(
-        '/tabs/$tabId/split/per-item',
-        options: Options(headers: _headers),
-        data: {'assignments': assignments, 'row_version': rowVersion},
-      );
-      return TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
-    } on DioException catch (e) {
-      state = state.copyWith(error: e.response?.data?['detail']?.toString() ?? 'Gagal split');
-      return null;
-    }
-  }
-
   Future<TabModel?> splitCustom(
       String tabId, List<Map<String, dynamic>> splits, int rowVersion) async {
     try {
@@ -464,6 +449,27 @@ class TabNotifier extends StateNotifier<TabListState> {
         errMsg = detail;
       }
       state = state.copyWith(error: errMsg);
+      return null;
+    }
+  }
+
+  /// Ubah jumlah tamu di tab yang lagi jalan (temen nyusul / rombongan pecah).
+  /// Backend nolak kalau split udah kebentuk — amount tiap split udah dihitung
+  /// dari jumlah orang yang lama.
+  Future<TabModel?> updateGuests(String tabId, int guestCount, int rowVersion) async {
+    try {
+      final res = await _dio.patch(
+        '/tabs/$tabId/guests',
+        options: Options(headers: _headers),
+        data: {'guest_count': guestCount, 'row_version': rowVersion},
+      );
+      final tab = TabModel.fromJson(res.data['data'] as Map<String, dynamic>);
+      await fetchTabs();
+      return tab;
+    } on DioException catch (e) {
+      state = state.copyWith(
+        error: e.response?.data?['detail']?.toString() ?? 'Gagal ubah jumlah tamu',
+      );
       return null;
     }
   }

@@ -156,6 +156,15 @@ class PayItemsRequest(BaseModel):
     idempotency_key: Optional[str] = None
 
 
+class UpdateGuestsRequest(BaseModel):
+    """Ubah jumlah tamu yang duduk di meja (tamu nambah/berkurang di tengah jalan).
+
+    Batas atas 50 disamain dengan TabCreate.guest_count biar konsisten.
+    """
+    guest_count: int = Field(..., ge=1, le=50)
+    row_version: int
+
+
 class MoveTableRequest(BaseModel):
     """Pindah meja."""
     new_table_id: UUID

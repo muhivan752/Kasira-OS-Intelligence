@@ -4,11 +4,21 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
 
+/// Bar aksi bawah halaman Tab.
+///
+/// Ditata 2×2, bukan 4-in-a-row seperti sebelumnya: di layar 360dp satu baris
+/// isi 4 chip cuma nyisain ~76px per chip, yang maksa label 10px dua baris dan
+/// tinggi tap 40px — di bawah ambang 44px dan susah dipencet sambil berdiri di
+/// depan kasir. Grid 2×2 ngasih ~150×68px per tile.
+///
+/// "Pindah Meja" sengaja gak ikut di grid ini — dia aksi level meja yang jarang
+/// dipakai, jadi ditaruh di menu header. Yang di sini cuma empat yang dipakai
+/// tiap hari.
 class TabBottomActions extends StatelessWidget {
   final TabModel tab;
   final NumberFormat currency;
   final VoidCallback onAddOrder;
-  final VoidCallback onMoveTable;
+  final VoidCallback onAddGuests;
   final VoidCallback onMergeTab;
   final VoidCallback onCancel;
   final VoidCallback onPayFull;
@@ -19,7 +29,7 @@ class TabBottomActions extends StatelessWidget {
     required this.tab,
     required this.currency,
     required this.onAddOrder,
-    required this.onMoveTable,
+    required this.onAddGuests,
     required this.onMergeTab,
     required this.onCancel,
     required this.onPayFull,
@@ -28,99 +38,281 @@ class TabBottomActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canCancel = tab.paidAmount == 0;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(
+        KasiraDS.space4,
+        KasiraDS.space4,
+        KasiraDS.space4,
+        MediaQuery.of(context).padding.bottom + KasiraDS.space4,
+      ),
       decoration: BoxDecoration(
         color: KasiraDS.surfaceCard,
-        border: Border(top: BorderSide(color: KasiraDS.borderSubtle)),
+        border: const Border(top: BorderSide(color: KasiraDS.borderSubtle)),
+        boxShadow: KasiraDS.shadowMd,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (tab.isOpen)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  _buildActionChip(LucideIcons.plus, 'Tambah\nPesanan', const Color(0xFF059669), onAddOrder),
-                  const SizedBox(width: 8),
-                  _buildActionChip(LucideIcons.arrowRightLeft, 'Pindah\nMeja', KasiraDS.info, onMoveTable),
-                  const SizedBox(width: 8),
-                  _buildActionChip(LucideIcons.merge, 'Gabung\nMeja', KasiraDS.warning, onMergeTab),
-                  if (tab.paidAmount == 0) ...[
-                    const SizedBox(width: 8),
-                    _buildActionChip(LucideIcons.x, 'Batalkan', KasiraDS.danger, onCancel),
-                  ],
-                ],
-              ),
+          if (tab.isOpen) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _ActionTile(
+                    icon: LucideIcons.plus,
+                    label: 'Tambah Pesanan',
+                    color: KasiraDS.success,
+                    onTap: onAddOrder,
+                  ),
+                ),
+                const SizedBox(width: KasiraDS.space3),
+                Expanded(
+                  child: _ActionTile(
+                    icon: LucideIcons.userPlus,
+                    label: 'Tambah Orang',
+                    color: KasiraDS.brandSecondary,
+                    badge: '${tab.guestCount}',
+                    onTap: onAddGuests,
+                  ),
+                ),
+              ],
             ),
-          Row(
-            children: [
-              if (tab.isOpen && tab.totalAmount > 0) ...[
+            const SizedBox(height: KasiraDS.space3),
+            Row(
+              children: [
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onPayFull,
-                    icon: const Icon(LucideIcons.banknote, size: 18),
-                    label: const Text('Bayar Lunas'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
+                  child: _ActionTile(
+                    icon: LucideIcons.merge,
+                    label: 'Gabung Meja',
+                    color: KasiraDS.warning,
+                    onTap: onMergeTab,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: KasiraDS.space3),
                 Expanded(
-                  child: FilledButton.icon(
-                    onPressed: onSplitBill,
-                    icon: const Icon(LucideIcons.split, size: 18),
-                    label: const Text('Split Bill'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: KasiraDS.brandPrimary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
+                  child: _ActionTile(
+                    icon: LucideIcons.x,
+                    label: 'Batalkan',
+                    color: KasiraDS.danger,
+                    onTap: canCancel ? onCancel : null,
+                    disabledHint: 'Sudah ada\nyang bayar',
                   ),
                 ),
-              ] else if (tab.isSplitting && tab.remainingAmount > 0)
+              ],
+            ),
+            const SizedBox(height: KasiraDS.space4),
+          ],
+          if (tab.isOpen && tab.totalAmount > 0)
+            Row(
+              children: [
                 Expanded(
-                  child: FilledButton.icon(
-                    onPressed: onPayFull,
-                    icon: const Icon(LucideIcons.banknote, size: 18),
-                    label: Text('Bayar Sisa ${currency.format(tab.remainingAmount)}'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: KasiraDS.success,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
+                  child: _SecondaryButton(
+                    icon: LucideIcons.banknote,
+                    label: 'Bayar Lunas',
+                    onTap: onPayFull,
                   ),
                 ),
-            ],
-          ),
+                const SizedBox(width: KasiraDS.space3),
+                Expanded(
+                  child: _PrimaryButton(
+                    icon: LucideIcons.split,
+                    label: 'Split Bill',
+                    onTap: onSplitBill,
+                  ),
+                ),
+              ],
+            )
+          else if (tab.isSplitting && tab.remainingAmount > 0)
+            _PrimaryButton(
+              icon: LucideIcons.banknote,
+              label: 'Bayar Sisa ${currency.format(tab.remainingAmount)}',
+              onTap: onPayFull,
+            ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildActionChip(IconData icon, String label, Color color, VoidCallback onTap) {
-    return Expanded(
+class _ActionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback? onTap;
+  final String? badge;
+  final String? disabledHint;
+
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.badge,
+    this.disabledHint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    final tint = enabled ? color : KasiraDS.neutral400;
+
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: KasiraDS.brMd,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          height: 68,
+          padding: const EdgeInsets.symmetric(horizontal: KasiraDS.space3),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.08),
-            border: Border.all(color: color.withOpacity(0.3)),
-            borderRadius: BorderRadius.circular(10),
+            color: tint.withOpacity(enabled ? 0.08 : 0.04),
+            border: Border.all(color: tint.withOpacity(enabled ? 0.32 : 0.16)),
+            borderRadius: KasiraDS.brMd,
           ),
-          child: Column(
+          child: Row(
             children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color, height: 1.2),
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tint.withOpacity(enabled ? 0.14 : 0.08),
+                  borderRadius: KasiraDS.brSm,
+                ),
+                child: Icon(icon, size: 20, color: tint),
               ),
+              const SizedBox(width: KasiraDS.space2),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: KasiraDS.sans(
+                        size: 13.5,
+                        weight: FontWeight.w700,
+                        color: tint,
+                        height: 1.15,
+                      ),
+                    ),
+                    if (!enabled && disabledHint != null)
+                      Text(
+                        disabledHint!.replaceAll('\n', ' '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: KasiraDS.sans(size: 10.5, color: KasiraDS.textMuted),
+                      ),
+                  ],
+                ),
+              ),
+              if (badge != null && enabled)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: tint,
+                    borderRadius: KasiraDS.brPill,
+                  ),
+                  child: Text(
+                    badge!,
+                    style: KasiraDS.sans(
+                      size: 12,
+                      weight: FontWeight.w800,
+                      color: KasiraDS.textOnBrand,
+                    ),
+                  ),
+                ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PrimaryButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _PrimaryButton({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 56,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: KasiraDS.gradientFrekuensi,
+          borderRadius: KasiraDS.brMd,
+          boxShadow: KasiraDS.glowBrand,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 19, color: KasiraDS.textOnBrand),
+            const SizedBox(width: KasiraDS.space2),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: KasiraDS.sans(
+                  size: 16,
+                  weight: FontWeight.w700,
+                  color: KasiraDS.textOnBrand,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SecondaryButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SecondaryButton({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 56,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: KasiraDS.surfaceCard,
+          borderRadius: KasiraDS.brMd,
+          border: Border.all(color: KasiraDS.borderDefault),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 19, color: KasiraDS.textStrong),
+            const SizedBox(width: KasiraDS.space2),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: KasiraDS.sans(
+                  size: 16,
+                  weight: FontWeight.w700,
+                  color: KasiraDS.textStrong,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

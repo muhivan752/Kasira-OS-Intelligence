@@ -14,6 +14,7 @@ import '../widgets/tab_header.dart';
 import '../widgets/tab_info_card.dart';
 import '../widgets/tab_split_card.dart';
 import '../widgets/tab_bottom_actions.dart';
+import '../widgets/guest_count_sheet.dart';
 
 class TabDetailPage extends ConsumerStatefulWidget {
   final String tabId;
@@ -64,7 +65,11 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
       backgroundColor: KasiraDS.bgBase,
       body: Column(
         children: [
-          TabHeader(tab: tab, currency: _currency),
+          TabHeader(
+            tab: tab,
+            currency: _currency,
+            onMoveTable: tab.isOpen ? () => _showMoveTableModal(tab) : null,
+          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _loadTab,
@@ -114,7 +119,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                 ref.read(pendingNavigateToPosProvider.notifier).state = true;
                 context.go('/dashboard');
               },
-              onMoveTable: () => _showMoveTableModal(tab),
+              onAddGuests: () => _showGuestCountModal(tab),
               onMergeTab: () => _showMergeTabModal(tab),
               onCancel: () => _confirmCancel(tab),
               onPayFull: () => _showPayFullModal(tab),
@@ -165,6 +170,45 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
         tab: tab,
         split: null,
         onPaid: (updatedTab) => setState(() => _tab = updatedTab),
+      ),
+    );
+  }
+
+  /// Ubah jumlah tamu di tab berjalan (temen nyusul / rombongan pecah).
+  /// Angka ini yang dipakai "bagi rata" sebagai default jumlah orang.
+  Future<void> _showGuestCountModal(TabModel tab) async {
+    final newCount = await showGuestCountSheet(
+      context,
+      tableName: tab.tableName ?? tab.tabNumber,
+      initial: tab.guestCount,
+      title: 'Ubah jumlah tamu',
+      confirmLabel: 'Simpan',
+      confirmIcon: LucideIcons.check,
+    );
+    if (newCount == null || !mounted) return;
+    if (newCount == tab.guestCount) return;
+
+    final updated = await ref
+        .read(tabProvider.notifier)
+        .updateGuests(tab.id, newCount, tab.rowVersion);
+    if (!mounted) return;
+
+    if (updated == null) {
+      final err = ref.read(tabProvider).error ?? 'Gagal ubah jumlah tamu';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: KasiraDS.danger),
+      );
+      // Backend nolak (mis. split udah kebentuk / row_version basi) — tarik
+      // ulang biar layar gak nampilin angka yang gak jadi kesimpan.
+      await _loadTab();
+      return;
+    }
+
+    setState(() => _tab = updated);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Jumlah tamu jadi $newCount orang'),
+        backgroundColor: KasiraDS.success,
       ),
     );
   }

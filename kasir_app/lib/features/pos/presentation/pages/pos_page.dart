@@ -23,7 +23,7 @@ import '../../../tables/presentation/pages/table_grid_page.dart';
 import '../../../products/presentation/widgets/product_detail_sheet.dart';
 import '../../providers/pos_mode_provider.dart';
 import '../../../tabs/providers/tab_provider.dart';
-import '../../../tabs/presentation/widgets/table_actions_sheet.dart';
+import '../../../tabs/presentation/widgets/guest_count_sheet.dart';
 
 class PosPage extends ConsumerStatefulWidget {
   const PosPage({super.key});
@@ -180,7 +180,7 @@ class _PosPageState extends ConsumerState<PosPage> {
       // Reality warkop/cafe Indonesia: tiap meja bisa 1-6+ orang, default 1
       // bikin split bill humanity gak akurat (kasir lupa update guest_count
       // sampai checkout → tab udah ke-create dengan guest_count=1 hardcoded).
-      final guestCount = await _askGuestCount(table.name);
+      final guestCount = await showGuestCountSheet(context, tableName: table.name);
       if (guestCount == null) return; // user cancel
       ref.read(cartProvider.notifier).setTable(
             table.id,
@@ -217,26 +217,13 @@ class _PosPageState extends ConsumerState<PosPage> {
 
         final tabData = res.data['data'];
         if (tabData != null) {
-          // Tab aktif ditemukan — show bottom sheet warkop pattern (items pool
-          // + 3 actions: Bayar Sebagian / Tambah Pesanan / Lihat Tab).
-          // Beda dari direct push ke /tabs/{id} — sheet kasih akses cepat ke
-          // pay-items adhoc tanpa harus navigate ke tab detail page dulu.
+          // Langsung ke halaman Tab. Dulu di sini muncul bottom sheet ringkas
+          // yang cuma punya 4 aksi (bayar semua / bayar sebagian / tambah /
+          // detail), sementara tambah orang, gabung meja, pindah meja, dan
+          // batalkan cuma ada di halaman Tab — kasir gak nemu aksinya dari
+          // jalur ini. Satu tempat aja biar gak kebagi dua.
           final tabId = tabData['id'] as String;
-          if (mounted) {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: KasiraDS.surfaceCard,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              builder: (_) => TableActionsSheet(
-                tabId: tabId,
-                tableName: table.name,
-                tableId: table.id,
-              ),
-            );
-          }
+          if (mounted) context.push('/tabs/$tabId');
           return;
         }
 
@@ -252,7 +239,15 @@ class _PosPageState extends ConsumerState<PosPage> {
               duration: const Duration(seconds: 4),
             ),
           );
-          ref.read(cartProvider.notifier).setTable(table.id, name: table.name);
+          // Tetap tanya jumlah tamu — jalur ini bikin tab baru juga, jadi
+          // kalau di-skip guest_count-nya ikut kekunci di 1.
+          final guestCount = await showGuestCountSheet(context, tableName: table.name);
+          if (guestCount == null || !mounted) return;
+          ref.read(cartProvider.notifier).setTable(
+                table.id,
+                name: table.name,
+                guestCount: guestCount,
+              );
           ref.read(posModeProvider.notifier).state = PosMode.dineInOrdering;
         }
       } catch (e) {
@@ -281,104 +276,6 @@ class _PosPageState extends ConsumerState<PosPage> {
         ),
       );
     }
-  }
-
-  /// Quick popup numpad untuk input jumlah tamu saat kasir tap meja kosong.
-  /// 1 tap quick (1/2/4/6) atau ketik manual. Returns null kalau user cancel.
-  /// Default 1 (single seater). Capped 1-50.
-  Future<int?> _askGuestCount(String tableName) async {
-    int selected = 2; // default rekomendasi 2 — most common warkop scenario
-    final manualController = TextEditingController();
-    return showDialog<int>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          void pick(int n) {
-            setLocal(() {
-              selected = n;
-              manualController.text = n.toString();
-            });
-          }
-
-          return AlertDialog(
-            title: Row(
-              children: [
-                const Icon(LucideIcons.users, size: 22, color: KasiraDS.brandPrimary),
-                const SizedBox(width: 10),
-                Text('Berapa orang?', style: Theme.of(ctx).textTheme.titleMedium),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${BusinessLabels.getLabel('table')} $tableName',
-                  style: TextStyle(color: KasiraDS.textMuted, fontSize: 13),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [1, 2, 3, 4, 5, 6, 8, 10].map((n) {
-                    final active = selected == n;
-                    return SizedBox(
-                      width: 56,
-                      height: 56,
-                      child: FilledButton(
-                        onPressed: () => pick(n),
-                        style: FilledButton.styleFrom(
-                          backgroundColor:
-                              active ? KasiraDS.brandPrimary : KasiraDS.surfaceSunken,
-                          foregroundColor:
-                              active ? Colors.white : KasiraDS.textStrong,
-                          padding: EdgeInsets.zero,
-                        ),
-                        child: Text(
-                          '$n',
-                          style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: manualController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'atau ketik manual',
-                    isDense: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onChanged: (v) {
-                    final parsed = int.tryParse(v);
-                    if (parsed != null && parsed >= 1 && parsed <= 50) {
-                      setLocal(() => selected = parsed);
-                    }
-                  },
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Batal'),
-              ),
-              FilledButton.icon(
-                onPressed: () => Navigator.pop(ctx, selected),
-                icon: const Icon(LucideIcons.arrowRight, size: 16),
-                label: Text('Lanjut ($selected org)'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
   }
 
   @override

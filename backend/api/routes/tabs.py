@@ -42,6 +42,7 @@ from backend.schemas.tab import (
     TabCreate, TabAddOrder, TabResponse,
     SplitEqualRequest, SplitPerItemRequest, SplitCustomRequest,
     PaySplitRequest, PayItemsRequest, MoveTableRequest, MergeTabRequest,
+    UpdateGuestsRequest,
 )
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
@@ -1216,6 +1217,71 @@ async def cancel_tab(
     return StandardResponse(
         success=True, data=_tab_response(tab),
         request_id=request.state.request_id, message="Tab dibatalkan"
+    )
+
+
+# ── UPDATE GUESTS (tambah/kurang orang) ──
+
+@router.patch("/{tab_id}/guests", response_model=StandardResponse[TabResponse])
+async def update_guests(
+    request: Request,
+    tab_id: UUID,
+    body: UpdateGuestsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Ubah jumlah tamu di tab yang lagi jalan.
+
+    Realita warung/cafe: temen dateng nyusul, rombongan pecah. Tanpa ini,
+    `guest_count` kekunci di angka waktu meja pertama kali dibuka dan "bagi
+    rata" ngitung pakai jumlah orang yang salah.
+
+    Sengaja TIDAK dibolehin kalau udah ada split kebentuk — amount tiap split
+    udah dihitung dari jumlah orang yang lama, jadi ngubah angkanya di tengah
+    cuma bikin tampilan dan pembagian gak nyambung. Kasir harus reset split
+    dulu (atau bikin ulang) kalau emang mau bagi rata ke jumlah baru.
+    """
+    tab = await _get_tab_or_404(db, tab_id, lock=True)
+    if tab.status in ('paid', 'cancelled'):
+        raise HTTPException(status_code=400, detail="Tab sudah ditutup")
+    if tab.row_version != body.row_version:
+        raise HTTPException(
+            status_code=409,
+            detail="Tab sudah diubah orang lain. Refresh dulu.",
+        )
+    if tab.splits:
+        raise HTTPException(
+            status_code=400,
+            detail="Split bill sudah dibuat. Batalkan split dulu sebelum ubah jumlah tamu.",
+        )
+
+    old_count = tab.guest_count
+    if old_count == body.guest_count:
+        return StandardResponse(
+            success=True, data=_tab_response(tab),
+            request_id=request.state.request_id, message="Jumlah tamu tidak berubah"
+        )
+
+    tab.guest_count = body.guest_count
+    tab.row_version += 1
+
+    _tab_event(
+        db, tab, "tab.guests_updated",
+        {"from": old_count, "to": body.guest_count}, current_user.id,
+    )
+    await log_audit(
+        db=db, action="UPDATE", entity="tab", entity_id=tab.id,
+        before_state={"guest_count": old_count},
+        after_state={"guest_count": body.guest_count},
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+
+    tab = await _get_tab_or_404(db, tab.id)
+    return StandardResponse(
+        success=True, data=_tab_response(tab),
+        request_id=request.state.request_id,
+        message=f"Jumlah tamu jadi {body.guest_count} orang",
     )
 
 

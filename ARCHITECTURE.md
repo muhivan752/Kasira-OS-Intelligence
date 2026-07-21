@@ -388,12 +388,23 @@ cancelled           (auto-close when all splits paid)
 ```
 
 ### Split Methods
-| Method | Endpoint | Logic |
-|--------|----------|-------|
-| Equal | `POST /tabs/{id}/split/equal` | total ÷ num_people, remainder distributed |
-| Per-Item | `POST /tabs/{id}/split/per-item` | Assign order items to people, proportional tax/service |
-| Custom | `POST /tabs/{id}/split/custom` | Manual amounts, must sum to total |
-| Full | `POST /tabs/{id}/pay-full` | 1 person pays all |
+| Method | Endpoint | Logic | UI Flutter |
+|--------|----------|-------|-----------|
+| Pay-Items | `POST /tabs/{id}/pay-items` | Ad-hoc: centang item yang dibayar, tandai `paid_at`. **Gak bikin TabSplit** dan gak set `split_method` | ✅ "Sebagian" (default) |
+| Equal | `POST /tabs/{id}/split/equal` | total ÷ num_people, remainder distributed | ✅ "Bagi Rata" |
+| Custom | `POST /tabs/{id}/split/custom` | Manual amounts, must sum to total | ✅ "Custom" |
+| Full | `POST /tabs/{id}/pay-full` | 1 person pays all | ✅ "Bayar Lunas" |
+| Per-Item | `POST /tabs/{id}/split/per-item` | Assign order items to people, proportional tax/service | ❌ **dibuang dari UI Juli 2026** |
+
+**Per-Item sengaja gak ada di UI.** Alurnya panjang (set jumlah tamu → kasih nama tiap tamu → tap tiap item satu-satu) sementara Pay-Items nutup kebutuhan yang sama jauh lebih cepat. Endpoint + skema backend dibiarkan hidup kalau suatu saat dibalikin, tapi `splitPerItem()` di `tab_provider.dart` udah dihapus — kalau mau balikin, tulis ulang client-nya.
+
+### Guest Count
+`tabs.guest_count` = jumlah orang yang duduk. Dipakai Flutter sebagai default `num_people` waktu bagi rata.
+
+- Diisi waktu buka meja lewat `showGuestCountSheet()` — **satu-satunya** tempat jumlah tamu ditanya (`kasir_app/lib/features/tabs/presentation/widgets/guest_count_sheet.dart`). Dulu tiap flow nanya sendiri-sendiri dan cabang tab "Meja" kelewat nanya, jadi tab kebuat dengan `guest_count = 1` dan bagi rata gak kepake.
+- Ubah di tengah jalan: `PATCH /tabs/{id}/guests` body `{guest_count, row_version}`. **Ditolak (400) kalau split udah kebentuk** — amount tiap split udah dihitung dari jumlah orang yang lama, jadi ngubah angkanya bikin pembagian gak nyambung.
+- `POST /tabs/{id}/merge` nambahin `target.guest_count += source.guest_count`.
+- Split equal pakai `body.num_people` dari client, BUKAN `tab.guest_count` — guest_count cuma jadi nilai awal di UI.
 
 ### Pay Split: `POST /tabs/{id}/splits/{split_id}/pay`
 - `row_version` = **split's row_version**, bukan tab's

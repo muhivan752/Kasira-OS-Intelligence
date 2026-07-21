@@ -9,6 +9,7 @@ import '../../../../core/theme/kasira_ds.dart';
 import '../../../reservations/presentation/pages/reservation_list_page.dart';
 import '../../../pos/providers/cart_provider.dart';
 import '../../../pos/providers/pos_mode_provider.dart';
+import '../../../tabs/presentation/widgets/guest_count_sheet.dart';
 
 enum TableStatus { available, occupied, reserved, dirty }
 
@@ -479,11 +480,18 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
     loadingDialog.ignore();
   }
 
-  /// Tab Meja standalone: tap meja kosong → mulai dine-in + lompat ke Kasir.
-  /// (Desain: Meja → tap meja → order. Ini entry dine-in setelah selector Kasir dihapus.)
-  void _startDineInFromMeja(TableModel table) {
+  /// Tab Meja standalone: tap meja kosong → tanya jumlah tamu → dine-in + lompat
+  /// ke Kasir. (Desain: Meja → tap meja → order.)
+  ///
+  /// Jumlah tamu WAJIB ditanya di sini. Dulu cabang ini manggil setTable() tanpa
+  /// guestCount sementara cabang POS nanya, jadi tab yang dibuka lewat tab Meja
+  /// selalu kecatat 1 orang dan split "bagi rata" jadi gak kepake.
+  Future<void> _startDineInFromMeja(TableModel table) async {
+    final guestCount = await showGuestCountSheet(context, tableName: table.name);
+    if (guestCount == null || !mounted) return; // user batal
+
     final cart = ref.read(cartProvider.notifier);
-    cart.setTable(table.id, name: table.name);
+    cart.setTable(table.id, name: table.name, guestCount: guestCount);
     cart.setOrderType('Dine In');
     ref.read(posModeProvider.notifier).state = PosMode.dineInOrdering;
     // Shell (dashboard) consume flag ini → pindah ke tab Kasir.

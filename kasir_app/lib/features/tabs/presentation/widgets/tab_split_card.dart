@@ -4,6 +4,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
 
+/// Satu baris split bill. Nominal jadi elemen paling besar (itu yang dibaca
+/// kasir waktu nagih), tombol Bayar dinaikin ke 44px biar ke-tap sekali.
 class TabSplitCard extends StatelessWidget {
   final TabSplitModel split;
   final NumberFormat currency;
@@ -19,48 +21,108 @@ class TabSplitCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isPaid = split.isPaid;
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: isPaid ? KasiraDS.success.withOpacity(0.3) : KasiraDS.borderSubtle),
+    final accent = isPaid ? KasiraDS.success : KasiraDS.brandPrimary;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: KasiraDS.space2),
+      padding: const EdgeInsets.all(KasiraDS.space3),
+      decoration: BoxDecoration(
+        color: KasiraDS.surfaceCard,
+        borderRadius: KasiraDS.brLg,
+        border: Border.all(
+          color: isPaid ? KasiraDS.success.withOpacity(0.35) : KasiraDS.borderSubtle,
+        ),
+        boxShadow: KasiraDS.shadowXs,
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: CircleAvatar(
-          backgroundColor: isPaid ? KasiraDS.success.withOpacity(0.1) : KasiraDS.brandPrimary.withOpacity(0.1),
-          child: Icon(
-            isPaid ? LucideIcons.checkCircle2 : LucideIcons.user,
-            color: isPaid ? KasiraDS.success : KasiraDS.brandPrimary,
-            size: 20,
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: accent.withOpacity(0.12),
+              borderRadius: KasiraDS.brMd,
+            ),
+            child: Icon(
+              isPaid ? LucideIcons.checkCheck : LucideIcons.user,
+              color: accent,
+              size: 21,
+            ),
           ),
-        ),
-        title: Text(split.label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-          currency.format(split.amount),
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isPaid ? KasiraDS.success : KasiraDS.textStrong,
+          const SizedBox(width: KasiraDS.space3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  split.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: KasiraDS.sans(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: KasiraDS.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    currency.format(split.amount),
+                    style: KasiraDS.display(
+                      size: 20,
+                      color: isPaid ? KasiraDS.success : KasiraDS.textStrong,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        trailing: isPaid
-            ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: KasiraDS.success.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text('Lunas', style: TextStyle(color: KasiraDS.success, fontWeight: FontWeight.bold, fontSize: 12)),
-              )
-            : FilledButton(
-                onPressed: onPay,
-                style: FilledButton.styleFrom(
-                  backgroundColor: KasiraDS.brandPrimary,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                ),
-                child: const Text('Bayar', style: TextStyle(fontSize: 13)),
+          const SizedBox(width: KasiraDS.space2),
+          if (isPaid)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: KasiraDS.space3,
+                vertical: 6,
               ),
+              decoration: BoxDecoration(
+                color: KasiraDS.success.withOpacity(0.12),
+                borderRadius: KasiraDS.brPill,
+              ),
+              child: Text(
+                'Lunas',
+                style: KasiraDS.sans(
+                  size: 12,
+                  weight: FontWeight.w700,
+                  color: KasiraDS.success,
+                ),
+              ),
+            )
+          else
+            GestureDetector(
+              onTap: onPay,
+              child: Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: KasiraDS.space5),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: KasiraDS.gradientFrekuensi,
+                  borderRadius: KasiraDS.brMd,
+                  boxShadow: KasiraDS.glowPink,
+                ),
+                child: Text(
+                  'Bayar',
+                  style: KasiraDS.sans(
+                    size: 14.5,
+                    weight: FontWeight.w700,
+                    color: KasiraDS.textOnBrand,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
