@@ -12,3 +12,8 @@ final posModeProvider = StateProvider<PosMode>((ref) => PosMode.selection);
 /// Beda dari watch posModeProvider persisten (yang bikin user gak bisa keluar
 /// dari POS tab selama dineInOrdering aktif), ini cuma fire SEKALI per request.
 final pendingNavigateToPosProvider = StateProvider<bool>((ref) => false);
+
+/// One-shot signal untuk redirect dashboard ke tab Meja (page 4).
+/// Dipakai context-pill di header Kasir ("Take away" → tap → pilih meja / dine-in).
+/// Shell consume saat build → setSelectedIndex(4) kalau Pro, lalu clear.
+final pendingNavigateToMejaProvider = StateProvider<bool>((ref) => false);

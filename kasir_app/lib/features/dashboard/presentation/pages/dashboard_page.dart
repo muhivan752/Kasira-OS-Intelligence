@@ -401,6 +401,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       });
     }
 
+    // One-shot: context-pill Kasir "Take away" → tap → pindah ke tab Meja (Pro).
+    final pendingMeja = ref.watch(pendingNavigateToMejaProvider);
+    if (pendingMeja) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          if (_isPro && _selectedIndex != 4) setState(() => _selectedIndex = 4);
+          ref.read(pendingNavigateToMejaProvider.notifier).state = false;
+        }
+      });
+    }
+
     final isWide = MediaQuery.of(context).size.width >= 600;
 
     if (isWide) {
@@ -615,11 +626,8 @@ class _DashboardContent extends ConsumerWidget {
               ),
               const SizedBox(height: 18),
               _bukaKasirCta(ref),
-              const SizedBox(height: 26),
-              Text('Transaksi Terakhir',
-                  style: KasiraDS.display(size: 16, color: KasiraDS.textStrong)),
-              const SizedBox(height: 12),
-              _buildOrderList(context, ordersState, ref),
+              // "Transaksi Terakhir" DIHAPUS dari Beranda — redundan dgn tab Riwayat
+              // (sesuai desain: Beranda gak nampilin daftar transaksi).
             ],
           ),
         ),

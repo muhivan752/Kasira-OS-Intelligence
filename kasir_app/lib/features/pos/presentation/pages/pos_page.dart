@@ -390,7 +390,11 @@ class _PosPageState extends ConsumerState<PosPage> {
     // Trigger tax config fetch (feeds into cart calculations)
     ref.watch(taxConfigProvider);
     final itemCount = cart.items.fold<int>(0, (sum, item) => sum + item.qty);
-    final showFab = !isWide && (posMode == PosMode.takeaway || posMode == PosMode.dineInOrdering);
+    // selection = default view Kasir (takeaway grid) — cart bar HARUS muncul juga.
+    final showFab = !isWide &&
+        (posMode == PosMode.selection ||
+            posMode == PosMode.takeaway ||
+            posMode == PosMode.dineInOrdering);
 
     final addOrderCtx = ref.watch(addOrderContextProvider);
 
@@ -646,13 +650,16 @@ class _PosPageState extends ConsumerState<PosPage> {
                       ],
                     ),
                   ),
-                  if (showSearch)
+                  if (showSearch) ...[
+                    _ctxPill(),
+                    const SizedBox(width: 8),
                     _circleIconBtn(LucideIcons.refreshCw, () {
                       _searchDebounce?.cancel();
                       _searchController.clear();
                       setState(() => _searchQuery = '');
                       ref.read(productsProvider.notifier).refresh();
                     }),
+                  ],
                 ],
               ),
               // Full-width search field (design: surface-card, 1.5px border, r14)
@@ -726,6 +733,54 @@ class _PosPageState extends ConsumerState<PosPage> {
           boxShadow: KasiraDS.shadowSm,
         ),
         child: Icon(icon, size: 19, color: KasiraDS.textStrong),
+      ),
+    );
+  }
+
+  /// Context pill header Kasir (desain: orderCtxLabel). "Take away" default,
+  /// "{Meja} · dine-in" kalau ada meja. Tap → pindah ke tab Meja (Pro) buat
+  /// pilih meja = mulai dine-in.
+  Widget _ctxPill() {
+    final cart = ref.watch(cartProvider);
+    final isDinein = cart.tableId != null;
+    final label = isDinein
+        ? '${cart.tableName ?? BusinessLabels.getLabel('table')} · dine-in'
+        : 'Take away';
+    return GestureDetector(
+      onTap: () {
+        if (SessionCache.instance.isPro) {
+          ref.read(pendingNavigateToMejaProvider.notifier).state = true;
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Dine-in (kelola meja) tersedia di paket Pro'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: KasiraDS.surfaceCard,
+          borderRadius: KasiraDS.brPill,
+          border: Border.all(color: KasiraDS.borderDefault),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(isDinein ? LucideIcons.utensils : LucideIcons.shoppingBag,
+                size: 14, color: KasiraDS.brandPrimary),
+            const SizedBox(width: 5),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 110),
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.textStrong)),
+            ),
+          ],
+        ),
       ),
     );
   }
