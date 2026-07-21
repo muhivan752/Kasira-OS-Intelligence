@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     # pantau dulu). Isi angka > 0 buat nyalain rem tanpa ubah kode.
     LANDING_CHAT_MAX_PER_IP: int = 0
 
+    # Akun demo: satu nomor + satu OTP tetap, buat dipamerin ke calon pelanggan
+    # tanpa perlu OTP WhatsApp beneran. SENGAJA dua-duanya harus diisi dan
+    # dicocokkan persis — kalau salah satu kosong, jalur ini mati total.
+    DEMO_PHONE: str = ""
+    DEMO_OTP: str = ""
+
     # Voyage AI (embeddings for Layer 4)
     VOYAGE_API_KEY: str = ""
 

@@ -101,23 +101,40 @@ async def verify_otp(
     if verify_attempts and int(verify_attempts) >= 5:
         raise HTTPException(status_code=429, detail="Terlalu banyak percobaan. Coba lagi dalam 15 menit.")
 
-    stored_otp = await redis.get(f"otp:{request.phone}")
+    # ── Jalur akun demo ──────────────────────────────────────────────────────
+    # SATU nomor, OTP tetap, dan cuma kalau DUA-DUANYA keisi di .env. Ini
+    # sengaja sesempit mungkin: bukan "kalau tenant is_demo", bukan prefix
+    # nomor, bukan flag global. Satu nomor persis, dibandingkan string penuh.
+    # Nomor demo tetap harus punya user aktif — jalur ini cuma nggantiin
+    # pengecekan OTP, bukan ngelewatin autentikasi.
+    demo_phone = (settings.DEMO_PHONE or "").strip()
+    demo_otp = (settings.DEMO_OTP or "").strip()
+    is_demo_login = bool(
+        demo_phone and demo_otp
+        and request.phone.strip() == demo_phone
+        and request.otp.strip() == demo_otp
+    )
 
-    if not stored_otp:
-        raise HTTPException(status_code=400, detail="OTP expired atau tidak ditemukan. Kirim ulang OTP.")
+    if is_demo_login:
+        logger.info("Login akun demo dipakai (phone=%s)", demo_phone)
+    else:
+        stored_otp = await redis.get(f"otp:{request.phone}")
 
-    # Decode jika Redis return bytes (safety)
-    otp_str = stored_otp.decode() if isinstance(stored_otp, bytes) else str(stored_otp)
-    if otp_str != request.otp:
-        # Increment rate limit counter
-        if not verify_attempts:
-            await redis.setex(verify_rate_key, 900, 1)
-        else:
-            await redis.incr(verify_rate_key)
-        raise HTTPException(status_code=400, detail="OTP tidak valid")
-            
-    # OTP is valid, delete it
-    await redis.delete(f"otp:{request.phone}")
+        if not stored_otp:
+            raise HTTPException(status_code=400, detail="OTP expired atau tidak ditemukan. Kirim ulang OTP.")
+
+        # Decode jika Redis return bytes (safety)
+        otp_str = stored_otp.decode() if isinstance(stored_otp, bytes) else str(stored_otp)
+        if otp_str != request.otp:
+            # Increment rate limit counter
+            if not verify_attempts:
+                await redis.setex(verify_rate_key, 900, 1)
+            else:
+                await redis.incr(verify_rate_key)
+            raise HTTPException(status_code=400, detail="OTP tidak valid")
+
+        # OTP is valid, delete it
+        await redis.delete(f"otp:{request.phone}")
     
     # Get user
     stmt = select(User).where(User.phone == request.phone, User.deleted_at == None)
