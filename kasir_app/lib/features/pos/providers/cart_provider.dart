@@ -242,6 +242,12 @@ class CartNotifier extends StateNotifier<CartState> {
       state = state.copyWith(clearTable: true);
     }
   }
+  /// Diskon manual dari cart (promo chips). Clamp 0..subtotal biar total gak minus.
+  void setDiscount(double amount) {
+    final capped = amount < 0 ? 0.0 : (amount > state.subtotal ? state.subtotal : amount);
+    state = state.copyWith(discountAmount: capped);
+  }
+
   void setCustomer(String? id, {String? name}) {
     if (id == null) {
       state = state.copyWith(clearCustomer: true);

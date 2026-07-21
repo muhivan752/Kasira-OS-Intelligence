@@ -114,20 +114,25 @@ class CartPanel extends ConsumerWidget {
 
         const SizedBox(height: 8),
 
-        // Cart items
+        // Cart items + upsell + promo (scrollable area)
         Expanded(
           child: cart.items.isEmpty
               ? _buildEmptyCart()
-              : ListView.separated(
+              : ListView(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-                  itemCount: cart.items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (_, i) => _CartItemTile(
-                    item: cart.items[i],
-                    currency: currency,
-                    onIncrement: () => ref.read(cartProvider.notifier).incrementItem(cart.items[i].productId),
-                    onDecrement: () => ref.read(cartProvider.notifier).decrementItem(cart.items[i].productId),
-                  ),
+                  children: [
+                    for (int i = 0; i < cart.items.length; i++) ...[
+                      _CartItemTile(
+                        item: cart.items[i],
+                        currency: currency,
+                        onIncrement: () => ref.read(cartProvider.notifier).incrementItem(cart.items[i].productId),
+                        onDecrement: () => ref.read(cartProvider.notifier).decrementItem(cart.items[i].productId),
+                      ),
+                      if (i != cart.items.length - 1) const SizedBox(height: 12),
+                    ],
+                    _upsellSection(ref, cart),
+                    _promoSection(ref, cart, currency),
+                  ],
                 ),
         ),
 
@@ -425,6 +430,126 @@ class CartPanel extends ConsumerWidget {
           Text('Pilih produk untuk memulai',
               style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted)),
         ],
+      ),
+    );
+  }
+
+  /// Upsell "sering dibeli bareng" — best-seller yang belum di keranjang.
+  /// Heuristik lokal (bukan combo-detection backend) supaya cepat + offline-safe.
+  Widget _upsellSection(WidgetRef ref, CartState cart) {
+    final products = ref.watch(productsProvider).valueOrNull ?? const <ProductModel>[];
+    final inCart = cart.items.map((e) => e.productId).toSet();
+    final upsell = products
+        .where((p) => p.isBestSeller && p.isAvailable && !inCart.contains(p.id))
+        .take(3)
+        .toList();
+    if (upsell.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(LucideIcons.sparkles, size: 14, color: KasiraDS.brandPrimary),
+            const SizedBox(width: 6),
+            Text('Sering dibeli bareng',
+                style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.textBody)),
+          ]),
+          const SizedBox(height: 9),
+          Wrap(spacing: 8, runSpacing: 8, children: upsell.map((p) => _upsellChip(ref, p)).toList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _upsellChip(WidgetRef ref, ProductModel p) {
+    return GestureDetector(
+      onTap: () => ref.read(cartProvider.notifier).addItem(CartItem(
+            productId: p.id,
+            name: p.name,
+            price: p.price,
+            stockQty: p.stockEnabled ? p.stock.toDouble() : null,
+          )),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: KasiraDS.surfaceCard,
+          borderRadius: KasiraDS.brPill,
+          border: Border.all(color: KasiraDS.borderDefault, width: 1.5),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(LucideIcons.plus, size: 14, color: KasiraDS.brandPrimary),
+          const SizedBox(width: 5),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 140),
+            child: Text(p.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: KasiraDS.sans(size: 12.5, weight: FontWeight.w600, color: KasiraDS.textBody)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  /// Promo/diskon cepat — set discountAmount via cart notifier (clamp di provider).
+  Widget _promoSection(WidgetRef ref, CartState cart, NumberFormat currency) {
+    final subtotal = cart.subtotal;
+    if (subtotal <= 0) return const SizedBox.shrink();
+    final options = <({String label, double amount})>[
+      (label: 'Diskon 10%', amount: (subtotal * 0.10).roundToDouble()),
+      (label: 'Rp 5rb', amount: 5000),
+      (label: 'Rp 10rb', amount: 10000),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(LucideIcons.tag, size: 14, color: KasiraDS.brandPrimary),
+            const SizedBox(width: 6),
+            Text('Diskon / promo',
+                style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.textBody)),
+          ]),
+          const SizedBox(height: 9),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final o in options)
+              _promoChip(ref, o.label, o.amount, cart.discountAmount),
+            if (cart.discountAmount > 0)
+              GestureDetector(
+                onTap: () => ref.read(cartProvider.notifier).setDiscount(0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: KasiraDS.surfaceSunken,
+                    borderRadius: KasiraDS.brPill,
+                  ),
+                  child: Text('Tanpa diskon',
+                      style: KasiraDS.sans(size: 12.5, weight: FontWeight.w700, color: KasiraDS.textMuted)),
+                ),
+              ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _promoChip(WidgetRef ref, String label, double amount, double current) {
+    final sel = (current - amount).abs() < 0.5 && current > 0;
+    return GestureDetector(
+      onTap: () => ref.read(cartProvider.notifier).setDiscount(sel ? 0 : amount),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: sel ? KasiraDS.gradientFrekuensi : null,
+          color: sel ? null : KasiraDS.surfaceCard,
+          borderRadius: KasiraDS.brPill,
+          border: Border.all(color: sel ? Colors.transparent : KasiraDS.borderDefault, width: 1.5),
+        ),
+        child: Text(label,
+            style: KasiraDS.sans(
+                size: 12.5, weight: FontWeight.w700, color: sel ? Colors.white : KasiraDS.textStrong)),
       ),
     );
   }
