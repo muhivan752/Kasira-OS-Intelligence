@@ -235,28 +235,43 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
             const SizedBox(height: 12),
           ],
 
-          // Action buttons
-          if (unpaidItems.isNotEmpty)
+          // Action buttons — simplified: "Bayar Semua" jadi aksi utama (1 tap).
+          if (unpaidItems.isNotEmpty) ...[
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: () => _onPayItems(unpaidItems),
-                icon: const Icon(LucideIcons.checkSquare, size: 18),
-                label: Text('Bayar Sebagian (${unpaidItems.length} item)'),
+                onPressed: () => _onPayItems(unpaidItems, preselectAll: true),
+                icon: const Icon(LucideIcons.creditCard, size: 18),
+                label: Text('Bayar Semua · ${_currency.format(tab.remainingAmount)}'),
                 style: FilledButton.styleFrom(
                   backgroundColor: KasiraDS.brandPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
                 ),
               ),
             ),
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
+            // Bayar sebagian (pilih item) — buat split / bayar sebagian aja
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _onPayItems(unpaidItems, preselectAll: false),
+                icon: const Icon(LucideIcons.checkSquare, size: 16),
+                label: Text('Bayar sebagian (pilih item · ${unpaidItems.length})'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: tab.isOpen ? _onAddOrder : null,
                   icon: const Icon(LucideIcons.plus, size: 16),
-                  label: const Text('Tambah Pesanan'),
+                  label: const Text('Tambah'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
@@ -267,7 +282,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
                 child: OutlinedButton.icon(
                   onPressed: _onViewDetail,
                   icon: const Icon(LucideIcons.fileText, size: 16),
-                  label: const Text('Lihat Tab'),
+                  label: const Text('Detail'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
@@ -280,7 +295,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
     );
   }
 
-  void _onPayItems(List<TabItemModel> unpaid) {
+  void _onPayItems(List<TabItemModel> unpaid, {bool preselectAll = false}) {
     Navigator.pop(context); // close sheet
     showModalBottomSheet(
       context: context,
@@ -292,6 +307,7 @@ class _TableActionsSheetState extends ConsumerState<TableActionsSheet> {
       builder: (_) => PayItemsModal(
         tab: _tab!,
         unpaidItems: unpaid,
+        preselectAll: preselectAll,
         onPaid: (updated) async {
           // Refresh tab provider so other screens reflect change
           await ref.read(tabProvider.notifier).fetchTabs();

@@ -452,7 +452,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               ],
             ),
           ),
-          Expanded(child: _pages[_selectedIndex]),
+          Expanded(child: IndexedStack(index: _selectedIndex, children: _pages)),
         ],
       ),
     );
@@ -467,7 +467,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final showAiFab = _isPro && (_selectedIndex == 0 || _selectedIndex == 2 || _selectedIndex == 3);
     return Scaffold(
       backgroundColor: KasiraDS.bgBase,
-      body: _pages[_selectedIndex],
+      // IndexedStack: semua tab tetap hidup (state kejaga) → pindah tab INSTAN,
+      // gak reload/spinner tiap balik ke tab (optimistic).
+      body: IndexedStack(index: _selectedIndex, children: _pages),
       floatingActionButton: showAiFab ? _buildAiFab() : null,
       bottomNavigationBar: DecoratedBox(
         decoration: const BoxDecoration(

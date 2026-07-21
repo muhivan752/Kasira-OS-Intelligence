@@ -19,12 +19,15 @@ class PayItemsModal extends ConsumerStatefulWidget {
   final TabModel tab;
   final List<TabItemModel> unpaidItems;
   final void Function(TabModel updatedTab) onPaid;
+  /// true = semua item ke-select duluan (= "Bayar Semua" 1 tap).
+  final bool preselectAll;
 
   const PayItemsModal({
     super.key,
     required this.tab,
     required this.unpaidItems,
     required this.onPaid,
+    this.preselectAll = false,
   });
 
   @override
@@ -43,6 +46,10 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
   @override
   void initState() {
     super.initState();
+    // "Bayar Semua" → semua item unpaid ke-select duluan, kasir tinggal konfirmasi.
+    if (widget.preselectAll) {
+      _selected.addAll(widget.unpaidItems.map((i) => i.id));
+    }
   }
 
   @override

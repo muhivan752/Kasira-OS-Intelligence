@@ -58,7 +58,9 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
   }
 
   Future<void> _load() async {
-    setState(() => _isLoading = true);
+    // Optimistic: spinner full-screen HANYA saat load pertama (belum ada data).
+    // Refresh berikutnya jalan diam-diam, grid lama tetap tampil.
+    if (_tables.isEmpty) setState(() => _isLoading = true);
     try {
       final cache = SessionCache.instance;
 
@@ -188,7 +190,7 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
 
           // Table grid
           Expanded(
-            child: _isLoading
+            child: (_isLoading && _tables.isEmpty)
                 ? const Center(child: CircularProgressIndicator())
                 : _tables.isEmpty
                     ? const Center(child: Text('Belum ada meja. Tambah di Owner Dashboard.', style: TextStyle(color: KasiraDS.textMuted)))
