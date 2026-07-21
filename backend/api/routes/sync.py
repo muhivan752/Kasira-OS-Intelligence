@@ -255,6 +255,17 @@ async def sync_data(
         # Commit all pushed changes in a single transaction
         await db.commit()
 
+        # CRITICAL: SET LOCAL is transaction-scoped — COMMIT resets
+        # app.current_tenant_id back to '', which is the RLS *bypass* value
+        # (policy 069: `current_setting(...) = ''` OR tenant match). Without
+        # this re-set, every PULL query below runs with RLS effectively OFF
+        # and returns EVERY tenant's rows to this device. Same pattern as
+        # orders.py:285. Bound param, not f-string (no interpolation into SQL).
+        await db.execute(
+            text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+            {"tid": str(current_user.tenant_id)},
+        )
+
     # 2. PULL with CURSOR PAGINATION (CRITICAL #7).
     # Effective cursor priority: cursor_hlc (intra-session pagination) >
     # last_sync_hlc (first page marker). Zero data loss: filter > cursor

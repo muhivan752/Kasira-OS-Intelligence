@@ -1448,6 +1448,108 @@ async def send_receipt_whatsapp(
 
 # ── REFUND ENDPOINTS ─────────────────────────────────────────────────────────
 
+
+async def _settle_refund(db: AsyncSession, refund, actor_user_id, now):
+    """Selesaikan refund: stamp completed, tandai payment, balikin stok, revert item ad-hoc.
+
+    Dipakai DUA jalur yang sebelumnya divergen:
+      - request_refund() auto-approve (owner/superuser)
+      - approve_refund() (jalur request kasir → approve owner)
+
+    Sebelumnya jalur auto-approve cuma nge-stamp status='approved' lalu berhenti,
+    dan approve_refund menolak apa pun yang != 'pending' — jadi refund auto-approve
+    NGGAK PERNAH bisa selesai: uang keluar laci, payment tetap 'paid' di laporan,
+    stok gak balik, dan guard dedup bikin nyangkut permanen.
+
+    Stok HANYA dibalikin untuk refund PENUH. Refund parsial = itikad baik/potongan
+    (barang tetap di tangan customer), jadi balikin 100% stok itu salah.
+    Return: (payment, is_full_refund).
+    """
+    from backend.models.tab import Tab as _Tab
+    from backend.services.stock_service import restore_stock_on_cancel
+    from backend.services.ingredient_stock_service import restore_ingredients_on_cancel
+    from backend.models.tenant import Tenant
+    from decimal import Decimal as D
+
+    refund.status = 'completed'
+    refund.approved_by = actor_user_id
+    refund.approved_at = now
+    refund.completed_at = now
+    refund.row_version = (refund.row_version or 0) + 1
+
+    payment = (await db.execute(
+        select(Payment).where(Payment.id == refund.payment_id).with_for_update()
+    )).scalar_one_or_none()
+    if not payment:
+        return None, False
+
+    refund_amt = D(str(refund.amount))
+    is_full = refund_amt >= D(str(payment.amount_paid))
+
+    payment.refunded_at = now
+    payment.refund_amount = refund_amt
+    payment.row_version += 1
+    if is_full:
+        payment.status = 'refunded'
+
+    # Balikin stok — HANYA refund penuh.
+    if is_full and payment.order_id:
+        order = (await db.execute(
+            select(Order)
+            .where(Order.id == payment.order_id)
+            .options(selectinload(Order.items).selectinload(OrderItem.product))
+        )).scalar_one_or_none()
+        if order and order.status == 'completed':
+            outlet = await db.get(Outlet, order.outlet_id)
+            tier = "starter"
+            stock_mode = "simple"
+            if outlet:
+                sm = getattr(outlet, 'stock_mode', 'simple')
+                stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
+                if outlet.tenant_id:
+                    tenant = await db.get(Tenant, outlet.tenant_id)
+                    if tenant:
+                        tier_val = getattr(tenant, 'subscription_tier', None) or "starter"
+                        tier = tier_val.value if hasattr(tier_val, 'value') else str(tier_val)
+            for item in order.items:
+                product = item.product
+                if product and product.stock_enabled:
+                    if stock_mode == 'recipe':
+                        await restore_ingredients_on_cancel(
+                            db, product_id=product.id, quantity=item.quantity,
+                            outlet_id=order.outlet_id, order_id=order.id, tier=tier,
+                        )
+                    else:
+                        await restore_stock_on_cancel(
+                            db, product=product, quantity=item.quantity,
+                            outlet_id=order.outlet_id, order_id=order.id, tier=tier,
+                        )
+
+    # Revert per-item ad-hoc payment marks (Migration 085)
+    # Items balik ke "unpaid pool" → kasir bisa rebill ke customer lain.
+    # PENTING: pay-items SENGAJA gak nambah tab.paid_amount (source of truth = items.paid_at),
+    # jadi refund pay-items HANYA revert items, JANGAN decrement tab.paid_amount.
+    reverted_items = (await db.execute(
+        select(OrderItem).where(OrderItem.paid_payment_id == payment.id)
+    )).scalars().all()
+    if reverted_items:
+        for it in reverted_items:
+            it.paid_at = None
+            it.paid_payment_id = None
+            it.row_version = (it.row_version or 0) + 1
+
+        # Re-open tab kalau sudah closed (split via items refunded mid-close)
+        if payment.tab_id:
+            tab = await db.get(_Tab, payment.tab_id)
+            if tab and tab.status == 'paid':
+                tab.status = 'open'
+                tab.closed_at = None
+                tab.closed_by = None
+                tab.row_version = (tab.row_version or 0) + 1
+
+    return payment, is_full
+
+
 @router.post("/refunds", response_model=StandardResponse[RefundResponse])
 async def request_refund(
     request: Request,
@@ -1501,14 +1603,14 @@ async def request_refund(
         requested_by=current_user.id,
     )
     db.add(refund)
-
-    # If user is owner/superuser, auto-approve
-    if current_user.is_superuser:
-        refund.status = 'approved'
-        refund.approved_by = current_user.id
-        refund.approved_at = datetime.now(timezone.utc)
-
     await db.flush()
+
+    # Owner/superuser: auto-approve DAN langsung selesaikan.
+    # Dulu di sini cuma stamp status='approved' tanpa memproses apa pun, dan
+    # approve_refund menolak status != 'pending' → refund nyangkut selamanya.
+    auto_approved = bool(current_user.is_superuser)
+    if auto_approved:
+        await _settle_refund(db, refund, current_user.id, datetime.now(timezone.utc))
 
     db.add(Event(
         outlet_id=payment.outlet_id,
@@ -1523,6 +1625,21 @@ async def request_refund(
         },
         event_metadata={"ts": datetime.now(timezone.utc).isoformat(), "user_id": str(current_user.id)},
     ))
+    if auto_approved:
+        # Event stream harus konsisten dgn jalur approve_refund.
+        db.add(Event(
+            outlet_id=payment.outlet_id,
+            stream_id=f"refund:{refund.id}",
+            event_type="refund.completed",
+            event_data={
+                "refund_id": str(refund.id),
+                "payment_id": str(payment.id),
+                "amount": float(refund_amount),
+                "approved_by": str(current_user.id),
+                "auto_approved": True,
+            },
+            event_metadata={"ts": datetime.now(timezone.utc).isoformat(), "user_id": str(current_user.id)},
+        ))
     await log_audit(
         db=db, action="CREATE", entity="refund", entity_id=refund.id,
         after_state={"payment_id": str(body.payment_id), "amount": float(refund_amount), "reason": body.reason},
@@ -1534,7 +1651,7 @@ async def request_refund(
         success=True,
         data=RefundResponse.model_validate(refund),
         request_id=request.state.request_id,
-        message="Refund berhasil diajukan" + (" dan disetujui" if current_user.is_superuser else ""),
+        message="Refund berhasil diajukan dan diproses" if auto_approved else "Refund berhasil diajukan",
     )
 
 
@@ -1571,94 +1688,8 @@ async def approve_refund(
         raise HTTPException(status_code=409, detail="Data berubah, refresh dulu")
 
     now = datetime.now(timezone.utc)
-    refund.status = 'completed'
-    refund.approved_by = current_user.id
-    refund.approved_at = now
-    refund.completed_at = now
-    refund.row_version += 1
-
-    # Update payment status
-    payment = await db.execute(
-        select(Payment).where(Payment.id == refund.payment_id).with_for_update()
-    )
-    payment = payment.scalar_one_or_none()
-    if payment:
-        payment.status = 'refunded'
-        payment.refunded_at = now
-        payment.refund_amount = D(str(refund.amount))
-        payment.row_version += 1
-
-        # Restore stock if order exists
-        if payment.order_id:
-            from backend.services.stock_service import restore_stock_on_cancel
-            from backend.services.ingredient_stock_service import restore_ingredients_on_cancel
-            from backend.models.tenant import Tenant
-
-            order_q = await db.execute(
-                select(Order)
-                .where(Order.id == payment.order_id)
-                .options(selectinload(Order.items).selectinload(OrderItem.product))
-            )
-            order = order_q.scalar_one_or_none()
-            if order and order.status == 'completed':
-                outlet = await db.get(Outlet, order.outlet_id)
-                tier = "starter"
-                stock_mode = "simple"
-                if outlet:
-                    sm = getattr(outlet, 'stock_mode', 'simple')
-                    stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
-                    if outlet.tenant_id:
-                        tenant = await db.get(Tenant, outlet.tenant_id)
-                        if tenant:
-                            tier_val = getattr(tenant, 'subscription_tier', None) or "starter"
-                            tier = tier_val.value if hasattr(tier_val, 'value') else str(tier_val)
-                for item in order.items:
-                    product = item.product
-                    if product and product.stock_enabled:
-                        if stock_mode == 'recipe':
-                            await restore_ingredients_on_cancel(
-                                db,
-                                product_id=product.id,
-                                quantity=item.quantity,
-                                outlet_id=order.outlet_id,
-                                order_id=order.id,
-                                tier=tier,
-                            )
-                        else:
-                            await restore_stock_on_cancel(
-                                db,
-                                product=product,
-                                quantity=item.quantity,
-                                outlet_id=order.outlet_id,
-                                order_id=order.id,
-                                tier=tier,
-                            )
-
-        # Revert per-item ad-hoc payment marks (Migration 085)
-        # Kalau payment ini link ke order_items via paid_payment_id (= pay-items payment),
-        # items balik ke "unpaid pool" → kasir bisa rebill ke customer lain.
-        # PENTING: pay-items SENGAJA gak nambah tab.paid_amount (source of truth = items.paid_at).
-        # Jadi refund pay-items HANYA revert items, JANGAN decrement tab.paid_amount.
-        # tab.paid_amount cuma di-affect kalau payment link ke split/full (path lain).
-        from backend.models.tab import Tab as _Tab
-        reverted_items_q = await db.execute(
-            select(OrderItem).where(OrderItem.paid_payment_id == payment.id)
-        )
-        reverted_items = reverted_items_q.scalars().all()
-        if reverted_items:
-            for it in reverted_items:
-                it.paid_at = None
-                it.paid_payment_id = None
-                it.row_version = (it.row_version or 0) + 1
-
-            # Re-open tab kalau sudah closed (split via items refunded mid-close)
-            if payment.tab_id:
-                tab = await db.get(_Tab, payment.tab_id)
-                if tab and tab.status == 'paid':
-                    tab.status = 'open'
-                    tab.closed_at = None
-                    tab.closed_by = None
-                    tab.row_version = (tab.row_version or 0) + 1
+    # Logika penyelesaian dipakai bareng dgn jalur auto-approve di request_refund().
+    payment, _is_full = await _settle_refund(db, refund, current_user.id, now)
 
     db.add(Event(
         outlet_id=payment.outlet_id if payment else None,
