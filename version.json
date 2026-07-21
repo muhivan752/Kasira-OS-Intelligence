@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.5.6",
+    "version": "1.5.7",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.6/kasira-pos-v1.5.6.apk",
-    "release_notes": "Redesign Aurora lengkap + cart upsell & promo diskon."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.7/kasira-pos-v1.5.7.apk",
+    "release_notes": "Beranda tablet Aurora + sapaan pakai nama toko."
   },
   "dapur": {
-    "version": "1.5.6",
+    "version": "1.5.7",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.6/kasira-dapur-v1.5.6.apk",
-    "release_notes": "Redesign Aurora lengkap + cart upsell & promo diskon."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.7/kasira-dapur-v1.5.7.apk",
+    "release_notes": "Beranda tablet Aurora + sapaan pakai nama toko."
   }
 }
