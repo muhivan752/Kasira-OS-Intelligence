@@ -55,7 +55,7 @@ class _PaymentModalState extends State<PaymentModal> {
   ));
   SessionCache get _cache => SessionCache.instance;
 
-  Future<void> _submitCashPayment(double amountPaid) async {
+  Future<void> _submitCashPayment(double amountPaid, {String apiMethod = 'cash'}) async {
     setState(() {
       _isLoadingQris = true;
       _cashError = null;
@@ -63,7 +63,10 @@ class _PaymentModalState extends State<PaymentModal> {
     try {
       final outletId = _cache.outletId ?? '';
       final shiftId = _cache.shiftSessionId;
-      final change = amountPaid - widget.totalAmount;
+      // Non-cash (kartu) gak ada kembalian — amount_paid = tagihan.
+      final isCashApi = apiMethod == 'cash';
+      final paid = isCashApi ? amountPaid : widget.totalAmount;
+      final change = paid - widget.totalAmount;
 
       await _dio.post(
         '/payments/',
@@ -71,9 +74,9 @@ class _PaymentModalState extends State<PaymentModal> {
         data: {
           'order_id': widget.orderId,
           'outlet_id': outletId,
-          'payment_method': 'cash',
+          'payment_method': apiMethod,
           'amount_due': widget.totalAmount,
-          'amount_paid': amountPaid,
+          'amount_paid': paid,
           'change_amount': change < 0 ? 0 : change,
           if (shiftId != null) 'shift_session_id': shiftId,
         },
@@ -403,82 +406,79 @@ class _PaymentModalState extends State<PaymentModal> {
     );
   }
 
-  // ─── Narrow layout (phone) ──────────────────────────────────────────────────
+  // ─── Narrow layout (phone) — ports "Kasira POS.dc.html" CHECKOUT screen ──────
   Widget _buildNarrowLayout(BuildContext context) {
     final change = _amountReceived - widget.totalAmount;
     final isCash = _paymentMethod == 'Cash';
+    final isKartu = _paymentMethod == 'Kartu Debit/Kredit';
     final screenHeight = MediaQuery.of(context).size.height;
 
     return SizedBox(
-      height: screenHeight * 0.88,
+      height: screenHeight * 0.9,
       child: Column(
         children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 20, 8, 16),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: KasiraDS.borderSubtle)),
-            ),
+          // Header: back + "Pembayaran"
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
             child: Row(
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Total Tagihan',
-                          style: TextStyle(color: KasiraDS.textMuted, fontSize: 12)),
-                      Text(
-                        currencyFormatter.format(widget.totalAmount),
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              color: KasiraDS.brandPrimary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(LucideIcons.x),
-                ),
+                _circleBtn(LucideIcons.x, () => Navigator.pop(context)),
+                const SizedBox(width: 12),
+                Text('Pembayaran',
+                    style: KasiraDS.display(size: 19, color: KasiraDS.textStrong)),
               ],
             ),
           ),
-          // Method selector chips
-          Container(
-            color: KasiraDS.surfaceSunken,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                _buildMethodChip('Cash', LucideIcons.banknote),
-                const SizedBox(width: 8),
-                _buildMethodChip('QRIS', LucideIcons.qrCode),
-                const SizedBox(width: 8),
-                _buildMethodChip('Kartu', LucideIcons.creditCard),
-              ],
-            ),
-          ),
-          // Details (scrollable)
           Expanded(
-            child: isCash
-                ? SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Total hero
+                  Center(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: _buildCashDetails(context, change),
+                      children: [
+                        const SizedBox(height: 8),
+                        Text('// TOTAL TAGIHAN',
+                            style: KasiraDS.eyebrow(color: KasiraDS.textMuted)),
+                        const SizedBox(height: 6),
+                        Text(currencyFormatter.format(widget.totalAmount),
+                            style: KasiraDS.display(size: 38, color: KasiraDS.textStrong)),
+                        const SizedBox(height: 18),
+                      ],
                     ),
-                  )
-                : _paymentMethod == 'QRIS'
-                    ? Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: _buildQrisDetails(context),
-                      )
-                    : const Center(child: Text('Metode belum tersedia')),
+                  ),
+                  Text('Metode pembayaran',
+                      style: KasiraDS.sans(size: 12.5, weight: FontWeight.w700, color: KasiraDS.textBody)),
+                  const SizedBox(height: 10),
+                  // Method grid 2col
+                  Row(children: [
+                    Expanded(child: _methodTile('Cash', 'Tunai', LucideIcons.banknote)),
+                    const SizedBox(width: 11),
+                    Expanded(child: _methodTile('QRIS', 'QRIS', LucideIcons.qrCode)),
+                  ]),
+                  const SizedBox(height: 11),
+                  Row(children: [
+                    Expanded(child: _methodTile('Kartu Debit/Kredit', 'Kartu', LucideIcons.creditCard)),
+                    const SizedBox(width: 11),
+                    const Expanded(child: SizedBox()),
+                  ]),
+                  const SizedBox(height: 18),
+                  if (isCash)
+                    ..._buildCashDetails(context, change)
+                  else if (_paymentMethod == 'QRIS')
+                    _buildQrisDetails(context)
+                  else if (isKartu)
+                    _buildKartuInfo(),
+                ],
+              ),
+            ),
           ),
-          // Button
+          // Confirm button (QRIS auto-confirms via polling → hide)
           if (_paymentMethod != 'QRIS')
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
               child: _buildPayButton(context, change),
             ),
         ],
@@ -486,15 +486,131 @@ class _PaymentModalState extends State<PaymentModal> {
     );
   }
 
+  Widget _circleBtn(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: KasiraDS.surfaceCard,
+          shape: BoxShape.circle,
+          border: Border.all(color: KasiraDS.borderSubtle),
+          boxShadow: KasiraDS.shadowSm,
+        ),
+        child: Icon(icon, size: 19, color: KasiraDS.textStrong),
+      ),
+    );
+  }
+
+  /// Method grid tile (design 591-596): icon tile + label, selected = brand border + tint + glow.
+  Widget _methodTile(String value, String label, IconData icon) {
+    final isSelected = _paymentMethod == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _paymentMethod = value;
+          _cashError = null;
+        });
+        if (value == 'QRIS' && (_qrisUrl == null || _qrisError != null) && !_isLoadingQris) {
+          _generateQris();
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+        decoration: BoxDecoration(
+          color: isSelected ? KasiraDS.brandTint : KasiraDS.surfaceCard,
+          borderRadius: KasiraDS.brMd,
+          border: Border.all(
+            color: isSelected ? KasiraDS.brandPrimary : KasiraDS.borderSubtle,
+            width: isSelected ? 2 : 1.5,
+          ),
+          boxShadow: isSelected ? KasiraDS.shadowSm : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: isSelected ? KasiraDS.gradientFrekuensi : null,
+                color: isSelected ? null : KasiraDS.surfaceSunken,
+                borderRadius: KasiraDS.brSm,
+              ),
+              child: Icon(icon, size: 19,
+                  color: isSelected ? Colors.white : KasiraDS.textMuted),
+            ),
+            const SizedBox(width: 11),
+            Flexible(
+              child: Text(label,
+                  overflow: TextOverflow.ellipsis,
+                  style: KasiraDS.sans(
+                      size: 14,
+                      weight: FontWeight.w700,
+                      color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textStrong)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKartuInfo() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: KasiraDS.surfaceSunken,
+        borderRadius: KasiraDS.brLg,
+      ),
+      child: Column(
+        children: [
+          const Icon(LucideIcons.creditCard, size: 30, color: KasiraDS.textMuted),
+          const SizedBox(height: 10),
+          Text('Gesek/tap di mesin EDC, lalu tekan Konfirmasi pembayaran.',
+              textAlign: TextAlign.center,
+              style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
+        ],
+      ),
+    );
+  }
+
+  /// Denominasi cash: uang pas + pembulatan + pecahan umum di atas total.
+  List<double> _cashOptions() {
+    final total = widget.totalAmount;
+    final opts = <double>{total};
+    for (final n in [1000, 5000, 10000, 20000, 50000, 100000]) {
+      final up = (total / n).ceil() * n.toDouble();
+      if (up > total) opts.add(up);
+    }
+    for (final note in [20000.0, 50000.0, 100000.0]) {
+      if (note > total) opts.add(note);
+    }
+    final list = opts.toList()..sort();
+    return list.take(6).toList();
+  }
+
   List<Widget> _buildCashDetails(BuildContext context, double change) {
+    final hasCash = _amountReceived > 0;
     return [
-      Text('Uang Diterima', style: Theme.of(context).textTheme.titleMedium),
+      Text('Uang diterima',
+          style: KasiraDS.sans(size: 12.5, weight: FontWeight.w700, color: KasiraDS.textBody)),
+      const SizedBox(height: 11),
+      Wrap(
+        spacing: 9,
+        runSpacing: 9,
+        children: _cashOptions().map((a) => _cashChip(a)).toList(),
+      ),
       const SizedBox(height: 12),
       TextField(
         controller: _amountController,
         keyboardType: TextInputType.number,
-        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        decoration: const InputDecoration(prefixText: 'Rp '),
+        style: KasiraDS.sans(size: 15, weight: FontWeight.w700, color: KasiraDS.textStrong),
+        decoration: const InputDecoration(prefixText: 'Rp ', hintText: 'Nominal lain', isDense: true),
         onChanged: (val) {
           setState(() {
             _amountReceived = double.tryParse(val) ?? 0.0;
@@ -502,37 +618,31 @@ class _PaymentModalState extends State<PaymentModal> {
           });
         },
       ),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          _buildQuickCashBtn(widget.totalAmount),
-          const SizedBox(width: 8),
-          _buildQuickCashBtn(100000),
-          const SizedBox(width: 8),
-          _buildQuickCashBtn(50000),
-        ],
-      ),
-      const SizedBox(height: 20),
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text('Kembalian', style: Theme.of(context).textTheme.titleLarge),
-          Text(
-            currencyFormatter.format(change > 0 ? change : 0),
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: change >= 0 ? KasiraDS.success : KasiraDS.danger,
-                  fontWeight: FontWeight.bold,
-                ),
+      const SizedBox(height: 14),
+      if (hasCash)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: KasiraDS.success.withOpacity(0.12),
+            borderRadius: KasiraDS.brMd,
           ),
-        ],
-      ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Kembalian',
+                  style: KasiraDS.sans(size: 14, weight: FontWeight.w700, color: KasiraDS.textStrong)),
+              Text(currencyFormatter.format(change > 0 ? change : 0),
+                  style: KasiraDS.display(size: 20, color: change >= 0 ? KasiraDS.success : KasiraDS.danger)),
+            ],
+          ),
+        ),
       if (_cashError != null) ...[
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: KasiraDS.danger.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: KasiraDS.brSm,
             border: Border.all(color: KasiraDS.danger.withOpacity(0.3)),
           ),
           child: Row(
@@ -540,16 +650,46 @@ class _PaymentModalState extends State<PaymentModal> {
               const Icon(LucideIcons.alertCircle, color: KasiraDS.danger, size: 16),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  _cashError!,
-                  style: const TextStyle(color: KasiraDS.danger, fontSize: 13),
-                ),
+                child: Text(_cashError!, style: KasiraDS.sans(size: 13, color: KasiraDS.danger)),
               ),
             ],
           ),
         ),
       ],
     ];
+  }
+
+  Widget _cashChip(double amount) {
+    final isSelected = _amountReceived == amount;
+    final isPas = amount == widget.totalAmount;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _amountReceived = amount;
+          _amountController.text = amount.toInt().toString();
+          _cashError = null;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          gradient: isSelected ? KasiraDS.gradientFrekuensi : null,
+          color: isSelected ? null : KasiraDS.surfaceCard,
+          borderRadius: KasiraDS.brMd,
+          border: Border.all(
+            color: isSelected ? Colors.transparent : KasiraDS.borderDefault,
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          isPas ? 'Uang pas' : currencyFormatter.format(amount),
+          style: KasiraDS.sans(
+              size: 13.5,
+              weight: FontWeight.w800,
+              color: isSelected ? Colors.white : KasiraDS.textStrong),
+        ),
+      ),
+    );
   }
 
   Widget _buildQrisDetails(BuildContext context) {
@@ -629,22 +769,45 @@ class _PaymentModalState extends State<PaymentModal> {
 
   Widget _buildPayButton(BuildContext context, double change) {
     final isCash = _paymentMethod == 'Cash';
+    final isKartu = _paymentMethod == 'Kartu Debit/Kredit';
     final isDisabled = (isCash && change < 0) || _isLoadingQris;
+    void submit() {
+      if (isKartu) {
+        _submitCashPayment(widget.totalAmount, apiMethod: 'card');
+      } else {
+        _submitCashPayment(_amountReceived);
+      }
+    }
+
     return SizedBox(
       width: double.infinity,
-      height: 52,
-      child: ElevatedButton(
-        onPressed: isDisabled ? null : () async => _submitCashPayment(_amountReceived),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isDisabled ? KasiraDS.borderSubtle : KasiraDS.brandPrimary,
+      height: 54,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: isDisabled ? null : KasiraDS.gradientFrekuensi,
+          color: isDisabled ? KasiraDS.surfaceSunken : null,
+          borderRadius: KasiraDS.brMd,
+          boxShadow: isDisabled ? null : KasiraDS.glowBrand,
         ),
-        child: _isLoadingQris
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : const Text('SELESAIKAN PEMBAYARAN',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: isDisabled ? null : submit,
+            borderRadius: KasiraDS.brMd,
+            child: Center(
+              child: _isLoadingQris
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text('Konfirmasi pembayaran',
+                      style: KasiraDS.sans(
+                          size: 15,
+                          weight: FontWeight.w800,
+                          color: isDisabled ? KasiraDS.textMuted : Colors.white)),
+            ),
+          ),
+        ),
       ),
     );
   }
