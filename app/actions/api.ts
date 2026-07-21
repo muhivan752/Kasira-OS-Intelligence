@@ -661,3 +661,35 @@ export async function getReferralStats() {
   if (!res.ok) return null;
   return data.data;
 }
+
+// ── CRM pelanggan ────────────────────────────────────────────────────────────
+// Pakai server action, bukan route handler di /api/*, karena nginx melempar
+// SEMUA /api/ ke FastAPI — route Next di bawah /api/ harus didaftarkan manual
+// di nginx dan gampang kelupaan. Server action juga lebih cepat: nembak
+// backend lewat jaringan internal Docker, bypass nginx.
+
+export async function getCrmCustomers(params: { search?: string; sort?: string } = {}) {
+  try {
+    const qs = new URLSearchParams({ sort: params.sort || 'last_visit', limit: '200' });
+    if (params.search?.trim()) qs.set('search', params.search.trim());
+    const res = await fetchWithAuth(`/customers/crm?${qs}`);
+    const data = await res.json();
+    return data.data ?? null;
+  } catch { return null; }
+}
+
+export async function getCrmCustomerDetail(customerId: string) {
+  try {
+    const res = await fetchWithAuth(`/customers/${customerId}/detail`);
+    const data = await res.json();
+    return data.data ?? null;
+  } catch { return null; }
+}
+
+export async function refreshCrmStats() {
+  try {
+    const res = await fetchWithAuth('/customers/refresh-stats', { method: 'POST' });
+    const data = await res.json();
+    return data.success === true;
+  } catch { return false; }
+}

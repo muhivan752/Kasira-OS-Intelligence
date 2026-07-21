@@ -10,6 +10,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Store,
   X,
   Star,
   Bot,
@@ -71,7 +72,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const mainNav = [
     { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Menu', href: '/dashboard/menu', icon: MenuIcon },
-    { name: 'Kasir', href: '/dashboard/kasir', icon: Users },
+    { name: 'Kasir', href: '/dashboard/kasir', icon: Store },
+    { name: 'Pelanggan', href: '/dashboard/pelanggan', icon: Users },
     { name: 'Laporan', href: '/dashboard/laporan', icon: BarChart3 },
   ];
 
