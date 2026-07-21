@@ -20,10 +20,16 @@ import logging
 from datetime import date
 from typing import Any, List, Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.deps import get_current_user
 from backend.core.config import settings
+from backend.core.database import AsyncSessionLocal, get_db
+from backend.models.landing_chat_log import LandingChatLog
+from backend.models.user import User
 from backend.schemas.response import StandardResponse
 from backend.services.llm_client import chat_configured, get_llm_client
 from backend.services.redis import get_redis_client
@@ -32,19 +38,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Rem biaya per request. Jawaban landing itu 3-4 kalimat, 600 token udah lega.
-MAX_TOKENS = 600
-# Cuma bawa 10 pesan terakhir — percakapan panjang gak nambah kualitas jawaban
-# sales, tapi nambah biaya input tiap giliran.
-MAX_HISTORY = 10
-MAX_CHARS = 500
+# Batas dilonggarin: DeepSeek jauh lebih murah dari Haiku, jadi ngirit token di
+# sini cuma bikin jawaban kepotong tanpa hemat yang berarti. Angka segini masih
+# nahan percakapan yang bener-bener liar, bukan ngerem pengunjung wajar.
+MAX_TOKENS = 1500
+MAX_HISTORY = 30
+MAX_CHARS = 2000
 
 # Model Haiku-class → dibelokin ke DeepSeek oleh llm_client.route_model().
 LANDING_MODEL = "claude-haiku-4-5-20251001"
 
 SYSTEM_PROMPT = """Kamu "Barista Kasira", asisten penjualan ramah di landing page Kasira — aplikasi kasir (POS) + toko online untuk cafe, warkop & UMKM F&B Indonesia.
 
-Gaya: Bahasa Indonesia santai ala Jakarta, hangat, jujur, to-the-point. Panggil calon pelanggan "kamu". Maksimal 3-4 kalimat atau bullet pendek. Maksimal 1 emoji.
+Gaya: Bahasa Indonesia santai ala Jakarta, hangat, jujur, to-the-point. Panggil calon pelanggan "kamu". Default 3-4 kalimat atau bullet pendek — tapi kalau orang minta saran atau penjelasan yang emang butuh detail, panjangin secukupnya sampai kepakai. Maksimal 1 emoji.
 
 Tujuan kamu: bantu calon pelanggan paham Kasira dan dorong dengan halus ke arah daftar coba gratis atau lanjut ke WhatsApp. Jangan maksa/hard-sell. Kalau orang udah tertarik, arahin: "daftar gratis 30 hari di tombol Coba gratis" atau "lanjut ngobrol via WhatsApp".
 
@@ -55,6 +61,15 @@ SOAL AKURASI — baca baik-baik, ada dua sisi:
 (a) HARGA & FITUR: JAWAB, jangan mengelak. Semua harga ada di FAKTA PRODUK. Ditanya "biaya langganan berapa" harus langsung dijawab dengan angkanya. Pertanyaan harga yang dijawab "aku nggak tau" itu kegagalan — orang datang ke sini justru buat itu.
 
 (b) YANG TIDAK BOLEH DIKARANG: jumlah pengguna, jumlah cafe, testimoni, rating, nama klien, omzet pelanggan, cara pembayaran/penagihan, dan harga di luar yang tercantum. Kasira produk baru dan belum punya basis pelanggan besar — kalau ditanya "udah berapa yang pakai / ada testimoni / kliennya siapa", jawab apa adanya, lalu balikin jadi kelebihan: yang gabung sekarang bisa ikut nentuin arah produk dan dapet perhatian langsung dari tim.
+
+KAMU BOLEH — malah HARUS — NGASIH SARAN BISNIS:
+Kamu ngerti operasional cafe/warkop Indonesia: margin kopi, HPP, jam ramai vs sepi, menu signature, upselling, promo, kelola stok bahan, shift kasir, bocor kas, harga vs daya beli sekitar.
+
+Kalau orang nanya saran (biar rame, menu apa yang laku, naikin omzet, mau buka cafe baru, harga jual berapa) — JAWAB BENERAN dan spesifik. Kasih 2-3 langkah konkret yang bisa dia kerjain besok, bukan basa-basi. Ini bukan di luar topik: orang yang ngerasa kebantu jauh lebih gampang percaya buat coba produknya.
+
+Baru setelah sarannya berisi, sambungin secara wajar ke Kasira di bagian yang emang nyambung — misal saran "cek menu mana yang rugi" nyambung ke margin/HPP real-time. Jangan dipaksain kalau emang nggak nyambung; saran yang tulus lebih laku daripada iklan.
+
+Yang tetap kamu tolak halus cuma yang bener-bener nggak ada hubungannya sama jualan makanan/minuman: coding, politik, tugas sekolah, curhat pribadi.
 
 CARA JAWAB KALAU NGGAK YAKIN — jangan buntu:
 Salah: "Aku nggak punya info itu." (mentok, orangnya pergi)
@@ -92,7 +107,28 @@ class ChatMessage(BaseModel):
 
 
 class LandingChatRequest(BaseModel):
-    messages: List[ChatMessage] = Field(..., min_length=1, max_length=40)
+    messages: List[ChatMessage] = Field(..., min_length=1, max_length=60)
+    # Acak dari browser. Bukan identitas — cuma buat nyambungin satu percakapan
+    # jadi kelihatan alur pertanyaannya, bukan potongan lepas.
+    session_id: Optional[str] = Field(None, max_length=64)
+
+
+async def _log_exchange(session_id: Optional[str], question: str,
+                        answer: str, turn: int) -> None:
+    """Simpan tanya-jawab buat riset produk. Sengaja pakai session DB sendiri
+    dan ditelen kalau gagal — nyimpen log nggak boleh sampai bikin pengunjung
+    gagal dapet jawaban."""
+    try:
+        async with AsyncSessionLocal() as db:
+            db.add(LandingChatLog(
+                session_id=session_id,
+                question=question,
+                answer=answer,
+                turn=turn,
+            ))
+            await db.commit()
+    except Exception as e:
+        logger.warning("Gagal nyimpen landing chat log (diabaikan): %s", e)
 
 
 def _client_ip(request: Request) -> str:
@@ -174,8 +210,60 @@ async def landing_chat(request: Request, body: LandingChatRequest) -> Any:
     if not reply:
         reply = "Hmm, coba tanya lagi ya — atau langsung WhatsApp aja biar cepat."
 
+    await _log_exchange(
+        session_id=body.session_id,
+        question=body.messages[-1].content,
+        answer=reply,
+        turn=sum(1 for m in body.messages if m.role == "user"),
+    )
+
     return StandardResponse(
         success=True,
         data={"reply": reply},
+        request_id=getattr(request.state, "request_id", None),
+    )
+
+
+@router.get("/questions", response_model=StandardResponse)
+async def list_questions(
+    request: Request,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Baca pertanyaan pengunjung landing — riset produk.
+
+    Beda dari endpoint chat-nya, yang ini WAJIB login dan cuma buat superadmin:
+    isinya pertanyaan orang lain, bukan data yang boleh dibuka ke publik.
+    """
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Khusus superadmin")
+
+    limit = max(1, min(limit, 500))
+
+    rows = (await db.execute(
+        select(LandingChatLog)
+        .order_by(LandingChatLog.created_at.desc())
+        .limit(limit)
+    )).scalars().all()
+
+    total = (await db.execute(select(func.count(LandingChatLog.id)))).scalar() or 0
+
+    return StandardResponse(
+        success=True,
+        data={
+            "total": int(total),
+            "items": [
+                {
+                    "id": str(r.id),
+                    "session_id": r.session_id,
+                    "turn": r.turn,
+                    "question": r.question,
+                    "answer": r.answer,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in rows
+            ],
+        },
         request_id=getattr(request.state, "request_id", None),
     )

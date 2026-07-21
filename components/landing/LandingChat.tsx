@@ -18,6 +18,15 @@ export default function LandingChat({ waLink }: { waLink: string }) {
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Acak per tab, nggak disimpan ke mana-mana. Gunanya cuma biar pertanyaan
+  // dalam satu percakapan kebaca berurutan pas dianalisis, bukan potongan lepas.
+  const sessionId = useRef<string>('');
+  if (!sessionId.current) {
+    sessionId.current =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `s-${Math.random().toString(36).slice(2)}`;
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -36,7 +45,10 @@ export default function LandingChat({ waLink }: { waLink: string }) {
       const res = await fetch('/api/landing-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next.map((m) => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({
+          session_id: sessionId.current,
+          messages: next.map((m) => ({ role: m.role, content: m.content })),
+        }),
       });
       const data = await res.json();
       setMessages((prev) => [
@@ -141,7 +153,7 @@ export default function LandingChat({ waLink }: { waLink: string }) {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && send(draft)}
-                maxLength={500}
+                maxLength={2000}
                 placeholder="Tanya soal Kasira…"
                 className="min-w-0 flex-1 rounded-xl border border-[#E7E5DE] bg-[#FAFAF7] px-3.5 py-2.5 text-[14px] text-[#0B1512] outline-none transition placeholder:text-[#A8B0AA] focus:border-[#059669]"
               />
