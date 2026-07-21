@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.5.7",
+    "version": "1.5.8",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.7/kasira-pos-v1.5.7.apk",
-    "release_notes": "Beranda tablet Aurora + sapaan pakai nama toko."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.8/kasira-pos-v1.5.8.apk",
+    "release_notes": "Navbar, Meja & Kasir sesuai desain. Kasir langsung ke menu, dine-in via tab Meja."
   },
   "dapur": {
-    "version": "1.5.7",
+    "version": "1.5.8",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.7/kasira-dapur-v1.5.7.apk",
-    "release_notes": "Beranda tablet Aurora + sapaan pakai nama toko."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.8/kasira-dapur-v1.5.8.apk",
+    "release_notes": "Navbar, Meja & Kasir sesuai desain. Kasir langsung ke menu, dine-in via tab Meja."
   }
 }
