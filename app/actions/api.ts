@@ -668,10 +668,13 @@ export async function getReferralStats() {
 // di nginx dan gampang kelupaan. Server action juga lebih cepat: nembak
 // backend lewat jaringan internal Docker, bypass nginx.
 
-export async function getCrmCustomers(params: { search?: string; sort?: string } = {}) {
+export async function getCrmCustomers(
+  params: { search?: string; sort?: string; segment?: string } = {}
+) {
   try {
     const qs = new URLSearchParams({ sort: params.sort || 'last_visit', limit: '200' });
     if (params.search?.trim()) qs.set('search', params.search.trim());
+    if (params.segment) qs.set('segment', params.segment);
     const res = await fetchWithAuth(`/customers/crm?${qs}`);
     const data = await res.json();
     return data.data ?? null;

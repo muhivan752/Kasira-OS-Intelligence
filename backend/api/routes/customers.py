@@ -154,6 +154,7 @@ async def crm_list(
     request: Request,
     search: Optional[str] = None,
     sort: str = "last_visit",   # last_visit | spent | visits | name | newest
+    segment: Optional[str] = None,  # lapse | repeat | top | baru | belum_belanja
     skip: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
@@ -167,6 +168,28 @@ async def crm_list(
         s = f"%{search}%"
         base.append(or_(Customer.name.ilike(s), Customer.phone.ilike(s), Customer.email.ilike(s)))
 
+    # Segmen. Sengaja cuma lima dan semuanya bisa dijawab dari kolom yang udah
+    # dihitung — nggak ada skoring RFM atau model apa pun. Yang dibutuhin pemilik
+    # warung itu "siapa yang perlu disapa", bukan angka yang harus ditafsirkan.
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    now = _dt.now(_tz.utc)
+    if segment == "lapse":
+        # Pernah belanja, tapi 30 hari terakhir nggak kelihatan.
+        base += [Customer.total_visits > 0, Customer.last_visit_at < now - _td(days=30)]
+    elif segment == "repeat":
+        base.append(Customer.total_visits > 1)
+    elif segment == "top":
+        base.append(Customer.total_spent > 0)
+    elif segment == "baru":
+        # Kunjungan pertamanya dalam 30 hari terakhir — orang yang baru kenal.
+        base += [Customer.first_visit_at.isnot(None),
+                 Customer.first_visit_at >= now - _td(days=30)]
+    elif segment == "belum_belanja":
+        # Nomornya kesimpan tapi belum pernah ada transaksi lunas atas namanya.
+        base.append(Customer.total_visits == 0)
+
+    if segment == "top":
+        sort = "spent"
     order_by = {
         "spent": Customer.total_spent.desc(),
         "visits": Customer.total_visits.desc(),
@@ -189,12 +212,34 @@ async def crm_list(
         ).where(*base)
     )).first()
 
+    # Jumlah tiap segmen — dihitung tanpa filter segmen aktif, biar angka di
+    # chip nggak ikut berubah waktu salah satu segmen lagi dipilih.
+    scope = [Customer.tenant_id == current_user.tenant_id, Customer.deleted_at.is_(None)]
+    counts_row = (await db.execute(
+        select(
+            _f.count(Customer.id).filter(
+                Customer.total_visits > 0,
+                Customer.last_visit_at < now - _td(days=30)),
+            _f.count(Customer.id).filter(Customer.total_visits > 1),
+            _f.count(Customer.id).filter(
+                Customer.first_visit_at.isnot(None),
+                Customer.first_visit_at >= now - _td(days=30)),
+            _f.count(Customer.id).filter(Customer.total_visits == 0),
+        ).where(*scope)
+    )).first()
+
     return StandardResponse(
         success=True,
         data={
             "total": int(total),
             "total_spent_all": float(agg[0] or 0),
             "repeat_customers": int(agg[1] or 0),
+            "segments": {
+                "lapse": int(counts_row[0] or 0),
+                "repeat": int(counts_row[1] or 0),
+                "baru": int(counts_row[2] or 0),
+                "belum_belanja": int(counts_row[3] or 0),
+            },
             "items": [_summary(c) for c in rows],
         },
         request_id=request.state.request_id,

@@ -30,6 +30,17 @@ type Detail = Customer & {
   favourites: { name: string; qty: number }[];
 };
 
+// Segmen sengaja cuma empat dan semuanya kalimat yang bisa langsung
+// ditindaklanjuti pemilik warung — bukan istilah analitik yang harus
+// ditafsirkan dulu.
+const SEGMENTS = [
+  { key: '', label: 'Semua' },
+  { key: 'lapse', label: 'Lama nggak mampir', hint: 'Pernah belanja, 30 hari terakhir nggak kelihatan' },
+  { key: 'repeat', label: 'Balik lagi', hint: 'Sudah belanja lebih dari sekali' },
+  { key: 'baru', label: 'Baru kenal', hint: 'Pertama kali belanja dalam 30 hari terakhir' },
+  { key: 'belum_belanja', label: 'Belum pernah belanja', hint: 'Nomornya tersimpan tapi belum ada transaksi' },
+];
+
 const SORTS = [
   { key: 'last_visit', label: 'Terakhir mampir' },
   { key: 'spent', label: 'Belanja terbesar' },
@@ -58,6 +69,8 @@ export default function PelangganPage() {
   const [spentAll, setSpentAll] = useState(0);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('last_visit');
+  const [segment, setSegment] = useState('');
+  const [segCounts, setSegCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -66,17 +79,18 @@ export default function PelangganPage() {
   const load = useCallback(async (opts: { silent?: boolean } = {}) => {
     if (!opts.silent) setLoading(true);
     try {
-      const data = await getCrmCustomers({ search, sort });
+      const data = await getCrmCustomers({ search, sort, segment });
       setItems(data?.items ?? []);
       setTotal(data?.total ?? 0);
       setRepeat(data?.repeat_customers ?? 0);
       setSpentAll(data?.total_spent_all ?? 0);
+      setSegCounts(data?.segments ?? {});
     } catch {
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, [sort, search]);
+  }, [sort, search, segment]);
 
   // Debounce pencarian — tiap ketikan jangan langsung nembak server.
   useEffect(() => {
@@ -155,6 +169,30 @@ export default function PelangganPage() {
         <Stat label="Total belanja tercatat" value={rp(spentAll)} />
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {SEGMENTS.map((sg) => {
+          const active = segment === sg.key;
+          const n = sg.key ? segCounts[sg.key] : total;
+          return (
+            <button
+              key={sg.key || 'all'}
+              onClick={() => setSegment(sg.key)}
+              title={sg.hint}
+              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+                active
+                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                  : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              {sg.label}
+              {typeof n === 'number' && (
+                <span className={active ? 'ml-1.5 text-emerald-100' : 'ml-1.5 text-gray-400'}>{n}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="flex flex-wrap gap-3">
         <div className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -180,7 +218,11 @@ export default function PelangganPage() {
         ) : !items.length ? (
           <div className="p-10 text-center">
             <Users className="mx-auto h-8 w-8 text-gray-300" />
-            <p className="mt-3 font-semibold text-gray-700">Belum ada pelanggan tercatat</p>
+            <p className="mt-3 font-semibold text-gray-700">
+              {segment
+                ? `Nggak ada pelanggan di "${SEGMENTS.find((x) => x.key === segment)?.label}"`
+                : 'Belum ada pelanggan tercatat'}
+            </p>
             <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
               Pelanggan tercatat otomatis saat kasir memilih pelanggan di transaksi, atau saat struk dikirim
               lewat WhatsApp. Semakin sering dipakai, semakin kelihatan siapa yang balik lagi.
