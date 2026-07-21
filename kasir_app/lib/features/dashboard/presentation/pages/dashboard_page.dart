@@ -83,9 +83,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         (icon: LucideIcons.receipt, label: 'Riwayat', page: 3),
       ];
     }
+    // Free: + Stok (Starter WAJIB bisa kelola produk/stok). Meja tetap Pro-only.
     return const [
       (icon: LucideIcons.home, label: 'Beranda', page: 0),
       (icon: LucideIcons.shoppingBag, label: 'Kasir', page: 1),
+      (icon: LucideIcons.package, label: 'Stok', page: 5),
       (icon: LucideIcons.barChart3, label: 'Laporan', page: 2),
       (icon: LucideIcons.receipt, label: 'Riwayat', page: 3),
     ];
