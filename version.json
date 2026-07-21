@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.5.8",
+    "version": "1.5.10",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.8/kasira-pos-v1.5.8.apk",
-    "release_notes": "Navbar, Meja & Kasir sesuai desain. Kasir langsung ke menu, dine-in via tab Meja."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.10/kasira-pos-v1.5.10.apk",
+    "release_notes": "Fix tombol checkout Kasir, Take away/Dine-in, akses Stok utk semua paket."
   },
   "dapur": {
-    "version": "1.5.8",
+    "version": "1.5.10",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.8/kasira-dapur-v1.5.8.apk",
-    "release_notes": "Navbar, Meja & Kasir sesuai desain. Kasir langsung ke menu, dine-in via tab Meja."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.10/kasira-dapur-v1.5.10.apk",
+    "release_notes": "Fix tombol checkout Kasir, Take away/Dine-in, akses Stok utk semua paket."
   }
 }
