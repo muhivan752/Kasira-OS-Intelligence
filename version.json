@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.5.10",
+    "version": "1.5.11",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.10/kasira-pos-v1.5.10.apk",
-    "release_notes": "Fix tombol checkout Kasir, Take away/Dine-in, akses Stok utk semua paket."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.11/kasira-pos-v1.5.11.apk",
+    "release_notes": "Insight AI di Beranda + konsistensi stok (recipe qty0, dsb)."
   },
   "dapur": {
-    "version": "1.5.10",
+    "version": "1.5.11",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.10/kasira-dapur-v1.5.10.apk",
-    "release_notes": "Fix tombol checkout Kasir, Take away/Dine-in, akses Stok utk semua paket."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.11/kasira-dapur-v1.5.11.apk",
+    "release_notes": "Insight AI di Beranda + konsistensi stok (recipe qty0, dsb)."
   }
 }
