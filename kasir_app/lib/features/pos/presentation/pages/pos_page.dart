@@ -19,7 +19,6 @@ import '../../providers/tax_config_provider.dart';
 import '../../utils/post_payment_refresh.dart';
 import '../widgets/product_card.dart';
 import '../widgets/cart_panel.dart';
-import '../widgets/pos_mode_selector.dart';
 import '../../../tables/presentation/pages/table_grid_page.dart';
 import '../../../products/presentation/widgets/product_detail_sheet.dart';
 import '../../providers/pos_mode_provider.dart';
@@ -504,8 +503,6 @@ class _PosPageState extends ConsumerState<PosPage> {
   Widget _buildMainContent(AsyncValue<List<ProductModel>> productsAsync, PosMode posMode, {required bool isWide}) {
     final crossAxisCount = isWide ? 4 : 2;
     switch (posMode) {
-      case PosMode.selection:
-        return const Expanded(child: PosModeSelector());
       case PosMode.dineInTableSelect:
         return Expanded(
           child: Column(
@@ -541,6 +538,7 @@ class _PosPageState extends ConsumerState<PosPage> {
             ],
           ),
         );
+      case PosMode.selection:
       case PosMode.takeaway:
       case PosMode.dineInOrdering:
         return Expanded(
@@ -591,9 +589,13 @@ class _PosPageState extends ConsumerState<PosPage> {
   }
 
   Widget _buildHeader({required bool isWide, required PosMode posMode}) {
-    final showSearch = posMode == PosMode.takeaway || posMode == PosMode.dineInOrdering;
-    final showBack = posMode != PosMode.selection;
-    final title = showSearch ? 'Kasir' : 'Kasira POS';
+    // Desain: Kasir langsung ke grid (takeaway). Dine-in lewat tab Meja.
+    // selection = default view Kasir = grid takeaway (bukan layar pilih mode).
+    final showSearch = posMode == PosMode.selection ||
+        posMode == PosMode.takeaway ||
+        posMode == PosMode.dineInOrdering;
+    final showBack = posMode == PosMode.dineInTableSelect || posMode == PosMode.dineInOrdering;
+    final title = 'Kasir';
 
     return Container(
       decoration: const BoxDecoration(
@@ -877,7 +879,13 @@ class _PosPageState extends ConsumerState<PosPage> {
                   sellingPrice: product.price,
                 ),
                 onTap: () {
-                  ref.read(cartProvider.notifier).addItem(CartItem(
+                  final cartNotifier = ref.read(cartProvider.notifier);
+                  // Tanpa meja = takeaway (default cart 'Dine In', jadi harus di-set).
+                  final cartState = ref.read(cartProvider);
+                  if (cartState.tableId == null && cartState.orderType != 'Takeaway') {
+                    cartNotifier.setOrderType('Takeaway');
+                  }
+                  cartNotifier.addItem(CartItem(
                         productId: product.id,
                         name: product.name,
                         price: product.price,

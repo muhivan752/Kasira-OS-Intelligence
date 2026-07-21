@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:dio/dio.dart';
@@ -6,6 +7,8 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../../reservations/presentation/pages/reservation_list_page.dart';
+import '../../../pos/providers/cart_provider.dart';
+import '../../../pos/providers/pos_mode_provider.dart';
 
 enum TableStatus { available, occupied, reserved, dirty }
 
@@ -30,16 +33,16 @@ class TableModel {
 }
 
 
-class TableGridPage extends StatefulWidget {
+class TableGridPage extends ConsumerStatefulWidget {
   final void Function(TableModel table)? onTableSelected;
 
   const TableGridPage({super.key, this.onTableSelected});
 
   @override
-  State<TableGridPage> createState() => _TableGridPageState();
+  ConsumerState<TableGridPage> createState() => _TableGridPageState();
 }
 
-class _TableGridPageState extends State<TableGridPage> {
+class _TableGridPageState extends ConsumerState<TableGridPage> {
   TableStatus? _filterStatus;
   List<TableModel> _tables = [];
   // Map table_id → tab.status untuk render sub-badge di occupied cards.
@@ -180,44 +183,8 @@ class _TableGridPageState extends State<TableGridPage> {
             ),
           ),
 
-          // Status filter chips
-          Container(
-            height: 60,
-            color: KasiraDS.surfaceCard,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              children: [
-                _buildFilterChip(null, 'Semua', KasiraDS.brandPrimary),
-                const SizedBox(width: 8),
-                _buildFilterChip(TableStatus.available, 'Tersedia ($available)', KasiraDS.success),
-                const SizedBox(width: 8),
-                _buildFilterChip(TableStatus.occupied, 'Terisi ($occupied)', KasiraDS.danger),
-                const SizedBox(width: 8),
-                _buildFilterChip(TableStatus.reserved, 'Reservasi ($reserved)', KasiraDS.warning),
-                const SizedBox(width: 8),
-                _buildFilterChip(TableStatus.dirty, 'Perlu Dibersihkan ($dirty)', KasiraDS.textMuted),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 1),
-
-          // Summary stats
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-            child: Row(
-              children: [
-                _buildStatBadge('Tersedia', available, KasiraDS.success),
-                const SizedBox(width: 12),
-                _buildStatBadge('Terisi', occupied, KasiraDS.danger),
-                const SizedBox(width: 12),
-                _buildStatBadge('Reservasi', reserved, KasiraDS.warning),
-                const SizedBox(width: 12),
-                _buildStatBadge('Kotor', dirty, KasiraDS.textMuted),
-              ],
-            ),
-          ),
+          // (Desain Meja: langsung ke grid — tanpa filter chips / stat badges.)
+          const SizedBox(height: 6),
 
           // Table grid
           Expanded(
@@ -316,7 +283,7 @@ class _TableGridPageState extends State<TableGridPage> {
         } else if (table.status == TableStatus.occupied) {
           _openTabForTable(table);
         } else if (isSelectable) {
-          _showTableDetail(table);
+          _startDineInFromMeja(table);
         }
       },
       child: AnimatedContainer(
@@ -508,6 +475,17 @@ class _TableGridPageState extends State<TableGridPage> {
     }
     // Ignore linter for unused loadingDialog future
     loadingDialog.ignore();
+  }
+
+  /// Tab Meja standalone: tap meja kosong → mulai dine-in + lompat ke Kasir.
+  /// (Desain: Meja → tap meja → order. Ini entry dine-in setelah selector Kasir dihapus.)
+  void _startDineInFromMeja(TableModel table) {
+    final cart = ref.read(cartProvider.notifier);
+    cart.setTable(table.id, name: table.name);
+    cart.setOrderType('Dine In');
+    ref.read(posModeProvider.notifier).state = PosMode.dineInOrdering;
+    // Shell (dashboard) consume flag ini → pindah ke tab Kasir.
+    ref.read(pendingNavigateToPosProvider.notifier).state = true;
   }
 
   void _showTableDetail(TableModel table) {

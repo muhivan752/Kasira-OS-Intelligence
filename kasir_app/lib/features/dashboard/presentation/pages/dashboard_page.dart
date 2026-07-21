@@ -67,20 +67,28 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     const ProductManagementPage(),     // 5 Stok
   ];
 
-  /// Bottom-nav sesuai desain Aurora: Beranda·Kasir·Laporan·Riwayat + Meja(Pro)·Stok.
-  /// AI = FAB (bukan tab). Setting via header/side-nav action. Reservasi = di dalam Meja.
+  /// Bottom-nav PERSIS desain Aurora (urutan + ikon dari HTML `nav` array):
+  /// Pro:  Beranda·Meja·Kasir·Stok·Laporan·Riwayat
+  /// Free: Beranda·Kasir·Laporan·Riwayat
+  /// AI = FAB (bukan tab). Setting via header/side-nav action. Reservasi di dalam Meja.
+  /// (page index STABIL: 0 Beranda,1 Kasir,2 Laporan,3 Riwayat,4 Meja,5 Stok.)
   List<({IconData icon, String label, int page})> get _visibleTabs {
-    final tabs = <({IconData icon, String label, int page})>[
-      (icon: LucideIcons.layoutDashboard, label: 'Beranda', page: 0),
-      (icon: LucideIcons.monitorPlay, label: 'Kasir', page: 1),
-      (icon: LucideIcons.barChart2, label: 'Laporan', page: 2),
-      (icon: LucideIcons.receipt, label: BusinessLabels.getLabel('order'), page: 3),
-    ];
     if (_isPro) {
-      tabs.add((icon: LucideIcons.utensils, label: 'Meja', page: 4));
+      return const [
+        (icon: LucideIcons.home, label: 'Beranda', page: 0),
+        (icon: LucideIcons.layoutGrid, label: 'Meja', page: 4),
+        (icon: LucideIcons.shoppingBag, label: 'Kasir', page: 1),
+        (icon: LucideIcons.package, label: 'Stok', page: 5),
+        (icon: LucideIcons.barChart3, label: 'Laporan', page: 2),
+        (icon: LucideIcons.receipt, label: 'Riwayat', page: 3),
+      ];
     }
-    tabs.add((icon: LucideIcons.packageSearch, label: 'Stok', page: 5));
-    return tabs;
+    return const [
+      (icon: LucideIcons.home, label: 'Beranda', page: 0),
+      (icon: LucideIcons.shoppingBag, label: 'Kasir', page: 1),
+      (icon: LucideIcons.barChart3, label: 'Laporan', page: 2),
+      (icon: LucideIcons.receipt, label: 'Riwayat', page: 3),
+    ];
   }
 
   /// Page index yang Pro-only (Meja).
