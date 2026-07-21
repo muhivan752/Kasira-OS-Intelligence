@@ -14,10 +14,31 @@ export default function LaporanPage() {
 
   useEffect(() => {
     loadData();
+
+    // Kasir update status order dari HP, tapi halaman ini cuma fetch sekali —
+    // jadi angkanya nyangkut di kondisi waktu halaman dibuka. Order yang udah
+    // "Selesai" di Flutter tetap kelihatan "preparing" di sini sampai
+    // di-reload manual. Dua jaring pengaman:
+    //   1. polling 30 detik
+    //   2. fetch ulang begitu tab dilihat lagi — kasus paling sering: dashboard
+    //      dibiarin kebuka di laptop sambil transaksi jalan di HP
+    const timer = setInterval(() => loadData({ silent: true }), 30000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadData({ silent: true });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
   }, [filter]);
 
-  async function loadData() {
-    setLoading(true);
+  // `silent` dipakai polling: refresh latar jangan nampilin layar "Memuat..."
+  // dan bikin tabel berkedip tiap 30 detik.
+  async function loadData({ silent = false }: { silent?: boolean } = {}) {
+    if (!silent) setLoading(true);
     try {
       const outlets = await getOutlets();
       if (outlets && outlets.length > 0) {

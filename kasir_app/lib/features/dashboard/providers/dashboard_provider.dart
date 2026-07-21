@@ -76,6 +76,22 @@ final dashboardProvider = AsyncNotifierProvider<DashboardNotifier, DashboardStat
   DashboardNotifier.new,
 );
 
+/// Nama outlet buat sapaan Beranda.
+///
+/// SessionCache.outletName diisi lewat fetch fire-and-forget pas init, jadi
+/// pas Beranda pertama kali dirender nilainya sering masih null dan sapaannya
+/// jatuh ke teks cadangan "Toko kamu" — dan gak pernah berubah karena gak ada
+/// yang nyuruh rebuild waktu fetch-nya kelar. Provider ini yang nungguin
+/// fetch-nya, jadi begitu nama aslinya dapet, sapaannya ikut ke-update.
+final outletNameProvider = FutureProvider<String?>((ref) async {
+  final cache = SessionCache.instance;
+  if (cache.outletName != null && cache.outletName!.isNotEmpty) {
+    return cache.outletName;
+  }
+  await cache.fetchAndCacheOutletInfo();
+  return cache.outletName;
+});
+
 /// Insight AI singkat buat Beranda (Pro). Fetch dari POST /ai/insight (Haiku,
 /// cached server-side per jam). Return "" kalau gagal / non-Pro → card fallback
 /// ke insight lokal dari data (biar tetap ada isi).

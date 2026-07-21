@@ -26,7 +26,9 @@ export default function DashboardPage() {
   const [bestSellers, setBestSellers] = useState<any[]>([]);
 
   useEffect(() => {
-    async function loadData() {
+    // Sama kayak halaman Laporan: fetch sekali doang bikin ringkasan nyangkut
+    // di kondisi waktu halaman dibuka, padahal transaksi jalan terus dari HP.
+    async function loadData({ silent = false }: { silent?: boolean } = {}) {
       try {
         const outlets = await getOutlets();
         if (outlets && outlets.length > 0) {
@@ -46,10 +48,22 @@ export default function DashboardPage() {
       } catch (error) {
         console.error('Failed to load dashboard data', error);
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
     }
     loadData();
+
+    const timer = setInterval(() => loadData({ silent: true }), 30000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadData({ silent: true });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
   }, []);
 
   if (loading) {

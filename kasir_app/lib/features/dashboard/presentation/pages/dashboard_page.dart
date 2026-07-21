@@ -649,7 +649,12 @@ class _DashboardContent extends ConsumerWidget {
   Widget _berandaHeader(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     final dateLabel = '${_days[now.weekday % 7]}, ${now.day} ${_months[now.month - 1]} ${now.year}';
-    final outlet = SessionCache.instance.outletName ?? 'Toko kamu';
+    // Pakai provider, bukan baca SessionCache langsung: nama outlet diisi
+    // asinkron, jadi baca sekali pas build bikin sapaannya nyangkut di
+    // teks cadangan walaupun nama aslinya udah dapet sedetik kemudian.
+    final outlet = ref.watch(outletNameProvider).value ??
+        SessionCache.instance.outletName ??
+        'Toko kamu';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -657,7 +662,7 @@ class _DashboardContent extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('// $dateLabel'.toUpperCase(),
+              Text(dateLabel.toUpperCase(),
                   style: KasiraDS.eyebrow(color: KasiraDS.textMuted)),
               const SizedBox(height: 3),
               Text('Halo, $outlet 👋',
@@ -775,7 +780,7 @@ class _DashboardContent extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('// PENJUALAN HARI INI',
+          Text('PENJUALAN HARI INI',
               style: KasiraDS.eyebrow(color: Colors.white).copyWith(color: Colors.white70)),
           const SizedBox(height: 6),
           Text(_currencyFmt.format(stats.revenueToday),

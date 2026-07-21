@@ -218,12 +218,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </span>
             )}
           </div>
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="p-2 text-gray-500 hover:bg-gray-100 rounded-md"
-          >
-            <MenuIcon className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Keluar juga ada di footer sidebar, tapi di HP itu ketutup menu
+                hamburger dan harus di-scroll ke paling bawah — praktisnya
+                nggak keliatan. Ditaruh langsung di header biar kejangkau. */}
+            <button
+              onClick={handleLogout}
+              aria-label="Keluar"
+              title="Keluar"
+              className="p-2 text-red-600 hover:bg-red-50 rounded-md"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Buka menu"
+              className="p-2 text-gray-500 hover:bg-gray-100 rounded-md"
+            >
+              <MenuIcon className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
         {/* Billing Warning Banner */}

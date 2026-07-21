@@ -198,7 +198,7 @@ class _SummaryCard extends StatelessWidget {
               const Icon(LucideIcons.trendingUp,
                   size: 16, color: KasiraDS.brandPrimary),
               const SizedBox(width: 8),
-              Text('// RINGKASAN MARGIN',
+              Text('RINGKASAN MARGIN',
                   style: KasiraDS.eyebrow(color: KasiraDS.textMuted)),
             ],
           ),
@@ -214,13 +214,13 @@ class _SummaryCard extends StatelessWidget {
               ),
               Expanded(
                 child: _SummaryStat(
-                  label: 'Sudah diisi',
+                  label: 'Modal terisi',
                   value: '${s.withBuyPrice}/${s.totalProducts}',
                 ),
               ),
               Expanded(
                 child: _SummaryStat(
-                  label: 'Belum diisi',
+                  label: 'Modal kosong',
                   value: s.missingBuyPrice.toString(),
                   warn: s.missingBuyPrice > 0,
                 ),

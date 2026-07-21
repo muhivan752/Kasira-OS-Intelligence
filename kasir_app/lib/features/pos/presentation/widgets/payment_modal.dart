@@ -504,7 +504,7 @@ class _PaymentModalState extends State<PaymentModal> {
                     child: Column(
                       children: [
                         const SizedBox(height: 8),
-                        Text('// TOTAL TAGIHAN',
+                        Text('TOTAL TAGIHAN',
                             style: KasiraDS.eyebrow(color: KasiraDS.textMuted)),
                         const SizedBox(height: 6),
                         Text(currencyFormatter.format(widget.totalAmount),

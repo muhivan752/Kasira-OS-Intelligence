@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/session_cache.dart';
 import '../sync/sync_provider.dart';
+import '../../features/auth/presentation/pages/login_page.dart';
 
 /// Centralized logout flow — Batch #17 Rule #10/#11 + Batch #18 Rule #4b.
 ///
@@ -45,4 +46,13 @@ Future<void> performLogout(WidgetRef ref) async {
   //    syncServiceProvider akan re-create next read → nodeId re-eval dengan
   //    userId baru (atau null kalau pre-login).
   ref.invalidate(syncServiceProvider);
+
+  // 5. Invalidate authProvider — WAJIB, jangan dihapus.
+  //    AuthState.isSuccess nempel `true` setelah login sukses dan gak pernah
+  //    di-reset. Tanpa baris ini, logout → go('/login') → LoginPage lihat
+  //    isSuccess masih true → yang dirender layar "Login berhasil!" + spinner,
+  //    SELAMANYA. ref.listen juga gak nembak ulang karena previous.isSuccess
+  //    sama-sama true, jadi gak ada yang nyelametin. User kekunci di spinner
+  //    dan gak pernah nyampe form login.
+  ref.invalidate(authProvider);
 }
