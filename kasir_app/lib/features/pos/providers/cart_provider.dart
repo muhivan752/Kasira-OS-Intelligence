@@ -581,32 +581,24 @@ class CartNotifier extends StateNotifier<CartState> {
               // Recipe mode: deduct ingredient stocks
               await _deductIngredientStockOffline(item.productId, item.qty, outletId);
             } else {
-              // Simple mode: Pure CRDT stock deduct — PNCounter.
-              // Batch #18: pake composite nodeId dari SyncService (sha256 per
-              // user-device pair). Gak lagi baca raw 'device_node_id' key —
-              // biar shift-switch User A → User B di device sama jatuh di
-              // slot PNCounter yang beda, merge server penjumlahan bukan max.
-              final nodeId = _syncService.nodeId;
-
+              // Simple mode — SERVER-AUTHORITATIVE (Finding 1 proper fix, tiru
+              // recipe mode `outlet_stock`). Deduction REAL dilakuin SERVER pas
+              // ORDER-nya sync (`sync.py` → svc_deduct_stock, idempotent via
+              // _is_sale_already_recorded). Di sini cuma deduct stockQty LOKAL
+              // buat display optimistic — JANGAN push stok (isSynced dibiarin),
+              // biar gak konflik LWW / double-deduct sama server. Multi-device
+              // safe: tiap sale = 1 order → server deduct sekali per order.
               final product = await (_db.select(_db.products)
                     ..where((p) => p.id.equals(item.productId)))
                   .getSingleOrNull();
 
               if (product != null && product.stockEnabled) {
-                final negMap = PNCounter.fromJson(product.crdtNegative);
-                final posMap = PNCounter.fromJson(product.crdtPositive);
-                final newNeg = PNCounter.increment(negMap, nodeId, amount: item.qty);
-                final newStock = PNCounter.getValue(posMap, newNeg);
-
-                // Rule #20: produk stock=0 tetap muncul (is_available dikomputasi dari stockQty),
-                // jangan paksa isActive=false karena itu flag on/off manual dari owner.
+                // Rule #20: produk stock=0 tetap muncul (is_available dikomputasi dari stockQty).
+                final newStock =
+                    (product.stockQty - item.qty).clamp(0.0, double.infinity);
                 await (_db.update(_db.products)
                       ..where((p) => p.id.equals(item.productId)))
-                    .write(ProductsCompanion(
-                  crdtNegative: drift.Value(PNCounter.toJson(newNeg)),
-                  stockQty: drift.Value(newStock),
-                  isSynced: const drift.Value(false),
-                ));
+                    .write(ProductsCompanion(stockQty: drift.Value(newStock)));
               }
             }
           }

@@ -361,18 +361,20 @@ class SyncService {
           double mergedStock = (p['stock_qty'] as num?)?.toDouble() ?? 0.0;
 
           if (existing != null && existing.stockEnabled) {
-            // Merge CRDT: ambil max dari setiap node
-            final localPosMap = PNCounter.fromJson(existing.crdtPositive);
-            final localNegMap = PNCounter.fromJson(existing.crdtNegative);
-            final serverPosMap = PNCounter.fromJson(serverPos);
-            final serverNegMap = PNCounter.fromJson(serverNeg);
-
-            final mPos = PNCounter.merge(localPosMap, serverPosMap);
-            final mNeg = PNCounter.merge(localNegMap, serverNegMap);
-
+            // Finding 1 proper fix — SERVER-AUTHORITATIVE (tiru recipe/outlet_stock).
+            // stock_qty server = source of truth (server deduct dari tiap order
+            // yg sync, idempotent; restock dashboard / order online juga update
+            // stock_qty). JANGAN recompute dari counter (getValue) — counter
+            // di-sync HLC-LWW (process_table_sync gak merge), jadi bisa basi &
+            // ngabaikan perubahan server. Counter tetap di-merge buat storage/
+            // kompat, tapi mergedStock TETAP = server stock_qty.
+            final mPos = PNCounter.merge(
+                PNCounter.fromJson(existing.crdtPositive), PNCounter.fromJson(serverPos));
+            final mNeg = PNCounter.merge(
+                PNCounter.fromJson(existing.crdtNegative), PNCounter.fromJson(serverNeg));
             mergedPos = PNCounter.toJson(mPos);
             mergedNeg = PNCounter.toJson(mNeg);
-            mergedStock = PNCounter.getValue(mPos, mNeg);
+            // mergedStock TIDAK di-override — pakai stock_qty server (authoritative).
           }
 
           await db.into(db.products).insertOnConflictUpdate(
