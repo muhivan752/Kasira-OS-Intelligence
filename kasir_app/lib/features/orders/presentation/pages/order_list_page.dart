@@ -182,20 +182,27 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
       _ => KasiraDS.warning,
     };
 
-    return Card(
+    return Container(
       margin: EdgeInsets.only(bottom: isWide ? 16 : 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: KasiraDS.surfaceCard,
+        borderRadius: KasiraDS.brLg,
+        border: Border.all(color: KasiraDS.borderSubtle),
+        boxShadow: KasiraDS.shadowSm,
+      ),
       child: Padding(
-        padding: EdgeInsets.all(isWide ? 20 : 12),
+        padding: EdgeInsets.all(isWide ? 20 : 13),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: KasiraDS.brandPrimary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+                color: KasiraDS.surfaceSunken,
+                borderRadius: KasiraDS.brMd,
               ),
-              child: const Icon(LucideIcons.receipt, color: KasiraDS.brandPrimary, size: 20),
+              child: const Icon(LucideIcons.receipt, color: KasiraDS.textBody, size: 19),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -203,12 +210,11 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(order.orderNumber,
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: isWide ? 16 : 14)),
-                  const SizedBox(height: 4),
+                      style: KasiraDS.display(size: isWide ? 16 : 14.5, color: KasiraDS.textStrong)),
+                  const SizedBox(height: 3),
                   Text(
-                    '${order.orderTypeLabel} • ${order.items.length} item',
-                    style: const TextStyle(color: KasiraDS.textMuted, fontSize: 12),
+                    '${order.orderTypeLabel} · ${order.items.length} item',
+                    style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted),
                   ),
                 ],
               ),
@@ -217,18 +223,17 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(_currencyFmt.format(order.totalAmount),
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: isWide ? 16 : 14)),
+                    style: KasiraDS.display(size: isWide ? 16 : 15, color: KasiraDS.textStrong)),
                 const SizedBox(height: 4),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
+                    color: statusColor.withOpacity(0.12),
+                    borderRadius: KasiraDS.brSm,
                   ),
                   child: Text(order.statusLabel,
-                      style: TextStyle(
-                          color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                      style: KasiraDS.sans(
+                          size: 10.5, weight: FontWeight.w700, color: statusColor)),
                 ),
               ],
             ),
