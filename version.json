@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.5.12",
+    "version": "1.5.13",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.12/kasira-pos-v1.5.12.apk",
-    "release_notes": "Checkout online kerasa instan (modal bayar langsung muncul)."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.13/kasira-pos-v1.5.13.apk",
+    "release_notes": "Stok simple mode sinkron dashboard-HP (server-authoritative)."
   },
   "dapur": {
-    "version": "1.5.12",
+    "version": "1.5.13",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.12/kasira-dapur-v1.5.12.apk",
-    "release_notes": "Checkout online kerasa instan (modal bayar langsung muncul)."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.13/kasira-dapur-v1.5.13.apk",
+    "release_notes": "Stok simple mode sinkron dashboard-HP (server-authoritative)."
   }
 }
