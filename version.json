@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.5.1",
+    "version": "1.5.2",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.1/kasira-pos-v1.5.1.apk",
-    "release_notes": "First launch release (with Lucide Icons fix)"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.2/kasira-pos-v1.5.2.apk",
+    "release_notes": "Redesign UI Aurora (F&B): tampilan baru POS, keranjang, pembayaran & beranda."
   },
   "dapur": {
-    "version": "1.5.1",
+    "version": "1.5.2",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.1/kasira-dapur-v1.5.1.apk",
-    "release_notes": "First launch release (with Lucide Icons fix)"
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.5.2/kasira-dapur-v1.5.2.apk",
+    "release_notes": "Redesign UI Aurora (F&B): tampilan baru POS, keranjang, pembayaran & beranda."
   }
 }
