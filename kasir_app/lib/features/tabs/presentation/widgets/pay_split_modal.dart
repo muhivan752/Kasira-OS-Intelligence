@@ -361,43 +361,33 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
         Navigator.pop(context);
         widget.onPaid(result);
 
-        // Tab lunas snackbar
-        if (result.isPaid) {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Tab lunas! Semua pembayaran selesai.'),
-              backgroundColor: KasiraDS.success,
-            ),
-          );
-        }
-
-        // Snackbar action "Kirim WA" — only for cash success (QRIS pending = jangan kirim)
-        if (_paymentMethod == 'cash' && widget.tab.orderIds.isNotEmpty) {
-          // Defer 700ms biar gak overlap sama snackbar "lunas" di atas
-          Future.delayed(const Duration(milliseconds: 700), () {
-            messenger.showSnackBar(
-              SnackBar(
-                content: const Text('Mau kirim struk via WA ke customer?'),
-                backgroundColor: KasiraDS.surfaceCard,
-                duration: const Duration(seconds: 6),
-                action: SnackBarAction(
-                  label: '📱 Kirim WA',
-                  textColor: KasiraDS.brandPrimary,
-                  onPressed: () {
-                    showDialog<void>(
-                      context: rootNav.context,
-                      builder: (_) => SendWaReceiptDialog(
-                        orderId: widget.tab.orderIds.first,
-                        // pay-split + pay-full = full order receipt (subset gak supported
-                        // untuk pay_split — backend gak link items.paid_payment_id ke split)
-                      ),
-                    );
-                  },
-                ),
-              ),
-            );
-          });
-        }
+        // SATU snackbar aja. Sebelumnya ada snackbar kedua berwarna PUTIH yang
+        // nyembul 700ms kemudian cuma buat nanya "mau kirim struk via WA?",
+        // nangkring 6 detik. Buat kasir yang lagi ngelayanin antrian itu kotak
+        // putih nongol sendiri sesaat setelah transaksi kelar — ganggu banget.
+        // Kemampuannya nggak dibuang, cuma ditempel jadi aksi di snackbar sukses.
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(result.isPaid
+                ? 'Tab lunas! Semua pembayaran selesai.'
+                : 'Pembayaran tercatat.'),
+            backgroundColor: KasiraDS.success,
+            action: (_paymentMethod == 'cash' && widget.tab.orderIds.isNotEmpty)
+                ? SnackBarAction(
+                    label: 'Kirim WA',
+                    textColor: Colors.white,
+                    onPressed: () {
+                      showDialog<void>(
+                        context: rootNav.context,
+                        builder: (_) => SendWaReceiptDialog(
+                          orderId: widget.tab.orderIds.first,
+                        ),
+                      );
+                    },
+                  )
+                : null,
+          ),
+        );
       } else {
         setState(() => _error = ref.read(tabProvider).error ?? 'Gagal memproses pembayaran');
       }

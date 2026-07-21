@@ -276,7 +276,13 @@ class CartPanel extends ConsumerWidget {
           duration: const Duration(seconds: 2),
         ),
       );
-      context.go('/tabs/${addOrderCtx.tabId}');
+      // Balik ke tab Meja dulu di bawah, baru PUSH tab detail di atasnya.
+      // Sebelumnya di sini go('/tabs/X') — dan karena go() ngeganti seluruh
+      // tumpukan, satu-satunya route yang tersisa itu /tabs/X tanpa /dashboard
+      // di bawahnya. Pencet back = LAYAR HITAM. Selain itu user balik ke tab
+      // Kasir dengan keranjang kosong, padahal dia berangkat dari Meja.
+      ref.read(pendingNavigateToMejaProvider.notifier).state = true;
+      context.push('/tabs/${addOrderCtx.tabId}');
       return;
     }
 

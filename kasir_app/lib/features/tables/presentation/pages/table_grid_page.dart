@@ -10,6 +10,7 @@ import '../../../reservations/presentation/pages/reservation_list_page.dart';
 import '../../../pos/providers/cart_provider.dart';
 import '../../../pos/providers/pos_mode_provider.dart';
 import '../../../tabs/presentation/widgets/guest_count_sheet.dart';
+import '../../../tabs/providers/tab_provider.dart';
 
 enum TableStatus { available, occupied, reserved, dirty }
 
@@ -137,6 +138,19 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Grid ini hidup di dalam IndexedStack dashboard, jadi initState cuma jalan
+    // SEKALI seumur sesi — pindah tab nggak bikin dia fetch ulang. Akibatnya
+    // pesanan yang baru ditambahin ke sebuah meja nggak kelihatan sampai
+    // dashboard-nya kebetulan dibangun ulang. Nebeng tabProvider yang emang
+    // udah di-refresh tiap transaksi kelar, lalu tarik ulang data meja.
+    ref.listen(tabProvider, (prev, next) {
+      if (prev?.tabs.length != next.tabs.length ||
+          prev?.tabs.map((t) => t.status).join() !=
+              next.tabs.map((t) => t.status).join()) {
+        _load();
+      }
+    });
+
     final available = _tables.where((t) => t.status == TableStatus.available).length;
     final occupied = _tables.where((t) => t.status == TableStatus.occupied).length;
     final reserved = _tables.where((t) => t.status == TableStatus.reserved).length;

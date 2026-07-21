@@ -117,7 +117,17 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                 // One-shot signal — dashboard akan switch ke POS tab sekali, lalu clear.
                 // Beda dari watch posModeProvider persistent yg bikin user stuck di POS tab.
                 ref.read(pendingNavigateToPosProvider.notifier).state = true;
-                context.go('/dashboard');
+
+                // POP, bukan go(). `go()` ngeganti SELURUH tumpukan navigasi —
+                // halaman ini di-push di atas /dashboard, jadi go('/dashboard')
+                // bikin tumpukan tinggal satu route. Pencet back sesudahnya =
+                // pop route terakhir = LAYAR HITAM. Pop balik ke /dashboard yang
+                // udah ada di bawah, tumpukannya tetap utuh.
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/dashboard');
+                }
               },
               onAddGuests: () => _showGuestCountModal(tab),
               onMergeTab: () => _showMergeTabModal(tab),

@@ -398,51 +398,46 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
         Navigator.pop(context);
         widget.onPaid(result);
 
+        // SATU snackbar aja — aksi WA nempel di sini. Sebelumnya ada snackbar
+        // kedua berwarna PUTIH yang nyembul 700ms kemudian dan nangkring 6 detik
+        // cuma buat nawarin kirim struk. Buat kasir yang lagi ngelayanin antrian,
+        // kotak putih yang nongol sendiri abis transaksi itu ganggu.
         messenger.showSnackBar(
           SnackBar(
             content: Text(result.isPaid
                 ? 'Tab lunas! Semua sudah dibayar.'
                 : '${selectedItemIds.length} item dibayar. Sisa: ${_currency.format(result.remainingAmount)}'),
             backgroundColor: KasiraDS.success,
-          ),
-        );
-
-        // Snackbar action "Kirim WA" — subset receipt (cuma item dia bayar) untuk warkop privacy
-        if (_paymentMethod == 'cash') {
-          Future.delayed(const Duration(milliseconds: 700), () {
-            messenger.showSnackBar(
-              SnackBar(
-                content: const Text('Mau kirim struk via WA ke customer?'),
-                backgroundColor: KasiraDS.surfaceCard,
-                duration: const Duration(seconds: 6),
-                action: SnackBarAction(
-                  label: '📱 Kirim WA',
-                  textColor: KasiraDS.brandPrimary,
-                  onPressed: () async {
-                    // Resolve paymentId + orderId dari items yg baru ke-pay
-                    final resolved = await _resolveWaReceiptTarget(widget.tab.id, selectedItemIds);
-                    if (resolved == null) {
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('Gagal load info pembayaran — coba reprint dari menu order'),
-                          backgroundColor: KasiraDS.warning,
+            action: _paymentMethod == 'cash'
+                ? SnackBarAction(
+                    label: 'Kirim WA',
+                    textColor: Colors.white,
+                    onPressed: () async {
+                      // Resolve paymentId + orderId dari items yg baru ke-pay
+                      final resolved =
+                          await _resolveWaReceiptTarget(widget.tab.id, selectedItemIds);
+                      if (resolved == null) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                                'Gagal load info pembayaran — coba reprint dari menu order'),
+                            backgroundColor: KasiraDS.warning,
+                          ),
+                        );
+                        return;
+                      }
+                      showDialog<void>(
+                        context: rootNav.context,
+                        builder: (_) => SendWaReceiptDialog(
+                          orderId: resolved.$1,
+                          paymentId: resolved.$2,
                         ),
                       );
-                      return;
-                    }
-                    showDialog<void>(
-                      context: rootNav.context,
-                      builder: (_) => SendWaReceiptDialog(
-                        orderId: resolved.$1,
-                        paymentId: resolved.$2,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            );
-          });
-        }
+                    },
+                  )
+                : null,
+          ),
+        );
       } else {
         setState(() => _error = ref.read(tabProvider).error ?? 'Gagal memproses pembayaran');
       }
