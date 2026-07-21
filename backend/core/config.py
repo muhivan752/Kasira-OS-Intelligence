@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_CHAT_MODEL: str = "deepseek-v4-flash"
 
+    # Chat publik di landing page. 0 = tanpa batas per IP (keputusan Ivan:
+    # pantau dulu). Isi angka > 0 buat nyalain rem tanpa ubah kode.
+    LANDING_CHAT_MAX_PER_IP: int = 0
+
     # Voyage AI (embeddings for Layer 4)
     VOYAGE_API_KEY: str = ""
 

@@ -1,13 +1,121 @@
 import Link from 'next/link';
-import {
-  Smartphone, Globe, LineChart, Package,
-  Sparkles, CheckCircle2, ArrowRight, MessageCircle,
-  Shield, Wifi, WifiOff, Receipt,
-  ChefHat, BarChart3, Users, Star,
-  Clock, Flame, CreditCard, Store, LayoutDashboard, QrCode
-} from 'lucide-react';
-import Navbar from '@/components/landing/Navbar';
-import FAQ from '@/components/landing/FAQ';
+import { Bricolage_Grotesque } from 'next/font/google';
+import { ArrowRight, Check, ChevronDown, MessageCircle } from 'lucide-react';
+import LandingChat from '@/components/landing/LandingChat';
+
+// Font display khusus landing. Sengaja di-load di sini, bukan di layout.tsx,
+// biar halaman lain (dashboard/login) nggak kena ongkos font yang nggak dipakai
+// dan biar nggak nabrak redesign Aurora yang lagi jalan di layout.
+const bricolage = Bricolage_Grotesque({
+  subsets: ['latin'],
+  weight: ['600', '700', '800'],
+  variable: '--font-bricolage',
+  display: 'swap',
+});
+
+// Ditulis literal (bukan disusun runtime) supaya kebaca scanner Tailwind.
+const DISPLAY = 'font-[family-name:var(--font-bricolage)]';
+
+const WA_NUMBER = '6285270782220';
+const WA_LINK = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Halo Kasira, saya tertarik coba')}`;
+const DEMO_SLUG = 'kasira-coffee';
+
+const NAV = [
+  { label: 'Fitur', href: '#fitur' },
+  { label: 'Kenapa beda', href: '#beda' },
+  { label: 'Harga', href: '#harga' },
+  { label: 'Cerita', href: '#cerita' },
+];
+
+const PAINS = [
+  { bad: 'Tutup shift, hitung cash selisih terus', good: 'Rekap cash + QRIS otomatis' },
+  { bad: 'Pelanggan nanya menu, kirim foto satu-satu', good: 'Website toko online sendiri' },
+  { bad: 'Nggak tau menu mana untung, mana buntung', good: 'Margin real-time per produk' },
+  { bad: 'Bayar komisi 0,7% tiap transaksi QRIS', good: 'QRIS BYOK, nol komisi' },
+];
+
+const DIFFS = [
+  {
+    no: '01',
+    title: 'Bayar per orang, ala warkop beneran.',
+    body: 'Lima orang nongkrong di satu meja, masing-masing bayar item sendiri, ada yang nyusul, ada yang cabut duluan. Kasir tinggal centang item yang mau dibayar — sisanya nempel di tab. Kompetitor cuma bisa bagi rata.',
+    tag: 'Warkop Pay-Items',
+  },
+  {
+    no: '02',
+    title: 'QRIS langsung ke rekening kamu. Komisi ke Kasira: nol.',
+    body: 'Daftar Xendit sendiri (BYOK), tempel API key, uang tiap transaksi masuk langsung ke rekening kamu — bypass Kasira. Bukan "gratis 6 bulan lalu kena potong". Nol, selamanya.',
+    tag: 'BYOK Xendit · 0% komisi',
+  },
+  {
+    no: '03',
+    title: 'Tahu untung-rugi tiap menu, bukan cuma omzet.',
+    body: 'Masukin HPP pas restock, dashboard hitung margin per produk otomatis. Muncul alert kalau margin Kopi Susu turun dari 60% ke 45% bulan ini — biar kamu bisa gerak sebelum rugi.',
+    tag: 'Margin tracking',
+  },
+  {
+    no: '04',
+    title: 'Rangkuman & saran mampir ke WhatsApp tiap pagi.',
+    body: 'Buka WA pagi hari, AI Kasira udah kirim: omzet kemarin, menu yang turun, sampai saran stok buat hari ini. Nyambung ke transaksi toko kamu — bukan chatbot generik.',
+    tag: 'AI Kopi Asisten · Pro',
+  },
+];
+
+const PILLARS = [
+  {
+    title: 'Kasir yang tahan banting',
+    body: 'Mati lampu atau WiFi ngadat, kasir tetap jalan. Data sync otomatis pas online lagi.',
+    items: ['Mode offline', 'Print struk bluetooth', 'Split bill & open tab'],
+  },
+  {
+    title: 'Toko online jadi seketika',
+    body: 'Daftar, website toko langsung live di kasira.online/namamu. Sebar ke WA & IG.',
+    items: ['Storefront gratis', 'Terima order sendiri', 'Reservasi meja (Pro)'],
+  },
+  {
+    title: 'Dapur & stok terkendali',
+    body: 'Pantau stok bahan, resep & HPP, sampai layar dapur pas jam rame.',
+    items: ['Alert stok rendah', 'Resep & HPP', 'Kitchen Display (Pro)'],
+  },
+];
+
+const PLANS = [
+  {
+    name: 'Starter',
+    tagline: 'Buat warung & kios kecil',
+    price: '99rb',
+    badge: 'Siap pakai',
+    dark: false,
+    features: ['1 kasir + 1 outlet', 'Website toko gratis', 'QRIS BYOK (nol komisi)', 'Mode offline', 'Margin & laporan harian'],
+    cta: 'Mulai gratis',
+    href: '/register',
+  },
+  {
+    name: 'Pro',
+    tagline: 'Pilihan utama cafe hits',
+    price: '299rb',
+    badge: 'Early access',
+    dark: true,
+    features: ['Semua Starter, plus:', 'Warkop Pay-Items ⭐', 'AI Kopi Asisten via WA', 'Reservasi & Kitchen Display', 'Resep + HPP, loyalty points'],
+    cta: 'Mulai Pro 30 hari',
+    href: '/register?tier=pro',
+  },
+];
+
+const FAQS = [
+  { q: 'Beneran gratis 30 hari?', a: 'Ya, 30 hari penuh tanpa kartu kredit. Batal kapan aja, nggak ada penalti.' },
+  { q: 'QRIS-nya kena potongan ke Kasira?', a: 'Nggak. Kamu daftar Xendit sendiri (BYOK), tempel API key di setelan, dan uang tiap transaksi QRIS langsung masuk ke rekening kamu. Kasira nol komisi, selamanya.' },
+  { q: 'Kenapa harus daftar Xendit sendiri (BYOK)?', a: 'Karena kamu settle langsung tanpa lewat Kasira, kami nggak perlu KYC platform — jadi harganya bisa lebih murah dan kontrol pembayaran penuh di tangan kamu.' },
+  { q: 'Bisa dipakai di HP Android biasa?', a: 'Bisa. App kasir jalan di HP Android manapun, nggak butuh tablet atau mesin khusus.' },
+  { q: 'Kalau internet mati gimana?', a: 'Kasir tetap bisa transaksi offline. Data otomatis kesinkron begitu internet nyala lagi.' },
+  { q: 'Data saya aman?', a: 'Data disimpan di server Indonesia dengan enkripsi, dan di-backup otomatis berkala.' },
+];
+
+const SPLIT_ROWS = [
+  { name: 'Andi', items: 'Kopi Susu · Croissant', status: '✓ QRIS', paid: true },
+  { name: 'Rani', items: 'Matcha Latte', status: '✓ Tunai', paid: true },
+  { name: 'Budi', items: 'Nasi Goreng · Es Teh', status: 'Rp 43rb', paid: false },
+];
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -15,7 +123,8 @@ const jsonLd = {
   name: 'Kasira',
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'Android, Web',
-  description: 'Kasir digital modern dengan storefront gratis, QRIS tanpa komisi, dan AI insight untuk bisnis F&B dan UMKM Indonesia.',
+  description:
+    'Kasir digital modern dengan storefront gratis, QRIS tanpa komisi, dan AI insight untuk bisnis F&B dan UMKM Indonesia.',
   url: 'https://kasira.online',
   offers: [
     { '@type': 'Offer', name: 'Starter', price: '99000', priceCurrency: 'IDR', description: 'POS + Storefront + QRIS + Laporan' },
@@ -39,472 +148,401 @@ const organizationLd = {
   },
 };
 
+// Diturunkan dari FAQS yang sama dengan yang dirender — biar structured data
+// nggak pernah beda dari yang dibaca pengunjung. (Versi lama masih nyebut
+// Midtrans padahal pembayaran udah pindah ke BYOK Xendit.)
 const faqLd = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
-  mainEntity: [
-    {
-      '@type': 'Question',
-      name: 'Apakah benar-benar gratis 30 hari?',
-      acceptedAnswer: { '@type': 'Answer', text: 'Ya, gratis penuh 30 hari tanpa perlu kartu kredit. Cancel kapan saja.' },
-    },
-    {
-      '@type': 'Question',
-      name: 'Apakah QRIS ada biaya komisi ke Kasira?',
-      acceptedAnswer: { '@type': 'Answer', text: 'Tidak ada. Kasira zero komisi selamanya. Lo daftar Midtrans sendiri, uang langsung masuk ke rekening lo.' },
-    },
-    {
-      '@type': 'Question',
-      name: 'Bisa pakai di HP Android biasa?',
-      acceptedAnswer: { '@type': 'Answer', text: 'Ya, app kasir bisa diinstall di HP Android manapun. Tidak perlu tablet khusus.' },
-    },
-    {
-      '@type': 'Question',
-      name: 'Bagaimana kalau internet mati?',
-      acceptedAnswer: { '@type': 'Answer', text: 'App kasir tetap bisa transaksi saat offline. Data otomatis sync saat internet kembali.' },
-    },
-    {
-      '@type': 'Question',
-      name: 'Apakah data saya aman?',
-      acceptedAnswer: { '@type': 'Answer', text: 'Data tersimpan di server Indonesia dengan enkripsi AES-256. Backup otomatis tiap 6 jam.' },
-    },
-  ],
+  mainEntity: FAQS.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
 };
 
 export default function LandingPage() {
-  const waLink = 'https://wa.me/6285270782220?text=Halo%20Kasira%2C%20saya%20tertarik%20untuk%20coba';
-
   return (
-    <div className="min-h-screen bg-[#FAFAFA] font-sans selection:bg-emerald-500/30 selection:text-emerald-900">
+    <div className={`${bricolage.variable} min-h-screen w-full overflow-x-hidden bg-[#FAFAF7] text-[#0B1512] antialiased`}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
-      <Navbar />
 
-      {/* ═══════════════ HERO ═══════════════ */}
-      <section className="relative pt-32 pb-24 lg:pt-48 lg:pb-32 overflow-hidden">
-        {/* Soft, premium ambient background glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-emerald-400/20 opacity-60 blur-[120px] rounded-full pointer-events-none" />
-        <div className="absolute -top-32 right-0 w-[500px] h-[500px] bg-teal-400/10 blur-[100px] rounded-full pointer-events-none" />
+      {/* ── NAV ── */}
+      <header className="sticky top-0 z-50 border-b border-[#EAE8E1] bg-[#FAFAF7]/85 backdrop-blur-[14px]">
+        <div className="mx-auto flex h-[68px] max-w-[1180px] items-center justify-between px-5 sm:px-6">
+          <Link href="/" className={`${DISPLAY} text-[24px] font-extrabold tracking-[-0.03em] text-[#0B1512]`}>
+            kasira<span className="text-[#059669]">.</span>
+          </Link>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="text-center max-w-4xl mx-auto">
-            <div className="inline-flex items-center gap-2 bg-white border border-gray-200/80 shadow-sm text-gray-700 text-sm font-medium px-4 py-1.5 rounded-full mb-8 hover:border-emerald-200 hover:bg-emerald-50 transition-all cursor-default">
-              <Sparkles className="w-4 h-4 text-emerald-500" />
-              Sistem kasir generasi baru untuk F&B Indonesia
-            </div>
+          <nav className="hidden items-center gap-7 text-[14.5px] font-semibold text-[#3F4A45] md:flex">
+            {NAV.map((n) => (
+              <a key={n.href} href={n.href} className="transition hover:text-[#0B1512]">
+                {n.label}
+              </a>
+            ))}
+          </nav>
 
-            <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.05] mb-8">
-              Bikin cafe lo makin pro,<br className="hidden md:block" />
-              <span className="relative inline-block mt-2">
-                <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500">
-                  tanpa ribet urus IT.
-                </span>
-              </span>
+          <div className="flex items-center gap-2.5">
+            <Link href="/login" className="hidden px-3 py-2 text-[14.5px] font-semibold text-[#3F4A45] transition hover:text-[#0B1512] sm:block">
+              Masuk
+            </Link>
+            <Link href="/register" className="rounded-full bg-[#0B1512] px-4 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#1a2622]">
+              Coba gratis
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* ── HERO ── */}
+      <section className="mx-auto max-w-[1180px] px-5 pb-16 pt-14 sm:px-6 lg:pb-24 lg:pt-20">
+        <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#D8E7DF] bg-[#ECFDF5] px-3 py-1.5 text-[12.5px] font-bold text-[#047857]">
+              <span className="rounded-full bg-[#059669] px-1.5 py-0.5 text-[10.5px] text-white">Baru</span>
+              POS + toko online + AI, jadi satu
+            </span>
+
+            <h1 className={`${DISPLAY} mt-5 text-[42px] font-extrabold leading-[1.03] tracking-[-0.035em] sm:text-[54px] lg:text-[62px]`}>
+              Fokus ke rasa,
+              <br />
+              <span className="text-[#4B5750]">sisanya</span> Kasira urus.
             </h1>
 
-            <p className="text-lg md:text-xl text-slate-600 mb-10 leading-relaxed max-w-2xl mx-auto font-medium">
-              Tinggalkan cara lama pakai kertas dan excel. Dari terima pesanan, pantau stok bahan, sampai punya website jualan sendiri—semua beres dalam satu aplikasi.
+            <p className="mt-5 max-w-[540px] text-[16.5px] leading-[1.6] text-[#4B5750]">
+              Tinggalin catatan kertas sama Excel. Dari terima pesanan, pantau stok bahan, sampai punya website
+              jualan sendiri — semua beres di satu aplikasi. Setup 5 menit, langsung jualan.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
                 href="/register"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-slate-900 text-white text-base font-semibold rounded-2xl hover:bg-slate-800 transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.2)] hover:-translate-y-0.5 active:translate-y-0"
+                className="inline-flex items-center gap-2 rounded-full bg-[#059669] px-6 py-3.5 text-[15px] font-bold text-white shadow-[0_16px_34px_-14px_rgba(5,150,105,0.9)] transition hover:bg-[#047857]"
               >
-                Mulai Gratis 30 Hari
-                <ArrowRight className="w-4 h-4" />
+                Coba gratis 30 hari
+                <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="/kasira-coffee"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-slate-700 text-base font-semibold rounded-2xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm"
+                href={`/${DEMO_SLUG}`}
+                className="inline-flex items-center gap-2 rounded-full border border-[#DCDAD2] bg-white px-6 py-3.5 text-[15px] font-bold text-[#0B1512] transition hover:border-[#0B1512]"
               >
-                <Store className="w-4 h-4 text-emerald-600" />
-                Lihat Demo Toko
+                Lihat demo toko
               </Link>
             </div>
-            
-            <div className="mt-8 flex items-center justify-center gap-6 text-sm text-slate-500 font-medium">
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Tanpa kartu kredit
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Batal kapan saja
-              </div>
-            </div>
+
+            <ul className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-medium text-[#8A938D]">
+              {['Tanpa kartu kredit', 'Batal kapan aja', 'Server di Indonesia'].map((t) => (
+                <li key={t} className="flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 text-[#059669]" />
+                  {t}
+                </li>
+              ))}
+            </ul>
           </div>
 
-          {/* ── Premium Mockup Showcase ── */}
-          <div className="mt-20 relative mx-auto max-w-5xl group perspective-1000">
-            <div className="absolute -inset-1 bg-gradient-to-b from-emerald-400/20 to-transparent rounded-[32px] blur-xl opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
-            <div className="relative rounded-[24px] overflow-hidden shadow-[0_20px_50px_rgb(0,0,0,0.1)] border border-gray-200/80 bg-white/80 backdrop-blur-xl transform transition-transform duration-700 hover:scale-[1.01] hover:-rotate-1">
-              
-              {/* Fake macOS Window Header */}
-              <div className="bg-slate-50/90 px-4 py-3 flex items-center gap-4 border-b border-gray-200/80">
-                <div className="flex gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-400/80" />
-                  <div className="w-3 h-3 rounded-full bg-amber-400/80" />
-                  <div className="w-3 h-3 rounded-full bg-emerald-400/80" />
+          {/* Kartu demo split bill */}
+          <div className="relative">
+            <div className="rounded-[22px] border border-[#E7E5DE] bg-white p-5 shadow-[0_30px_60px_-30px_rgba(11,21,18,0.35)]">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className={`${DISPLAY} text-[19px] font-extrabold`}>Meja 4</p>
+                  <p className="text-[12.5px] text-[#8A938D]">4 orang · buka 19:24</p>
                 </div>
-                <div className="flex-1 flex justify-center">
-                  <div className="bg-white/60 rounded-md px-3 py-1.5 text-[11px] font-medium text-slate-500 flex items-center gap-2 border border-gray-200/50 w-64 justify-center shadow-sm">
-                    <Shield className="w-3 h-3" /> kasira.online/dashboard
-                  </div>
-                </div>
-                <div className="w-12" /> {/* Spacer */}
+                <span className="rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11.5px] font-bold text-[#047857]">Split aktif</span>
               </div>
 
-              {/* Dashboard content */}
-              <div className="bg-slate-50/50 p-6 sm:p-8">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  {[
-                    { label: 'Omzet Hari Ini', value: 'Rp 2.847.000', icon: BarChart3, color: 'text-emerald-600', bg: 'bg-emerald-100/50', trend: '+12%' },
-                    { label: 'Total Pesanan', value: '63', icon: Receipt, color: 'text-blue-600', bg: 'bg-blue-100/50', trend: '+5%' },
-                    { label: 'Produk Terjual', value: '147', icon: Package, color: 'text-violet-600', bg: 'bg-violet-100/50', trend: '-2%' },
-                    { label: 'Rata-rata Order', value: 'Rp 45.190', icon: LineChart, color: 'text-amber-600', bg: 'bg-amber-100/50', trend: '+8%' },
-                  ].map((stat, i) => (
-                    <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className={`w-10 h-10 ${stat.bg} rounded-xl flex items-center justify-center`}>
-                          <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                        </div>
-                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${stat.trend.startsWith('+') ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'}`}>
-                          {stat.trend}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-500 font-medium mb-1">{stat.label}</p>
-                      <p className="text-2xl font-bold text-slate-900 tracking-tight">{stat.value}</p>
-                    </div>
-                  ))}
-                </div>
+              <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.12em] text-[#A8B0AA]">Bayar per orang</p>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <div className="flex items-center justify-between mb-8">
-                      <h3 className="text-base font-bold text-slate-900">Grafik Penjualan</h3>
-                      <select className="text-sm bg-slate-50 border border-gray-200 rounded-lg px-3 py-1.5 text-slate-600 font-medium outline-none">
-                         <option>7 Hari Terakhir</option>
-                      </select>
+              <div className="mt-2.5 space-y-2">
+                {SPLIT_ROWS.map((r) => (
+                  <div
+                    key={r.name}
+                    className={`flex items-center justify-between rounded-xl border px-3.5 py-3 ${
+                      r.paid ? 'border-[#E3EFE9] bg-[#F6FBF8]' : 'border-[#E7E5DE] bg-white'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-bold">{r.name}</p>
+                      <p className="truncate text-[12px] text-[#8A938D]">{r.items}</p>
                     </div>
-                    <div className="flex items-end gap-3 h-40">
-                      {[40, 55, 35, 65, 50, 80, 70].map((h, i) => (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-3 group/bar">
-                          <div className="w-full relative rounded-t-lg bg-emerald-100/60 overflow-hidden transition-all duration-500 hover:bg-emerald-200" style={{ height: `${h}%` }}>
-                            {i === 5 && <div className="absolute inset-0 bg-gradient-to-t from-emerald-500 to-emerald-400 shadow-[inset_0_2px_4px_rgba(255,255,255,0.3)]" />}
-                          </div>
-                          <span className={`text-xs font-medium ${i === 5 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                            {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'][i]}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                    <span className={`shrink-0 text-[12.5px] font-bold ${r.paid ? 'text-[#047857]' : 'text-[#0B1512]'}`}>
+                      {r.status}
+                    </span>
                   </div>
-
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <h3 className="text-base font-bold text-slate-900 mb-6">Menu Paling Laku</h3>
-                    <div className="space-y-4">
-                      {[
-                        { rank: 1, name: 'Kopi Gula Aren', sold: 25, price: 'Rp 21.000' },
-                        { rank: 2, name: 'Croissant Butter', sold: 18, price: 'Rp 25.000' },
-                        { rank: 3, name: 'Es Teh Manis', sold: 10, price: 'Rp 8.000' },
-                        { rank: 4, name: 'Nasi Goreng Spesial', sold: 8, price: 'Rp 35.000' },
-                      ].map((p) => (
-                        <div key={p.rank} className="flex items-center gap-3 group/item cursor-default">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${p.rank === 1 ? 'bg-amber-100 text-amber-700' : p.rank === 2 ? 'bg-slate-100 text-slate-600' : 'bg-orange-50 text-orange-600'}`}>
-                            #{p.rank}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-slate-800 truncate group-hover/item:text-emerald-600 transition-colors">{p.name}</p>
-                            <p className="text-xs text-slate-500">{p.sold} terjual</p>
-                          </div>
-                          <div className="text-sm font-bold text-slate-700">{p.price}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
+
+              <div className="mt-3.5 flex items-center justify-between border-t border-[#EAE8E1] pt-3.5">
+                <p className="text-[12.5px] text-[#8A938D]">Sisa 1 orang belum bayar</p>
+                <p className="text-[12.5px] font-bold text-[#047857]">2/3 lunas</p>
+              </div>
+
+              <div aria-hidden="true" className="mt-3 w-full rounded-xl bg-[#0B1512] py-3 text-center text-[14px] font-bold text-white">
+                Tagih Budi · Rp 43.000
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#E3EFE9] bg-[#ECFDF5] px-3.5 py-2.5 text-[12.5px] text-[#047857]">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#10B981]" />
+              <span>
+                <strong className="font-bold">QRIS Andi masuk</strong> — langsung ke rekening kamu
+              </span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ═══════════════ SOCIAL PROOF ═══════════════ */}
-      <section className="py-10 border-y border-gray-200/60 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-6">Solusi tepercaya untuk bisnis masa kini</p>
-          <div className="flex flex-wrap justify-center items-center gap-x-12 gap-y-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
-             {/* Dummy Logos representation */}
-             <div className="flex items-center gap-2 text-xl font-black text-slate-800"><CoffeeIcon /> Kopi Kenangan</div>
-             <div className="flex items-center gap-2 text-xl font-bold text-slate-800 font-serif"><ChefHat /> Warung Pak Min</div>
-             <div className="flex items-center gap-2 text-xl font-bold text-slate-800 italic"><Flame /> Sate Taichan Senayan</div>
-             <div className="flex items-center gap-2 text-xl font-bold text-slate-800"><Store /> Kios Kopi</div>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════ BENTO GRID FEATURES ═══════════════ */}
-      <section id="features" className="py-24 bg-[#FAFAFA]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-2xl mb-16">
-            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">
-              Bukan cuma aplikasi kasir biasa.
-            </h2>
-            <p className="text-lg text-slate-600 leading-relaxed font-medium">
-              Sistem kasir cerdas yang didesain buat ngertiin pusingnya operasional resto & cafe. Semua beres di satu tempat.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Bento 1: POS & Offline */}
-            <div className="md:col-span-2 bg-white rounded-3xl p-8 border border-gray-200/80 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-               <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <Smartphone className="w-48 h-48" />
-               </div>
-               <div className="relative z-10 w-full md:w-2/3">
-                  <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-6">
-                    <WifiOff className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-slate-900 mb-3">Tahan Banting, Walau Internet Mati.</h3>
-                  <p className="text-slate-600 leading-relaxed mb-6">
-                    Mati lampu? WiFi ngadat? Jangan panik. Kasir tetap bisa jalan buat terima pesanan dan bayaran. Data akan disinkron otomatis ke awan begitu internet nyala lagi.
-                  </p>
-                  <ul className="space-y-3">
-                    {['Sinkronisasi data otomatis via CRDT', 'Support print struk bluetooth offline', 'Catat split bill dan open tab'].map((item, i) => (
-                       <li key={i} className="flex items-center gap-3 text-sm font-medium text-slate-700">
-                         <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center"><CheckCircle2 className="w-3 h-3 text-emerald-600" /></div>
-                         {item}
-                       </li>
-                    ))}
-                  </ul>
-               </div>
-            </div>
-
-            {/* Bento 2: QRIS */}
-            <div className="bg-white rounded-3xl p-8 border border-gray-200/80 shadow-sm hover:shadow-md transition-shadow">
-               <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
-                 <QrCode className="w-6 h-6" />
-               </div>
-               <h3 className="text-xl font-bold text-slate-900 mb-3">Terima QRIS, Bebas Potongan.</h3>
-               <p className="text-slate-600 leading-relaxed text-sm">
-                 Terima pembayaran dari dompet digital mana aja tanpa ada embel-embel komisi terselubung dari Kasira. Uang langsung cair ke rekening kamu.
-               </p>
-            </div>
-
-            {/* Bento 3: Storefront */}
-            <div className="bg-slate-900 rounded-3xl p-8 border border-slate-800 shadow-xl overflow-hidden relative group text-white">
-               <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent" />
-               <div className="relative z-10">
-                 <div className="w-12 h-12 bg-slate-800 text-emerald-400 rounded-2xl flex items-center justify-center mb-6 border border-slate-700">
-                   <Globe className="w-6 h-6" />
-                 </div>
-                 <h3 className="text-xl font-bold mb-3 text-white">Website Toko Jadi Detik Itu Juga.</h3>
-                 <p className="text-slate-400 leading-relaxed text-sm mb-6">
-                   Tinggal daftar, website toko kamu langsung live: <span className="text-emerald-400 font-mono">kasira.online/namamu</span>. Bagikan ke WA atau Instagram, biarkan pembeli order sendiri.
-                 </p>
-                 <Link href="/kasira-coffee" className="inline-flex items-center text-sm font-bold text-white hover:text-emerald-400 transition-colors">
-                   Lihat contoh toko <ArrowRight className="w-4 h-4 ml-2" />
-                 </Link>
-               </div>
-            </div>
-
-            {/* Bento 4: AI & Dashboard */}
-            <div className="md:col-span-2 bg-white rounded-3xl p-8 border border-gray-200/80 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
-               <div className="flex flex-col md:flex-row gap-8 items-center">
-                 <div className="flex-1">
-                    <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mb-6">
-                      <Sparkles className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-3">AI Laporan Langsung ke WhatsApp.</h3>
-                    <p className="text-slate-600 leading-relaxed mb-6">
-                      Nggak perlu pusing baca grafik. AI Kasira bakal kirim rangkuman harian: menu apa yang laris manis, jam berapa paling rame, dan saran stok buat besok.
-                    </p>
-                    <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-gray-100 w-max">
-                      <div className="w-8 h-8 bg-[#25D366] rounded-full flex items-center justify-center text-white"><MessageCircle className="w-4 h-4" /></div>
-                      <span className="text-sm font-semibold text-slate-700">"Bos, hari ini omzet naik 15%!"</span>
-                    </div>
-                 </div>
-                 <div className="flex-1 relative w-full aspect-video md:aspect-square max-h-64 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200/50 flex items-center justify-center p-6 shadow-inner">
-                    <LayoutDashboard className="w-24 h-24 text-slate-300 drop-shadow-sm" />
-                 </div>
-               </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════ HOW IT WORKS ═══════════════ */}
-      <section className="py-24 bg-white border-t border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16 max-w-2xl mx-auto">
-            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">Gak Pake Lama, Langsung Jualan.</h2>
-            <p className="text-lg text-slate-600 font-medium">Lupakan setting yang rumit. Kasira dibuat sesimpel mungkin supaya kamu bisa fokus ngelayanin pembeli.</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8 lg:gap-12 relative max-w-5xl mx-auto">
-            <div className="hidden md:block absolute top-12 left-[15%] right-[15%] h-0.5 bg-gradient-to-r from-emerald-100 via-emerald-300 to-emerald-100" />
-            {[
-              { step: '01', title: 'Daftar via HP', desc: 'Masukkan nomor WhatsApp dan nama usahamu. Gak sampai semenit.' },
-              { step: '02', title: 'Pajang Menu', desc: 'Tambahkan nama menu dan harga. Website jualan langsung otomatis jadi.' },
-              { step: '03', title: 'Terima Cuan', desc: 'Download app Kasira di kasir, dan kamu siap terima pesanan hari ini juga.' },
-            ].map(({ step, title, desc }, i) => (
-              <div key={i} className="relative pt-6">
-                <div className="w-14 h-14 mx-auto bg-white border-[4px] border-emerald-500 rounded-2xl flex items-center justify-center mb-6 relative z-10 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-                  <span className="text-lg font-black text-emerald-600">{step}</span>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-3 text-center">{title}</h3>
-                <p className="text-slate-600 text-center leading-relaxed font-medium">{desc}</p>
-              </div>
+      {/* ── PAY-ITEMS ── */}
+      <section className="border-y border-[#EAE8E1] bg-white">
+        <div className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#059669]">Warkop Pay-Items</p>
+          <h2 className={`${DISPLAY} mt-3 max-w-[640px] text-[30px] font-extrabold leading-[1.12] tracking-[-0.03em] sm:text-[38px]`}>
+            Satu meja, tiap orang bayar punyanya sendiri.
+          </h2>
+          <p className="mt-4 max-w-[620px] text-[16px] leading-[1.6] text-[#4B5750]">
+            Ada yang bayar duluan pakai QRIS, ada yang cash, ada yang nyusul. Kasir tinggal centang item per orang
+            — bukan maksa bagi rata kayak kasir lain.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-2.5">
+            {['Metode bayar beda-beda per orang', 'Tab meja tetap jalan sampai semua lunas'].map((t) => (
+              <span key={t} className="rounded-full border border-[#E7E5DE] bg-[#FAFAF7] px-3.5 py-2 text-[13px] font-semibold text-[#3F4A45]">
+                {t}
+              </span>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ═══════════════ PRICING ═══════════════ */}
-      <section id="pricing" className="py-24 bg-slate-900 text-white relative">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(16,185,129,0.1),transparent)]" />
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-4xl font-extrabold mb-4 tracking-tight">Harga Masuk Akal Buat UMKM.</h2>
-            <p className="text-lg text-slate-400 font-medium">Mulai dengan gratis, bayar pas bisnismu udah jalan. Transparan tanpa biaya tersembunyi.</p>
-          </div>
+      {/* ── PAINS ── */}
+      <section className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#8A938D]">Yang bikin pusing → beres</p>
+        <h2 className={`${DISPLAY} mt-3 max-w-[620px] text-[30px] font-extrabold leading-[1.12] tracking-[-0.03em] sm:text-[38px]`}>
+          Kamu udah kenal masalahnya. Kami bikin solusinya.
+        </h2>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto items-center">
-            {/* STARTER */}
-            <div className="bg-slate-800/50 rounded-3xl p-8 border border-slate-700 backdrop-blur-sm">
-              <div className="mb-8">
-                <h3 className="text-xl font-bold text-white mb-2">Starter</h3>
-                <p className="text-sm text-slate-400">Cocok buat warung dan kios kecil</p>
-                <div className="mt-6 flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-white">99rb</span>
-                  <span className="text-slate-500 font-medium">/bln</span>
-                </div>
-              </div>
-              <ul className="space-y-4 mb-8 text-sm font-medium text-slate-300">
-                {['1 Akun Kasir', 'Website Toko Gratis', 'Laporan Harian', 'Bisa Dipakai Offline'].map((f, i) => (
-                  <li key={i} className="flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" /> {f}
+        <div className="mt-8 grid gap-3 sm:grid-cols-2">
+          {PAINS.map((p) => (
+            <div key={p.bad} className="rounded-2xl border border-[#E7E5DE] bg-white p-5">
+              <p className="text-[14px] leading-snug text-[#8A938D] line-through decoration-[#D6D3CA]">{p.bad}</p>
+              <p className="mt-2.5 flex items-start gap-2 text-[15px] font-bold leading-snug text-[#0B1512]">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#059669]" />
+                {p.good}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── DIFFS ── */}
+      <section id="beda" className="border-y border-[#EAE8E1] bg-white">
+        <div className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#059669]">Bukan kasir biasa</p>
+          <h2 className={`${DISPLAY} mt-3 text-[30px] font-extrabold leading-[1.12] tracking-[-0.03em] sm:text-[38px]`}>
+            Empat hal yang nggak dipunya kompetitor.
+          </h2>
+          <p className="mt-4 max-w-[640px] text-[16px] leading-[1.6] text-[#4B5750]">
+            Moka, Pawoon, Olsera — bagus, tapi kerasa &ldquo;barat&rdquo;. Ini bagian yang kami bikin khusus buat
+            cara jualan orang Indonesia.
+          </p>
+
+          <div className="mt-9 grid gap-5 md:grid-cols-2">
+            {DIFFS.map((d) => (
+              <article key={d.no} className="rounded-2xl border border-[#E7E5DE] bg-[#FAFAF7] p-6">
+                <span className={`${DISPLAY} text-[13px] font-extrabold tracking-[0.08em] text-[#059669]`}>{d.no}</span>
+                <h3 className={`${DISPLAY} mt-2.5 text-[20px] font-extrabold leading-[1.2] tracking-[-0.02em] sm:text-[22px]`}>
+                  {d.title}
+                </h3>
+                <p className="mt-3 text-[15px] leading-[1.62] text-[#4B5750]">{d.body}</p>
+                <span className="mt-4 inline-block rounded-full border border-[#DCE8E2] bg-white px-3 py-1.5 text-[12px] font-bold text-[#047857]">
+                  {d.tag}
+                </span>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── PILLARS ── */}
+      <section id="fitur" className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
+        <div className="grid gap-5 md:grid-cols-3">
+          {PILLARS.map((f) => (
+            <article key={f.title} className="rounded-2xl border border-[#E7E5DE] bg-white p-6">
+              <h3 className={`${DISPLAY} text-[19px] font-extrabold leading-tight tracking-[-0.02em]`}>{f.title}</h3>
+              <p className="mt-2.5 text-[14.5px] leading-[1.6] text-[#4B5750]">{f.body}</p>
+              <ul className="mt-4 space-y-2">
+                {f.items.map((it) => (
+                  <li key={it} className="flex items-center gap-2 text-[14px] font-medium text-[#2C3833]">
+                    <Check className="h-3.5 w-3.5 shrink-0 text-[#059669]" />
+                    {it}
                   </li>
                 ))}
               </ul>
-              <Link href="/register" className="w-full block text-center px-6 py-3.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-colors">
-                Mulai Gratis
-              </Link>
-            </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
-            {/* PRO */}
-            <div className="bg-gradient-to-b from-emerald-600 to-emerald-900 rounded-3xl p-1 border border-emerald-400/50 relative shadow-[0_0_40px_rgba(16,185,129,0.3)] transform md:-translate-y-4">
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-900 text-xs font-black uppercase tracking-wider px-4 py-1.5 rounded-full shadow-lg">
-                Paling Laris
-              </div>
-              <div className="bg-slate-900 rounded-[22px] p-8 h-full">
-                <div className="mb-8">
-                  <h3 className="text-xl font-bold text-white mb-2">Pro</h3>
-                  <p className="text-sm text-slate-400">Pilihan utama buat cafe hits</p>
-                  <div className="mt-6 flex items-baseline gap-1">
-                    <span className="text-5xl font-black text-white">299rb</span>
-                    <span className="text-slate-500 font-medium">/bln</span>
-                  </div>
-                </div>
-                <ul className="space-y-4 mb-8 text-sm font-medium text-slate-300">
-                  <li className="text-xs font-bold text-emerald-400 uppercase tracking-widest pb-2 border-b border-slate-800">Semua di Starter, plus:</li>
-                  {['AI Insight via WA', 'Manajemen Meja & Reservasi', 'Split Bill & Open Tab', 'Bahan Baku & HPP (Resep)'].map((f, i) => (
-                    <li key={i} className="flex items-center gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" /> {f}
+      {/* ── HARGA ── */}
+      <section id="harga" className="border-y border-[#EAE8E1] bg-white">
+        <div className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
+          <div className="text-center">
+            <h2 className={`${DISPLAY} text-[30px] font-extrabold leading-[1.12] tracking-[-0.03em] sm:text-[38px]`}>
+              Masuk akal buat UMKM.
+            </h2>
+            <p className="mx-auto mt-4 max-w-[520px] text-[16px] leading-[1.6] text-[#4B5750]">
+              Mulai gratis, bayar pas bisnis udah jalan. Transparan, tanpa biaya nyempil.
+            </p>
+          </div>
+
+          <div className="mx-auto mt-10 grid max-w-[840px] gap-5 md:grid-cols-2">
+            {PLANS.map((pl) => (
+              <article
+                key={pl.name}
+                className={
+                  pl.dark
+                    ? 'rounded-[22px] border border-[#12201B] bg-[#0A0F0D] p-7 shadow-[0_30px_60px_-24px_rgba(5,150,105,0.45)]'
+                    : 'rounded-[22px] border border-[#E7E5DE] bg-white p-7'
+                }
+              >
+                <span
+                  className={`inline-block rounded-full px-2.5 py-1 text-[11.5px] font-bold ${
+                    pl.dark ? 'bg-[#FEF3C7] text-[#B45309]' : 'bg-[#ECFDF5] text-[#047857]'
+                  }`}
+                >
+                  {pl.badge}
+                </span>
+                <h3 className={`${DISPLAY} mt-3.5 text-[24px] font-extrabold ${pl.dark ? 'text-white' : 'text-[#0B1512]'}`}>
+                  {pl.name}
+                </h3>
+                <p className={`text-[13.5px] ${pl.dark ? 'text-[#8CA095]' : 'text-[#6B756F]'}`}>{pl.tagline}</p>
+
+                <p className="mt-5 flex items-baseline gap-1.5">
+                  <span className={`${DISPLAY} text-[38px] font-extrabold tracking-[-0.03em] ${pl.dark ? 'text-white' : 'text-[#0B1512]'}`}>
+                    {pl.price}
+                  </span>
+                  <span className={`text-[14px] ${pl.dark ? 'text-[#8CA095]' : 'text-[#6B756F]'}`}>/bln</span>
+                </p>
+
+                <ul className="mt-6 space-y-2.5">
+                  {pl.features.map((ft) => (
+                    <li key={ft} className={`flex items-start gap-2.5 text-[14.5px] ${pl.dark ? 'text-[#D3DED8]' : 'text-[#2C3833]'}`}>
+                      <Check className={`mt-0.5 h-4 w-4 shrink-0 ${pl.dark ? 'text-[#34D399]' : 'text-[#059669]'}`} />
+                      {ft}
                     </li>
                   ))}
                 </ul>
-                <a href={waLink} target="_blank" rel="noopener noreferrer" className="w-full block text-center px-6 py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.4)]">
-                  Hubungi Tim Kami
-                </a>
-              </div>
-            </div>
 
-            {/* BUSINESS */}
-            <div className="bg-slate-800/50 rounded-3xl p-8 border border-slate-700 backdrop-blur-sm">
-              <div className="mb-8">
-                <h3 className="text-xl font-bold text-white mb-2">Business</h3>
-                <p className="text-sm text-slate-400">Buat restoran yang punya banyak cabang</p>
-                <div className="mt-6 flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-white">499rb</span>
-                  <span className="text-slate-500 font-medium">/bln</span>
-                </div>
-              </div>
-              <ul className="space-y-4 mb-8 text-sm font-medium text-slate-300">
-                {['Multi Cabang Terpusat', 'Dashboard Khusus Owner', 'Transfer Stok Antar Outlet', 'Bantuan Setup Langsung'].map((f, i) => (
-                  <li key={i} className="flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-slate-500 shrink-0" /> {f}
-                  </li>
-                ))}
-              </ul>
-              <a href={waLink} target="_blank" rel="noopener noreferrer" className="w-full block text-center px-6 py-3.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-colors">
-                Ngobrol Bareng
-              </a>
+                <Link
+                  href={pl.href}
+                  className={`mt-7 flex w-full items-center justify-center rounded-xl py-3.5 text-[15px] font-bold transition ${
+                    pl.dark
+                      ? 'bg-[#10B981] text-[#04231A] hover:bg-[#34D399]'
+                      : 'border border-[#E4E2DB] bg-[#F2F1EC] text-[#0B1512] hover:border-[#0B1512]'
+                  }`}
+                >
+                  {pl.cta}
+                </Link>
+              </article>
+            ))}
+          </div>
+
+          <p className="mx-auto mt-6 max-w-[560px] text-center text-[13px] leading-relaxed text-[#8A938D]">
+            Demo toko pakai data contoh. Pro lagi tahap early access — feedback kamu kami dengerin.
+          </p>
+        </div>
+      </section>
+
+      {/* ── CERITA ── */}
+      <section id="cerita" className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
+        <div className="mx-auto max-w-[760px] rounded-[22px] border border-[#E7E5DE] bg-white p-7 sm:p-10">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#8A938D]">Kenapa Kasira ada</p>
+          <blockquote className={`${DISPLAY} mt-4 text-[20px] font-semibold leading-[1.4] tracking-[-0.015em] text-[#0B1512] sm:text-[23px]`}>
+            &ldquo;Gue bikin Kasira karena POS yang ada kerasa terlalu &lsquo;barat&rsquo; buat warkop Indonesia.
+            Split bill bagi rata? Warkop beneran nggak gitu — orang bayar punya dia sendiri, ada yang nyusul, ada
+            yang pulang duluan. Itu yang Kasira beresin.&rdquo;
+          </blockquote>
+          <div className="mt-6 flex items-center gap-3">
+            <span className={`${DISPLAY} flex h-11 w-11 items-center justify-center rounded-full bg-[#0B1512] text-[17px] font-extrabold text-white`}>
+              I
+            </span>
+            <div>
+              <p className="text-[14.5px] font-bold">Ivan</p>
+              <p className="text-[13px] text-[#8A938D]">Founder Kasira</p>
             </div>
+          </div>
+          <p className="mt-6 rounded-xl bg-[#FAFAF7] px-4 py-3.5 text-[13.5px] leading-relaxed text-[#4B5750]">
+            Kami lagi di fase pra-pilot. 10 cafe pertama yang gabung bantu bentuk produknya — dan dapet 2 bulan Pro
+            gratis.
+          </p>
+        </div>
+      </section>
+
+      {/* ── FAQ ── */}
+      <section className="border-y border-[#EAE8E1] bg-white">
+        <div className="mx-auto max-w-[780px] px-5 py-16 sm:px-6 lg:py-20">
+          <h2 className={`${DISPLAY} text-[30px] font-extrabold leading-[1.12] tracking-[-0.03em] sm:text-[36px]`}>
+            Pertanyaan yang sering muncul
+          </h2>
+          <div className="mt-8 border-y border-[#EAE8E1]">
+            {FAQS.map((f) => (
+              // <details> native: accordion tanpa JavaScript sama sekali, dan
+              // isinya tetap kebaca crawler buat SEO.
+              <details key={f.q} className="group border-b border-[#EAE8E1] py-4 last:border-b-0">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[15.5px] font-bold text-[#0B1512]">
+                  {f.q}
+                  <ChevronDown className="h-4 w-4 shrink-0 text-[#8A938D] transition group-open:rotate-180" />
+                </summary>
+                <p className="mt-3 text-[14.5px] leading-[1.65] text-[#4B5750]">{f.a}</p>
+              </details>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ═══════════════ FAQ ═══════════════ */}
-      <FAQ />
-
-      {/* ═══════════════ CTA ═══════════════ */}
-      <section className="py-24 bg-emerald-600 relative overflow-hidden text-white">
-        <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]" />
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl md:text-5xl font-extrabold mb-6 tracking-tight">
-            Udah Saatnya Usahamu Naik Kelas.
+      {/* ── CTA ── */}
+      <section className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-24">
+        <div className="rounded-[26px] bg-[#0A0F0D] px-7 py-12 text-center sm:px-10 sm:py-16">
+          <h2 className={`${DISPLAY} mx-auto max-w-[560px] text-[30px] font-extrabold leading-[1.1] tracking-[-0.03em] text-white sm:text-[40px]`}>
+            Cafe kamu layak sistem yang proper.
           </h2>
-          <p className="text-emerald-100 text-lg md:text-xl mb-10 max-w-2xl mx-auto font-medium">
-            Gabung bareng ratusan kedai kopi dan restoran lain yang udah ninggalin buku catatan kusam mereka. Coba gratis 30 hari, tanpa syarat ribet.
+          <p className="mx-auto mt-4 max-w-[520px] text-[16px] leading-[1.6] text-[#8CA095]">
+            Coba gratis 30 hari. Tanpa kartu kredit, tanpa syarat ribet. Kalau nggak cocok, tinggal berhenti.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/register"
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-slate-900 text-white text-base font-bold rounded-2xl hover:bg-slate-800 transition-all shadow-xl hover:-translate-y-1"
+              className="inline-flex items-center gap-2 rounded-full bg-[#10B981] px-6 py-3.5 text-[15px] font-bold text-[#04231A] transition hover:bg-[#34D399]"
             >
-              Mulai Sekarang Jauh Lebih Gampang
-              <ArrowRight className="w-5 h-5" />
+              Daftar gratis sekarang
+              <ArrowRight className="h-4 w-4" />
             </Link>
+            <a
+              href={WA_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-[#25342D] px-6 py-3.5 text-[15px] font-bold text-white transition hover:border-[#8CA095]"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Tanya via WhatsApp
+            </a>
           </div>
         </div>
       </section>
 
-      {/* ═══════════════ FOOTER ═══════════════ */}
-      <footer className="bg-slate-50 pt-16 pb-8 border-t border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-12">
-            <div>
-              <span className="text-slate-900 font-black text-3xl tracking-tight">kasira</span>
-              <span className="text-emerald-500 font-black text-3xl">.</span>
-            </div>
-            <div className="flex flex-wrap justify-center gap-x-8 gap-y-4 text-sm font-semibold">
-              <Link href="#features" className="text-slate-500 hover:text-emerald-600 transition-colors">Fitur</Link>
-              <Link href="#pricing" className="text-slate-500 hover:text-emerald-600 transition-colors">Harga</Link>
-              <Link href="/kasira-coffee" className="text-slate-500 hover:text-emerald-600 transition-colors">Demo</Link>
-              <Link href="/login" className="text-slate-500 hover:text-emerald-600 transition-colors">Masuk</Link>
-              <Link href="/privacy" className="text-slate-500 hover:text-emerald-600 transition-colors">Privasi</Link>
-              <Link href="/terms" className="text-slate-500 hover:text-emerald-600 transition-colors">Ketentuan</Link>
-            </div>
-          </div>
-          <div className="pt-8 border-t border-gray-200/60 flex flex-col items-center gap-4">
-            <p className="text-slate-400 text-sm font-medium">&copy; {new Date().getFullYear()} Kasira POS. Karya anak bangsa untuk UMKM Indonesia.</p>
-          </div>
+      {/* ── FOOTER ── */}
+      <footer className="border-t border-[#EAE8E1]">
+        <div className="mx-auto flex max-w-[1180px] flex-col items-center justify-between gap-4 px-5 py-8 text-[13px] text-[#8A938D] sm:flex-row sm:px-6">
+          <p>© {new Date().getFullYear()} Kasira · buat UMKM Indonesia 🇮🇩</p>
+          <nav className="flex flex-wrap items-center justify-center gap-5">
+            <Link href={`/${DEMO_SLUG}`} className="transition hover:text-[#0B1512]">Demo</Link>
+            <Link href="/download" className="transition hover:text-[#0B1512]">Download</Link>
+            <Link href="/privacy" className="transition hover:text-[#0B1512]">Privasi</Link>
+            <Link href="/terms" className="transition hover:text-[#0B1512]">Ketentuan</Link>
+          </nav>
         </div>
       </footer>
-    </div>
-  );
-}
 
-// Simple dummy icon component for social proof
-function CoffeeIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
-      <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
-      <line x1="6" x2="6" y1="2" y2="4" />
-      <line x1="10" x2="10" y1="2" y2="4" />
-      <line x1="14" x2="14" y1="2" y2="4" />
-    </svg>
+      <LandingChat waLink={WA_LINK} />
+    </div>
   );
 }

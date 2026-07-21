@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect, ai, reservations, loyalty, media, customers, tables, tabs, webhook, ingredients, recipes, knowledge_graph, superadmin, billing, referrals, platform, embeddings, analytics, invoice_ocr, waitlist
+from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect, ai, reservations, loyalty, media, customers, tables, tabs, webhook, ingredients, recipes, knowledge_graph, superadmin, billing, referrals, platform, embeddings, analytics, invoice_ocr, waitlist, landing
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -14,6 +14,8 @@ api_router.include_router(sync.router, prefix="/sync", tags=["sync"])
 api_router.include_router(shifts.router, prefix="/shifts", tags=["shifts"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(connect.router, prefix="/connect", tags=["connect"])
+# Publik, tanpa auth — chat "Barista Kasira" di landing page.
+api_router.include_router(landing.router, prefix="/landing", tags=["landing"])
 api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
 api_router.include_router(reservations.router, prefix="/reservations", tags=["reservations"])
 api_router.include_router(loyalty.router, prefix="/loyalty", tags=["loyalty"])
