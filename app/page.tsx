@@ -24,7 +24,6 @@ const NAV = [
   { label: 'Fitur', href: '#fitur' },
   { label: 'Kenapa beda', href: '#beda' },
   { label: 'Harga', href: '#harga' },
-  { label: 'Cerita', href: '#cerita' },
 ];
 
 const PAINS = [
@@ -448,31 +447,6 @@ export default function LandingPage() {
 
           <p className="mx-auto mt-6 max-w-[560px] text-center text-[13px] leading-relaxed text-[#8A938D]">
             Demo toko pakai data contoh. Pro lagi tahap early access — feedback kamu kami dengerin.
-          </p>
-        </div>
-      </section>
-
-      {/* ── CERITA ── */}
-      <section id="cerita" className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
-        <div className="mx-auto max-w-[760px] rounded-[22px] border border-[#E7E5DE] bg-white p-7 sm:p-10">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#8A938D]">Kenapa Kasira ada</p>
-          <blockquote className={`${DISPLAY} mt-4 text-[20px] font-semibold leading-[1.4] tracking-[-0.015em] text-[#0B1512] sm:text-[23px]`}>
-            &ldquo;Gue bikin Kasira karena POS yang ada kerasa terlalu &lsquo;barat&rsquo; buat warkop Indonesia.
-            Split bill bagi rata? Warkop beneran nggak gitu — orang bayar punya dia sendiri, ada yang nyusul, ada
-            yang pulang duluan. Itu yang Kasira beresin.&rdquo;
-          </blockquote>
-          <div className="mt-6 flex items-center gap-3">
-            <span className={`${DISPLAY} flex h-11 w-11 items-center justify-center rounded-full bg-[#0B1512] text-[17px] font-extrabold text-white`}>
-              I
-            </span>
-            <div>
-              <p className="text-[14.5px] font-bold">Ivan</p>
-              <p className="text-[13px] text-[#8A938D]">Founder Kasira</p>
-            </div>
-          </div>
-          <p className="mt-6 rounded-xl bg-[#FAFAF7] px-4 py-3.5 text-[13.5px] leading-relaxed text-[#4B5750]">
-            Kami lagi di fase pra-pilot. 10 cafe pertama yang gabung bantu bentuk produknya — dan dapet 2 bulan Pro
-            gratis.
           </p>
         </div>
       </section>
