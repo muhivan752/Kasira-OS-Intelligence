@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/services/printer_service.dart';
@@ -57,6 +59,15 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
   String _outletAddress = '';
   bool _autoPrintAttempted = false;
 
+  // Tangkap nomor pelanggan di sini, bukan di keranjang. Di keranjang tombolnya
+  // ketulis "(opsional)" dan alurnya 6 langkah — kasir nggak akan pakai pas
+  // rame, dan buktinya cuma 0,4% transaksi yang nyambung ke pelanggan.
+  // Di layar ini kasir udah selesai, orangnya masih di depan, dan alasannya
+  // jelas buat customer: "struknya dikirim ke WA ya".
+  final _waPhoneController = TextEditingController();
+  bool _waSending = false;
+  bool _waSent = false;
+
   @override
   void initState() {
     super.initState();
@@ -107,6 +118,7 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
 
   @override
   void dispose() {
+    _waPhoneController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -199,6 +211,55 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
         duration: Duration(seconds: seconds),
       ),
     );
+  }
+
+  void _snack(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// Kirim struk + otomatis simpan pelanggan + sambungkan ke order.
+  /// Endpoint /payments/send-receipt udah ngerjain ketiganya sekaligus.
+  Future<void> _quickSendWa() async {
+    final raw = _waPhoneController.text.trim();
+    if (raw.length < 8 || _waSending) return;
+    setState(() => _waSending = true);
+    try {
+      final cache = SessionCache.instance;
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 12),
+        receiveTimeout: const Duration(seconds: 12),
+      ));
+      final res = await dio.post(
+        '/payments/send-receipt',
+        options: Options(headers: cache.authHeaders),
+        data: {'order_id': widget.orderId, 'phone': raw},
+      );
+      final sent = res.data['data']?['sent'] == true;
+      if (!mounted) return;
+      setState(() {
+        _waSending = false;
+        _waSent = sent;
+      });
+      _snack(
+        sent ? 'Struk dikirim & pelanggan tersimpan' : 'Nomor tersimpan, struk gagal terkirim',
+        sent ? KasiraDS.success : KasiraDS.warning,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _waSending = false);
+      // Gagal kirim struk nggak boleh kelihatan kayak transaksinya bermasalah —
+      // uangnya udah masuk, ini cuma layanan tambahan.
+      _snack('Gagal kirim struk. Transaksi tetap aman.', KasiraDS.warning);
+    }
   }
 
   void _sendWa() {
@@ -324,7 +385,80 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
+
+                  // TANGKAP NOMOR PELANGGAN — inline, bukan popup.
+                  // Cuma muncul kalau transaksinya belum kepaut pelanggan.
+                  // Boleh dilewat: kasir tinggal lanjut ke tombol di bawah.
+                  if (widget.customerId == null && !_waSent)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: KasiraDS.surfaceSunken,
+                        borderRadius: KasiraDS.brMd,
+                        border: Border.all(color: KasiraDS.borderSubtle),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Kirim struk ke WhatsApp customer?',
+                              style: KasiraDS.sans(
+                                  size: 13.5,
+                                  weight: FontWeight.w700,
+                                  color: KasiraDS.textStrong)),
+                          const SizedBox(height: 2),
+                          Text('Nomornya tersimpan jadi data pelanggan. Boleh dilewat.',
+                              style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted)),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _waPhoneController,
+                                  keyboardType: TextInputType.phone,
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: InputDecoration(
+                                    hintText: '08xxxxxxxxxx',
+                                    isDense: true,
+                                    filled: true,
+                                    fillColor: KasiraDS.surfaceCard,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 12),
+                                    border: OutlineInputBorder(
+                                      borderRadius: KasiraDS.brSm,
+                                      borderSide: const BorderSide(
+                                          color: KasiraDS.borderSubtle),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                height: 44,
+                                child: FilledButton(
+                                  onPressed: (_waPhoneController.text.trim().length >= 8 &&
+                                          !_waSending)
+                                      ? _quickSendWa
+                                      : null,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFF25D366),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  ),
+                                  child: _waSending
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2, color: Colors.white))
+                                      : const Text('Kirim'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
 
                   // PRIMARY ACTION — Cetak Struk
                   SizedBox(
