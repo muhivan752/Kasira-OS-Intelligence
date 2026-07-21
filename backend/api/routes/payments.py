@@ -202,6 +202,20 @@ async def _handle_tab_payment_webhook_paid(db: AsyncSession, payment: Payment) -
         except Exception as e:
             logger.warning("tab webhook WA receipt fail-silent: %s", e)
 
+    # Loyalty (Pro+) — mirror jalur cash di tabs.py. Self-guard: cuma jalan
+    # kalau blok di atas beneran nutup tab ke 'paid'.
+    try:
+        from backend.services.loyalty_service import earn_points_for_tab
+
+        outlet_for_loyalty = await db.get(Outlet, payment.outlet_id)
+        if outlet_for_loyalty:
+            await earn_points_for_tab(
+                db, tab, payment.outlet_id, outlet_for_loyalty.tenant_id,
+                source="tab_webhook",
+            )
+    except Exception:
+        logger.warning("tab webhook loyalty fail-silent tab=%s", payment.tab_id, exc_info=True)
+
 
 async def _handle_tab_payment_webhook_failed(db: AsyncSession, payment: Payment) -> None:
     """Release locks taken at QRIS init time when webhook arrives with status
@@ -272,72 +286,60 @@ def _sanitize_xendit_response(payload: Any) -> Dict[str, Any]:
     }
 
 
-async def _try_earn_loyalty_points(db: AsyncSession, order: Order, outlet_id: UUID, user_id: UUID, tenant_id: UUID):
-    """Auto-earn loyalty points setelah order fully paid. Pro+ only, silently skip jika gagal."""
-    try:
-        if not order.customer_id:
-            return
-        from backend.models.tenant import Tenant
-        tenant = (await db.execute(
-            select(Tenant).where(Tenant.id == tenant_id)
-        )).scalar_one_or_none()
-        if not tenant:
-            return
-        raw_tier = getattr(tenant, "subscription_tier", "starter") or "starter"
-        tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier)
-        if tier.lower() not in {"pro", "business", "enterprise"}:
-            return
+async def _try_earn_loyalty_points(
+    db: AsyncSession,
+    order: Order,
+    outlet_id: UUID,
+    user_id: UUID,
+    tenant_id: UUID,
+    *,
+    source: str = "pos",
+) -> int:
+    """Auto-earn loyalty setelah order lunas. Pro+ only, gak pernah ngeblok payment.
 
-        from backend.models.loyalty import CustomerPoints, PointTransaction
-        POINTS_PER_RUPIAH = 10_000
+    Isinya pindah ke `backend/services/loyalty_service.py` supaya tabs.py dan
+    sync.py bisa pake logika yang sama persis. Signature lama dipertahankan
+    (termasuk `user_id` yang memang gak kepake) biar call site existing gak
+    ikut berubah.
+    """
+    from backend.services.loyalty_service import earn_points_for_order
 
-        # Idempotency check — Rule #35
-        existing = (await db.execute(
-            select(PointTransaction).where(
-                PointTransaction.order_id == order.id,
-                PointTransaction.type == 'earn',
-            )
-        )).scalar_one_or_none()
-        if existing:
-            return
+    return await earn_points_for_order(
+        db, order, outlet_id, tenant_id, source=source,
+    )
 
-        points_earned = int(float(order.total_amount) // POINTS_PER_RUPIAH)
-        if points_earned == 0:
-            return
 
-        cp = (await db.execute(
-            select(CustomerPoints).where(
-                CustomerPoints.customer_id == order.customer_id,
-                CustomerPoints.outlet_id == outlet_id,
-                CustomerPoints.deleted_at.is_(None),
-            ).with_for_update()
-        )).scalar_one_or_none()
+async def _try_earn_loyalty_points_for_receipt(
+    db: AsyncSession, order: Order, outlet: Optional[Outlet], source: str = "send_receipt",
+) -> int:
+    """Earn dari jalur kirim struk — order biasa maupun order di dalam tab.
 
-        if not cp:
-            cp = CustomerPoints(
-                customer_id=order.customer_id,
-                outlet_id=outlet_id,
-                balance=0,
-                lifetime_earned=0,
-            )
-            db.add(cp)
-            await db.flush()
+    Bedanya sama `_try_earn_loyalty_points`: order yang nempel di tab gak punya
+    Payment per-order (bayarnya lewat split / pay-items di level tab), jadi
+    predikat "sudah lunas" per-order selalu False. Untuk order tab, kelunasan
+    dibaca dari `tab.status == 'paid'`.
+    """
+    from backend.services.loyalty_service import earn_points_for_order
 
-        cp.balance += points_earned
-        cp.lifetime_earned += points_earned
-        cp.row_version += 1
+    if not outlet or not order or not order.customer_id:
+        return 0
 
-        txn = PointTransaction(
-            customer_id=order.customer_id,
-            outlet_id=outlet_id,
-            order_id=order.id,
-            type='earn',
-            points=points_earned,
-            description=f"Earn dari transaksi Rp{int(order.total_amount):,}",
+    tab_id = getattr(order, "tab_id", None)
+    if tab_id:
+        tab = await db.get(Tab, tab_id)
+        if not tab:
+            return 0
+        tab_status = tab.status.value if hasattr(tab.status, 'value') else str(tab.status)
+        if tab_status != 'paid':
+            return 0  # tab belum lunas — poin nyusul pas tab close
+        return await earn_points_for_order(
+            db, order, outlet.id, outlet.tenant_id,
+            source=f"{source}_tab", require_fully_paid=False,
         )
-        db.add(txn)
-    except Exception:
-        pass  # Loyalty gagal tidak boleh block payment
+
+    return await earn_points_for_order(
+        db, order, outlet.id, outlet.tenant_id, source=source,
+    )
 
 
 @router.post("/", response_model=StandardResponse[PaymentResponse])
@@ -953,10 +955,17 @@ async def xendit_webhook(
                     # Use payment.outlet_id; no current_user in webhook context
                     outlet_for_loyalty = await db.get(Outlet, payment.outlet_id)
                     if outlet_for_loyalty:
+                        # WAJIB flush dulu. Session ini autoflush=False, dan
+                        # loyalty ngecek kelunasan lewat SUM(payments.amount_paid)
+                        # di DB. Tanpa flush, status='paid' + amount_paid milik
+                        # payment INI masih nyangkut di memori → SUM-nya kurang →
+                        # order dikira belum lunas → poin gak pernah masuk.
+                        await db.flush()
                         await _try_earn_loyalty_points(
                             db, order, payment.outlet_id,
                             order.user_id or payment.outlet_id,  # fallback if no user
                             outlet_for_loyalty.tenant_id,
+                            source="webhook",
                         )
         elif new_status == PaymentStatus.failed:
             # Tab QRIS init expired/failed via Xendit — release locks so kasir
@@ -1408,6 +1417,14 @@ async def send_receipt_whatsapp(
     # Auto-link order.customer_id kalau masih NULL (capture data point untuk AI)
     if order.customer_id is None:
         order.customer_id = customer.id
+
+    # Auto-earn loyalty (Pro+). INI jalur mayoritas: kasir nangkep nomor
+    # pelanggan di halaman struk, SESUDAH bayar. Waktu create_payment jalan
+    # tadi order.customer_id masih NULL, jadi earn di sana ke-skip. Kalau gak
+    # dipanggil ulang di sini, poinnya hilang permanen — itu bug aslinya.
+    # Idempoten via UNIQUE(order_id,'earn'), jadi kirim struk berkali-kali
+    # (atau reprint) gak bikin poin dobel.
+    await _try_earn_loyalty_points_for_receipt(db, order, outlet, source="send_receipt")
 
     # Build receipt text
     receipt_text = _build_receipt_text(

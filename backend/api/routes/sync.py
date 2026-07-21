@@ -224,6 +224,31 @@ async def sync_data(
                     )
         if request.changes.payments:
             await process_table_sync(db, Payment, request.changes.payments, {"outlet_id": outlet_id}, server_hlc, conflict_strategy="financial_strict")
+
+            # Loyalty (Pro+) untuk order offline. Transaksi yang dibuat pas
+            # device lagi offline gak pernah lewat POST /payments/, jadi tanpa
+            # blok ini pelanggan yang dipilih saat offline gak pernah dapet
+            # poin. Idempoten via UNIQUE(order_id,'earn') — device yang re-push
+            # batch yang sama gak bikin poin dobel.
+            #
+            # flush() dulu: session ini autoflush=False dan loyalty ngecek
+            # kelunasan lewat SUM(payments.amount_paid) di DB.
+            await db.flush()
+            from backend.services.loyalty_service import earn_points_for_order_id
+
+            seen_order_ids = set()
+            for pay in request.changes.payments:
+                if not isinstance(pay, dict):
+                    continue
+                if str(pay.get("status") or "") != "paid":
+                    continue
+                oid = pay.get("order_id")
+                if not oid or oid in seen_order_ids:
+                    continue
+                seen_order_ids.add(oid)
+                await earn_points_for_order_id(
+                    db, oid, outlet_id, current_user.tenant_id, source="sync_offline",
+                )
         if request.changes.shifts:
             await process_table_sync(db, Shift, request.changes.shifts, {"outlet_id": outlet_id}, server_hlc, conflict_strategy="financial_strict")
         if request.changes.cash_activities:

@@ -46,6 +46,7 @@ from backend.schemas.tab import (
 )
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
+from backend.services.loyalty_service import earn_points_for_tab as _earn_points_for_tab
 from backend.services.tab_service import (
     utc_now as _utc_now,
     tab_event as _tab_event,
@@ -567,6 +568,12 @@ async def pay_tab_full(
 
         # WA receipt ke customer linked di tab.orders (fail-silent)
         await _send_tab_wa_receipts(db, tab, payment, body.payment_method)
+
+        # Loyalty (Pro+). Baru dikasih SETELAH tab beneran close ke 'paid' —
+        # helper-nya self-guard, jadi aman dipanggil tanpa cek ulang di sini.
+        await _earn_points_for_tab(
+            db, tab, tab.outlet_id, current_user.tenant_id, source="tab_pay_full",
+        )
     elif body.payment_method == 'qris':
         # Init Xendit QRIS — async settle via webhook (payments.py:652 tab branch)
         outlet = await db.get(Outlet, tab.outlet_id)
@@ -732,6 +739,12 @@ async def pay_split(
 
         # WA receipt ke customer linked di tab.orders (fail-silent)
         await _send_tab_wa_receipts(db, tab, payment, body.payment_method)
+
+        # Loyalty (Pro+). Split yang belum nutup tab → helper skip sendiri;
+        # poin baru turun pas split terakhir bikin tab.status = 'paid'.
+        await _earn_points_for_tab(
+            db, tab, tab.outlet_id, current_user.tenant_id, source="tab_pay_split",
+        )
     else:
         # QRIS — claim split + init Xendit QR. Webhook settles split + tab close.
         split.status = 'pending'
@@ -1120,6 +1133,12 @@ async def pay_items(
         paid_orders = list({order.id: order for order, _ in target_items}.values())
         await _send_tab_wa_receipts(
             db, tab, payment, body.payment_method, only_orders=paid_orders,
+        )
+
+        # Loyalty (Pro+). pay-items bisa jalan berkali-kali; helper skip sampai
+        # sisa tagihan habis dan tab close ke 'paid'.
+        await _earn_points_for_tab(
+            db, tab, tab.outlet_id, current_user.tenant_id, source="tab_pay_items",
         )
     elif body.payment_method == 'qris':
         # Init Xendit QRIS — claim items via paid_payment_id (no paid_at yet,
