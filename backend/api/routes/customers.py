@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
@@ -88,15 +89,36 @@ async def create_customer(
         if (await db.execute(dup_stmt)).scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Pelanggan dengan nomor HP ini sudah terdaftar")
 
+    # phone_hmac WAJIB dihitung beneran. Sebelumnya diisi string kosong untuk
+    # SEMUA pelanggan, padahal ada unique constraint (tenant_id, phone_hmac) —
+    # jadi pelanggan KEDUA yang dibuat lewat endpoint ini di tenant mana pun
+    # selalu gagal dengan 500 duplicate key. Praktis bikin "Tambah Pelanggan"
+    # nggak pernah jalan, dan ikut menjelaskan kenapa data pelanggan sedikit.
+    # Rumusnya disamakan dengan payments.py biar nomor yang sama menghasilkan
+    # hmac yang sama di kedua jalur.
+    import hashlib, hmac as _hmac
+    phone_hmac = (
+        _hmac.new(b'kasira-phone-key', customer_in.phone.encode(), hashlib.sha256).hexdigest()
+        if customer_in.phone else ''
+    )
+
     customer = Customer(
         tenant_id=current_user.tenant_id,
         name=customer_in.name,
         phone=customer_in.phone,
         email=customer_in.email,
-        phone_hmac='',
+        phone_hmac=phone_hmac,
     )
     db.add(customer)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Balapan dengan jalur auto-create (struk WA / storefront) yang bikin
+        # pelanggan dengan nomor sama. Pesan jelas, bukan 500.
+        await db.rollback()
+        raise HTTPException(
+            status_code=400, detail="Pelanggan dengan nomor HP ini sudah terdaftar"
+        )
     await db.refresh(customer)
 
     await log_audit(
