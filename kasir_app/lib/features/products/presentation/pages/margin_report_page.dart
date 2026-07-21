@@ -185,9 +185,10 @@ class _SummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: KasiraDS.brandPrimary.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: KasiraDS.brandPrimary.withOpacity(0.2)),
+        color: KasiraDS.surfaceCard,
+        borderRadius: KasiraDS.brLg,
+        border: Border.all(color: KasiraDS.borderSubtle),
+        boxShadow: KasiraDS.shadowSm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,16 +196,10 @@ class _SummaryCard extends StatelessWidget {
           Row(
             children: [
               const Icon(LucideIcons.trendingUp,
-                  size: 18, color: KasiraDS.brandPrimary),
+                  size: 16, color: KasiraDS.brandPrimary),
               const SizedBox(width: 8),
-              const Text(
-                'Ringkasan Margin',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: KasiraDS.textStrong,
-                ),
-              ),
+              Text('// RINGKASAN MARGIN',
+                  style: KasiraDS.eyebrow(color: KasiraDS.textMuted)),
             ],
           ),
           const SizedBox(height: 12),
