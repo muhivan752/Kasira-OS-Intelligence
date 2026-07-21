@@ -49,8 +49,13 @@ class Settings(BaseSettings):
     # Superadmin — comma-separated phone numbers
     SUPERADMIN_PHONES: str = ""
 
-    # Claude AI
+    # Claude AI — Sonnet (pricing coach) + invoice OCR (vision)
     ANTHROPIC_API_KEY: str = ""
+
+    # DeepSeek — pengganti Haiku untuk chat/insight/menu/resep/WA bot.
+    # Kosongin buat rollback: semua task balik ke Anthropic tanpa deploy kode.
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_CHAT_MODEL: str = "deepseek-v4-flash"
 
     # Voyage AI (embeddings for Layer 4)
     VOYAGE_API_KEY: str = ""

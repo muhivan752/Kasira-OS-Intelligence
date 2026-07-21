@@ -962,7 +962,11 @@ export default function AIChatPage() {
 
               {msg.role === 'assistant' && msg.content && !loading && msg.tokens !== undefined && (
                 <p className="text-[10px] text-gray-400 mt-2">
-                  {msg.model?.includes('haiku') ? 'Haiku' : 'Sonnet'} &middot; {msg.tokens} tokens
+                  {msg.model?.includes('deepseek')
+                    ? 'DeepSeek'
+                    : msg.model?.includes('haiku')
+                      ? 'Haiku'
+                      : 'Sonnet'} &middot; {msg.tokens} tokens
                 </p>
               )}
               {msg.role === 'assistant' && msg.content === '' && loading && (

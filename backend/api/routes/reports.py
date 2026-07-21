@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_, or_, cast, Date
 from datetime import datetime, timezone, date, time, timedelta
 from decimal import Decimal
 from uuid import UUID
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
@@ -15,9 +16,70 @@ from backend.models.shift import Shift, ShiftStatus
 from backend.models.product import Product
 from backend.models.product import Product as ProductModel
 from backend.models.outlet import Outlet
+from backend.models.tab import Tab
 from backend.schemas.response import StandardResponse
 
 router = APIRouter()
+
+# Rule #6 — simpan UTC di DB, tapi batas "hari" untuk laporan HARUS kalender
+# lokal outlet (WIB). Kalau potong di UTC, hari berjalan 07:00→07:00 WIB dan
+# transaksi dini hari (cafe tutup lewat tengah malam) kelempar ke hari kemarin.
+JAKARTA_TZ = ZoneInfo("Asia/Jakarta")
+
+
+def _today_local() -> date:
+    return datetime.now(JAKARTA_TZ).date()
+
+
+def _day_bounds_utc(start: date, end: date) -> tuple[datetime, datetime]:
+    """[start 00:00 WIB, end+1 00:00 WIB) → UTC, buat dipakai di filter created_at."""
+    start_local = datetime.combine(start, time.min, tzinfo=JAKARTA_TZ)
+    end_local = datetime.combine(end + timedelta(days=1), time.min, tzinfo=JAKARTA_TZ)
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+
+def _local_day_col():
+    """Tanggal kalender WIB dari created_at (timestamptz) — buat GROUP BY per hari."""
+    return cast(func.timezone("Asia/Jakarta", Order.created_at), Date)
+
+
+def _paid_order_filter():
+    """Order dianggap kontribusi revenue kalau benar-benar lunas.
+
+    - Non-tab: punya Payment sendiri yang `paid`.
+    - Tab: ikut status tab, BUKAN keberadaan Payment di order itu. Payment tab
+      cuma di-anchor ke `first_order.id` (gotcha #17), jadi kalau ngandelin
+      `Order.id IN (payments.order_id)` order ke-2 dst dalam satu tab hilang
+      total dari revenue & count.
+    """
+    return or_(
+        and_(
+            Order.tab_id.is_(None),
+            Order.id.in_(
+                select(Payment.order_id).where(
+                    Payment.status == "paid",
+                    Payment.deleted_at.is_(None),
+                )
+            ),
+        ),
+        and_(
+            Order.tab_id.isnot(None),
+            Order.tab_id.in_(
+                select(Tab.id).where(
+                    Tab.status == "paid",
+                    Tab.deleted_at.is_(None),
+                )
+            ),
+        ),
+    )
+
+
+def _net_paid_col():
+    """Duit yang beneran masuk laci. `amount_paid` untuk cash = uang yang
+    diserahin customer (100rb buat belanja 28rb), kembalian ada di
+    `change_amount` — kalau di-sum mentah, breakdown Tunai jadi ngarang.
+    """
+    return func.sum(Payment.amount_paid - func.coalesce(Payment.change_amount, 0))
 
 
 @router.get("/summary", response_model=StandardResponse)
@@ -47,14 +109,12 @@ async def get_report_summary(
     if (end_date - start_date).days > 90:
         raise HTTPException(status_code=400, detail="Maksimal range 90 hari")
 
-    start_dt = datetime.combine(start_date, time.min).replace(tzinfo=timezone.utc)
-    end_dt = datetime.combine(end_date + timedelta(days=1), time.min).replace(tzinfo=timezone.utc)
+    start_dt, end_dt = _day_bounds_utc(start_date, end_date)
 
-    # Revenue + order count per day
-    from sqlalchemy import cast, Date
+    # Revenue + order count per day (bucket per kalender WIB)
     daily_query = (
         select(
-            cast(Order.created_at, Date).label("day"),
+            _local_day_col().label("day"),
             func.count(Order.id).label("orders"),
             func.coalesce(func.sum(Order.total_amount), 0).label("revenue"),
         )
@@ -64,12 +124,7 @@ async def get_report_summary(
             Order.created_at < end_dt,
             Order.deleted_at.is_(None),
             Order.status != "cancelled",
-            Order.id.in_(
-                select(Payment.order_id).where(
-                    Payment.status == "paid",
-                    Payment.deleted_at.is_(None),
-                )
-            ),
+            _paid_order_filter(),
         )
         .group_by("day")
         .order_by("day")
@@ -80,9 +135,9 @@ async def get_report_summary(
     # Payment breakdown per day
     payment_query = (
         select(
-            cast(Order.created_at, Date).label("day"),
+            _local_day_col().label("day"),
             Payment.payment_method,
-            func.sum(Payment.amount_paid).label("total"),
+            _net_paid_col().label("total"),
         )
         .select_from(Payment)
         .join(Order, Payment.order_id == Order.id)
@@ -175,9 +230,8 @@ async def get_daily_report(
     if not outlet_check.scalar():
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
 
-    target_date = report_date or datetime.now(timezone.utc).date()
-    start_of_day = datetime.combine(target_date, time.min).replace(tzinfo=timezone.utc)
-    end_of_day = datetime.combine(target_date + timedelta(days=1), time.min).replace(tzinfo=timezone.utc)
+    target_date = report_date or _today_local()
+    start_of_day, end_of_day = _day_bounds_utc(target_date, target_date)
 
     # 1. Order stats (revenue, count, avg)
     # Filter: orders today, status != cancelled, paid
@@ -190,14 +244,9 @@ async def get_daily_report(
         Order.created_at < end_of_day,
         Order.deleted_at.is_(None),
         Order.status != "cancelled",
-        Order.id.in_(
-            select(Payment.order_id).where(
-                Payment.status == "paid",
-                Payment.deleted_at.is_(None),
-            )
-        )
+        _paid_order_filter(),
     )
-    
+
     order_result = await db.execute(order_query)
     order_stats = order_result.first()
     
@@ -221,12 +270,7 @@ async def get_daily_report(
         Order.deleted_at.is_(None),
         Product.deleted_at.is_(None),
         Order.status != "cancelled",
-        Order.id.in_(
-            select(Payment.order_id).where(
-                Payment.status == "paid",
-                Payment.deleted_at.is_(None),
-            )
-        )
+        _paid_order_filter(),
     ).group_by(
         Product.id, Product.name
     ).order_by(
@@ -246,7 +290,7 @@ async def get_daily_report(
     # 3. Payment breakdown
     payment_query = select(
         Payment.payment_method,
-        func.sum(Payment.amount_paid).label("total")
+        _net_paid_col().label("total")
     ).select_from(Payment).join(
         Order, Payment.order_id == Order.id
     ).where(

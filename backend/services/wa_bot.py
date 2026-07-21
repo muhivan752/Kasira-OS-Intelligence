@@ -566,13 +566,14 @@ async def execute_reservation(
 async def ai_compose_response(
     message: str, outlet_name: str, outlet_id: str, db: AsyncSession,
 ) -> Optional[str]:
-    """Use Claude Haiku for ambiguous messages. Returns None if no API key."""
-    if not settings.ANTHROPIC_API_KEY:
+    """LLM fallback buat pesan ambigu (default DeepSeek). None kalau belum ada key."""
+    from backend.services.llm_client import chat_configured, get_llm_client
+
+    if not chat_configured():
         return None
 
     try:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        client = get_llm_client()
 
         # Get basic outlet info for context
         from backend.models.outlet import Outlet

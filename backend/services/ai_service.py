@@ -23,6 +23,7 @@ from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
+from backend.services.llm_client import chat_configured, get_llm_client, route_model
 
 logger = logging.getLogger(__name__)
 
@@ -671,11 +672,10 @@ async def generate_dashboard_insight(outlet_name: str, summary_text: str) -> str
     """Insight AI 1-2 kalimat buat Beranda (Pro). One-shot Haiku (murah).
     summary_text = ringkasan penjualan hari ini (dibangun caller). Return "" kalau
     AI belum dikonfigurasi / error (caller fallback ke insight lokal)."""
-    if not settings.ANTHROPIC_API_KEY:
+    if not chat_configured():
         return ""
     try:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        client = get_llm_client()
         msg = await client.messages.create(
             model=HAIKU_MODEL_ID,
             max_tokens=160,
@@ -707,13 +707,12 @@ async def generate_menu_proposal(
     Generate multi-product menu proposal via Haiku.
     Yields SSE-ready text chunks dengan embedded <MENU_PROPOSAL> block.
     """
-    if not settings.ANTHROPIC_API_KEY:
+    if not chat_configured():
         yield "Maaf, fitur AI belum dikonfigurasi. Hubungi admin."
         return
 
     try:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        client = get_llm_client()
 
         # Smart suggest: detect merchant domain dari existing products/categories
         domain_info = await detect_domain(outlet_id, db)
@@ -756,13 +755,12 @@ async def generate_recipe_proposal(
     Yields SSE-ready text chunks dengan embedded <RECIPE_PROPOSAL> block.
     Caller handle 'done' event setelah generator selesai.
     """
-    if not settings.ANTHROPIC_API_KEY:
+    if not chat_configured():
         yield "Maaf, fitur AI belum dikonfigurasi. Hubungi admin."
         return
 
     try:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        client = get_llm_client()
 
         # Smart suggest: detect domain biar ingredient typical-nya match
         # (jangan kasih resep F&B untuk vape shop)
@@ -1781,7 +1779,7 @@ async def stream_ai_response(
             return
 
     # 2. Cek API key
-    if not settings.ANTHROPIC_API_KEY:
+    if not chat_configured():
         yield sse({
             "type": "chunk",
             "content": "Maaf, fitur AI belum dikonfigurasi. Hubungi admin untuk mengaktifkan.",
@@ -1910,14 +1908,10 @@ async def stream_ai_response(
 
     # 5. Stream dari Claude API
     try:
-        import anthropic
         # Timeout 30s pricing coach, 25s untuk lainnya — bikin failover cepat
         # daripada default 10 menit SDK.
         client_timeout = 30.0 if intent == INTENT_PRICING_COACH else 25.0
-        client = anthropic.AsyncAnthropic(
-            api_key=settings.ANTHROPIC_API_KEY,
-            timeout=client_timeout,
-        )
+        client = get_llm_client(timeout=client_timeout)
 
         tokens_used = 0
         # Pricing coach perlu ruang lebih besar untuk reasoning multi-produk
@@ -1972,7 +1966,7 @@ async def stream_ai_response(
                         "type": "done",
                         "intent": intent,
                         "tokens_used": tokens_used,
-                        "model": try_model,
+                        "model": route_model(try_model)[1],
                     }
                     if is_fallback or pricing_coach_degraded_reason:
                         done_payload["degraded"] = True
@@ -2031,7 +2025,12 @@ async def stream_ai_response(
                 final_msg.usage.input_tokens + final_msg.usage.output_tokens
             )
 
-        yield sse({"type": "done", "intent": intent, "tokens_used": tokens_used, "model": model})
+        # Lapor model yang BENERAN dipakai (bisa DeepSeek hasil routing),
+        # bukan model id logis — dashboard nampilin badge dari field ini.
+        yield sse({
+            "type": "done", "intent": intent, "tokens_used": tokens_used,
+            "model": route_model(model)[1],
+        })
         # Persist multi-turn turn pair setelah stream sukses. Fail-silent
         # supaya error save gak corrupt user-visible done event.
         await _save_conversation_turn(
