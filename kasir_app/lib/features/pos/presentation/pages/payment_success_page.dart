@@ -67,6 +67,11 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
   final _waPhoneController = TextEditingController();
   bool _waSending = false;
   bool _waSent = false;
+  /// Izin kirim promo. Default MATI — kasir harus nanya dulu ke customer.
+  /// Izin nggak boleh disimpulkan dari "dia mau dikirimi struk": struk itu
+  /// bukti transaksi, promo itu iklan. Dan izin nggak bisa dikumpulin surut —
+  /// nomor yang masuk tanpa centang ini selamanya nggak boleh dikirimi promo.
+  bool _waConsent = false;
 
   @override
   void initState() {
@@ -241,7 +246,11 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
       final res = await dio.post(
         '/payments/send-receipt',
         options: Options(headers: cache.authHeaders),
-        data: {'order_id': widget.orderId, 'phone': raw},
+        data: {
+          'order_id': widget.orderId,
+          'phone': raw,
+          'marketing_consent': _waConsent,
+        },
       );
       final sent = res.data['data']?['sent'] == true;
       if (!mounted) return;
@@ -455,6 +464,33 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
                                 ),
                               ),
                             ],
+                          ),
+                          InkWell(
+                            onTap: () => setState(() => _waConsent = !_waConsent),
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 34,
+                                    height: 34,
+                                    child: Checkbox(
+                                      value: _waConsent,
+                                      onChanged: (v) =>
+                                          setState(() => _waConsent = v ?? false),
+                                      activeColor: KasiraDS.brandPrimary,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      'Customer setuju dikirimi info promo',
+                                      style: KasiraDS.sans(
+                                          size: 12, color: KasiraDS.textMuted),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),

@@ -39,8 +39,9 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
   @override
   void initState() {
     super.initState();
-    _amountReceived = _amountDue;
-    _amountController.text = _amountDue.toStringAsFixed(0);
+    // Sengaja dikosongin — lihat alasan di payment_modal.dart. Tombol 'Pas'
+    // di bawah tetap ada buat kasus uang pas.
+    _amountReceived = 0;
   }
 
   @override

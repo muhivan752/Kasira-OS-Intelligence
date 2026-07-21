@@ -141,8 +141,11 @@ class _PaymentModalState extends State<PaymentModal> {
   @override
   void initState() {
     super.initState();
-    _amountReceived = widget.totalAmount;
-    _amountController.text = widget.totalAmount.toInt().toString();
+    // Sengaja DIKOSONGIN. Sebelumnya keisi otomatis sebesar tagihan, jadi
+    // kasir bisa langsung tekan Bayar tanpa lihat uang aslinya — catatan
+    // "diserahkan berapa, kembali berapa" jadi ngarang. Tombol cepat di bawah
+    // (Pas / 50rb / 100rb) tetap ada buat yang mau sekali tap.
+    _amountReceived = 0;
     // Cara A: resolve orderId di background (submitOrder yg dikick dari cart).
     widget.orderIdFuture.then((id) {
       if (!mounted) return;

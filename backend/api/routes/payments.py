@@ -1155,6 +1155,10 @@ class SendReceiptRequest(BaseModel):
     phone: str
     payment_id: Optional[UUID] = None  # subset receipt: cuma items yg paid_payment_id match
     customer_name: Optional[str] = None  # auto-create customer dgn nama ini (default: "Customer 0812****")
+    # Izin kirim promo, ditanya kasir ke customer. Default False dan HARUS
+    # tetap False kalau nggak dikirim — izin nggak boleh disimpulkan dari
+    # "dia mau dikirimi struk". Struk itu bukti transaksi, promo itu iklan.
+    marketing_consent: bool = False
 
 
 def _normalize_phone(phone: str) -> str:
@@ -1391,6 +1395,15 @@ async def send_receipt_whatsapp(
         pass
     elif body.customer_name and body.customer_name.strip():
         customer.name = body.customer_name.strip()
+
+    # Catat izin promo kalau kasir mencentangnya. Sekali diberikan jangan
+    # dicabut diam-diam oleh transaksi berikutnya yang nggak dicentang —
+    # pencabutan harus tindakan sadar, bukan efek samping.
+    if body.marketing_consent and not customer.wa_marketing_consent:
+        from datetime import datetime as _dt, timezone as _tz
+        customer.wa_marketing_consent = True
+        customer.consent_given_at = _dt.now(_tz.utc)
+        customer.consent_source = 'kasir_input'
 
     # Auto-link order.customer_id kalau masih NULL (capture data point untuk AI)
     if order.customer_id is None:

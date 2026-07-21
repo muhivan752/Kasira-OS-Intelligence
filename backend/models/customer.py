@@ -1,5 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, Boolean, Integer, Numeric, Text, DateTime
+from sqlalchemy.dialects.postgresql import ENUM as PGEnum
 from sqlalchemy.dialects.postgresql import UUID
 from backend.models.base import BaseModel
 
@@ -32,6 +33,10 @@ class Customer(BaseModel):
     # broadcast — kirim ke yang belum setuju itu spam + masalah UU PDP.
     wa_marketing_consent = Column(Boolean, server_default='false', nullable=False)
     consent_given_at = Column(DateTime(timezone=True), nullable=True)
+    consent_source = Column(
+        PGEnum('self_order', 'kasir_input', 'profile', name='consent_source', create_type=False),
+        nullable=True,
+    )
     data_retention_until = Column(DateTime(timezone=True), nullable=True)
 
     row_version = Column(Integer, server_default='0', nullable=False)
