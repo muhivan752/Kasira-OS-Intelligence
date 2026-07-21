@@ -623,6 +623,10 @@ class _DashboardContent extends ConsumerWidget {
                     _salesHero(context, stats),
                     const SizedBox(height: 14),
                     _quickStats(context, ref, stats),
+                    if (SessionCache.instance.isPro) ...[
+                      const SizedBox(height: 14),
+                      _aiInsightCard(ref, stats),
+                    ],
                   ],
                 ),
               ),
@@ -834,6 +838,80 @@ class _DashboardContent extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Insight AI (Pro, sesuai desain) — teks dari endpoint /ai/insight (Haiku),
+  /// fallback ke insight lokal dari data selama loading / kalau AI gagal.
+  Widget _aiInsightCard(WidgetRef ref, DashboardStats stats) {
+    final aiText = ref.watch(aiInsightProvider).valueOrNull;
+    final text = (aiText != null && aiText.isNotEmpty) ? aiText : _computedInsight(stats);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [KasiraDS.brandTint, KasiraDS.brandTint2],
+        ),
+        borderRadius: KasiraDS.brXl,
+        border: Border.all(color: KasiraDS.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: KasiraDS.gradientFrekuensi,
+                  borderRadius: KasiraDS.brSm,
+                  boxShadow: KasiraDS.glowPink,
+                ),
+                child: const Icon(LucideIcons.sparkles, size: 16, color: Colors.white),
+              ),
+              const SizedBox(width: 9),
+              Text('Insight AI', style: KasiraDS.display(size: 15.5, color: KasiraDS.textStrong)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  gradient: KasiraDS.gradientFrekuensi,
+                  borderRadius: KasiraDS.brPill,
+                ),
+                child: Text('Baru',
+                    style: KasiraDS.sans(size: 9.5, weight: FontWeight.w800, color: Colors.white)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(text, style: KasiraDS.sans(size: 13.5, color: KasiraDS.textBody, height: 1.5)),
+        ],
+      ),
+    );
+  }
+
+  /// Fallback insight dari data real (dipakai selama AI loading / gagal).
+  String _computedInsight(DashboardStats stats) {
+    final tops = stats.topProducts;
+    if (tops.isNotEmpty) {
+      final name = tops.first['name']?.toString();
+      final sold = tops.first['sold'];
+      if (name != null && name.isNotEmpty) {
+        final soldTxt = sold != null ? '$sold porsi ' : '';
+        return 'Menu terlaris hari ini: $soldTxt$name. Sudah ${stats.orderCount} transaksi '
+            '(rata-rata ${_currencyFmt.format(stats.avgOrderValue)}/order). '
+            'Siapin stok $name lebih banyak biar gak kehabisan pas ramai.';
+      }
+    }
+    if (stats.orderCount > 0) {
+      return 'Hari ini ${stats.orderCount} transaksi, rata-rata '
+          '${_currencyFmt.format(stats.avgOrderValue)}/order. Jaga momentumnya!';
+    }
+    return 'Belum ada transaksi hari ini. Cek stok bahan dulu, terus buka kasir & mulai jualan!';
   }
 
   Widget _bukaKasirCta(WidgetRef ref) {

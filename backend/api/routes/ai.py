@@ -39,6 +39,58 @@ from backend.services.audit import log_audit
 from backend.services.ai_service import stream_ai_response, DOMAIN_KEYWORDS
 
 router = APIRouter()
+
+
+class InsightRequest(BaseModel):
+    outlet_id: UUID
+    revenue_today: float = 0
+    order_count: int = 0
+    avg_order: float = 0
+    top_products: List[dict] = Field(default_factory=list)
+
+
+@router.post("/insight")
+async def ai_insight(
+    body: InsightRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+    tenant: Tenant = Depends(deps.require_pro_tier),
+):
+    """Insight AI singkat buat Beranda (Pro). One-shot Haiku, cache Redis per-jam
+    (maks ~24 call/hari/outlet) biar hemat token. Return {insight} (bisa "")."""
+    outlet = (await db.execute(select(Outlet).where(
+        Outlet.id == body.outlet_id,
+        Outlet.tenant_id == current_user.tenant_id,
+        Outlet.deleted_at.is_(None),
+    ))).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    from datetime import timedelta
+    now_wib = datetime.now(timezone.utc) + timedelta(hours=7)
+    cache_key = f"ai_insight:{body.outlet_id}:{now_wib.strftime('%Y%m%d-%H')}"
+    redis = await get_redis_client()
+    cached = await redis.get(cache_key)
+    if cached:
+        insight = cached.decode() if isinstance(cached, (bytes, bytearray)) else cached
+        return {"success": True, "data": {"insight": insight}}
+
+    tops = ", ".join(
+        f"{p.get('name')} ({p.get('sold')} terjual)"
+        for p in (body.top_products or [])[:3] if p.get("name")
+    ) or "belum ada"
+    summary = (
+        f"Omzet: Rp{int(body.revenue_today):,}\n"
+        f"Transaksi: {body.order_count}\n"
+        f"Rata-rata/order: Rp{int(body.avg_order):,}\n"
+        f"Menu terlaris: {tops}"
+    ).replace(",", ".")
+
+    from backend.services.ai_service import generate_dashboard_insight
+    insight = await generate_dashboard_insight(outlet.name or "Toko", summary)
+    if insight:
+        await redis.set(cache_key, insight, ex=7200)
+    return {"success": True, "data": {"insight": insight}}
 logger = logging.getLogger(__name__)
 
 

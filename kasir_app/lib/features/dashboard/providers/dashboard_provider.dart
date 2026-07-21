@@ -75,3 +75,39 @@ class DashboardNotifier extends AsyncNotifier<DashboardStats> {
 final dashboardProvider = AsyncNotifierProvider<DashboardNotifier, DashboardStats>(
   DashboardNotifier.new,
 );
+
+/// Insight AI singkat buat Beranda (Pro). Fetch dari POST /ai/insight (Haiku,
+/// cached server-side per jam). Return "" kalau gagal / non-Pro → card fallback
+/// ke insight lokal dari data (biar tetap ada isi).
+final aiInsightProvider = FutureProvider<String>((ref) async {
+  if (!SessionCache.instance.isPro) return '';
+  final stats = await ref.watch(dashboardProvider.future);
+  final c = SessionCache.instance;
+  final outletId = c.outletId;
+  if (outletId == null) return '';
+  try {
+    final dio = Dio(BaseOptions(
+      baseUrl: AppConfig.apiV1,
+      connectTimeout: const Duration(seconds: 12),
+      receiveTimeout: const Duration(seconds: 20),
+    ));
+    final resp = await dio.post(
+      '/ai/insight',
+      data: {
+        'outlet_id': outletId,
+        'revenue_today': stats.revenueToday,
+        'order_count': stats.orderCount,
+        'avg_order': stats.avgOrderValue,
+        'top_products': stats.topProducts,
+      },
+      options: Options(headers: {
+        if (c.accessToken != null) 'Authorization': 'Bearer ${c.accessToken}',
+        if (c.tenantId != null) 'X-Tenant-ID': c.tenantId,
+      }),
+    );
+    final data = resp.data is Map ? resp.data['data'] : null;
+    return (data?['insight'] as String?)?.trim() ?? '';
+  } catch (_) {
+    return '';
+  }
+});

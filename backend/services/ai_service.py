@@ -667,6 +667,35 @@ KALAU USER SEBUT KATEGORI: pilih template yang cocok atau adjust.
 """
 
 
+async def generate_dashboard_insight(outlet_name: str, summary_text: str) -> str:
+    """Insight AI 1-2 kalimat buat Beranda (Pro). One-shot Haiku (murah).
+    summary_text = ringkasan penjualan hari ini (dibangun caller). Return "" kalau
+    AI belum dikonfigurasi / error (caller fallback ke insight lokal)."""
+    if not settings.ANTHROPIC_API_KEY:
+        return ""
+    try:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        msg = await client.messages.create(
+            model=HAIKU_MODEL_ID,
+            max_tokens=160,
+            system=(
+                "Kamu asisten bisnis F&B Indonesia. Dari data penjualan hari ini, "
+                "kasih 1 insight singkat (MAKS 2 kalimat) yang langsung actionable — "
+                "fokus ke apa yang laku, tren, atau saran stok. Bahasa Indonesia "
+                "casual & langsung ke poin. JANGAN pakai markdown, bullet, atau sapaan."
+            ),
+            messages=[{
+                "role": "user",
+                "content": f"Toko: {outlet_name}\nData hari ini:\n{summary_text}\n\nKasih 1 insight singkat + actionable.",
+            }],
+        )
+        return "".join(b.text for b in msg.content if getattr(b, "type", None) == "text").strip()
+    except Exception as e:
+        logger.error(f"Dashboard insight generation error: {e}")
+        return ""
+
+
 async def generate_menu_proposal(
     message: str,
     outlet_id: str,
