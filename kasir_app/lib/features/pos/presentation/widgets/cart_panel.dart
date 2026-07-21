@@ -322,67 +322,33 @@ class CartPanel extends ConsumerWidget {
   }
 
   Future<void> _handlePayment(BuildContext context, WidgetRef ref, CartState cart) async {
-    // 1. Submit order ke backend — bungkus UI-level try/catch sbg safety net.
-    // submitOrder() punya catch internal, tapi kalau ada exception sinkron
-    // (invalid state, null deref di getter), lebih baik show snackbar manusiawi
-    // daripada crash zone error boundary.
-    String? orderId;
-    try {
-      orderId = await ref.read(cartProvider.notifier).submitOrder();
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal proses pembayaran: ${_shortError(e)}'),
-            backgroundColor: KasiraDS.danger,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-      return;
-    }
+    // Cara A (optimistic online): buka payment modal LANGSUNG sambil submitOrder
+    // jalan di background. Latensi POST /orders kesembunyiin di belakang waktu
+    // kasir milih metode + ketik uang. Modal resolve orderId pas benar-benar
+    // butuh (QRIS generate / konfirmasi bayar). Gak nyentuh logic pembayaran.
+    final orderIdFuture = ref.read(cartProvider.notifier).submitOrder();
 
-    if (orderId == null) {
-      // submitOrder() sudah set state.error — amplify via snackbar biar user
-      // langsung tau, terutama kalau panel error message ke-scroll.
-      final errMsg = ref.read(cartProvider).error ?? 'Gagal proses pembayaran';
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errMsg),
-            backgroundColor: KasiraDS.danger,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-      return;
-    }
+    // Snapshot cart SEKARANG (sebelum clearCart di onPaymentSuccess).
+    final receiptItems = cart.items
+        .map((i) => ReceiptItem(name: i.name, qty: i.qty, price: i.price))
+        .toList();
+    final taxAmount = cart.taxAmount;
+    final serviceChargeAmount = cart.serviceChargeAmount;
+    final discountAmount = cart.discountAmount;
+    final taxInclusive = cart.taxInclusive;
+    final totalAmount = cart.total;
+    final customerId = cart.customerId;
+    final customerName = cart.customerName;
 
-    // 2. Buka payment modal — capture orderId ke non-null local biar
-    // Dart flow analysis gak kehilangan non-null promotion di dalam closure.
-    final confirmedOrderId = orderId;
     if (context.mounted) {
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (_) => PaymentModal(
-          totalAmount: cart.total,
-          orderId: confirmedOrderId,
-          onPaymentSuccess: (String paymentMethod, double amountPaid) {
-            final receiptItems = cart.items.map((i) => ReceiptItem(
-              name: i.name,
-              qty: i.qty,
-              price: i.price,
-            )).toList();
-            final taxAmount = cart.taxAmount;
-            final serviceChargeAmount = cart.serviceChargeAmount;
-            final discountAmount = cart.discountAmount;
-            final taxInclusive = cart.taxInclusive;
-            final totalAmount = cart.total;
-            final customerId = cart.customerId;
-            final customerName = cart.customerName;
+          totalAmount: totalAmount,
+          orderIdFuture: orderIdFuture,
+          orderErrorGetter: () => ref.read(cartProvider).error,
+          onPaymentSuccess: (String paymentMethod, double amountPaid, String orderId) {
             ref.read(cartProvider.notifier).clearCart();
             ref.read(posModeProvider.notifier).state = PosMode.selection;
             // P3 Quick Win #1: defer ke microtask (helper) — paint UI dulu
@@ -393,8 +359,8 @@ class CartPanel extends ConsumerWidget {
                 'amountPaid': amountPaid,
                 'changeAmount': amountPaid - totalAmount,
                 'paymentMethod': paymentMethod,
-                'orderId': confirmedOrderId,
-                'displayNumber': confirmedOrderId.substring(0, 8).toUpperCase(),
+                'orderId': orderId,
+                'displayNumber': orderId.substring(0, 8).toUpperCase(),
                 'items': receiptItems,
                 'tax': taxAmount,
                 'serviceCharge': serviceChargeAmount,

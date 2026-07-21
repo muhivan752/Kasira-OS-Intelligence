@@ -10,14 +10,18 @@ import '../../../../core/services/session_cache.dart';
 
 class PaymentModal extends StatefulWidget {
   final double totalAmount;
-  final String orderId;
-  final void Function(String paymentMethod, double amountPaid) onPaymentSuccess;
+  // Cara A (optimistic): orderId di-resolve async — submitOrder jalan di
+  // background pas modal dibuka. Modal await pas benar-benar butuh.
+  final Future<String?> orderIdFuture;
+  final String? Function()? orderErrorGetter;
+  final void Function(String paymentMethod, double amountPaid, String orderId) onPaymentSuccess;
 
   const PaymentModal({
     super.key,
     required this.totalAmount,
-    required this.orderId,
+    required this.orderIdFuture,
     required this.onPaymentSuccess,
+    this.orderErrorGetter,
   });
 
   @override
@@ -29,6 +33,24 @@ class _PaymentModalState extends State<PaymentModal> {
   double _amountReceived = 0.0;
   final _amountController = TextEditingController();
   final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+  // Cara A: orderId di-resolve dari future (submitOrder background).
+  String? _orderId;
+  String? _orderError;
+  bool _orderResolved = false;
+
+  /// Tunggu orderId siap (biasanya udah kelar duluan karena user butuh waktu
+  /// milih metode + ketik uang). Return null kalau order gagal dibuat.
+  Future<String?> _ensureOrderId() async {
+    if (_orderId != null) return _orderId;
+    if (_orderResolved) return null; // resolved tapi null = gagal
+    try {
+      final id = await widget.orderIdFuture;
+      return id;
+    } catch (_) {
+      return null;
+    }
+  }
 
   // QRIS State
   bool _isLoadingQris = false;
@@ -60,6 +82,17 @@ class _PaymentModalState extends State<PaymentModal> {
       _isLoadingQris = true;
       _cashError = null;
     });
+    // Cara A: pastiin order udah kebuat di server sebelum POST payment.
+    final oid = await _ensureOrderId();
+    if (oid == null) {
+      if (mounted) {
+        setState(() {
+          _isLoadingQris = false;
+          _cashError = _orderError ?? 'Pesanan gagal dibuat. Tutup & coba lagi.';
+        });
+      }
+      return;
+    }
     try {
       final outletId = _cache.outletId ?? '';
       final shiftId = _cache.shiftSessionId;
@@ -72,7 +105,7 @@ class _PaymentModalState extends State<PaymentModal> {
         '/payments/',
         options: Options(headers: _cache.authHeaders),
         data: {
-          'order_id': widget.orderId,
+          'order_id': oid,
           'outlet_id': outletId,
           'payment_method': apiMethod,
           'amount_due': widget.totalAmount,
@@ -84,7 +117,7 @@ class _PaymentModalState extends State<PaymentModal> {
 
       if (mounted) {
         setState(() => _isLoadingQris = false);
-        widget.onPaymentSuccess(_paymentMethod, amountPaid);
+        widget.onPaymentSuccess(_paymentMethod, amountPaid, oid);
         Navigator.pop(context);
       }
     } on DioException catch (e) {
@@ -110,6 +143,24 @@ class _PaymentModalState extends State<PaymentModal> {
     super.initState();
     _amountReceived = widget.totalAmount;
     _amountController.text = widget.totalAmount.toInt().toString();
+    // Cara A: resolve orderId di background (submitOrder yg dikick dari cart).
+    widget.orderIdFuture.then((id) {
+      if (!mounted) return;
+      setState(() {
+        _orderResolved = true;
+        _orderId = id;
+        if (id == null) {
+          _orderError = widget.orderErrorGetter?.call() ??
+              'Gagal membuat pesanan. Tutup & coba lagi.';
+        }
+      });
+    }).catchError((e) {
+      if (!mounted) return;
+      setState(() {
+        _orderResolved = true;
+        _orderError = 'Gagal membuat pesanan. Tutup & coba lagi.';
+      });
+    });
   }
 
   @override
@@ -154,7 +205,7 @@ class _PaymentModalState extends State<PaymentModal> {
           if (mounted) setState(() => _isQrisPaid = true);
           Future.delayed(const Duration(seconds: 2), () {
             if (mounted) {
-              widget.onPaymentSuccess('QRIS', widget.totalAmount);
+              widget.onPaymentSuccess('QRIS', widget.totalAmount, _orderId ?? '');
               Navigator.pop(context);
             }
           });
@@ -229,6 +280,19 @@ class _PaymentModalState extends State<PaymentModal> {
       _isLoadingQris = true;
       _qrisError = null;
     });
+    // Cara A: QRIS butuh order ADA di server (buat generate QR Xendit) — tunggu
+    // order kelar dulu. Biasanya udah beres pas user tap QRIS.
+    final oid = await _ensureOrderId();
+    if (oid == null) {
+      if (mounted) {
+        setState(() {
+          _isLoadingQris = false;
+          _qrisError = _orderError ?? 'Pesanan gagal dibuat. Coba lagi.';
+        });
+      }
+      return;
+    }
+    _orderId = oid; // pastiin ke-set buat polling success
     try {
       final outletId = _cache.outletId ?? '';
       final shiftId = _cache.shiftSessionId;
@@ -237,7 +301,7 @@ class _PaymentModalState extends State<PaymentModal> {
         '/payments/',
         options: Options(headers: _cache.authHeaders),
         data: {
-          'order_id': widget.orderId,
+          'order_id': oid,
           'outlet_id': outletId,
           'payment_method': 'qris',
           'amount_due': widget.totalAmount,
