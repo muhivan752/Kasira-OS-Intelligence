@@ -40,6 +40,9 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
   String _paymentMethod = 'cash';
   final _amountController = TextEditingController();
   double _amountReceived = 0;
+  /// Begitu kasir ngetik nominal sendiri, field berhenti ngikutin total centangan.
+  /// Tanpa ini, ngetik manual bakal ketimpa tiap kali item di-centang/uncentang.
+  bool _amountEdited = false;
   bool _isLoading = false;
   String? _error;
 
@@ -91,7 +94,12 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
       } else {
         _selected.add(itemId);
       }
-      if (_paymentMethod == 'cash' && _amountController.text.isEmpty) {
+      // Syarat lama `_amountController.text.isEmpty` bikin nominal cuma ke-isi
+      // SEKALI — pas item pertama dicentang. Centang item berikutnya, total naik
+      // tapi "Uang Diterima" nyangkut di harga item pertama, jadi kasir liat
+      // 10rb padahal tagihannya lebih. Sekarang ngikut terus, kecuali kasir
+      // udah ngetik nominal sendiri.
+      if (_paymentMethod == 'cash' && !_amountEdited) {
         _amountReceived = _selectedTotal;
         _amountController.text = _selectedTotal.toStringAsFixed(0);
       }
@@ -105,8 +113,10 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
       } else {
         _selected.addAll(widget.unpaidItems.map((i) => i.id));
       }
-      _amountReceived = _selectedTotal;
-      _amountController.text = _selectedTotal.toStringAsFixed(0);
+      if (!_amountEdited) {
+        _amountReceived = _selectedTotal;
+        _amountController.text = _selectedTotal.toStringAsFixed(0);
+      }
     });
   }
 
@@ -268,7 +278,10 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     ),
                     onChanged: (v) {
-                      setState(() => _amountReceived = double.tryParse(v) ?? 0);
+                      setState(() {
+                        _amountEdited = true;
+                        _amountReceived = double.tryParse(v) ?? 0;
+                      });
                     },
                   ),
                   if (change > 0)
