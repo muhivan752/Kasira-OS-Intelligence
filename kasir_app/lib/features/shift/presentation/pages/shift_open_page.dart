@@ -229,28 +229,33 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
                         padding: EdgeInsets.only(
                           right: amount == _quickAmounts.last ? 0 : 8,
                         ),
-                        child: OutlinedButton(
-                          onPressed: () {
+                        child: GestureDetector(
+                          onTap: () {
                             setState(() {
                               _openingCash = amount;
                               _cashController.text = amount.toInt().toString();
                             });
                           },
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            side: BorderSide(
-                              color: _openingCash == amount ? KasiraDS.brandPrimary : KasiraDS.borderSubtle,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              gradient: _openingCash == amount ? KasiraDS.gradientFrekuensi : null,
+                              color: _openingCash == amount ? null : KasiraDS.surfaceCard,
+                              borderRadius: KasiraDS.brMd,
+                              border: Border.all(
+                                color: _openingCash == amount ? Colors.transparent : KasiraDS.borderDefault,
+                                width: 1.5,
+                              ),
                             ),
-                            backgroundColor: _openingCash == amount
-                                ? KasiraDS.brandPrimary.withOpacity(0.05)
-                                : null,
-                          ),
-                          child: Text(
-                            _formatShort(amount),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _openingCash == amount ? KasiraDS.brandPrimary : KasiraDS.textMuted,
-                              fontWeight: _openingCash == amount ? FontWeight.bold : FontWeight.normal,
+                            child: Text(
+                              _formatShort(amount),
+                              style: KasiraDS.sans(
+                                size: 12.5,
+                                weight: FontWeight.w800,
+                                color: _openingCash == amount ? Colors.white : KasiraDS.textStrong,
+                              ),
                             ),
                           ),
                         ),
