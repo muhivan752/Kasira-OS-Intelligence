@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../reservations/presentation/pages/reservation_list_page.dart';
 
 enum TableStatus { available, occupied, reserved, dirty }
 
@@ -152,6 +153,29 @@ class _TableGridPageState extends State<TableGridPage> {
                   '$occupied terisi · $available kosong',
                   style: KasiraDS.sans(size: 12.5, weight: FontWeight.w600, color: KasiraDS.textMuted),
                 ),
+                // Reservasi (di desain = sub-tab Meja). Cuma saat standalone,
+                // bukan pas dipakai di flow POS dine-in (onTableSelected != null).
+                if (widget.onTableSelected == null) ...[
+                  const SizedBox(width: 10),
+                  InkWell(
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const ReservationListPage())),
+                    borderRadius: KasiraDS.brPill,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: KasiraDS.brandTint2,
+                        borderRadius: KasiraDS.brPill,
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(LucideIcons.calendarCheck, size: 14, color: KasiraDS.brandSecondary),
+                        const SizedBox(width: 5),
+                        Text('Reservasi',
+                            style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.brandSecondary)),
+                      ]),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

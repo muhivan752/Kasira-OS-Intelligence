@@ -11,8 +11,8 @@ import '../../../pos/presentation/pages/pos_page.dart';
 import '../../../orders/presentation/pages/order_list_page.dart';
 import '../../../shift/presentation/pages/shift_page.dart';
 import '../../../products/presentation/pages/product_management_page.dart';
+import '../../../products/presentation/pages/margin_report_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
-import '../../../reservations/presentation/pages/reservation_list_page.dart';
 import '../../../tables/presentation/pages/table_grid_page.dart';
 import '../../../tabs/providers/tab_provider.dart';
 import '../../../ai/presentation/pages/ai_chat_page.dart';
@@ -56,40 +56,54 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     if (mounted) setState(() => _isPro = SessionCache.instance.isPro);
   }
 
+  // Page index STABIL (jangan diubah — posMode listener & pendingNavigateToPos
+  // depend index 1 = Kasir/POS).
   List<Widget> get _pages => [
-    const _DashboardContent(),
-    const PosPage(),
-    const OrderListPage(),
-    const ReservationListPage(),
-    const AiChatPage(),
-    const ProductManagementPage(),
-    const SettingsPage(),
+    const _DashboardContent(),         // 0 Beranda
+    const PosPage(),                   // 1 Kasir
+    const MarginReportPage(),          // 2 Laporan
+    const OrderListPage(),             // 3 Riwayat
+    const TableGridPage(),             // 4 Meja (Pro)
+    const ProductManagementPage(),     // 5 Stok
   ];
 
-  List<({IconData icon, String label})> get _navItems => [
-    (icon: LucideIcons.layoutDashboard, label: 'Beranda'),
-    (icon: LucideIcons.monitorPlay, label: 'POS'),
-    (icon: LucideIcons.receipt, label: BusinessLabels.getLabel('order')),
-    (icon: LucideIcons.calendarCheck, label: 'Reservasi'),
-    (icon: LucideIcons.bot, label: 'AI'),
-    (icon: LucideIcons.packageSearch, label: 'Produk & Stok'),
-    (icon: LucideIcons.settings, label: 'Setting'),
-  ];
+  /// Bottom-nav sesuai desain Aurora: Beranda·Kasir·Laporan·Riwayat + Meja(Pro)·Stok.
+  /// AI = FAB (bukan tab). Setting via header/side-nav action. Reservasi = di dalam Meja.
+  List<({IconData icon, String label, int page})> get _visibleTabs {
+    final tabs = <({IconData icon, String label, int page})>[
+      (icon: LucideIcons.layoutDashboard, label: 'Beranda', page: 0),
+      (icon: LucideIcons.monitorPlay, label: 'Kasir', page: 1),
+      (icon: LucideIcons.barChart2, label: 'Laporan', page: 2),
+      (icon: LucideIcons.receipt, label: BusinessLabels.getLabel('order'), page: 3),
+    ];
+    if (_isPro) {
+      tabs.add((icon: LucideIcons.utensils, label: 'Meja', page: 4));
+    }
+    tabs.add((icon: LucideIcons.packageSearch, label: 'Stok', page: 5));
+    return tabs;
+  }
 
-  /// Index nav items yang Pro-only (Reservasi = index 3, AI = index 4)
-  static const _proNavIndexes = {3, 4};
+  /// Page index yang Pro-only (Meja).
+  static const _proPageIndexes = {4};
 
-  static const _proFeatureNames = {
-    3: 'Reservasi & Booking',
-    4: 'AI Asisten',
-  };
-
-  void _onNavTap(int index) {
-    if (!_isPro && _proNavIndexes.contains(index)) {
-      _showUpgradeSheet(context, _proFeatureNames[index] ?? 'Fitur Pro');
+  void _onNavTap(int page) {
+    if (!_isPro && _proPageIndexes.contains(page)) {
+      _showUpgradeSheet(context, 'Manajemen Meja');
       return;
     }
-    setState(() => _selectedIndex = index);
+    setState(() => _selectedIndex = page);
+  }
+
+  void _openAiAssistant() {
+    if (!_isPro) {
+      _showUpgradeSheet(context, 'AI Asisten');
+      return;
+    }
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatPage()));
+  }
+
+  void _openSettings() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
   }
 
   static void _showUpgradeSheet(BuildContext context, String featureName) {
@@ -408,9 +422,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   child: const Icon(Icons.point_of_sale_rounded, color: KasiraDS.brandPrimary, size: 32),
                 ),
                 const SizedBox(height: 48),
-                ...List.generate(_navItems.length - 1, (i) => _buildSideNavItem(i)),
+                ..._visibleTabs.map((t) => _buildSideNavItem(t.icon, t.label, t.page)),
                 const Spacer(),
-                _buildSideNavItem(_navItems.length - 1),
+                if (_isPro)
+                  _buildSideNavAction(LucideIcons.sparkles, 'AI', _openAiAssistant),
+                _buildSideNavAction(LucideIcons.settings, 'Setting', _openSettings),
                 const SizedBox(height: 24),
               ],
             ),
@@ -422,17 +438,24 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 
   Widget _buildPhoneLayout() {
+    final tabs = _visibleTabs;
+    var pos = tabs.indexWhere((t) => t.page == _selectedIndex);
+    if (pos < 0) pos = 0;
+    // AI FAB (Pro) — hanya di screen tanpa FAB sendiri (Beranda/Laporan/Riwayat),
+    // biar gak nabrak cart-bar POS / kontrol lain.
+    final showAiFab = _isPro && (_selectedIndex == 0 || _selectedIndex == 2 || _selectedIndex == 3);
     return Scaffold(
       backgroundColor: KasiraDS.bgBase,
       body: _pages[_selectedIndex],
+      floatingActionButton: showAiFab ? _buildAiFab() : null,
       bottomNavigationBar: DecoratedBox(
         decoration: const BoxDecoration(
           color: KasiraDS.surfaceCard,
           border: Border(top: BorderSide(color: KasiraDS.borderSubtle)),
         ),
         child: BottomNavigationBar(
-          currentIndex: _selectedIndex,
-          onTap: _onNavTap,
+          currentIndex: pos,
+          onTap: (i) => _onNavTap(tabs[i].page),
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -440,10 +463,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           unselectedItemColor: KasiraDS.textMuted,
           selectedFontSize: 11,
           unselectedFontSize: 11,
-          items: _navItems
-              .map((item) => BottomNavigationBarItem(
-                    icon: Icon(item.icon),
-                    label: item.label,
+          items: tabs
+              .map((t) => BottomNavigationBarItem(
+                    icon: Icon(t.icon),
+                    label: t.label,
                   ))
               .toList(),
         ),
@@ -451,15 +474,30 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     );
   }
 
-  Widget _buildSideNavItem(int index) {
-    final item = _navItems[index];
-    final isSelected = _selectedIndex == index;
-    final isLocked = !_isPro && _proNavIndexes.contains(index);
+  Widget _buildAiFab() {
+    return GestureDetector(
+      onTap: _openAiAssistant,
+      child: Container(
+        width: 58,
+        height: 58,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: KasiraDS.gradientFrekuensi,
+          shape: BoxShape.circle,
+          boxShadow: KasiraDS.glowBrand,
+        ),
+        child: const Icon(LucideIcons.sparkles, color: Colors.white, size: 26),
+      ),
+    );
+  }
+
+  Widget _buildSideNavItem(IconData icon, String label, int page) {
+    final isSelected = _selectedIndex == page;
     return InkWell(
-      onTap: () => _onNavTap(index),
+      onTap: () => _onNavTap(page),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 20),
+        padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
           border: Border(
             right: BorderSide(
@@ -470,28 +508,34 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         ),
         child: Column(
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(item.icon,
-                    color: isLocked ? Colors.grey[350] : (isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted),
-                    size: 28),
-                if (isLocked)
-                  Positioned(
-                    right: -6, top: -4,
-                    child: Icon(LucideIcons.lock, size: 12, color: Colors.amber.shade700),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
+            Icon(icon, color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted, size: 26),
+            const SizedBox(height: 6),
             Text(
-              item.label,
-              style: TextStyle(
-                color: isLocked ? Colors.grey[400] : (isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted),
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              label,
+              textAlign: TextAlign.center,
+              style: KasiraDS.sans(
+                size: 11,
+                weight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSideNavAction(IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        child: Column(
+          children: [
+            Icon(icon, color: KasiraDS.textMuted, size: 24),
+            const SizedBox(height: 6),
+            Text(label, style: KasiraDS.sans(size: 11, weight: FontWeight.w600, color: KasiraDS.textMuted)),
           ],
         ),
       ),
@@ -620,6 +664,11 @@ class _DashboardContent extends ConsumerWidget {
           if (SessionCache.instance.isPro) {
             ref.read(tabProvider.notifier).fetchTabs();
           }
+        }),
+        const SizedBox(width: 8),
+        _circleBtn(LucideIcons.settings, () {
+          Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const SettingsPage()));
         }),
       ],
     );
