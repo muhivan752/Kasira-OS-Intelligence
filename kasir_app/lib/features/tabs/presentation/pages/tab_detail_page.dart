@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/services/printer_service.dart';
+import '../../../../core/services/tab_receipt_service.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/tab_receipt_sheet.dart';
 import '../../providers/tab_provider.dart';
 import '../../../tables/presentation/pages/table_grid_page.dart';
 import '../../../pos/providers/cart_provider.dart';
@@ -91,6 +94,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                       split: s,
                       currency: _currency,
                       onPay: () => _showPaySplitModal(tab, s),
+                      onReceipt: s.isPaid ? () => _showSplitReceipt(tab, s) : null,
                     )),
                     const SizedBox(height: 16),
                   ],
@@ -98,7 +102,9 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
               ),
             ),
           ),
-          if (tab.isOpen || tab.isSplitting)
+          // `paidAmount > 0` ikut masuk syarat: tab yang udah lunas dulu bikin
+          // bar ini ilang total, jadi gak ada lagi pintu ke struk.
+          if (tab.isOpen || tab.isSplitting || tab.paidAmount > 0)
             TabBottomActions(
               tab: tab,
               currency: _currency,
@@ -134,9 +140,37 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
               onCancel: () => _confirmCancel(tab),
               onPayFull: () => _showPayFullModal(tab),
               onSplitBill: () => _showSplitBillModal(tab),
+              onReceipt: () => _showTabReceipt(tab),
             ),
         ],
       ),
+    );
+  }
+
+  /// Struk satu porsi split — pintu satu-satunya buat orang yang bayar splitnya
+  /// sendiri. Riwayat cuma nyimpen struk order penuh, bukan porsi per orang.
+  void _showSplitReceipt(TabModel tab, TabSplitModel split) {
+    final printer = ref.read(printerProvider.notifier);
+    showTabReceiptSheet(
+      context,
+      title: split.label,
+      subtitle: '${tab.tabNumber} · ${_currency.format(split.amount)}',
+      onPrint: () => printTabSplitReceipt(printer,
+          tabId: tab.id, splitId: split.id),
+      waOrderId: tab.orderIds.isEmpty ? null : tab.orderIds.first,
+      waPaymentId: split.paymentId,
+    );
+  }
+
+  /// Struk seluruh tab — satu lembar per order di dalamnya.
+  void _showTabReceipt(TabModel tab) {
+    final printer = ref.read(printerProvider.notifier);
+    showTabReceiptSheet(
+      context,
+      title: 'Struk ${tab.tabNumber}',
+      subtitle: tab.tableName ?? 'Total ${_currency.format(tab.totalAmount)}',
+      onPrint: () => printTabFullReceipt(printer, orderIds: tab.orderIds),
+      waOrderId: tab.orderIds.isEmpty ? null : tab.orderIds.first,
     );
   }
 

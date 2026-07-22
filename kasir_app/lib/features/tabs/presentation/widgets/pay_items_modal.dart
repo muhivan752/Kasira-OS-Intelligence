@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/config/app_config.dart';
 import '../../../../core/services/printer_service.dart';
-import '../../../../core/services/session_cache.dart';
+import '../../../../core/services/tab_receipt_service.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/tab_receipt_sheet.dart';
 import '../../providers/tab_provider.dart';
 import 'qris_waiting_modal.dart';
 
@@ -375,11 +374,91 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
         final rootNav = Navigator.of(context, rootNavigator: true);
         final selectedItemIds = _selected.toList();
 
+        // ⚠️ `ref` HARAM disentuh sesudah pop — flutter_riverpod throw
+        // StateError('Cannot use "ref" after the widget was disposed').
+        // Lihat catatan lengkapnya di `pay_split_modal.dart`: gara-gara ini
+        // auto-print struk tab gak pernah jalan sama sekali. Notifier-nya milik
+        // provider container, jadi aman dipegang lintas await.
+        final printer = ref.read(printerProvider.notifier);
+        final tabNotifier = ref.read(tabProvider.notifier);
+
+        final tabIdSnap = widget.tab.id;
+        final tabNumberSnap = widget.tab.tabNumber;
+        final isCash = _paymentMethod == 'cash';
+        final paidCountSnap = selectedItemIds.length;
+        final tabSnap = result;
+        // Dihitung SEKARANG, bukan di dalam closure: `widget` dibaca sesudah
+        // State-nya ke-dispose itu jebakan yang sama kayak `ref`.
+        final unpaidLeftSnap = widget.unpaidItems
+            .where((i) => !selectedItemIds.contains(i.id))
+            .length;
+
+        // Target struk subset di-resolve sekali, lalu dipakai ulang buat cetak
+        // maupun kirim WA. Di-cache biar tombol STRUK yang dipencet belakangan
+        // gak nembak `/tabs/{id}/items` lagi tiap kali.
+        ({String orderId, String paymentId})? target;
+        var targetResolved = false;
+        Future<({String orderId, String paymentId})?> resolveTarget() async {
+          if (targetResolved) return target;
+          target = await resolveTabItemsReceiptTarget(
+            tabId: tabIdSnap,
+            itemIds: selectedItemIds,
+          );
+          targetResolved = true;
+          return target;
+        }
+
+        Future<TabPrintResult> printReceipt() async {
+          final t = await resolveTarget();
+          if (t == null) return TabPrintResult.failed;
+          return printTabItemsReceipt(
+            printer,
+            orderId: t.orderId,
+            paymentId: t.paymentId,
+            tabNumber: tabNumberSnap,
+            isTabPaid: tabSnap.status == 'paid',
+            outstandingAmount: tabSnap.remainingAmount,
+            outstandingItemCount: unpaidLeftSnap,
+          );
+        }
+
+        Future<void> openReceiptSheet() async {
+          final t = await resolveTarget();
+          await showTabReceiptSheet(
+            rootNav.context,
+            title: 'Struk $paidCountSnap item',
+            subtitle: tabNumberSnap,
+            onPrint: printReceipt,
+            waOrderId: t?.orderId,
+            waPaymentId: t?.paymentId,
+          );
+        }
+
+        SnackBarAction receiptAction() => SnackBarAction(
+              label: 'STRUK',
+              textColor: Colors.white,
+              onPressed: () => unawaited(openReceiptSheet()),
+            );
+
+        // Auto-print gak nge-block flow (Rule #54) tapi juga gak diam total —
+        // kasir wajib tau kalau struknya gagal keluar.
+        void autoPrintThenReport() {
+          unawaited(printReceipt().then((r) {
+            if (r == TabPrintResult.success) return;
+            messenger.showSnackBar(SnackBar(
+              content: Text(r == TabPrintResult.notConnected
+                  ? 'Struk belum kecetak — printer belum terhubung.'
+                  : 'Struk gagal dicetak.'),
+              backgroundColor: KasiraDS.warning,
+              duration: const Duration(seconds: 6),
+              action: receiptAction(),
+            ));
+          }));
+        }
+
         // QRIS branch — switch to waiting modal, autoprint via claim-print on webhook settle
         if (_paymentMethod == 'qris' && result.pendingQris != null) {
           final qris = result.pendingQris!;
-          final tabSnap = result;
-          final tabIdSnap = widget.tab.id;
           Navigator.pop(context);
           widget.onPaid(result);
           await showModalBottomSheet<bool>(
@@ -391,111 +470,38 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
               tabId: tabIdSnap,
               pendingQris: qris,
               onPaidAndClaimedPrint: (paymentId) async {
-                await _autoPrintItemsReceipt(tabIdSnap, selectedItemIds, tabSnap);
+                autoPrintThenReport();
               },
             ),
           );
           // Refresh tab post-webhook (paid → tab maybe closed; cancel/expired → items unlocked)
-          final notifier2 = ref.read(tabProvider.notifier);
-          final refreshed = await notifier2.getTab(tabIdSnap);
+          final refreshed = await tabNotifier.getTab(tabIdSnap);
           if (refreshed != null) widget.onPaid(refreshed);
           return;
-        }
-
-        // Auto-print struk per items dipay (cash only — QRIS pending webhook)
-        if (_paymentMethod == 'cash') {
-          unawaited(_autoPrintItemsReceipt(widget.tab.id, selectedItemIds, result));
         }
 
         Navigator.pop(context);
         widget.onPaid(result);
 
-        // Konfirmasi pembayaran doang — TANPA ajakan kirim WA. Lihat catatan
-        // panjang di `pay_split_modal.dart`: nawarin WA sesudah duit masuk bikin
-        // kasir kudu ngejar nomor customer yang udah beranjak. Kirim struk WA
-        // tetap tersedia lewat preview struk / detail order.
+        // Auto-print struk per items dipay (cash only — QRIS lewat claim-print)
+        if (isCash) autoPrintThenReport();
+
+        // Konfirmasi pembayaran doang — TANPA ajakan kirim WA yang nyembul
+        // sendiri. Yang nempel di sini tombol STRUK: kasir yang mencet waktu
+        // customer-nya yang minta, dan di dalam sheet baru ada pilihan cetak
+        // atau kirim WA. Lihat catatan lengkap di `pay_split_modal.dart`.
         messenger.showSnackBar(
           SnackBar(
             content: Text(result.isPaid
                 ? 'Tab lunas! Semua sudah dibayar.'
-                : '${selectedItemIds.length} item dibayar. Sisa: ${_currency.format(result.remainingAmount)}'),
+                : '$paidCountSnap item dibayar. Sisa: ${_currency.format(result.remainingAmount)}'),
             backgroundColor: KasiraDS.success,
+            action: receiptAction(),
           ),
         );
       } else {
         setState(() => _error = ref.read(tabProvider).error ?? 'Gagal memproses pembayaran');
       }
-    }
-  }
-
-  /// Auto-print struk items via subset receipt endpoint.
-  /// Fail-silent (Rule #54) — print error gak boleh block flow.
-  Future<void> _autoPrintItemsReceipt(String tabId, List<String> itemIds, TabModel updatedTab) async {
-    try {
-      // Fetch latest payment for these items via tab — find payment_id linking the items
-      // Strategy: fetch tab full → iterate items dipay (paidPaymentId match) → grab paymentId.
-      final cache = SessionCache.instance;
-      final dio = Dio(BaseOptions(
-        baseUrl: AppConfig.apiV1,
-        connectTimeout: const Duration(seconds: 6),
-        receiveTimeout: const Duration(seconds: 6),
-      ));
-
-      // Use the most recent payment (first item's order will have it)
-      // Find first item's order_id from unpaidItems list
-      final firstItemId = itemIds.first;
-      final firstItem = widget.unpaidItems.firstWhere((i) => i.id == firstItemId);
-      final orderId = firstItem.orderId;
-
-      // Fetch tab to get payment_id (latest payment in tab)
-      final tabRes = await dio.get(
-        '/tabs/$tabId',
-        options: Options(headers: cache.authHeaders),
-      );
-      final tabData = tabRes.data['data'] as Map<String, dynamic>?;
-      if (tabData == null) return;
-
-      // We need the payment_id — derived from updatedTab response or fetch order items
-      // Simpler: fetch order items, find one with paid_payment_id matching latest payment
-      final itemsRes = await dio.get(
-        '/tabs/$tabId/items',
-        options: Options(headers: cache.authHeaders),
-      );
-      final itemsList = (itemsRes.data['data'] as List?) ?? [];
-      String? paymentId;
-      for (final it in itemsList) {
-        if (itemIds.contains(it['id']?.toString()) && it['paid_payment_id'] != null) {
-          paymentId = it['paid_payment_id'].toString();
-          break;
-        }
-      }
-      if (paymentId == null) return; // gak ke-detect, skip print
-
-      // Fetch subset receipt
-      final receiptRes = await dio.get(
-        '/orders/$orderId/receipt',
-        queryParameters: {'payment_id': paymentId},
-        options: Options(headers: cache.authHeaders),
-      );
-      final receiptData = receiptRes.data['data'] as Map<String, dynamic>?;
-      if (receiptData == null) return;
-
-      // Compute outstanding info dari updated tab
-      final isTabPaid = updatedTab.status == 'paid';
-      final outstandingAmount = updatedTab.remainingAmount;
-      final unpaidLeft = widget.unpaidItems.where((i) => !itemIds.contains(i.id)).length;
-
-      final data = ItemsReceiptData.fromJson(
-        receiptData,
-        tabNumber: widget.tab.tabNumber,
-        isTabPaid: isTabPaid,
-        outstandingAmount: outstandingAmount,
-        outstandingItemCount: unpaidLeft,
-      );
-      final bytes = buildItemsReceipt(data);
-      await ref.read(printerProvider.notifier).printBytes(bytes);
-    } catch (_) {
-      // silent fail — print issue jangan block payment flow
     }
   }
 }

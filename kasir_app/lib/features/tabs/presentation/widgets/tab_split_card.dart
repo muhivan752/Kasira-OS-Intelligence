@@ -11,11 +11,19 @@ class TabSplitCard extends StatelessWidget {
   final NumberFormat currency;
   final VoidCallback? onPay;
 
+  /// Dipanggil waktu kasir mencet ikon struk di split yang udah lunas.
+  ///
+  /// Ini satu-satunya jalan ke struk PER-ORANG: Riwayat cuma nyimpen struk order
+  /// penuh, jadi kalau yang bayar split minta struknya sendiri, gak ada pintu
+  /// lain. Sebelumnya struk split cuma sempat keluar sekali di detik pembayaran.
+  final VoidCallback? onReceipt;
+
   const TabSplitCard({
     super.key,
     required this.split,
     required this.currency,
     this.onPay,
+    this.onReceipt,
   });
 
   @override
@@ -82,23 +90,46 @@ class TabSplitCard extends StatelessWidget {
           ),
           const SizedBox(width: KasiraDS.space2),
           if (isPaid)
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: KasiraDS.space3,
-                vertical: 6,
-              ),
-              decoration: BoxDecoration(
-                color: KasiraDS.success.withOpacity(0.12),
-                borderRadius: KasiraDS.brPill,
-              ),
-              child: Text(
-                'Lunas',
-                style: KasiraDS.sans(
-                  size: 12,
-                  weight: FontWeight.w700,
-                  color: KasiraDS.success,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: KasiraDS.space3,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: KasiraDS.success.withOpacity(0.12),
+                    borderRadius: KasiraDS.brPill,
+                  ),
+                  child: Text(
+                    'Lunas',
+                    style: KasiraDS.sans(
+                      size: 12,
+                      weight: FontWeight.w700,
+                      color: KasiraDS.success,
+                    ),
+                  ),
                 ),
-              ),
+                if (onReceipt != null) ...[
+                  const SizedBox(width: KasiraDS.space2),
+                  InkWell(
+                    onTap: onReceipt,
+                    borderRadius: KasiraDS.brMd,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        borderRadius: KasiraDS.brMd,
+                        border: Border.all(color: KasiraDS.borderSubtle),
+                      ),
+                      child: const Icon(LucideIcons.receipt,
+                          size: 18, color: KasiraDS.brandPrimary),
+                    ),
+                  ),
+                ],
+              ],
             )
           else
             GestureDetector(

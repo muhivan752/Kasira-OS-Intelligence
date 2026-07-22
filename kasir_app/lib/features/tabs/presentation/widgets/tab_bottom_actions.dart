@@ -24,6 +24,11 @@ class TabBottomActions extends StatelessWidget {
   final VoidCallback onPayFull;
   final VoidCallback onSplitBill;
 
+  /// Struk seluruh tab. Wajib ada waktu tab udah lunas: sebelumnya bar ini
+  /// render KOSONG begitu status jadi `paid` (dua cabang di bawah dua-duanya
+  /// gak match), jadi customer yang minta struk sesudah bayar mentok total.
+  final VoidCallback onReceipt;
+
   const TabBottomActions({
     super.key,
     required this.tab,
@@ -34,6 +39,7 @@ class TabBottomActions extends StatelessWidget {
     required this.onCancel,
     required this.onPayFull,
     required this.onSplitBill,
+    required this.onReceipt,
   });
 
   @override
@@ -121,13 +127,38 @@ class TabBottomActions extends StatelessWidget {
                     onTap: onSplitBill,
                   ),
                 ),
+                // Pola warkop: item dibayar satu-satu sementara tab-nya masih
+                // buka. Yang udah bayar berhak minta struknya sekarang, bukan
+                // nunggu semua orang kelar.
+                if (tab.paidAmount > 0) ...[
+                  const SizedBox(width: KasiraDS.space3),
+                  _ReceiptButton(onTap: onReceipt),
+                ],
               ],
             )
           else if (tab.isSplitting && tab.remainingAmount > 0)
-            _PrimaryButton(
-              icon: LucideIcons.banknote,
-              label: 'Bayar Sisa ${currency.format(tab.remainingAmount)}',
-              onTap: onPayFull,
+            Row(
+              children: [
+                Expanded(
+                  child: _PrimaryButton(
+                    icon: LucideIcons.banknote,
+                    label: 'Bayar Sisa ${currency.format(tab.remainingAmount)}',
+                    onTap: onPayFull,
+                  ),
+                ),
+                // Sebagian orang udah bayar duluan di mode split — mereka bisa
+                // minta struk kapan aja, gak usah nunggu tab-nya lunas.
+                if (tab.paidAmount > 0) ...[
+                  const SizedBox(width: KasiraDS.space3),
+                  _ReceiptButton(onTap: onReceipt),
+                ],
+              ],
+            )
+          else if (tab.paidAmount > 0)
+            _SecondaryButton(
+              icon: LucideIcons.receipt,
+              label: 'Struk',
+              onTap: onReceipt,
             ),
         ],
       ),
@@ -314,6 +345,32 @@ class _SecondaryButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Tombol struk versi ringkas — dipakai waktu dia numpang di baris yang udah
+/// keisi tombol bayar, biar label "Bayar Sisa Rp xxx" gak keremas.
+class _ReceiptButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ReceiptButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 56,
+        height: 56,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: KasiraDS.surfaceCard,
+          borderRadius: KasiraDS.brMd,
+          border: Border.all(color: KasiraDS.borderDefault),
+        ),
+        child: const Icon(LucideIcons.receipt, size: 20, color: KasiraDS.textStrong),
       ),
     );
   }
