@@ -467,7 +467,12 @@ class SyncService {
               unitPrice: (oi['unit_price'] as num).toDouble(),
               discountAmount: (oi['discount_amount'] as num).toDouble(),
               totalPrice: (oi['total_price'] as num).toDouble(),
-              modifiers: oi['modifiers']?.toString(),
+              // jsonEncode, BUKAN .toString(). Server ngirim modifiers sebagai
+              // objek JSON; `Map.toString()` di Dart ngasih `{variant_name:
+              // Dingin}` yang BUKAN JSON valid — jadi struk cetak-ulang offline
+              // yang mau baca nama varian dari sini bakal gagal parse dan
+              // diam-diam kehilangan "(Dingin)".
+              modifiers: oi['modifiers'] == null ? null : jsonEncode(oi['modifiers']),
               notes: oi['notes'],
               // Migration 085 — per-item ad-hoc payment fields (server source of truth)
               paidAt: oi['paid_at'] != null ? DateTime.parse(oi['paid_at']) : null,
@@ -776,7 +781,8 @@ class SyncService {
     'unit_price': oi.unitPrice,
     'discount_amount': oi.discountAmount,
     'total_price': oi.totalPrice,
-    'modifiers': oi.modifiers,
+    // Dikirim balik sebagai objek, bukan string — kolomnya JSONB di server.
+    'modifiers': oi.modifiers == null ? null : jsonDecode(oi.modifiers!),
     'notes': oi.notes,
     'row_version': oi.rowVersion,
     'is_deleted': oi.isDeleted,

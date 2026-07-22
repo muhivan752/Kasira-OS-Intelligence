@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:drift/drift.dart' as drift;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
@@ -596,6 +597,14 @@ class CartNotifier extends StateNotifier<CartState> {
             orderId: drift.Value(orderId),
             productId: drift.Value(item.productId),
             productVariantId: drift.Value(item.variantId),
+            // Snapshot nama varian ikut disimpan lokal — cerminan yang
+            // dilakuin server di `orders.py`. Tanpa ini, order yang dibuat
+            // pas offline struknya nggak nyebut "(Dingin)" sampai dia sync.
+            modifiers: drift.Value(
+              item.variantName == null
+                  ? null
+                  : jsonEncode({'variant_name': item.variantName}),
+            ),
             quantity: drift.Value(item.qty),
             unitPrice: drift.Value(item.price),
             discountAmount: const drift.Value(0),

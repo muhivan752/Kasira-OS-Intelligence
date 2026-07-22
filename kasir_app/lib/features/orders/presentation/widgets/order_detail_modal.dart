@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -436,8 +437,17 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
     final productNameById = {for (final p in productRows) p.id: p.name};
 
     final items = orderItemRows.map((oi) {
+      final base = productNameById[oi.productId] ?? 'Item';
+      // Nama varian dibaca dari snapshot `modifiers` yang ikut ke-sync dari
+      // server, BUKAN dari tabel product_variants lokal. Dua alasan: varian
+      // bisa udah dihapus pemilik (struk bulan lalu tetap harus benar), dan
+      // OrderItemLocal cuma nyimpen id-nya. Jalur ini cetak-ulang OFFLINE
+      // dari Drift — kalau dilewat, struk dari Riwayat kehilangan "(Dingin)"
+      // padahal struk pertamanya ada.
+      final vname = _variantNameOf(oi.modifiers);
+      final name = (vname == null || vname.isEmpty) ? base : '$base ($vname)';
       return ReceiptLineItem(
-        name: productNameById[oi.productId] ?? 'Item',
+        name: name,
         qty: oi.quantity,
         price: oi.unitPrice,
         notes: oi.notes,
@@ -696,4 +706,23 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
       ],
     );
   }
+}
+
+
+/// Ambil nama varian dari kolom `modifiers` (JSON string di Drift).
+///
+/// Fail-silent balik `null`: struk yang kehilangan embel-embel varian masih
+/// jauh lebih baik daripada tombol cetak yang meledak. Baris lama dari sebelum
+/// fitur varian memang nggak punya kunci ini.
+String? _variantNameOf(String? modifiers) {
+  if (modifiers == null || modifiers.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(modifiers);
+    if (decoded is Map && decoded['variant_name'] is String) {
+      return decoded['variant_name'] as String;
+    }
+  } catch (_) {
+    // Bukan JSON valid (baris lama yang sempat disimpan pakai Map.toString()).
+  }
+  return null;
 }
