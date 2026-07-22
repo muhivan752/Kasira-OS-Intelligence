@@ -163,10 +163,11 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
       dateTime: dateFormat.format(now),
       items: widget.items
           .map((i) => ReceiptLineItem(
-                // displayName, bukan name — struk WAJIB nulis "(Dingin)".
-                // Tanpa ini pelanggan protes dapet yang panas dan kasir nggak
-                // punya bukti apa yang dipesan.
-                name: i.displayName,
+                // `i` di sini ReceiptItem, BUKAN CartItem — namanya udah
+                // ditempelin varian di hulu (`cart_panel.dart` pas ngonversi
+                // CartItem.displayName → ReceiptItem.name). Jangan tambahin
+                // varian lagi di sini, nanti jadi dobel kurung.
+                name: i.name,
                 qty: i.qty,
                 price: i.price,
                 notes: i.notes,
