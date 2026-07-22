@@ -25,7 +25,13 @@ void schedulePostPaymentRefresh(
     ref.invalidate(ordersProvider);
     ref.invalidate(productsProvider);
     if (includeTabs) {
-      ref.invalidate(activeTabsCountProvider);
+      // HARUS fetchTabs(), BUKAN invalidate(activeTabsCountProvider).
+      // activeTabsCountProvider itu Provider turunan yang cuma `ref.watch(tabProvider).tabs`
+      // — invalidate dia = hitung ulang dari state tabProvider yang SAMA persis,
+      // nol request ke server. Akibatnya: buka meja baru → tabProvider gak pernah
+      // berubah → listener di TableGridPage gak ke-trigger → grid Meja tetap
+      // "Tersedia" padahal backend udah occupied.
+      ref.read(tabProvider.notifier).fetchTabs();
     }
   });
 }

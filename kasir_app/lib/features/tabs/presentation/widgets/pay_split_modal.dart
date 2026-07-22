@@ -8,7 +8,6 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
-import '../../../../core/widgets/send_wa_receipt_dialog.dart';
 import '../../providers/tab_provider.dart';
 import 'qris_waiting_modal.dart';
 
@@ -362,31 +361,20 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
         Navigator.pop(context);
         widget.onPaid(result);
 
-        // SATU snackbar aja. Sebelumnya ada snackbar kedua berwarna PUTIH yang
-        // nyembul 700ms kemudian cuma buat nanya "mau kirim struk via WA?",
-        // nangkring 6 detik. Buat kasir yang lagi ngelayanin antrian itu kotak
-        // putih nongol sendiri sesaat setelah transaksi kelar — ganggu banget.
-        // Kemampuannya nggak dibuang, cuma ditempel jadi aksi di snackbar sukses.
+        // Konfirmasi pembayaran doang — TANPA ajakan kirim WA.
+        // Riwayat: dulu ada snackbar kedua warna putih yang nyembul 700ms
+        // kemudian cuma buat nanya "mau kirim struk via WA?"; itu dibuang dan
+        // dipindah jadi tombol aksi di snackbar ini. Ternyata masih ganggu juga —
+        // nawarin WA sesudah duit masuk bikin kasir kudu balik nanya nomor ke
+        // customer yang udah beranjak pergi. Nomor WA ditangkap PAS transaksi,
+        // bukan sesudahnya. Kirim struk WA tetap ada di preview struk dan detail
+        // order (reprint) kalau kasir emang butuh.
         messenger.showSnackBar(
           SnackBar(
             content: Text(result.isPaid
                 ? 'Tab lunas! Semua pembayaran selesai.'
                 : 'Pembayaran tercatat.'),
             backgroundColor: KasiraDS.success,
-            action: (_paymentMethod == 'cash' && widget.tab.orderIds.isNotEmpty)
-                ? SnackBarAction(
-                    label: 'Kirim WA',
-                    textColor: Colors.white,
-                    onPressed: () {
-                      showDialog<void>(
-                        context: rootNav.context,
-                        builder: (_) => SendWaReceiptDialog(
-                          orderId: widget.tab.orderIds.first,
-                        ),
-                      );
-                    },
-                  )
-                : null,
           ),
         );
       } else {

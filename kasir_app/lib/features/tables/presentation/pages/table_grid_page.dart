@@ -12,6 +12,12 @@ import '../../../pos/providers/pos_mode_provider.dart';
 import '../../../tabs/presentation/widgets/guest_count_sheet.dart';
 import '../../../tabs/providers/tab_provider.dart';
 
+/// Di-bump tiap kali user pindah ke tab Meja. Grid-nya nangkring di IndexedStack
+/// dashboard, jadi `initState` cuma jalan SEKALI seumur sesi — tanpa tick ini
+/// status meja bisa basi berjam-jam kalau kebetulan gak ada perubahan tab yang
+/// ke-detect listener di bawah.
+final tableGridRefreshTickProvider = StateProvider<int>((_) => 0);
+
 enum TableStatus { available, occupied, reserved, dirty }
 
 class TableModel {
@@ -150,6 +156,12 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
         _load();
       }
     });
+
+    // Jaring pengaman: tiap kali user balik ke tab Meja, tarik ulang. Listener
+    // di atas cuma nyala kalau JUMLAH atau STATUS tab berubah — sedangkan status
+    // meja bisa berubah tanpa itu (tab pindah meja, meja di-release janitor,
+    // kasir lain yang bikin order).
+    ref.listen(tableGridRefreshTickProvider, (_, __) => _load());
 
     final available = _tables.where((t) => t.status == TableStatus.available).length;
     final occupied = _tables.where((t) => t.status == TableStatus.occupied).length;

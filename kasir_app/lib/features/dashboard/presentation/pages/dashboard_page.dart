@@ -102,6 +102,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       return;
     }
     setState(() => _selectedIndex = page);
+    // Tab Meja = IndexedStack, initState-nya cuma sekali. Bump tick biar grid
+    // narik status meja terbaru tiap kali dibuka.
+    if (page == 4) {
+      ref.read(tableGridRefreshTickProvider.notifier).state++;
+    }
   }
 
   void _openAiAssistant() {
@@ -409,6 +414,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           if (_isPro && _selectedIndex != 4) setState(() => _selectedIndex = 4);
+          if (_isPro) ref.read(tableGridRefreshTickProvider.notifier).state++;
           ref.read(pendingNavigateToMejaProvider.notifier).state = false;
         }
       });
