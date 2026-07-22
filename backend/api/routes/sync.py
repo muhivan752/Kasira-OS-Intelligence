@@ -234,6 +234,7 @@ async def sync_data(
             # flush() dulu: session ini autoflush=False dan loyalty ngecek
             # kelunasan lewat SUM(payments.amount_paid) di DB.
             await db.flush()
+            from backend.services.customer_stats import refresh_for_order_id
             from backend.services.loyalty_service import earn_points_for_order_id
 
             seen_order_ids = set()
@@ -249,6 +250,10 @@ async def sync_data(
                 await earn_points_for_order_id(
                     db, oid, outlet_id, current_user.tenant_id, source="sync_offline",
                 )
+                # Agregat CRM — semua tier, bukan cuma Pro. Transaksi yang
+                # dibuat pas device offline juga harus muncul di halaman
+                # Pelanggan begitu batch-nya kepush.
+                await refresh_for_order_id(db, oid)
         if request.changes.shifts:
             await process_table_sync(db, Shift, request.changes.shifts, {"outlet_id": outlet_id}, server_hlc, conflict_strategy="financial_strict")
         if request.changes.cash_activities:

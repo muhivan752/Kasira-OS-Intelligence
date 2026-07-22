@@ -47,6 +47,7 @@ from backend.schemas.tab import (
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.services.loyalty_service import earn_points_for_tab as _earn_points_for_tab
+from backend.services.customer_stats import refresh_for_tab as _refresh_tab_customer_stats
 from backend.services.tab_service import (
     utc_now as _utc_now,
     tab_event as _tab_event,
@@ -574,6 +575,9 @@ async def pay_tab_full(
         await _earn_points_for_tab(
             db, tab, tab.outlet_id, current_user.tenant_id, source="tab_pay_full",
         )
+        # Agregat CRM. Di luar loyalty karena halaman Pelanggan jalan di
+        # SEMUA tier, sedangkan poin cuma Pro+.
+        await _refresh_tab_customer_stats(db, tab)
     elif body.payment_method == 'qris':
         # Init Xendit QRIS — async settle via webhook (payments.py:652 tab branch)
         outlet = await db.get(Outlet, tab.outlet_id)
@@ -745,6 +749,9 @@ async def pay_split(
         await _earn_points_for_tab(
             db, tab, tab.outlet_id, current_user.tenant_id, source="tab_pay_split",
         )
+        # Agregat CRM. Di luar loyalty karena halaman Pelanggan jalan di
+        # SEMUA tier, sedangkan poin cuma Pro+.
+        await _refresh_tab_customer_stats(db, tab)
     else:
         # QRIS — claim split + init Xendit QR. Webhook settles split + tab close.
         split.status = 'pending'
@@ -1140,6 +1147,9 @@ async def pay_items(
         await _earn_points_for_tab(
             db, tab, tab.outlet_id, current_user.tenant_id, source="tab_pay_items",
         )
+        # Agregat CRM. Di luar loyalty karena halaman Pelanggan jalan di
+        # SEMUA tier, sedangkan poin cuma Pro+.
+        await _refresh_tab_customer_stats(db, tab)
     elif body.payment_method == 'qris':
         # Init Xendit QRIS — claim items via paid_payment_id (no paid_at yet,
         # CHECK constraint allows that). Webhook on success sets paid_at +

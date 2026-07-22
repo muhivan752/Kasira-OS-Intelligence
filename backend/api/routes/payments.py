@@ -205,6 +205,7 @@ async def _handle_tab_payment_webhook_paid(db: AsyncSession, payment: Payment) -
     # Loyalty (Pro+) — mirror jalur cash di tabs.py. Self-guard: cuma jalan
     # kalau blok di atas beneran nutup tab ke 'paid'.
     try:
+        from backend.services.customer_stats import refresh_for_tab
         from backend.services.loyalty_service import earn_points_for_tab
 
         outlet_for_loyalty = await db.get(Outlet, payment.outlet_id)
@@ -213,6 +214,7 @@ async def _handle_tab_payment_webhook_paid(db: AsyncSession, payment: Payment) -
                 db, tab, payment.outlet_id, outlet_for_loyalty.tenant_id,
                 source="tab_webhook",
             )
+        await refresh_for_tab(db, tab)  # agregat CRM — semua tier, bukan cuma Pro
     except Exception:
         logger.warning("tab webhook loyalty fail-silent tab=%s", payment.tab_id, exc_info=True)
 
@@ -302,11 +304,18 @@ async def _try_earn_loyalty_points(
     (termasuk `user_id` yang memang gak kepake) biar call site existing gak
     ikut berubah.
     """
+    from backend.services.customer_stats import refresh_for_order
     from backend.services.loyalty_service import earn_points_for_order
 
-    return await earn_points_for_order(
+    earned = await earn_points_for_order(
         db, order, outlet_id, tenant_id, source=source,
     )
+    # Agregat CRM (kunjungan / total belanja). Sengaja DI LUAR loyalty: loyalty
+    # cuma jalan di tier Pro, sedangkan halaman Pelanggan ada di semua tier.
+    # Tanpa ini kolomnya cuma keisi kalau ada yang buka detail pelanggan satu
+    # per satu — transaksi baru nggak pernah kelihatan di daftar.
+    await refresh_for_order(db, order)
+    return earned
 
 
 async def _try_earn_loyalty_points_for_receipt(
@@ -319,10 +328,19 @@ async def _try_earn_loyalty_points_for_receipt(
     predikat "sudah lunas" per-order selalu False. Untuk order tab, kelunasan
     dibaca dari `tab.status == 'paid'`.
     """
+    from backend.services.customer_stats import refresh_for_order
     from backend.services.loyalty_service import earn_points_for_order
 
     if not outlet or not order or not order.customer_id:
         return 0
+
+    # Jalur PALING penting buat CRM: di sini nomor pelanggan baru nempel ke
+    # order, puluhan detik SESUDAH bayar. Pas `create_payment` jalan tadi,
+    # `order.customer_id` masih NULL — jadi kalau refresh-nya cuma di sana,
+    # pelanggan yang ditangkep di halaman struk selamanya nol kunjungan.
+    # Ditaruh sebelum cabang tab: agregat nggak nunggu tab lunas, order yang
+    # belum lunas memang otomatis nggak kehitung sama predikatnya.
+    await refresh_for_order(db, order)
 
     tab_id = getattr(order, "tab_id", None)
     if tab_id:
