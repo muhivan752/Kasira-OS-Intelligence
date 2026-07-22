@@ -19,9 +19,55 @@ class ProductBase(BaseModel):
     barcode: Optional[str] = None
     is_subscription: bool = False
 
+class ProductVariantBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=40)
+    # SELISIH dari base_price, bukan harga akhir. Boleh negatif (size kecil
+    # lebih murah) — makanya sengaja TIDAK ada ge=0 di sini.
+    price_adjustment: Decimal = Decimal(0)
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class ProductVariantCreate(ProductVariantBase):
+    pass
+
+
+class ProductVariantUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=40)
+    price_adjustment: Optional[Decimal] = None
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None
+    row_version: int
+
+
+class ProductVariantResponse(ProductVariantBase):
+    id: UUID
+    product_id: UUID
+    row_version: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProductVariantBulkSet(BaseModel):
+    """Ganti seluruh daftar varian satu produk dalam sekali kirim.
+
+    Form produk di dashboard itu satu tombol Simpan — pemilik nambah "Dingin",
+    hapus "Large", ubah harga "Panas", lalu simpan. Kalau tiap baris dikirim
+    sebagai request POST/PUT/DELETE sendiri-sendiri, gagal di tengah bikin
+    daftar varian setengah jadi dan pemiliknya nggak tahu yang mana yang masuk.
+    Satu endpoint = satu transaksi.
+    """
+    variants: list[ProductVariantCreate] = []
+
+
 class ProductCreate(ProductBase):
     brand_id: UUID
     category_id: Optional[UUID] = None
+    # Varian boleh langsung ikut pas produk dibikin — pemilik yang nambah
+    # "Kopi Susu" biasanya udah tahu mau ada Panas & Dingin saat itu juga.
+    variants: list[ProductVariantCreate] = []
 
 class ProductUpdate(BaseModel):
     category_id: Optional[UUID] = None
@@ -52,6 +98,18 @@ class ProductResponse(ProductBase):
     row_version: int
     created_at: datetime
     updated_at: datetime
+    # Selalu ada (list kosong kalau produknya nggak bervarian) supaya klien
+    # nggak perlu bedain "belum di-load" vs "nggak punya varian".
+    variants: list[ProductVariantResponse] = []
+
+    @computed_field
+    @property
+    def has_variants(self) -> bool:
+        """Klien pakai ini buat mutusin tap produk → langsung masuk keranjang
+        atau buka pemilih varian dulu. Varian nonaktif nggak dihitung: kalau
+        semua variannya lagi mati, produknya jadi produk polos lagi, bukan
+        produk yang bikin kasir mentok di sheet kosong."""
+        return any(v.is_active for v in self.variants)
 
     @computed_field
     @property

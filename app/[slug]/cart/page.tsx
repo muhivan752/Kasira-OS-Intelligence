@@ -82,7 +82,15 @@ export default function CartPage() {
       delivery_address: orderType === 'delivery' ? deliveryAddress : null,
       table_id: orderType === 'dine_in' ? tableId : null,
       notes: notes || null,
-      items: items.map((item) => ({ product_id: item.id, qty: item.quantity, notes: '' })),
+      // item.id itu KUNCI BARIS (`productId::variantId`), bukan id produk —
+      // yang dikirim ke API wajib `productId`. Sempat salah di sini bikin
+      // backend nolak 422 karena "uuid::uuid" bukan UUID valid.
+      items: items.map((item) => ({
+        product_id: item.productId,
+        ...(item.variantId ? { product_variant_id: item.variantId } : {}),
+        qty: item.quantity,
+        notes: '',
+      })),
       payment_method: paymentMethod,
       idempotency_key: `${slug}-${customerPhone}-${Date.now()}`,
     };

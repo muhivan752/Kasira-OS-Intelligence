@@ -64,4 +64,20 @@ class OrderItem(BaseModel):
 
     @property
     def product_name(self) -> str:
-        return self.product.name if self.product else ''
+        """Nama item LENGKAP dengan variannya: "Kopi Susu (Dingin)".
+
+        Varian sengaja digabung DI SINI, bukan di tiap pemakai. Property ini
+        dibaca layar dapur, label split bill, struk WA, dan dashboard — dan
+        yang paling gawat kalau kelewat justru dapur: barista cuma lihat teks
+        ini, jadi tanpa varian dia bikin yang panas padahal pesanannya dingin.
+        Satu tempat = nggak ada konsumen yang bisa ketinggalan.
+
+        Nama varian dibaca dari snapshot di `modifiers`, BUKAN dari relasi ke
+        product_variants. Varian bisa dihapus pemilik kapan saja, dan struk
+        atau riwayat bulan lalu tetap harus nulis apa yang beneran dibeli.
+        """
+        base = self.product.name if self.product else ''
+        variant_name = None
+        if isinstance(self.modifiers, dict):
+            variant_name = self.modifiers.get("variant_name")
+        return f"{base} ({variant_name})" if variant_name and base else base

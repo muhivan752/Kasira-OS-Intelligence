@@ -35,6 +35,8 @@ class SyncService {
   final SharedPreferences prefs;
 
   static const String _lastSyncKey = 'last_sync_hlc';
+  /// Penanda backfill varian produk (v1.6.0) sudah jalan sekali di device ini.
+  static const String _variantsBackfilledKey = 'variants_backfilled_v1';
   // Raw device installation ID — UUID random di-generate sekali saat first
   // launch, survive logout (identity device fisik). Key legacy-compat pake
   // nama lama `device_node_id` biar user existing gak reset.
@@ -186,6 +188,20 @@ class SyncService {
         'shifts': unsyncedShifts.map(_shiftToJson).toList(),
         'cash_activities': unsyncedCashActivities.map(_cashActivityToJson).toList(),
       };
+
+      // Sekali seumur instalasi: paksa tarik-ulang penuh supaya varian produk
+      // yang dibikin SEBELUM device ini di-upgrade ikut kebawa.
+      //
+      // Kenapa perlu: sync itu delta by `last_sync_hlc`. APK lama nggak kenal
+      // product_variants tapi kursornya tetap maju tiap sync. Jadi varian yang
+      // pemilik bikin kemarin punya `updated_at` LEBIH TUA dari kursor
+      // sekarang — begitu APK baru dipasang, tabelnya kebuat tapi selamanya
+      // kosong, dan kasir lihat produk tanpa pilihan Hot/Ice tanpa ada yang
+      // ngeh kenapa. Nol-in kursornya sekali, biarin satu sync penuh jalan.
+      if (!(prefs.getBool(_variantsBackfilledKey) ?? false)) {
+        await prefs.remove(_lastSyncKey);
+        await prefs.setBool(_variantsBackfilledKey, true);
+      }
 
       final lastSyncHlc = prefs.getString(_lastSyncKey);
 
@@ -550,6 +566,32 @@ class SyncService {
               rowVersion: ing['row_version'] ?? 0,
               isDeleted: ing['is_deleted'] ?? false,
               lastModifiedHlc: ing['hlc'],
+              isSynced: true,
+            ),
+          );
+        }
+      }
+
+      // Apply Product Variants (read-only from server — dibikin dari dashboard)
+      //
+      // Baris yang dihapus di server ikut ketarik dengan `is_deleted: true`
+      // (server sengaja nggak nyaringnya). Kalau baris itu cuma di-tandain
+      // tanpa disingkirkan dari query pemakainya, varian yang udah dicabut
+      // pemilik bakal tetap nongol di POS — makanya `isDeleted` WAJIB ikut
+      // difilter di `productVariantsProvider`.
+      if (changes['product_variants'] != null) {
+        for (var v in changes['product_variants']) {
+          await db.into(db.productVariants).insertOnConflictUpdate(
+            ProductVariantLocal(
+              id: v['id'],
+              productId: v['product_id'],
+              name: v['name'],
+              priceAdjustment: _toDouble(v['price_adjustment']),
+              isActive: v['is_active'] ?? true,
+              sortOrder: v['sort_order'] ?? 0,
+              rowVersion: v['row_version'] ?? 0,
+              isDeleted: v['is_deleted'] ?? false,
+              lastModifiedHlc: v['hlc'],
               isSynced: true,
             ),
           );

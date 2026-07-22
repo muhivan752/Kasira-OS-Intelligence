@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getStorefront } from '@/app/actions/storefront';
-import { useCart } from './CartContext';
+import { useCart, cartLineId } from './CartContext';
 import { ShoppingBag, MessageCircle, Store, Clock, MapPin, CheckCircle2, Plus, Minus, CalendarDays, Star, Crown, Flame, Sparkles, Utensils } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
 
@@ -59,9 +59,37 @@ export default function StorefrontPage() {
       ? products
       : products.filter((p: any) => p.category_id === selectedCategory);
 
+  // Produk yang lagi dipilih variannya. Non-null = modal varian kebuka.
+  const [variantProduct, setVariantProduct] = useState<any>(null);
+
+  const addLine = (product: any, variant: any | null) => {
+    addItem({
+      id: cartLineId(product.id, variant?.id),
+      productId: product.id,
+      variantId: variant?.id,
+      variantName: variant?.name,
+      // Nama varian nempel ke nama baris supaya kelihatan di keranjang, di
+      // halaman checkout, dan di WA konfirmasi — tiga tempat yang semuanya
+      // cuma baca `name`.
+      name: variant ? `${product.name} (${variant.name})` : product.name,
+      // Harga dari server (base_price + price_adjustment, udah jadi). Halaman
+      // ini nggak pernah ngitung harga varian sendiri — kalau ngitung, suatu
+      // saat bakal beda sama yang dihitung server pas checkout.
+      price: variant ? variant.price : product.price,
+      quantity: 1,
+      image_url: product.image_url,
+    });
+  };
+
   const handleAddToCart = (product: any) => {
     if (product.stock <= 0) return;
-    addItem({ id: product.id, name: product.name, price: product.price, quantity: 1, image_url: product.image_url });
+    // Bervarian → tanya dulu. Tanpa ini pelanggan mesen "Kopi Susu" tanpa
+    // pernah bisa milih dingin, dan barista nebak-nebak.
+    if ((product.variants?.length ?? 0) > 0) {
+      setVariantProduct(product);
+      return;
+    }
+    addLine(product, null);
   };
 
   const handleWhatsApp = () => {
@@ -75,8 +103,14 @@ export default function StorefrontPage() {
     [...products].sort((a: any, b: any) => (b.sold_total || 0) - (a.sold_total || 0)).slice(0, 3).map((p: any) => p.id)
   );
 
-  if (isPro) return <ProStorefront />;
-  return <StarterStorefront />;
+  // VariantModal dirender di luar dua varian storefront — satu modal untuk
+  // Starter maupun Pro, jadi nggak ada tata letak yang ketinggalan.
+  return (
+    <>
+      {isPro ? <ProStorefront /> : <StarterStorefront />}
+      <VariantModal />
+    </>
+  );
 
   // ════════════════════════════════════════════════════════════
   // STARTER STOREFRONT — clean, functional, blue accent
@@ -515,6 +549,44 @@ export default function StorefrontPage() {
               <div className="pr-4"><ShoppingBag className="w-5 h-5" /></div>
             </button>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * Modal pilih varian — SATU pintu untuk semua layout.
+   *
+   * Halaman ini punya tiga tata letak (mobile, tablet, desktop) yang
+   * masing-masing me-render kartu produknya sendiri. Modalnya sengaja dirender
+   * SEKALI di luar ketiganya dan dikendalikan satu state: kalau tiap layout
+   * punya modal sendiri, cukup satu yang kelupaan diperbarui dan pelanggan di
+   * layar itu nggak pernah bisa milih dingin.
+   */
+  function VariantModal() {
+    if (!variantProduct) return null;
+    const p = variantProduct;
+    return (
+      <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
+        onClick={() => setVariantProduct(null)}>
+        <div className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 max-h-[80vh] overflow-y-auto"
+          onClick={e => e.stopPropagation()}>
+          <p className="text-xs font-semibold text-blue-600 tracking-wide mb-1">PILIH VARIAN</p>
+          <h3 className="text-lg font-bold text-gray-900 mb-4">{p.name}</h3>
+          <div className="space-y-2">
+            {p.variants.map((v: any) => (
+              <button key={v.id}
+                onClick={() => { addLine(p, v); setVariantProduct(null); }}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3.5 border border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-colors text-left">
+                <span className="font-semibold text-gray-900">{v.name}</span>
+                <span className="font-bold text-blue-600">{formatCurrency(v.price)}</span>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setVariantProduct(null)}
+            className="w-full mt-4 py-3 text-sm font-semibold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50">
+            Batal
+          </button>
         </div>
       </div>
     );

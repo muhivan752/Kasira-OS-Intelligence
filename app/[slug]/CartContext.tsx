@@ -3,12 +3,34 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 export type CartItem = {
+  /**
+   * Identitas BARIS keranjang, bukan id produk.
+   *
+   * Sejak ada varian, "Kopi Susu (Panas)" dan "Kopi Susu (Dingin)" itu produk
+   * yang sama tapi dua baris dengan harga berbeda. Kalau keranjang masih
+   * dikunci per id produk, pilih Dingin sesudah Panas cuma nambah qty baris
+   * Panas — pelanggan bayar harga yang salah dan dapat minuman yang salah.
+   *
+   * Formatnya `productId::variantId` (variantId kosong kalau tanpa varian),
+   * dibikin di `cartLineId()`. Field ini tetap dinamai `id` supaya semua
+   * pemakai lama (removeItem / updateQuantity / key React) nggak perlu ikut
+   * berubah.
+   */
   id: string;
+  /** Id produk asli — INI yang dikirim ke API pas checkout, bukan `id`. */
+  productId: string;
+  variantId?: string;
+  variantName?: string;
   name: string;
   price: number;
   quantity: number;
   image_url?: string;
 };
+
+/** Kunci baris keranjang. Satu-satunya tempat formatnya ditentukan. */
+export function cartLineId(productId: string, variantId?: string): string {
+  return `${productId}::${variantId ?? ''}`;
+}
 
 type CartContextType = {
   items: CartItem[];
@@ -40,8 +62,19 @@ export function CartProvider({ children, slug }: { children: React.ReactNode; sl
     const saved = localStorage.getItem(`kasira_cart_${slug}`);
     if (saved) {
       try {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setItems(JSON.parse(saved));
+        // Keranjang yang kesimpan SEBELUM fitur varian ada nggak punya
+        // `productId` — dulu `id` memang id produk. Kalau dibiarkan, pelanggan
+        // yang balik lagi bakal ngirim `product_id: undefined` pas checkout
+        // dan kena 422 tanpa penjelasan. Dinaikkan bentuknya di sini, sekali,
+        // pas dibaca.
+        const parsed = JSON.parse(saved) as CartItem[];
+        setItems(
+          parsed.map((i) =>
+            i.productId
+              ? i
+              : { ...i, productId: i.id, id: cartLineId(i.id, undefined) },
+          ),
+        );
       } catch (e) {
         console.error('Failed to parse cart', e);
       }

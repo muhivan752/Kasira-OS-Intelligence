@@ -24,6 +24,8 @@ import '../../../products/presentation/widgets/product_detail_sheet.dart';
 import '../../providers/pos_mode_provider.dart';
 import '../../../tabs/providers/tab_provider.dart';
 import '../../../tabs/presentation/widgets/guest_count_sheet.dart';
+import '../../../products/providers/variants_provider.dart';
+import '../widgets/variant_picker_sheet.dart';
 
 class PosPage extends ConsumerStatefulWidget {
   const PosPage({super.key});
@@ -775,6 +777,13 @@ class _PosPageState extends ConsumerState<PosPage> {
         ),
       ),
       data: (products) {
+        // Varian dibaca dari Drift lokal, jadi aman walau lagi offline. Kalau
+        // belum kebaca (sync pertama), map-nya kosong → semua produk kelakuan
+        // kayak produk polos. Sengaja: mending sekali tap langsung masuk
+        // daripada kasir mentok karena data varian belum turun.
+        final variantMap = ref.watch(productVariantsProvider).valueOrNull ??
+            const <String, List<ProductVariantModel>>{};
+
         final categoryFiltered = _selectedCategoryId == 'all'
             ? products
             : products.where((p) => p.categoryId == _selectedCategoryId).toList();
@@ -830,19 +839,50 @@ class _PosPageState extends ConsumerState<PosPage> {
                   productName: product.name,
                   sellingPrice: product.price,
                 ),
-                onTap: () {
+                onTap: () async {
                   final cartNotifier = ref.read(cartProvider.notifier);
                   // Tanpa meja = takeaway (default cart 'Dine In', jadi harus di-set).
                   final cartState = ref.read(cartProvider);
                   if (cartState.tableId == null && cartState.orderType != 'Takeaway') {
                     cartNotifier.setOrderType('Takeaway');
                   }
+
+                  // Produk bervarian (Hot/Ice, size) → tanya dulu, jangan main
+                  // masukin. Yang nggak punya varian tetap sekali tap seperti
+                  // dulu — mayoritas menu warung nggak bervarian dan nambah
+                  // satu ketukan buat semua orang itu pajak yang nggak perlu.
+                  final variants = variantMap[product.id] ?? const <ProductVariantModel>[];
+                  ProductVariantModel? chosen;
+                  double price = product.price;
+                  if (variants.isNotEmpty) {
+                    final result = await showVariantPickerSheet(
+                      context,
+                      productName: product.name,
+                      basePrice: product.price,
+                      variants: variants,
+                    );
+                    // Kasir batal → JANGAN tambahin apa pun. Tanpa cek ini,
+                    // tutup sheet = diam-diam masuk keranjang dengan harga
+                    // dasar, dan itu ketahuannya baru pas struk kecetak.
+                    if (result == null) return;
+                    chosen = result.variant;
+                    price = result.price;
+                  }
+
+                  // Nama varian di-snapshot ke variabel final: dipakai lagi
+                  // di snackbar bawah, dan `final` bikin promosi null-safety
+                  // pasti jalan tanpa perlu `!`.
+                  final chosenName = chosen?.name;
+
                   cartNotifier.addItem(CartItem(
                         productId: product.id,
                         name: product.name,
-                        price: product.price,
+                        price: price,
+                        variantId: chosen?.id,
+                        variantName: chosenName,
                         stockQty: product.stockEnabled ? product.stock.toDouble() : null,
                       ));
+                  if (!context.mounted) return;
                   if (MediaQuery.of(context).size.width < 700) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -851,7 +891,11 @@ class _PosPageState extends ConsumerState<PosPage> {
                             const Icon(LucideIcons.check,
                                 color: Colors.white, size: 16),
                             const SizedBox(width: 8),
-                            Text('${product.name} ditambahkan'),
+                            Text(
+                              chosenName == null
+                                  ? '${product.name} ditambahkan'
+                                  : '${product.name} ($chosenName) ditambahkan',
+                            ),
                           ],
                         ),
                         duration: const Duration(milliseconds: 900),

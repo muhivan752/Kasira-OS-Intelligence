@@ -168,6 +168,27 @@ export async function deleteProduct(productId: string) {
   } catch { return false; }
 }
 
+/**
+ * Simpan seluruh daftar varian satu produk sekaligus (Hot/Ice, size, level gula).
+ *
+ * Sengaja "kirim daftar final", bukan tambah/hapus per baris: form produk cuma
+ * punya satu tombol Simpan, jadi kalau tiap baris jadi request sendiri, gagal
+ * di tengah ninggalin daftar setengah jadi tanpa pemiliknya sadar.
+ */
+export async function setProductVariants(
+  productId: string,
+  variants: { name: string; price_adjustment: number; is_active: boolean; sort_order: number }[],
+) {
+  try {
+    const res = await fetchWithAuth(`/products/${productId}/variants`, {
+      method: 'PUT',
+      body: JSON.stringify({ variants }),
+    });
+    const data = await res.json();
+    return { success: res.ok, data: data.data, message: data.message || data.detail };
+  } catch { return { success: false, message: 'Gagal menyimpan varian' }; }
+}
+
 export async function toggleProductActive(productId: string, isActive: boolean, rowVersion: number) {
   try {
     const res = await fetchWithAuth(`/products/${productId}/`, {

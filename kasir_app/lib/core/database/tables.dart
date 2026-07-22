@@ -36,6 +36,25 @@ class Products extends Table with CrdtTable {
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
 }
 
+/// Varian produk — Hot/Ice, size R/L, level gula.
+///
+/// PULL-ONLY dari server: varian dibikin dari dashboard, kasir nggak pernah
+/// nambah varian dari HP. Makanya nggak ada `getUnsyncedProductVariants()` dan
+/// nggak pernah ikut push — sama polanya kayak Recipes.
+///
+/// `priceAdjustment` itu SELISIH dari `Products.basePrice`, bukan harga akhir.
+/// Boleh negatif (size kecil lebih murah). Harga jual dihitung di
+/// `ProductVariantModel.priceFor()` — satu tempat, jangan dihitung manual di
+/// widget.
+@DataClassName('ProductVariantLocal')
+class ProductVariants extends Table with CrdtTable {
+  TextColumn get productId => text()();
+  TextColumn get name => text()();
+  RealColumn get priceAdjustment => real().withDefault(const Constant(0.0))();
+  BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
 @DataClassName('OrderLocal')
 class Orders extends Table with CrdtTable {
   TextColumn get outletId => text()();

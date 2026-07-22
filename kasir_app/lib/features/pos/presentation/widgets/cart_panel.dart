@@ -14,6 +14,8 @@ import '../../../customers/presentation/widgets/customer_selection_modal.dart';
 import '../../../dashboard/providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../../products/providers/products_provider.dart';
+import '../../../products/providers/variants_provider.dart';
+import 'variant_picker_sheet.dart';
 import '../../../tabs/providers/tab_provider.dart';
 import '../../utils/post_payment_refresh.dart';
 
@@ -125,12 +127,14 @@ class CartPanel extends ConsumerWidget {
                       _CartItemTile(
                         item: cart.items[i],
                         currency: currency,
-                        onIncrement: () => ref.read(cartProvider.notifier).incrementItem(cart.items[i].productId),
-                        onDecrement: () => ref.read(cartProvider.notifier).decrementItem(cart.items[i].productId),
+                        // lineKey, BUKAN productId — dua varian dari produk
+                        // yang sama itu dua baris terpisah.
+                        onIncrement: () => ref.read(cartProvider.notifier).incrementItem(cart.items[i].lineKey),
+                        onDecrement: () => ref.read(cartProvider.notifier).decrementItem(cart.items[i].lineKey),
                       ),
                       if (i != cart.items.length - 1) const SizedBox(height: 12),
                     ],
-                    _upsellSection(ref, cart),
+                    _upsellSection(context, ref, cart),
                     _promoSection(ref, cart, currency),
                   ],
                 ),
@@ -336,7 +340,7 @@ class CartPanel extends ConsumerWidget {
 
     // Snapshot cart SEKARANG (sebelum clearCart di onPaymentSuccess).
     final receiptItems = cart.items
-        .map((i) => ReceiptItem(name: i.name, qty: i.qty, price: i.price))
+        .map((i) => ReceiptItem(name: i.displayName, qty: i.qty, price: i.price))
         .toList();
     final taxAmount = cart.taxAmount;
     final serviceChargeAmount = cart.serviceChargeAmount;
@@ -408,7 +412,7 @@ class CartPanel extends ConsumerWidget {
 
   /// Upsell "sering dibeli bareng" — best-seller yang belum di keranjang.
   /// Heuristik lokal (bukan combo-detection backend) supaya cepat + offline-safe.
-  Widget _upsellSection(WidgetRef ref, CartState cart) {
+  Widget _upsellSection(BuildContext context, WidgetRef ref, CartState cart) {
     final products = ref.watch(productsProvider).valueOrNull ?? const <ProductModel>[];
     final inCart = cart.items.map((e) => e.productId).toSet();
     final upsell = products
@@ -428,20 +432,44 @@ class CartPanel extends ConsumerWidget {
                 style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.textBody)),
           ]),
           const SizedBox(height: 9),
-          Wrap(spacing: 8, runSpacing: 8, children: upsell.map((p) => _upsellChip(ref, p)).toList()),
+          Wrap(spacing: 8, runSpacing: 8, children: upsell.map((p) => _upsellChip(context, ref, p)).toList()),
         ],
       ),
     );
   }
 
-  Widget _upsellChip(WidgetRef ref, ProductModel p) {
+  Widget _upsellChip(BuildContext context, WidgetRef ref, ProductModel p) {
     return GestureDetector(
-      onTap: () => ref.read(cartProvider.notifier).addItem(CartItem(
-            productId: p.id,
-            name: p.name,
-            price: p.price,
-            stockQty: p.stockEnabled ? p.stock.toDouble() : null,
-          )),
+      // JALUR KEDUA ke keranjang. Kalau chip ini nambah produk langsung tanpa
+      // nanya varian, "Es Kopi" bisa masuk sebagai kopi panas berharga dasar —
+      // bug diam-diam yang cuma kelihatan di struk. Lewat pintu yang sama
+      // dengan grid POS: `showVariantPickerSheet`.
+      onTap: () async {
+        final variants =
+            ref.read(productVariantsProvider).valueOrNull?[p.id] ??
+                const <ProductVariantModel>[];
+        ProductVariantModel? chosen;
+        var price = p.price;
+        if (variants.isNotEmpty) {
+          final result = await showVariantPickerSheet(
+            context,
+            productName: p.name,
+            basePrice: p.price,
+            variants: variants,
+          );
+          if (result == null) return;
+          chosen = result.variant;
+          price = result.price;
+        }
+        ref.read(cartProvider.notifier).addItem(CartItem(
+              productId: p.id,
+              name: p.name,
+              price: price,
+              variantId: chosen?.id,
+              variantName: chosen?.name,
+              stockQty: p.stockEnabled ? p.stock.toDouble() : null,
+            ));
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -592,7 +620,10 @@ class _CartItemTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item.name,
+              // displayName = "Kopi Susu (Dingin)". Kalau di sini cuma
+              // item.name, kasir nggak bisa bedain dua baris yang harganya
+              // beda dan pasti salah hapus.
+              Text(item.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: KasiraDS.sans(size: 14, weight: FontWeight.w700, color: KasiraDS.textStrong)),

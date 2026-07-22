@@ -23,6 +23,7 @@ from backend.services.audit import log_audit
 from backend.models.reservation import Table
 from backend.services.stock_service import deduct_stock, restore_stock_on_cancel
 from backend.services.ingredient_stock_service import deduct_ingredients_for_product, restore_ingredients_on_cancel
+from backend.services.variant_utils import resolve_variant
 from backend.models.event import Event
 
 router = APIRouter()
@@ -199,6 +200,21 @@ async def create_order(
         product = await db.get(Product, item_in.product_id)
         if not product or product.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+
+        # Varian: WAJIB divalidasi milik produknya sendiri. Tanpa cek ini klien
+        # bisa ngirim product_id produk murah + variant_id punya produk lain,
+        # dan harga jadi bisa diatur dari luar. Lihat `variant_utils`.
+        try:
+            variant = await resolve_variant(db, product.id, item_in.product_variant_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        # Nama varian ikut disimpan di `modifiers` supaya struk, layar dapur,
+        # dan riwayat tetap kebaca "Kopi Susu (Dingin)" walau varian-nya nanti
+        # dihapus pemilik. Nyimpen id doang bikin baris lama jadi teka-teki.
+        if variant is not None:
+            item_modifiers = dict(item_in.modifiers or {})
+            item_modifiers.setdefault("variant_name", variant.name)
+            item_in = item_in.model_copy(update={"modifiers": item_modifiers})
 
         # Deduct stock — branch by outlet stock_mode
         if product.stock_enabled:
@@ -678,6 +694,9 @@ async def get_order_receipt(
 
     items = [
         {
+            # `product_name` udah nyertain varian ("Kopi Susu (Dingin)") —
+            # digabung di OrderItem.product_name biar semua pemakai (dapur,
+            # split bill, struk WA, dashboard) dapat yang sama.
             "name": item.product_name or (item.product.name if item.product else "Item"),
             "qty": item.quantity,
             "price": float(item.unit_price or 0),

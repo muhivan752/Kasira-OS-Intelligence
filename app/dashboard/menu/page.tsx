@@ -6,6 +6,7 @@ import {
   toggleProductActive, createProduct, updateProduct, deleteProduct,
   createCategory, updateCategory, deleteCategory,
   getIngredients, getRecipes, createRecipe, updateRecipe, getCurrentUser,
+  setProductVariants,
 } from '@/app/actions/api';
 import { Plus, Search, Edit2, Loader2, X, Trash2, Tag, Upload, ImageOff, Package, FlaskConical, Sparkles } from 'lucide-react';
 import { useRef } from 'react';
@@ -63,6 +64,11 @@ export default function MenuPage() {
     category_id: '', image_url: '', is_active: true,
   });
   const [savingProduct, setSavingProduct] = useState(false);
+  // Varian produk (Hot/Ice, size, level gula). Dimulai KOSONG dan ditambah
+  // satu-satu — jangan pernah auto-render preset "Panas/Dingin", karena
+  // mayoritas produk (nasi, gorengan, rokok) memang nggak bervarian dan baris
+  // preset yang nongol sendiri bikin pemilik ngira dia wajib ngisi.
+  const [variants, setVariants] = useState<{ name: string; price_adjustment: string; is_active: boolean }[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +163,15 @@ export default function MenuPage() {
 
     if (product) {
       setEditingProduct(product);
+      // Varian ikut di response /products/ (relasi selalu eager-load di
+      // backend), jadi nggak perlu request tambahan.
+      setVariants(
+        (product.variants || []).map((v: any) => ({
+          name: v.name,
+          price_adjustment: String(v.price_adjustment ?? 0),
+          is_active: v.is_active ?? true,
+        })),
+      );
       setProductForm({
         name: product.name,
         description: product.description || '',
@@ -192,6 +207,7 @@ export default function MenuPage() {
       }
     } else {
       setEditingProduct(null);
+      setVariants([]);
       setProductForm({
         name: '', description: '', base_price: '', buy_price: '', stock_qty: '',
         category_id: categories.length > 0 ? categories[0].id : '',
@@ -247,9 +263,47 @@ export default function MenuPage() {
       is_active: productForm.is_active,
     };
     if (editingProduct) payload.row_version = editingProduct.row_version;
+
+    // Varian dikirim BARENGAN pas produk dibikin (satu request, satu
+    // transaksi). Pas edit, produknya disimpan dulu baru variannya — endpoint
+    // varian butuh product_id yang belum ada waktu create.
+    const cleanVariants = variants
+      .filter(v => v.name.trim() !== '')
+      .map((v, i) => ({
+        name: v.name.trim(),
+        price_adjustment: parseFloat(v.price_adjustment || '0') || 0,
+        is_active: v.is_active,
+        sort_order: i,
+      }));
+
+    // Nama dobel ditolak di sini juga, bukan cuma di backend — pemilik dapet
+    // pesannya sebelum kehilangan isian form.
+    const lower = cleanVariants.map(v => v.name.toLowerCase());
+    const dup = lower.find((n, i) => lower.indexOf(n) !== i);
+    if (dup) {
+      alert(`Nama varian "${dup}" dobel. Bikin kasir nggak bisa bedain dua tombol yang sama.`);
+      setSavingProduct(false);
+      return;
+    }
+
+    if (!editingProduct) payload.variants = cleanVariants;
+
     const res = editingProduct
       ? await updateProduct(editingProduct.id, payload)
       : await createProduct(payload);
+
+    if (res.success && editingProduct) {
+      // Simpan varian setelah produknya sukses. Kalau bagian ini gagal,
+      // JANGAN tutup modal — pemilik harus tahu variannya belum kesimpan,
+      // bukan lihat modal ketutup lalu ngira semuanya beres.
+      const vres = await setProductVariants(editingProduct.id, cleanVariants);
+      if (!vres.success) {
+        alert(vres.message || 'Produk tersimpan, tapi varian gagal disimpan');
+        setSavingProduct(false);
+        return;
+      }
+    }
+
     if (res.success) {
       setIsProductModalOpen(false);
       loadData();
@@ -453,7 +507,17 @@ export default function MenuPage() {
                         {categories.find(c => c.id === p.category_id)?.name
                           || <span className="text-gray-300 italic text-xs">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{fmt(p.base_price)}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                        {fmt(p.base_price)}
+                        {/* Penanda produk bervarian. Tanpa ini pemilik nggak
+                            punya cara tahu produk mana yang udah dikasih
+                            Hot/Ice selain buka satu-satu. */}
+                        {(p.variants?.length ?? 0) > 0 && (
+                          <span className="ml-1.5 px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full font-normal">
+                            {p.variants.length} varian
+                          </span>
+                        )}
+                      </td>
                       {stockMode === 'simple' && (
                         <td className="px-4 py-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -672,6 +736,87 @@ export default function MenuPage() {
                     );
                   })()}
                 </div>
+                {/* ── Varian (Hot/Ice, size, level gula) ──────────────────
+                    Mulai kosong. Baris ditambah satu-satu lewat tombol —
+                    JANGAN auto-render preset "Panas/Dingin": mayoritas produk
+                    (nasi, gorengan, rokok) nggak bervarian, dan baris yang
+                    nongol sendiri bikin pemilik ngira dia wajib ngisi. */}
+                <div className="border-t border-gray-200 pt-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Varian <span className="text-xs font-normal text-gray-500">— opsional</span>
+                    </label>
+                    <button type="button"
+                      onClick={() => setVariants([...variants, { name: '', price_adjustment: '0', is_active: true }])}
+                      className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
+                      <Plus className="w-3.5 h-3.5" /> Tambah varian
+                    </button>
+                  </div>
+
+                  {variants.length === 0 ? (
+                    <p className="text-xs text-gray-500">
+                      Contoh: Panas / Dingin, atau Reguler / Large. Kasir bakal ditanya pilihan ini
+                      sebelum produk masuk keranjang. Kosongkan kalau produknya cuma satu macam.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        {variants.map((v, i) => {
+                          const base = parseFloat(productForm.base_price) || 0;
+                          const adj = parseFloat(v.price_adjustment || '0') || 0;
+                          const final = base + adj;
+                          return (
+                            <div key={i} className="flex items-center gap-2">
+                              <input type="text" placeholder="Nama varian (mis. Dingin)"
+                                value={v.name}
+                                onChange={e => {
+                                  const next = [...variants];
+                                  next[i] = { ...next[i], name: e.target.value };
+                                  setVariants(next);
+                                }}
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                              {/* Yang diisi SELISIH, bukan harga akhir — biar
+                                  pas harga pokok naik, pemilik cukup ubah satu
+                                  angka di atas dan semua varian ikut. Harga
+                                  akhirnya tetap ditampilin di sebelah supaya
+                                  dia nggak perlu ngitung di kepala. */}
+                              <div className="relative w-32">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">Rp</span>
+                                <input type="number" placeholder="0"
+                                  value={v.price_adjustment}
+                                  onChange={e => {
+                                    const next = [...variants];
+                                    next[i] = { ...next[i], price_adjustment: e.target.value };
+                                    setVariants(next);
+                                  }}
+                                  className="w-full pl-7 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                              </div>
+                              <span className={`w-24 text-right text-xs ${final < 0 ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
+                                = {fmt(final)}
+                              </span>
+                              <button type="button"
+                                onClick={() => setVariants(variants.filter((_, j) => j !== i))}
+                                className="p-1.5 text-gray-400 hover:text-red-600" title="Hapus varian">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Angka Rp itu <strong>selisih</strong> dari harga jual, bukan harga akhir.
+                        Isi <strong>2000</strong> kalau Dingin lebih mahal Rp2.000, atau <strong>-3000</strong>
+                        {' '}kalau ukuran kecil lebih murah. Kosong / 0 = harga sama.
+                      </p>
+                      {variants.some(v => (parseFloat(productForm.base_price) || 0) + (parseFloat(v.price_adjustment || '0') || 0) < 0) && (
+                        <p className="text-xs text-red-600 font-semibold mt-1">
+                          Ada varian yang bikin harga jadi minus — perbaiki dulu sebelum simpan.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Foto Produk (Opsional)</label>
                   <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />

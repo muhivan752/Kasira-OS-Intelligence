@@ -8,12 +8,12 @@ import 'tables.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [Products, Orders, OrderItems, Payments, Shifts, CashActivities, Ingredients, Recipes, RecipeIngredients, OutletStocks])
+@DriftDatabase(tables: [Products, ProductVariants, Orders, OrderItems, Payments, Shifts, CashActivities, Ingredients, Recipes, RecipeIngredients, OutletStocks])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -40,6 +40,14 @@ class AppDatabase extends _$AppDatabase {
             // Additive: existing items NULL = unpaid (atau historical paid via order.status='completed').
             await m.addColumn(orderItems, orderItems.paidAt);
             await m.addColumn(orderItems, orderItems.paidPaymentId);
+          }
+          if (from < 7) {
+            // Migration 090 — varian produk (Hot/Ice, size, level gula).
+            // Tabel baru, pull-only. Device yang upgrade mulai kosong lalu
+            // keisi di sync berikutnya: `last_sync_hlc` device lama nunjuk ke
+            // masa lalu, dan varian yang udah ada `updated_at`-nya lebih baru
+            // dari situ, jadi semuanya ketarik tanpa perlu reset sync.
+            await m.createTable(productVariants);
           }
         },
       );

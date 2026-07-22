@@ -18,6 +18,11 @@ class CartItem {
   final String name;
   final double price;
   final double? stockQty; // null = stok tidak diaktifkan
+  /// Varian yang dipilih (Hot/Ice, size). Null = produk tanpa varian.
+  final String? variantId;
+  /// Nama varian, disimpan supaya keranjang & struk tetap kebaca walau
+  /// variannya nanti dihapus pemilik.
+  final String? variantName;
   int qty;
   String? notes;
 
@@ -26,9 +31,25 @@ class CartItem {
     required this.name,
     required this.price,
     this.stockQty,
+    this.variantId,
+    this.variantName,
     this.qty = 1,
     this.notes,
   });
+
+  /// Identitas BARIS keranjang — bukan `productId`.
+  ///
+  /// Ini inti perubahan varian: "Kopi Susu (Panas)" dan "Kopi Susu (Dingin)"
+  /// itu produk yang sama tapi dua baris berbeda dengan harga berbeda. Kalau
+  /// keranjang masih dikunci per `productId`, tap Dingin sesudah Panas cuma
+  /// nambahin qty baris Panas — pelanggan dapet minuman yang salah DAN harga
+  /// yang salah. Semua operasi keranjang (tambah, +, -, hapus) wajib pakai
+  /// kunci ini.
+  String get lineKey => '$productId::${variantId ?? ''}';
+
+  /// Nama buat ditampilin & dicetak: "Kopi Susu (Dingin)".
+  String get displayName =>
+      variantName == null || variantName!.isEmpty ? name : '$name ($variantName)';
 
   double get subtotal => price * qty;
 
@@ -37,6 +58,8 @@ class CartItem {
         name: name,
         price: price,
         stockQty: stockQty,
+        variantId: variantId,
+        variantName: variantName,
         qty: qty ?? this.qty,
         notes: notes ?? this.notes,
       );
@@ -196,8 +219,12 @@ class CartNotifier extends StateNotifier<CartState> {
 
   String _generateUuid() => _uuid.v4();
 
+  // Semua operasi di bawah pakai `lineKey` (produk + varian), BUKAN productId.
+  // Parameternya masih dinamai `lineKey` dan pemanggil wajib ngirim
+  // `item.lineKey` — buat produk tanpa varian nilainya "productId::" jadi
+  // perilakunya persis sama kayak dulu.
   void addItem(CartItem item) {
-    final existing = state.items.indexWhere((i) => i.productId == item.productId);
+    final existing = state.items.indexWhere((i) => i.lineKey == item.lineKey);
     if (existing >= 0) {
       final updated = List<CartItem>.from(state.items);
       updated[existing] = updated[existing].copyWith(qty: updated[existing].qty + 1);
@@ -208,19 +235,19 @@ class CartNotifier extends StateNotifier<CartState> {
     _recalcCharges();
   }
 
-  void incrementItem(String productId) {
+  void incrementItem(String lineKey) {
     final updated = state.items.map((i) {
-      if (i.productId == productId) return i.copyWith(qty: i.qty + 1);
+      if (i.lineKey == lineKey) return i.copyWith(qty: i.qty + 1);
       return i;
     }).toList();
     state = state.copyWith(items: updated);
     _recalcCharges();
   }
 
-  void decrementItem(String productId) {
+  void decrementItem(String lineKey) {
     final updated = state.items
         .map((i) {
-          if (i.productId == productId) return i.copyWith(qty: i.qty - 1);
+          if (i.lineKey == lineKey) return i.copyWith(qty: i.qty - 1);
           return i;
         })
         .where((i) => i.qty > 0)
@@ -229,9 +256,9 @@ class CartNotifier extends StateNotifier<CartState> {
     _recalcCharges();
   }
 
-  void removeItem(String productId) {
+  void removeItem(String lineKey) {
     state = state.copyWith(
-        items: state.items.where((i) => i.productId != productId).toList());
+        items: state.items.where((i) => i.lineKey != lineKey).toList());
     _recalcCharges();
   }
 
@@ -383,6 +410,7 @@ class CartNotifier extends StateNotifier<CartState> {
             'items': state.items
                 .map((i) => {
                       'product_id': i.productId,
+                      if (i.variantId != null) 'product_variant_id': i.variantId,
                       'quantity': i.qty,
                       'unit_price': i.price,
                       'total_price': i.price * i.qty,
@@ -491,6 +519,7 @@ class CartNotifier extends StateNotifier<CartState> {
           'items': state.items
               .map((i) => {
                     'product_id': i.productId,
+                    if (i.variantId != null) 'product_variant_id': i.variantId,
                     'quantity': i.qty,
                     'unit_price': i.price,
                     'total_price': i.price * i.qty,
@@ -566,6 +595,7 @@ class CartNotifier extends StateNotifier<CartState> {
             id: drift.Value(_generateUuid()),
             orderId: drift.Value(orderId),
             productId: drift.Value(item.productId),
+            productVariantId: drift.Value(item.variantId),
             quantity: drift.Value(item.qty),
             unitPrice: drift.Value(item.price),
             discountAmount: const drift.Value(0),

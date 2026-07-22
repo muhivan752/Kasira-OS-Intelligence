@@ -163,7 +163,10 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
       dateTime: dateFormat.format(now),
       items: widget.items
           .map((i) => ReceiptLineItem(
-                name: i.name,
+                // displayName, bukan name — struk WAJIB nulis "(Dingin)".
+                // Tanpa ini pelanggan protes dapet yang panas dan kasir nggak
+                // punya bukti apa yang dipesan.
+                name: i.displayName,
                 qty: i.qty,
                 price: i.price,
                 notes: i.notes,

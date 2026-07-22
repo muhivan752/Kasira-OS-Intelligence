@@ -25,6 +25,7 @@ from backend.services.audit import log_audit
 from backend.services.stock_service import deduct_stock
 from backend.services.ingredient_stock_service import deduct_ingredients_for_product
 from backend.api.routes.products import compute_recipe_stock
+from backend.services.variant_utils import resolve_variant, variant_price
 from backend.models.event import Event
 import datetime
 
@@ -62,6 +63,11 @@ async def invalidate_storefront_cache_by_tenant(tenant_id: uuid.UUID, db: AsyncS
 
 class ConnectOrderItemInput(BaseModel):
     product_id: uuid.UUID
+    # Varian pilihan pelanggan (Hot/Ice, size). Harga TIDAK pernah dikirim dari
+    # sini — dihitung ulang di server dari base_price + price_adjustment.
+    # Storefront itu endpoint publik, apa pun yang datang dari klien soal harga
+    # harus dianggap usulan, bukan fakta.
+    product_variant_id: Optional[uuid.UUID] = None
     qty: int = Field(gt=0)
     notes: Optional[str] = None
 
@@ -203,7 +209,19 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
                 "stock": stock,
                 "is_available": (not p.stock_enabled) or stock > 0,
                 "category_id": str(p.category_id) if p.category_id else None,
-                "image_url": p.image_url
+                "image_url": p.image_url,
+                # Varian aktif saja — yang lagi dimatikan pemilik (es batu
+                # habis) nggak boleh bisa dipesan dari storefront. Harga
+                # dikirim SUDAH JADI supaya halaman pelanggan nggak perlu
+                # ngitung sendiri dan nggak mungkin beda sama server.
+                "variants": [
+                    {
+                        "id": str(v.id),
+                        "name": v.name,
+                        "price": float(variant_price(p, v)),
+                    }
+                    for v in p.variants if v.is_active
+                ],
             } for p, stock in products_with_stock
         ],
         "menu": [
@@ -385,14 +403,27 @@ async def create_connect_order(
                     raise HTTPException(status_code=400, detail=f"Stok habis untuk produk {product.name}")
             stock_deductions.append((product, item_input.qty))
 
-        item_total = product.base_price * item_input.qty
+        # Varian: wajib divalidasi milik produk ini. Endpoint publik, jadi
+        # tanpa cek ini siapa pun bisa pasangin variant_id murah ke produk
+        # mahal (atau sebaliknya) lewat request buatan tangan.
+        try:
+            variant = await resolve_variant(db, product.id, item_input.product_variant_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        unit_price = variant_price(product, variant)
+        item_total = unit_price * item_input.qty
         subtotal += item_total
+
+        item_modifiers = {"variant_name": variant.name} if variant is not None else None
 
         order_items.append(OrderItem(
             product_id=product.id,
+            product_variant_id=variant.id if variant is not None else None,
             quantity=item_input.qty,
-            unit_price=product.base_price,
+            unit_price=unit_price,
             total_price=item_total,
+            modifiers=item_modifiers,
             notes=item_input.notes
         ))
 

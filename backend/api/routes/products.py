@@ -1,6 +1,8 @@
 from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timezone
+from decimal import Decimal
+import logging
 import math
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -11,18 +13,23 @@ from sqlalchemy.orm import selectinload
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
 from backend.models.user import User
-from backend.models.product import Product, OutletStock
+from backend.models.product import Product, OutletStock, ProductVariant
 from backend.models.tenant import Tenant
 from backend.models.brand import Brand
 from backend.models.outlet import Outlet
 from backend.models.recipe import Recipe, RecipeIngredient
-from backend.schemas.product import ProductCreate, ProductUpdate, ProductResponse
+from backend.schemas.product import (
+    ProductCreate, ProductUpdate, ProductResponse,
+    ProductVariantResponse, ProductVariantBulkSet,
+)
 from backend.schemas.stock import ProductRestock
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.services.stock_service import restock_product as svc_restock
 from backend.api.deps import validate_brand_ownership, validate_product_ownership
 from backend.services import embedding_service
+
+logger = logging.getLogger(__name__)
 
 
 async def compute_recipe_stock(db: AsyncSession, outlet_id: UUID, product_ids: List[UUID]) -> dict:
@@ -193,6 +200,33 @@ async def create_product(
     )
     db.add(product)
     await db.flush()
+
+    # Varian ikut sekalian kalau dikirim — pemilik yang nambah "Kopi Susu"
+    # biasanya udah tahu mau ada Panas & Dingin detik itu juga. Divalidasi sama
+    # persis kayak endpoint set_product_variants: nama unik + harga akhir nggak
+    # boleh minus.
+    if product_in.variants:
+        seen_names = set()
+        base = Decimal(str(product.base_price or 0))
+        for idx, v in enumerate(product_in.variants):
+            key = v.name.strip().lower()
+            if not key:
+                raise HTTPException(status_code=400, detail="Nama varian tidak boleh kosong")
+            if key in seen_names:
+                raise HTTPException(status_code=400, detail=f"Nama varian '{v.name}' dobel")
+            seen_names.add(key)
+            if base + Decimal(str(v.price_adjustment or 0)) < 0:
+                raise HTTPException(
+                    status_code=400, detail=f"Varian '{v.name}' bikin harga jadi minus"
+                )
+            db.add(ProductVariant(
+                product_id=product.id,
+                name=v.name.strip(),
+                price_adjustment=v.price_adjustment,
+                is_active=v.is_active,
+                sort_order=idx,
+            ))
+        await db.flush()
 
     # Audit log
     await log_audit(
@@ -510,3 +544,159 @@ async def delete_product(
         request_id=request.state.request_id,
         message="Product deleted successfully"
     )
+
+
+# ─── Varian produk (Hot/Ice, size, level gula) ──────────────────────────────
+#
+# Semua tier. Varian itu kebutuhan dasar warung kopi, bukan fitur analitik —
+# menggate-nya ke Pro cuma bikin merchant Starter balik bikin dua produk
+# terpisah "Kopi Hot" + "Kopi Ice" yang justru bikin data mereka berantakan.
+
+
+@router.get("/{product_id}/variants", response_model=StandardResponse[List[ProductVariantResponse]])
+async def read_product_variants(
+    request: Request,
+    product_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Daftar varian satu produk (yang belum dihapus), urut sort_order."""
+    product = await validate_product_ownership(db, product_id, current_user.tenant_id)
+    return StandardResponse(
+        success=True,
+        data=[ProductVariantResponse.model_validate(v) for v in product.variants],
+        request_id=request.state.request_id,
+    )
+
+
+@router.put("/{product_id}/variants", response_model=StandardResponse[List[ProductVariantResponse]])
+async def set_product_variants(
+    request: Request,
+    product_id: UUID,
+    body: ProductVariantBulkSet,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Ganti seluruh daftar varian satu produk dalam satu transaksi.
+
+    Bentuknya sengaja "kirim daftar final", bukan tambah/ubah/hapus satu-satu:
+    form produk di dashboard cuma punya satu tombol Simpan, dan kalau tiap baris
+    jadi request sendiri, gagal di tengah ninggalin daftar setengah jadi tanpa
+    pemiliknya sadar.
+
+    Varian yang hilang dari daftar di-SOFT delete (Rule #7) — order lama masih
+    nunjuk ke sana lewat `order_items.product_variant_id`, jadi barisnya wajib
+    tetap ada biar struk & riwayat nggak jadi "(varian terhapus)".
+
+    Nama dipakai sebagai identitas buat nyocokin baris lama dengan baru. Jadi
+    ganti harga "Dingin" itu UPDATE (id tetap, order lama tetap nyambung),
+    sedangkan ganti nama "Dingin"→"Es" itu hapus+bikin baru. Itu keputusan
+    sadar: pemilik yang ngetik nama beda memang lagi bikin pilihan yang beda.
+    """
+    product = await validate_product_ownership(db, product_id, current_user.tenant_id)
+
+    # Nama duplikat bikin kasir nggak bisa bedain dua tombol yang sama persis.
+    seen_names = set()
+    for v in body.variants:
+        key = v.name.strip().lower()
+        if not key:
+            raise HTTPException(status_code=400, detail="Nama varian tidak boleh kosong")
+        if key in seen_names:
+            raise HTTPException(
+                status_code=400, detail=f"Nama varian '{v.name}' dobel — bikin bingung kasir"
+            )
+        seen_names.add(key)
+
+    # Harga akhir nggak boleh minus. Dicegat di sini biar pemilik dapet pesan
+    # jelas, bukan diam-diam ke-clamp jadi 0 sama `variant_price()`.
+    base = Decimal(str(product.base_price or 0))
+    for v in body.variants:
+        if base + Decimal(str(v.price_adjustment or 0)) < 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Varian '{v.name}' bikin harga jadi minus "
+                    f"(harga produk Rp{int(base):,} dikurangi Rp{abs(int(v.price_adjustment)):,})"
+                ),
+            )
+
+    existing = {v.name.strip().lower(): v for v in product.variants}
+    now = datetime.now(timezone.utc)
+    before = [{"name": v.name, "price_adjustment": float(v.price_adjustment)} for v in product.variants]
+
+    kept = set()
+    for idx, incoming in enumerate(body.variants):
+        key = incoming.name.strip().lower()
+        kept.add(key)
+        row = existing.get(key)
+        if row is None:
+            row = ProductVariant(product_id=product.id, name=incoming.name.strip())
+            db.add(row)
+        else:
+            row.name = incoming.name.strip()
+            row.row_version = (row.row_version or 0) + 1
+        row.price_adjustment = incoming.price_adjustment
+        row.is_active = incoming.is_active
+        # Urutan tampil = urutan baris di form. Pemilik nyusun sendiri dengan
+        # drag/urutan ketik, nggak perlu ngisi angka.
+        row.sort_order = idx
+
+    for key, row in existing.items():
+        if key not in kept:
+            row.deleted_at = now
+            row.row_version = (row.row_version or 0) + 1
+
+    await db.flush()
+
+    await log_audit(
+        db=db,
+        action="UPDATE",
+        entity="product_variants",
+        entity_id=product.id,
+        before_state={"variants": before},
+        after_state={"variants": [
+            {"name": v.name.strip(), "price_adjustment": float(v.price_adjustment)}
+            for v in body.variants
+        ]},
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+
+    # `expire_on_commit=False` (backend/core/database.py:27) — jadi commit TIDAK
+    # nge-expire objek, dan `select()` ulang bakal ngasih balik instance yang
+    # sama dari identity map lengkap dengan koleksi `variants` versi LAMA yang
+    # udah ke-load sebelum kita nambah baris. Efeknya response balik kosong
+    # padahal datanya masuk ke DB dengan benar — persis kejadian pas tes
+    # pertama. `expire()` maksa relasinya dibaca ulang dari DB.
+    db.expire(product)
+    refreshed = (await db.execute(
+        select(Product).where(Product.id == product_id)
+    )).scalar_one()
+
+    # Storefront nge-cache menu 60 detik — tanpa ini varian baru nggak muncul
+    # di halaman pelanggan sampai cache-nya lewat (gotcha #8).
+    await _invalidate_storefront_cache(db, current_user.tenant_id)
+
+    return StandardResponse(
+        success=True,
+        data=[ProductVariantResponse.model_validate(v) for v in refreshed.variants],
+        request_id=request.state.request_id,
+        message="Varian tersimpan",
+    )
+
+
+async def _invalidate_storefront_cache(db: AsyncSession, tenant_id: UUID) -> None:
+    """Buang cache storefront semua outlet tenant ini (gotcha #8).
+
+    Import-nya di dalam fungsi, BUKAN di atas file: `connect.py` udah
+    ngimpor `compute_recipe_stock` dari modul ini, jadi impor di level modul
+    bikin lingkaran. Fail-silent — Redis mati nggak boleh bikin simpan varian
+    gagal; efek terburuknya menu di storefront telat maksimal 60 detik.
+    """
+    try:
+        from backend.api.routes.connect import invalidate_storefront_cache_by_tenant
+
+        await invalidate_storefront_cache_by_tenant(tenant_id, db)
+    except Exception:
+        logger.warning("gagal clear cache storefront tenant=%s", tenant_id, exc_info=True)

@@ -11,7 +11,7 @@ from backend.api import deps
 from backend.schemas.sync import SyncRequest, SyncResponse, SyncPayload
 from backend.models.user import User
 from backend.models.category import Category
-from backend.models.product import Product
+from backend.models.product import Product, ProductVariant
 from backend.models.order import Order, OrderItem
 from backend.models.payment import Payment
 from backend.models.outlet import Outlet
@@ -332,7 +332,8 @@ async def sync_data(
         outlet_stock=[],
         ingredients=ing_records,
         recipes=[],
-        recipe_ingredients=[]
+        recipe_ingredients=[],
+        product_variants=[]
     )
 
     # Aggregate has_more tracker — any table filled limit = page berikutnya ada
@@ -449,6 +450,28 @@ async def sync_data(
     pull_changes.recipe_ingredients = [_row_to_dict(r, has_row_version=False) for r in ri_records]
     has_more_any = has_more_any or ri_more
 
+    # Custom pull untuk product_variants (join Product buat scoping brand).
+    # Punya row_version, tapi nggak lewat get_table_changes karena filter-nya
+    # brand_id ada di tabel induk, bukan di tabel ini.
+    #
+    # Baris yang di-soft delete SENGAJA ikut ditarik (nggak difilter
+    # deleted_at): device offline harus dikasih tahu varian mana yang dicabut,
+    # kalau disaring di server barisnya cuma "hilang dari hasil" dan Drift
+    # lokal nyimpen varian hantu selamanya. Flutter yang nandain isDeleted.
+    stmt_pv = select(ProductVariant).join(
+        Product, ProductVariant.product_id == Product.id
+    ).filter(Product.brand_id == brand_id)
+    stmt_pv = _apply_delta_filter(stmt_pv, ProductVariant)
+    stmt_pv = stmt_pv.order_by(
+        ProductVariant.updated_at.asc(), ProductVariant.row_version.asc(), ProductVariant.id.asc()
+    ).limit(page_limit + 1)
+    pv_records = (await db.execute(stmt_pv)).scalars().all()
+    pv_more = len(pv_records) > page_limit
+    if pv_more:
+        pv_records = pv_records[:page_limit]
+    pull_changes.product_variants = [_row_to_dict(r) for r in pv_records]
+    has_more_any = has_more_any or pv_more
+
     # Custom pull for cash_activities (join Shift untuk outlet scoping)
     stmt = select(CashActivity).join(Shift).filter(Shift.outlet_id == outlet_id)
     stmt = _apply_delta_filter(stmt, CashActivity)
@@ -516,6 +539,7 @@ async def sync_data(
             ("ingredients", pull_changes.ingredients),
             ("recipes", pull_changes.recipes),
             ("recipe_ingredients", pull_changes.recipe_ingredients),
+            ("product_variants", pull_changes.product_variants),
         ):
             observe_sync_volume(table_name, "pull", len(records))
         # Push volume (client → server changes count)

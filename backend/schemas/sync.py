@@ -13,6 +13,11 @@ class SyncPayload(BaseModel):
     ingredients: List[Dict[str, Any]] = []
     recipes: List[Dict[str, Any]] = []
     recipe_ingredients: List[Dict[str, Any]] = []
+    # Varian produk (Hot/Ice, size). PULL-ONLY: dikelola dari dashboard, kasir
+    # nggak bikin varian dari HP. Klien boleh ngirim list ini tapi server
+    # mengabaikannya — sengaja, biar nggak ada jalur diam-diam yang bisa ngubah
+    # harga jual dari device.
+    product_variants: List[Dict[str, Any]] = []
 
 class SyncRequest(BaseModel):
     last_sync_hlc: Optional[str] = None
