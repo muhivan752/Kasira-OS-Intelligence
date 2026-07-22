@@ -702,62 +702,52 @@ export default function MenuPage() {
                     </div>
                   )}
                 </div>
-                {/* Harga Beli (Modal) — Starter margin tracking. Optional, addit-
-                    ive di backend (Pro recipe ignore field, pake HPP via
-                    unit_utils.py). Show live margin preview kalau dua harga
-                    udah diisi. Helper text di-clarify supaya user non-technical
-                    (cafe owner) gak bingung antara "modal" vs "stok". */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Harga Beli / Modal (Rp) <span className="text-xs font-normal text-gray-500">— opsional</span>
-                  </label>
-                  <input type="number" min="0" placeholder="0"
-                    value={productForm.buy_price}
-                    onChange={e => setProductForm({ ...productForm, buy_price: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                  {(() => {
-                    const sell = parseFloat(productForm.base_price);
-                    const buy = parseFloat(productForm.buy_price);
-                    if (!isNaN(sell) && !isNaN(buy) && sell > 0 && buy >= 0) {
-                      const margin = sell - buy;
-                      const pct = (margin / sell) * 100;
-                      const negative = margin < 0;
-                      return (
-                        <p className={`text-xs mt-1 ${negative ? 'text-red-600 font-semibold' : 'text-green-600'}`}>
-                          Margin: Rp {margin.toLocaleString('id-ID')} ({pct.toFixed(1)}%)
-                          {negative && ' — rugi!'}
-                        </p>
-                      );
-                    }
-                    return (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Modal = harga beli ke supplier (bukan stok!). Contoh: jual nasi 18rb, modal beli bahan 8rb → margin 10rb. Wajib diisi kalau mau lihat untung-rugi per produk di Laporan.
-                      </p>
-                    );
-                  })()}
-                </div>
-                {/* ── Varian (Hot/Ice, size, level gula) ──────────────────
-                    Mulai kosong. Baris ditambah satu-satu lewat tombol —
-                    JANGAN auto-render preset "Panas/Dingin": mayoritas produk
-                    (nasi, gorengan, rokok) nggak bervarian, dan baris yang
-                    nongol sendiri bikin pemilik ngira dia wajib ngisi. */}
-                <div className="border-t border-gray-200 pt-4">
+                {/* ── Pilihan / Varian (Hot/Ice, size, level gula) ─────────
+                    Default TETAP kosong — mayoritas produk (nasi, gorengan,
+                    rokok) nggak bervarian, dan baris yang nongol sendiri bikin
+                    pemilik ngira dia wajib ngisi.
+
+                    Tapi begitu tombolnya DIPENCET, langsung dibikin DUA baris
+                    kosong sekaligus (nama tetap kosong, cuma placeholder-nya
+                    yang nyontohin). Satu pilihan sendirian itu nggak ada
+                    artinya — "Dingin" doang bukan pilihan, kasir nggak punya
+                    lawannya. Minimal yang masuk akal memang dua.
+
+                    Posisinya SENGAJA tepat di bawah Harga Jual, bukan di bawah
+                    Harga Beli: waktu ditaruh di bawah, Ivan sendiri nggak nemu
+                    menunya karena ketutup paragraf penjelasan modal. */}
+                <div className="border border-blue-100 bg-blue-50/40 rounded-xl p-3.5">
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Varian <span className="text-xs font-normal text-gray-500">— opsional</span>
+                    {/* Judulnya sengaja nyebut contoh konkret, bukan cuma
+                        "Varian". Pemilik warung nyarinya "gimana nambah es",
+                        bukan istilah teknis — Ivan sendiri nggak nemu menu ini
+                        waktu namanya cuma "Varian". */}
+                    <label className="block text-sm font-semibold text-gray-800">
+                      Pilihan / Varian
+                      <span className="block text-xs font-normal text-gray-500 mt-0.5">
+                        Panas &amp; Dingin (es), ukuran, level gula — opsional
+                      </span>
                     </label>
-                    <button type="button"
-                      onClick={() => setVariants([...variants, { name: '', price_adjustment: '0', is_active: true }])}
-                      className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
-                      <Plus className="w-3.5 h-3.5" /> Tambah varian
-                    </button>
                   </div>
 
                   {variants.length === 0 ? (
-                    <p className="text-xs text-gray-500">
-                      Contoh: Panas / Dingin, atau Reguler / Large. Kasir bakal ditanya pilihan ini
-                      sebelum produk masuk keranjang. Kosongkan kalau produknya cuma satu macam.
-                    </p>
+                    <>
+                      <p className="text-xs text-gray-600 mb-2.5">
+                        Kalau produk ini bisa dipesan <strong>panas atau dingin</strong> (atau ada
+                        ukuran R/L), tambahin di sini. Kasir bakal ditanya pilihannya sebelum
+                        produk masuk keranjang, jadi nggak perlu bikin dua produk terpisah.
+                      </p>
+                      {/* Tombolnya besar & sendirian pas kosong — ini satu-satunya
+                          jalan masuk, jadi nggak boleh berupa link kecil di pojok. */}
+                      <button type="button"
+                        onClick={() => setVariants([
+                          { name: '', price_adjustment: '0', is_active: true },
+                          { name: '', price_adjustment: '0', is_active: true },
+                        ])}
+                        className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-blue-300 rounded-lg text-sm font-medium text-blue-700 hover:bg-blue-50">
+                        <Plus className="w-4 h-4" /> Tambah pilihan (mis. Panas / Dingin)
+                      </button>
+                    </>
                   ) : (
                     <>
                       <div className="space-y-2">
@@ -767,7 +757,12 @@ export default function MenuPage() {
                           const final = base + adj;
                           return (
                             <div key={i} className="flex items-center gap-2">
-                              <input type="text" placeholder="Nama varian (mis. Dingin)"
+                              {/* Placeholder ikut nomor baris: baris pertama
+                                  "Panas", kedua "Dingin". Contoh yang beda tiap
+                                  baris bikin polanya kebaca tanpa perlu dibaca
+                                  penjelasannya. */}
+                              <input type="text"
+                                placeholder={i === 0 ? 'Panas' : i === 1 ? 'Dingin (es)' : 'Nama pilihan'}
                                 value={v.name}
                                 onChange={e => {
                                   const next = [...variants];
@@ -803,6 +798,11 @@ export default function MenuPage() {
                           );
                         })}
                       </div>
+                      <button type="button"
+                        onClick={() => setVariants([...variants, { name: '', price_adjustment: '0', is_active: true }])}
+                        className="mt-2 flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
+                        <Plus className="w-3.5 h-3.5" /> Tambah pilihan lagi
+                      </button>
                       <p className="text-xs text-gray-500 mt-2">
                         Angka Rp itu <strong>selisih</strong> dari harga jual, bukan harga akhir.
                         Isi <strong>2000</strong> kalau Dingin lebih mahal Rp2.000, atau <strong>-3000</strong>
@@ -817,6 +817,40 @@ export default function MenuPage() {
                   )}
                 </div>
 
+                {/* Harga Beli (Modal) — Starter margin tracking. Optional, addit-
+                    ive di backend (Pro recipe ignore field, pake HPP via
+                    unit_utils.py). Show live margin preview kalau dua harga
+                    udah diisi. Helper text di-clarify supaya user non-technical
+                    (cafe owner) gak bingung antara "modal" vs "stok". */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Harga Beli / Modal (Rp) <span className="text-xs font-normal text-gray-500">— opsional</span>
+                  </label>
+                  <input type="number" min="0" placeholder="0"
+                    value={productForm.buy_price}
+                    onChange={e => setProductForm({ ...productForm, buy_price: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  {(() => {
+                    const sell = parseFloat(productForm.base_price);
+                    const buy = parseFloat(productForm.buy_price);
+                    if (!isNaN(sell) && !isNaN(buy) && sell > 0 && buy >= 0) {
+                      const margin = sell - buy;
+                      const pct = (margin / sell) * 100;
+                      const negative = margin < 0;
+                      return (
+                        <p className={`text-xs mt-1 ${negative ? 'text-red-600 font-semibold' : 'text-green-600'}`}>
+                          Margin: Rp {margin.toLocaleString('id-ID')} ({pct.toFixed(1)}%)
+                          {negative && ' — rugi!'}
+                        </p>
+                      );
+                    }
+                    return (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Modal = harga beli ke supplier (bukan stok!). Contoh: jual nasi 18rb, modal beli bahan 8rb → margin 10rb. Wajib diisi kalau mau lihat untung-rugi per produk di Laporan.
+                      </p>
+                    );
+                  })()}
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Foto Produk (Opsional)</label>
                   <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
