@@ -95,6 +95,22 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
     - **Semua tier.** Varian itu kebutuhan dasar warung kopi, bukan fitur analitik. Gate ke Pro = merchant Starter balik bikin dua produk terpisah yang bikin resep & stok kembar.
     - **Belum nyambung ke resep/stok** (keputusan sadar, wave berikutnya): Ice butuh es batu, Large butuh susu lebih banyak. Sekarang varian cuma ngubah harga. Kalau nanti disambung, itu nyentuh 6+ stock code path — baca ARCHITECTURE.md dulu.
 
+27. **Jangan "benerin" app DAPUR jadi Aurora — dia sengaja dark.** Per 2026-09-01 app POS (`kasir_app`) 100% pakai `KasiraDS` (aurora light). `lib/features/dapur/**` (7 file) TETAP pakai `AppColors` dark emerald, dan `app_theme.dart` TETAP nyimpen `lightTheme`/`darkTheme` lama buat `main_dapur.dart`. Itu **keputusan Ivan**, bukan kerjaan yang kelupaan: layar dapur ngadep panas/silau, penggunanya barista yang lihat dari jarak jauh, dan binary-nya emang terpisah dari app kasir.
+    - Konsekuensi yang harus diterima apa adanya: `flutter analyze` nyisain 1 warning `_now` unused di `dapur_dashboard_page.dart:21`. Jangan dikejar.
+    - **Cara ngukur sisa kerjaan Aurora — pakai grep, JANGAN daftar screen.** Tracker per-screen di memory pernah basi parah: nulis "BELUM" buat 7 layar yang udah kelar berbulan-bulan, dan hampir bikin satu sesi ngerjain ulang semuanya.
+      ```bash
+      cd /var/www/kasira/kasir_app
+      for f in $(find lib/features lib/core/widgets -name "*.dart" | grep -v /dapur/); do
+        grep -q "Widget build" $f && ! grep -q KasiraDS $f && echo $f
+      done   # kosong = app POS udah full Aurora
+      ```
+28. **`flutter analyze` di VPS SELALU keluar 9 error `productVariants` — itu BUKAN bug.** `lib/core/database/app_database.g.dart` (drift generated) belum di-regenerate lokal sejak kerjaan varian. CI jalanin `dart run build_runner build` di step 49 **sebelum** `flutter analyze` di step 122, jadi di CI bersih. Flutter ADA di VPS (`/opt/flutter/bin`) — analyze lokal dulu sebelum bakar CI run, tapi saring dulu:
+    ```bash
+    /opt/flutter/bin/flutter analyze 2>&1 | grep 'error •' \
+      | grep -v 'productVariants\|ProductVariantLocal\|HasResultSet'
+    ```
+    Kosong = aman. Kalau lo panik lihat "9 errors" mentah, lo bakal ngejar hantu.
+
 ---
 
 ## ✅ CHECKLIST — Kalau Lo Edit...
