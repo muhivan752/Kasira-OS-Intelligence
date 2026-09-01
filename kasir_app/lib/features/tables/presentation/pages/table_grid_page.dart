@@ -165,8 +165,6 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
 
     final available = _tables.where((t) => t.status == TableStatus.available).length;
     final occupied = _tables.where((t) => t.status == TableStatus.occupied).length;
-    final reserved = _tables.where((t) => t.status == TableStatus.reserved).length;
-    final dirty = _tables.where((t) => t.status == TableStatus.dirty).length;
 
     return Scaffold(
       backgroundColor: KasiraDS.bgBase,
@@ -237,47 +235,6 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
                         ),
                       ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(TableStatus? status, String label, Color color) {
-    final isSelected = _filterStatus == status;
-    return GestureDetector(
-      onTap: () => setState(() => _filterStatus = status),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? color : KasiraDS.borderSubtle),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? color : KasiraDS.textMuted,
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatBadge(String label, int count, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          Text('$count $label', style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13)),
         ],
       ),
     );
@@ -524,39 +481,6 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
     ref.read(pendingNavigateToPosProvider.notifier).state = true;
   }
 
-  void _showTableDetail(TableModel table) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(table.name),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Kapasitas: ${table.capacity} kursi'),
-            const SizedBox(height: 8),
-            Text('Status: ${_statusConfig(table.status).statusLabel}'),
-            if (table.currentOrderId != null) ...[
-              const SizedBox(height: 8),
-              Text('Order: ${table.currentOrderId}'),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
-          if (table.status == TableStatus.available)
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                widget.onTableSelected?.call(table);
-              },
-              child: const Text('Pilih Meja'),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 class _TableStatusConfig {

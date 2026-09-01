@@ -12,8 +12,6 @@ import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/localization/business_labels.dart';
 import '../../../../core/sync/sync_provider.dart';
 import '../../../products/providers/products_provider.dart';
-import '../../../dashboard/providers/dashboard_provider.dart';
-import '../../../orders/providers/orders_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/tax_config_provider.dart';
 import '../../utils/post_payment_refresh.dart';

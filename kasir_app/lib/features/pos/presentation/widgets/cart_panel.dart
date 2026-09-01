@@ -11,8 +11,6 @@ import '../../providers/pos_mode_provider.dart';
 import '../../presentation/pages/receipt_preview_page.dart';
 import 'payment_modal.dart';
 import '../../../customers/presentation/widgets/customer_selection_modal.dart';
-import '../../../dashboard/providers/dashboard_provider.dart';
-import '../../../orders/providers/orders_provider.dart';
 import '../../../products/providers/products_provider.dart';
 import '../../../products/providers/variants_provider.dart';
 import 'variant_picker_sheet.dart';

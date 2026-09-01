@@ -6,7 +6,6 @@ import 'package:dio/dio.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/config/app_config.dart';
-import '../../../../core/database/app_database.dart';
 import '../../../../core/sync/sync_provider.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';

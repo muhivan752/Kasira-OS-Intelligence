@@ -8,7 +8,6 @@ import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/config/app_config.dart';
-import '../../../../core/database/app_database.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../../core/sync/sync_provider.dart';

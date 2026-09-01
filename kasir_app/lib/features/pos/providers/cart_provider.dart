@@ -7,8 +7,6 @@ import 'package:uuid/uuid.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/sync/sync_provider.dart';
-import '../../../core/sync/sync_service.dart';
-import '../../../core/utils/pn_counter.dart';
 import '../../../core/services/session_cache.dart';
 import 'tax_config_provider.dart';
 
@@ -191,13 +189,8 @@ String parseStockErrorDetail(dynamic detail, {String fallback = 'Gagal membuat p
 
 class CartNotifier extends StateNotifier<CartState> {
   final AppDatabase _db;
-  final SyncService _syncService;
   TaxConfig? _taxConfig;
-  // Batch #18 Rule #1: CartNotifier dapet injection SyncService biar offline
-  // PNCounter increment pake composite nodeId (sha256(device|user)) — bukan
-  // raw device_node_id yang bikin collision kalau user shift-switch cepat di
-  // device yang sama.
-  CartNotifier(this._db, this._syncService) : super(const CartState());
+  CartNotifier(this._db) : super(const CartState());
 
   void setTaxConfig(TaxConfig config) {
     _taxConfig = config;
@@ -321,8 +314,6 @@ class CartNotifier extends StateNotifier<CartState> {
     state = state.copyWith(isSubmitting: true, clearError: true);
 
     try {
-      final token = _cache.accessToken;
-      final tenantId = _cache.tenantId;
       final outletId = _cache.outletId;
       final shiftId = _cache.shiftSessionId;
 
@@ -794,8 +785,7 @@ class CartNotifier extends StateNotifier<CartState> {
 
 final cartProvider = StateNotifierProvider<CartNotifier, CartState>((ref) {
   final db = ref.watch(databaseProvider);
-  final syncService = ref.watch(syncServiceProvider);
-  final notifier = CartNotifier(db, syncService);
+  final notifier = CartNotifier(db);
 
   // Inject tax config when available
   ref.listen(taxConfigProvider, (_, next) {

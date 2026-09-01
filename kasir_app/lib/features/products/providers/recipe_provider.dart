@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart';
-import '../../../core/database/app_database.dart';
 import '../../../core/sync/sync_provider.dart';
 
 class RecipeDetail {

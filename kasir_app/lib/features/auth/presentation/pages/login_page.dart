@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -206,8 +207,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         error: e.response?.data['detail'] ?? 'Kode OTP salah atau kedaluwarsa',
       );
     } catch (e, stack) {
-      // debugPrint('[AUTH] verifyOtp error: $e');
-      // debugPrint('[AUTH] stack: $stack');
+      // Jejaknya dibuang = bug abadi (CLAUDE.md gotcha #20). Dikurung kDebugMode
+      // biar gak bocor ke logcat HP pemilik warung di build rilis.
+      if (kDebugMode) {
+        debugPrint('[AUTH] verifyOtp error: $e');
+        debugPrint('[AUTH] stack: $stack');
+      }
       state = state.copyWith(isLoading: false, error: 'Terjadi kesalahan sistem: $e');
     }
   }

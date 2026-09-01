@@ -4,7 +4,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/theme/kasira_ds.dart';
-import '../../../../core/database/app_database.dart';
 import '../../../../core/sync/sync_provider.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../providers/products_provider.dart';

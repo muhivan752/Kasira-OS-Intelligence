@@ -140,12 +140,10 @@ class SessionCache {
       SharedPreferences.getInstance().then((p) => p.setString('c_stock_mode', value)),
     ]);
     _stockModeChanged = previous != null && previous != value;
-    _previousStockMode = previous;
   }
 
   // Track stock mode changes for sync notification
   bool _stockModeChanged = false;
-  String? _previousStockMode;
   bool get stockModeChanged => _stockModeChanged;
   void clearStockModeChanged() => _stockModeChanged = false;
 

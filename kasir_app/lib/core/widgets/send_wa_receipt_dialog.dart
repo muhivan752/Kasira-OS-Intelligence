@@ -5,7 +5,13 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../config/app_config.dart';
 import '../services/session_cache.dart';
-import '../theme/app_colors.dart';
+import '../theme/kasira_ds.dart';
+import '../utils/phone_normalize.dart';
+
+/// Warna resmi WhatsApp — sengaja BUKAN token brand Kasira. Tombol WA di
+/// [showTabReceiptSheet] juga pakai hijau ini, jadi kasir lihat warna yang sama
+/// dari tombol yang dia pencet sampai dialog yang kebuka.
+const _waGreen = Color(0xFF25D366);
 
 /// Dialog input nomor WA + nama optional → kirim struk via WhatsApp.
 ///
@@ -65,26 +71,19 @@ class _SendWaReceiptDialogState extends State<SendWaReceiptDialog> {
     super.dispose();
   }
 
-  /// Normalize ke format internasional 62xxx (Fonnte requirement).
-  /// 0812... → 62812..., 8121... → 62812..., 62812... → 62812... (no change).
-  String _normalize(String input) {
-    var p = input.trim().replaceAll(RegExp(r'[\s\-\+]'), '');
-    if (p.startsWith('0')) {
-      p = '62${p.substring(1)}';
-    } else if (p.startsWith('8')) {
-      p = '62$p';
-    }
-    return p;
-  }
-
-  bool _isValid(String phone) {
-    final p = _normalize(phone);
-    return p.startsWith('62') && p.length >= 10 && p.length <= 15 && RegExp(r'^\d+$').hasMatch(p);
-  }
+  /// Normalisasi lewat [normalizeIndoPhone] — helper yang SAMA dipakai
+  /// `add_customer_modal`. Wajib satu sumber: `/payments/send-receipt` nge-upsert
+  /// customer by (tenant, phone), jadi kalau dua jalur ini beda format, satu
+  /// orang bisa jadi dua baris customer.
+  bool _isValid(String? normalized) =>
+      normalized != null &&
+      normalized.startsWith('62') &&
+      normalized.length >= 10 &&
+      normalized.length <= 15;
 
   Future<void> _submit() async {
-    final phoneRaw = _phoneController.text.trim();
-    if (!_isValid(phoneRaw)) {
+    final phone = normalizeIndoPhone(_phoneController.text);
+    if (!_isValid(phone)) {
       setState(() => _error = 'Nomor WA tidak valid (contoh: 081234567890)');
       return;
     }
@@ -92,6 +91,12 @@ class _SendWaReceiptDialogState extends State<SendWaReceiptDialog> {
       _isSending = true;
       _error = null;
     });
+
+    // Di-capture SEBELUM pop. Sesudah `Navigator.pop`, element dialog-nya mati
+    // dan `ScaffoldMessenger.of(context)` bisa throw "deactivated widget's
+    // ancestor" — snackbar-nya senyap gak muncul. Lihat CLAUDE.md gotcha #22.
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
 
     final cache = SessionCache.instance;
     final dio = Dio(BaseOptions(
@@ -106,7 +111,7 @@ class _SendWaReceiptDialogState extends State<SendWaReceiptDialog> {
         options: Options(headers: cache.authHeaders),
         data: {
           'order_id': widget.orderId,
-          'phone': _normalize(phoneRaw),
+          'phone': phone,
           if (widget.paymentId != null) 'payment_id': widget.paymentId,
           if (_nameController.text.trim().isNotEmpty) 'customer_name': _nameController.text.trim(),
         },
@@ -117,15 +122,16 @@ class _SendWaReceiptDialogState extends State<SendWaReceiptDialog> {
       final maskedPhone = data?['phone'] as String? ?? '****';
 
       if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
+      navigator.pop();
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
             sent
-                ? '✅ Struk terkirim ke $maskedPhone'
-                : '⚠️ Struk gagal terkirim — cek koneksi WA',
+                ? 'Struk terkirim ke $maskedPhone'
+                : 'Struk gagal terkirim — cek koneksi WA',
           ),
-          backgroundColor: sent ? AppColors.success : AppColors.warning,
+          backgroundColor: sent ? KasiraDS.success : KasiraDS.warning,
+          behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -151,92 +157,208 @@ class _SendWaReceiptDialogState extends State<SendWaReceiptDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Row(
-        children: const [
-          Icon(LucideIcons.send, color: AppColors.primary, size: 22),
-          SizedBox(width: 10),
-          Expanded(child: Text('Kirim Struk via WhatsApp', style: TextStyle(fontSize: 16))),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Customer terima struk + tersimpan di database (untuk loyalty & insight).',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _phoneController,
-            enabled: !_isSending,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s]')),
-              LengthLimitingTextInputFormatter(16),
-            ],
-            decoration: const InputDecoration(
-              labelText: 'Nomor WhatsApp *',
-              hintText: '081234567890',
-              prefixIcon: Icon(LucideIcons.phone, size: 18),
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-            autofocus: true,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _nameController,
-            enabled: !_isSending,
-            decoration: const InputDecoration(
-              labelText: 'Nama Customer (opsional)',
-              hintText: 'Misal: Pak Adit',
-              prefixIcon: Icon(LucideIcons.user, size: 18),
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+    return Dialog(
+      backgroundColor: KasiraDS.surfaceCard,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: KasiraDS.brXl),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        // Field pertama autofocus → keyboard naik. Tanpa scroll, dialog-nya
+        // overflow di HP pendek.
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _header(),
+              const SizedBox(height: 16),
+              Text(
+                'Customer terima struk, dan nomornya kesimpan buat loyalty & insight.',
+                style: KasiraDS.sans(size: 12.5, color: KasiraDS.textMuted, height: 1.35),
               ),
-              child: Row(
-                children: [
-                  const Icon(LucideIcons.alertCircle, color: AppColors.error, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
-                  ),
+              const SizedBox(height: 18),
+              _field(
+                label: 'Nomor WhatsApp *',
+                icon: LucideIcons.phone,
+                hint: '081234567890',
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                autofocus: true,
+                textInputAction: TextInputAction.next,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s]')),
+                  LengthLimitingTextInputFormatter(16),
                 ],
               ),
+              const SizedBox(height: 12),
+              _field(
+                label: 'Nama Customer (opsional)',
+                icon: LucideIcons.user,
+                hint: 'Misal: Pak Adit',
+                controller: _nameController,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _isSending ? null : _submit(),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                _errorBox(_error!),
+              ],
+              const SizedBox(height: 20),
+              _actions(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: _waGreen.withOpacity(0.12),
+            borderRadius: KasiraDS.brMd,
+          ),
+          child: const Icon(LucideIcons.messageCircle, color: _waGreen, size: 21),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 2),
+              Text('Kirim Struk',
+                  style: KasiraDS.display(size: 19, color: KasiraDS.textStrong)),
+              const SizedBox(height: 3),
+              Text('via WhatsApp',
+                  style: KasiraDS.eyebrow(color: KasiraDS.textMuted)),
+            ],
+          ),
+        ),
+        IconButton(
+          onPressed: _isSending ? null : () => Navigator.of(context).pop(),
+          icon: const Icon(LucideIcons.x, size: 20),
+          color: KasiraDS.textMuted,
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Tutup',
+        ),
+      ],
+    );
+  }
+
+  Widget _field({
+    required String label,
+    required IconData icon,
+    required String hint,
+    required TextEditingController controller,
+    TextInputType keyboardType = TextInputType.text,
+    List<TextInputFormatter>? inputFormatters,
+    bool autofocus = false,
+    TextInputAction? textInputAction,
+    ValueChanged<String>? onSubmitted,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: KasiraDS.sans(
+                size: 12, weight: FontWeight.w700, color: KasiraDS.textMuted)),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: KasiraDS.surfaceSunken,
+            borderRadius: KasiraDS.brMd,
+            border: Border.all(color: KasiraDS.borderSubtle, width: 1.5),
+          ),
+          child: TextField(
+            controller: controller,
+            enabled: !_isSending,
+            keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
+            autofocus: autofocus,
+            textInputAction: textInputAction,
+            onSubmitted: onSubmitted,
+            style: KasiraDS.sans(size: 15, color: KasiraDS.textStrong),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: KasiraDS.sans(size: 14.5, color: KasiraDS.textMuted),
+              prefixIcon: Icon(icon, size: 18, color: KasiraDS.textMuted),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 14),
             ),
-          ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _errorBox(String msg) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: KasiraDS.danger.withOpacity(0.10),
+        borderRadius: KasiraDS.brSm,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(LucideIcons.alertCircle, color: KasiraDS.danger, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(msg,
+                style: KasiraDS.sans(size: 12.5, color: KasiraDS.danger, height: 1.3)),
+          ),
         ],
       ),
-      actions: [
+    );
+  }
+
+  Widget _actions() {
+    return Row(
+      children: [
         TextButton(
           onPressed: _isSending ? null : () => Navigator.of(context).pop(),
-          child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+          style: TextButton.styleFrom(
+            foregroundColor: KasiraDS.textMuted,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          child: Text('Batal',
+              style: KasiraDS.sans(size: 14.5, weight: FontWeight.w600)),
         ),
-        ElevatedButton.icon(
-          onPressed: _isSending ? null : _submit,
-          icon: _isSending
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                )
-              : const Icon(LucideIcons.send, size: 16),
-          label: Text(_isSending ? 'Mengirim…' : 'Kirim'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
+        const SizedBox(width: 8),
+        Expanded(
+          child: SizedBox(
+            height: 50,
+            child: FilledButton.icon(
+              onPressed: _isSending ? null : _submit,
+              style: FilledButton.styleFrom(
+                backgroundColor: _waGreen,
+                disabledBackgroundColor: _waGreen.withOpacity(0.45),
+                foregroundColor: Colors.white,
+                disabledForegroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: KasiraDS.brMd),
+              ),
+              icon: _isSending
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(LucideIcons.send, size: 17),
+              label: Text(_isSending ? 'Mengirim...' : 'Kirim Struk',
+                  style: KasiraDS.sans(
+                      size: 15, weight: FontWeight.w700, color: Colors.white)),
+            ),
           ),
         ),
       ],
