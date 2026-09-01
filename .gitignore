@@ -18,3 +18,12 @@ __pycache__/
 load_test/results/
 load_test/config.json
 loadtest/
+
+# Flutter — artefak build lokal (VPS punya /opt/flutter, jadi ini kegenerate
+# tiap `flutter analyze`). Jangan ikut ke-commit.
+kasir_app/.dart_tool/
+kasir_app/.flutter-plugins-dependencies
+kasir_app/build/
+
+# TypeScript incremental build info
+tsconfig.tsbuildinfo
