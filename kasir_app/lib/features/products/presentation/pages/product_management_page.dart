@@ -93,10 +93,15 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
         backgroundColor: KasiraDS.bgBase,
         body: Column(
           children: [
-            // Header
+            // Header. SafeArea sama alasannya dengan tab Meja: halaman ini
+            // nempel di IndexedStack tanpa AppBar, jadi judulnya nabrak jam
+            // dan ikon sinyal kalau zona status bar nggak diambil.
             Container(
-              padding: const EdgeInsets.all(20),
               color: KasiraDS.surfaceCard,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+              padding: const EdgeInsets.all(20),
               child: Row(
                 children: [
                   Text('Produk & Stok',
@@ -135,6 +140,8 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
                     tooltip: 'Refresh',
                   ),
                 ],
+              ),
+                ),
               ),
             ),
 

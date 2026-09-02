@@ -217,6 +217,22 @@ class CartPanel extends ConsumerWidget {
 
   /// Dine-in: kirim order ke dapur, link ke tab — bayar nanti
   Future<void> _handleDineIn(BuildContext context, WidgetRef ref, CartState cart) async {
+    // Jaring pengaman: mode dine-in bisa nyisa tanpa meja (keranjang dikosongin,
+    // sesi lama). Antar ke pemilih meja, jangan cuma nolak.
+    if (cart.tableId == null) {
+      // Messenger diambil SEBELUM sheet-nya di-pop — sesudah pop context-nya
+      // udah mati (gotcha #22).
+      final messenger = ScaffoldMessenger.of(context);
+      _openTablePicker(context, ref);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Pilih ${BusinessLabels.getLabel('table').toLowerCase()} dulu buat pesanan ini'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
     final tableName = cart.tableName ?? BusinessLabels.getLabel('table');
     final addOrderCtx = ref.read(addOrderContextProvider);
 
@@ -573,6 +589,11 @@ class CartPanel extends ConsumerWidget {
           ElevatedButton(
             onPressed: () {
               ref.read(cartProvider.notifier).clearCart();
+              // clearCart() ikut ngebuang mejanya, jadi mode dine-in yang
+              // ketinggalan bikin keranjang nyangkut: tombol "Simpan ke meja"
+              // muncul terus tapi selalu ditolak "Pilih meja terlebih dahulu",
+              // sementara tombol pilih mejanya sendiri nggak ada.
+              ref.read(posModeProvider.notifier).state = PosMode.selection;
               Navigator.pop(ctx);
             },
             style: ElevatedButton.styleFrom(backgroundColor: KasiraDS.danger),
@@ -685,6 +706,21 @@ class _CartItemTile extends StatelessWidget {
   }
 }
 
+/// Balik ke pemilih meja dari dalam keranjang.
+///
+/// Di HP keranjang itu modal bottom sheet, jadi ganti mode aja nggak cukup:
+/// pemilih mejanya kebuka DI BAWAH sheet, layar kelihatan beku. Di tablet
+/// keranjang nempel di halaman (bukan route), makanya pop-nya cuma jalan
+/// kalau route-nya emang PopupRoute.
+void _openTablePicker(BuildContext context, WidgetRef ref) {
+  ref.read(cartProvider.notifier).setTable(null);
+  ref.read(posModeProvider.notifier).state = PosMode.dineInTableSelect;
+  final route = ModalRoute.of(context);
+  if (route is PopupRoute && Navigator.of(context).canPop()) {
+    Navigator.of(context).pop();
+  }
+}
+
 class _PosModeBadge extends ConsumerWidget {
   final CartState cart;
 
@@ -735,13 +771,14 @@ class _PosModeBadge extends ConsumerWidget {
                 ],
               ),
             ),
-            if (isDineIn && cart.tableName != null)
+            // Tanpa cabang "belum ada meja" keranjang jadi buntu: mode dine-in
+            // tapi mejanya kosong (kejadian tiap kali keranjang dikosongin
+            // lewat ikon tong sampah), dan satu-satunya tombol yang ada malah
+            // nolak jalan.
+            if (isDineIn)
               GestureDetector(
-                onTap: () {
-                  ref.read(cartProvider.notifier).setTable(null);
-                  ref.read(posModeProvider.notifier).state = PosMode.dineInTableSelect;
-                },
-                child: Text('Ganti',
+                onTap: () => _openTablePicker(context, ref),
+                child: Text(cart.tableName != null ? 'Ganti' : 'Pilih meja',
                     style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.brandPrimary)),
               ),
           ],

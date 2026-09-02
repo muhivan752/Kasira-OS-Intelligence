@@ -170,10 +170,15 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
       backgroundColor: KasiraDS.bgBase,
       body: Column(
         children: [
-          // Header
+          // Header. SafeArea WAJIB: halaman ini duduk di IndexedStack dashboard
+          // tanpa AppBar, jadi tanpa ini judul "Meja" + hitungan meja nabrak
+          // jam sama ikon sinyal di status bar (kelihatan di device 2 Sep 2026).
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
             color: KasiraDS.surfaceCard,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -208,9 +213,11 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
                 ],
               ],
             ),
+              ),
+            ),
           ),
 
-          // (Desain Meja: langsung ke grid — tanpa filter chips / stat badges.)
+          // (Desain Meja: langsung ke grid, tanpa filter chips atau stat badge.)
           const SizedBox(height: 6),
 
           // Table grid
