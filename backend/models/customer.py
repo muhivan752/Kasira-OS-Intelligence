@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, Integer, Numeric, Text, DateTime
+from sqlalchemy import Column, String, Boolean, Integer, Numeric, Text, DateTime, Date, ForeignKey
 from sqlalchemy.dialects.postgresql import ENUM as PGEnum
 from sqlalchemy.dialects.postgresql import UUID
 from backend.models.base import BaseModel
@@ -38,5 +38,14 @@ class Customer(BaseModel):
         nullable=True,
     )
     data_retention_until = Column(DateTime(timezone=True), nullable=True)
+
+    # ── CRM gelombang 3 (mig 095) — diisi crm_service.refresh_segments ──
+    segment = Column(String(20), nullable=True)            # baru/setia/vip/biasa/mulai_jarang/hilang
+    segment_updated_at = Column(DateTime(timezone=True), nullable=True)
+    rfm_recency_days = Column(Integer, nullable=True)
+    rfm_frequency_90d = Column(Integer, server_default='0', nullable=False)
+    rfm_monetary_90d = Column(Numeric(12, 2), server_default='0', nullable=False)
+    birthday = Column(Date, nullable=True)
+    favorite_product_id = Column(UUID(as_uuid=True), ForeignKey('products.id', ondelete='SET NULL'), nullable=True)
 
     row_version = Column(Integer, server_default='0', nullable=False)
