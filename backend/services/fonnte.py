@@ -211,3 +211,32 @@ async def send_whatsapp_message(phone: str, message: str) -> bool:
     _record_failure(last_reason)
     track_fonnte_outcome("fail")
     return False
+
+
+async def validate_token(token: str) -> tuple[bool, str]:
+    """Cek token Fonnte via endpoint device. (True, nama device) atau (False, alasan)."""
+    try:
+        client = _get_client()
+        r = await client.post("https://api.fonnte.com/device", headers={"Authorization": token})
+        data = r.json() if r.content else {}
+        if r.status_code == 200 and data.get("status"):
+            return True, str(data.get("device") or data.get("name") or "ok")
+        return False, str(data.get("reason") or data.get("message") or f"HTTP {r.status_code}")
+    except Exception as e:  # noqa: BLE001
+        return False, f"gagal hubungi Fonnte: {e}"
+
+
+async def send_whatsapp_with_token(token: str, phone: str, message: str) -> bool:
+    """Kirim WA pakai token TOKO (promo/campaign). Nggak lewat circuit breaker platform."""
+    try:
+        client = _get_client()
+        r = await client.post(
+            "https://api.fonnte.com/send",
+            headers={"Authorization": token},
+            data={"target": phone, "message": message, "countryCode": "62"},
+        )
+        data = r.json() if r.content else {}
+        return r.status_code == 200 and bool(data.get("status"))
+    except Exception:  # noqa: BLE001
+        logger.warning("send_whatsapp_with_token gagal ke %s", phone, exc_info=True)
+        return False

@@ -100,3 +100,8 @@ class TaxConfigUpdate(BaseModel):
     receipt_footer: Optional[str] = Field(default=None, max_length=200)
     # Optimistic lock (Golden Rule #29-30). Wajib kalau config sudah ada.
     expected_row_version: Optional[int] = None
+
+
+class OutletWhatsAppSetup(BaseModel):
+    """Token Fonnte toko. Kosong/None = putus."""
+    fonnte_token: Optional[str] = None

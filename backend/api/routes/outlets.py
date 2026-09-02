@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from backend.api import deps
 from backend.models.outlet import Outlet
-from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentSetupOwn, OutletPaymentStatus, OutletStockModeUpdate, OutletLocationUpdate, TaxConfigResponse, TaxConfigUpdate
+from backend.schemas.outlet import Outlet as OutletSchema, OutletCreate, OutletUpdate, OutletPaymentSetup, OutletPaymentSetupOwn, OutletPaymentStatus, OutletStockModeUpdate, OutletLocationUpdate, TaxConfigResponse, TaxConfigUpdate, OutletWhatsAppSetup
 from backend.models.outlet_tax_config import OutletTaxConfig
 from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
@@ -337,6 +337,49 @@ async def remove_payment_own_key(
                     user_id=current_user.id, tenant_id=outlet.tenant_id)
     await db.commit()
     return StandardResponse(success=True, data={"ok": True}, message="Xendit API key dihapus")
+
+@router.post("/{outlet_id}/whatsapp-setup", response_model=StandardResponse[dict])
+async def setup_whatsapp(
+    request: Request,
+    outlet_id: uuid.UUID,
+    setup_in: OutletWhatsAppSetup,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Simpan token Fonnte milik toko. Promo/campaign WA (gelombang 3) dikirim
+    dari nomor toko sendiri, mirror BYOK Xendit. OTP + struk tetap token
+    platform. Token kosong = putus.
+    """
+    stmt = select(Outlet).where(
+        Outlet.id == outlet_id, Outlet.deleted_at == None,
+        Outlet.tenant_id == current_user.tenant_id,
+    )
+    outlet = (await db.execute(stmt)).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+
+    token = (setup_in.fonnte_token or "").strip()
+    if token:
+        # Cek token beneran valid ke Fonnte sebelum disimpan — token salah
+        # ketahuannya jangan pas campaign pertama gagal senyap.
+        from backend.services.fonnte import validate_token
+        ok, info = await validate_token(token)
+        if not ok:
+            raise HTTPException(status_code=400, detail=f"Token Fonnte ditolak: {info}")
+    outlet.fonnte_token = token or None
+    outlet.row_version = (outlet.row_version or 0) + 1
+    await log_audit(
+        db=db, action="WA_SETUP" if token else "WA_DISCONNECT", entity="outlets", entity_id=outlet.id,
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+    return StandardResponse(
+        success=True, data={"wa_connected": bool(token)},
+        message="WhatsApp toko tersambung" if token else "WhatsApp toko diputus",
+        request_id=request.state.request_id,
+    )
+
 
 @router.get("/{outlet_id}/payment-status", response_model=StandardResponse[OutletPaymentStatus])
 async def get_payment_status(
