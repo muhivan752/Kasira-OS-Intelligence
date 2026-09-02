@@ -46,7 +46,15 @@ const rpDec = (n: number | string | null | undefined) => {
 const tgl = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 const newKey = () => Math.random().toString(36).slice(2, 9);
-const UNITS = ['gram', 'kg', 'ml', 'liter', 'pcs', 'butir', 'bungkus', 'dus', 'tray', 'lusin'];
+// Satuan di nota — dipilih, bukan diketik. Konversi ke satuan stok bahan
+// (gram/ml/pcs/bungkus) dikerjain backend (unit_utils.UNIT_ALIASES), jadi
+// daftar ini WAJIB subset dari alias di sana.
+const UNIT_GROUPS: { label: string; units: { v: string; l: string }[] }[] = [
+  { label: 'Berat', units: [{ v: 'gram', l: 'gram (gr)' }, { v: 'ons', l: 'ons (100 gr)' }, { v: 'kg', l: 'kg' }] },
+  { label: 'Volume', units: [{ v: 'ml', l: 'ml' }, { v: 'liter', l: 'liter' }, { v: 'galon', l: 'galon (19 L)' }] },
+  { label: 'Hitungan', units: [{ v: 'pcs', l: 'pcs / buah' }, { v: 'butir', l: 'butir' }, { v: 'ekor', l: 'ekor' }, { v: 'ikat', l: 'ikat' }, { v: 'botol', l: 'botol' }, { v: 'kaleng', l: 'kaleng' }, { v: 'sisir', l: 'sisir' }, { v: 'lembar', l: 'lembar' }] },
+  { label: 'Kemasan', units: [{ v: 'bungkus', l: 'bungkus' }, { v: 'sachet', l: 'sachet' }, { v: 'pak', l: 'pak' }, { v: 'renceng', l: 'renceng' }, { v: 'dus', l: 'dus (12)' }, { v: 'lusin', l: 'lusin (12)' }, { v: 'tray', l: 'tray (30)' }, { v: 'papan', l: 'papan telur (30)' }] },
+];
 
 export default function PembelianPage() {
   const [loading, setLoading] = useState(true);
@@ -468,7 +476,10 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
                       </optgroup>
                     </select>
                     <input type="number" inputMode="decimal" min="0" step="any" value={l.quantity} onChange={e => updateLine(l.key, { quantity: e.target.value })} placeholder="Jml" className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0" />
-                    <input list="units" value={l.unit} onChange={e => updateLine(l.key, { unit: e.target.value })} placeholder={t?.unit || 'satuan'} className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0" />
+                    <select value={l.unit} onChange={e => updateLine(l.key, { unit: e.target.value })} className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0">
+                      <option value="">{t?.unit ? `satuan: ${t.unit}` : 'satuan'}</option>
+                      {UNIT_GROUPS.map(g => <optgroup key={g.label} label={g.label}>{g.units.map(u => <option key={u.v} value={u.v}>{u.l}</option>)}</optgroup>)}
+                    </select>
                     <input type="number" inputMode="numeric" min="0" value={l.unit_price} onChange={e => updateLine(l.key, { unit_price: e.target.value })} placeholder="Harga/satuan" className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0" />
                     <input type="number" inputMode="numeric" min="0" value={l.total_price} onChange={e => updateLine(l.key, { total_price: e.target.value })} placeholder="Total" className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0 font-semibold" />
                     <button onClick={() => setLines(ls => ls.length > 1 ? ls.filter(x => x.key !== l.key) : ls)} className="p-2 text-gray-400 hover:text-red-500"><X className="w-4 h-4" /></button>
@@ -499,7 +510,6 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
               );
             })}
           </div>
-          <datalist id="units">{UNITS.map(u => <option key={u} value={u} />)}</datalist>
           <button onClick={() => setLines(ls => [...ls, { key: newKey(), targetKey: '', quantity: '', unit: '', unit_price: '', total_price: '' }])} className="mt-2 text-sm text-blue-600 font-medium hover:underline">+ Tambah baris</button>
         </div>
 

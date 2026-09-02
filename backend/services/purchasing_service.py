@@ -235,6 +235,16 @@ async def receive_purchase(
             ))
             effects.append({"name": other_name, "cost_before": None, "cost_after": None, "unit": line.unit})
             event_lines.append({"other": True, "name": other_name, "qty": qty, "total": str(line_total)})
+            # Jadi pengeluaran (laba rugi). purchase_id keisi → arus kas ambil
+            # pembayaran notanya, bukan baris ini (nggak dobel).
+            from backend.models.finance import Expense
+            from backend.services.finance_service import guess_category
+            db.add(Expense(
+                tenant_id=tenant_id, outlet_id=outlet_id, category=guess_category(other_name),
+                amount=line_total, paid_at=received_at, payment_method="cash",
+                supplier_id=supplier.id if supplier else None, purchase_id=po.id,
+                note=f"{other_name} · nota {po.po_number}", recorded_by=user_id,
+            ))
             continue
 
         # ── Bahan baru: dibikin dulu, lalu jalan sebagai baris bahan biasa ──

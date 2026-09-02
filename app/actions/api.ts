@@ -800,3 +800,56 @@ export async function scanInvoice(formData: FormData) {
   }
   return { success: true, message: data.message, data: data.data };
 }
+
+// ── Keuangan (laba rugi, arus kas, pengeluaran) ───────────────────────
+
+export async function getFinanceSummary(outletId: string, month: string) {
+  try {
+    const res = await fetchWithAuth(`/finance/summary?outlet_id=${outletId}&month=${month}`);
+    const data = await res.json();
+    return data.data;
+  } catch { return null; }
+}
+
+export async function getFinanceCategories() {
+  try { const res = await fetchWithAuth('/finance/categories'); return (await res.json()).data || []; } catch { return []; }
+}
+
+export async function getCashAccounts() {
+  try { const res = await fetchWithAuth('/finance/accounts'); return (await res.json()).data || []; } catch { return []; }
+}
+
+export async function getExpenses(outletId: string, month: string) {
+  try {
+    const res = await fetchWithAuth(`/finance/expenses?outlet_id=${outletId}&month=${month}`);
+    return (await res.json()).data || [];
+  } catch { return []; }
+}
+
+export async function createExpense(payload: Record<string, unknown>) {
+  const res = await fetchWithAuth('/finance/expenses', { method: 'POST', body: JSON.stringify(payload) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(extractError(data, 'Gagal mencatat pengeluaran'));
+  return data.data;
+}
+
+export async function updateExpense(id: string, payload: Record<string, unknown>) {
+  const res = await fetchWithAuth(`/finance/expenses/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(extractError(data, 'Gagal mengubah pengeluaran'));
+  return data.data;
+}
+
+export async function deleteExpense(id: string) {
+  const res = await fetchWithAuth(`/finance/expenses/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(extractError(data, 'Gagal menghapus pengeluaran'));
+  return true;
+}
+
+export async function copyRecurringExpenses(outletId: string, month: string) {
+  const res = await fetchWithAuth(`/finance/expenses/copy-recurring?outlet_id=${outletId}&month=${month}`, { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(extractError(data, 'Gagal menyalin'));
+  return { items: data.data || [], message: data.message };
+}

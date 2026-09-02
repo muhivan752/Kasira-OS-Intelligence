@@ -21,6 +21,7 @@ import {
   Smartphone,
   ChefHat,
   ShoppingCart,
+  Wallet,
 } from 'lucide-react';
 import { logout } from '@/app/actions/auth';
 import { getCurrentUser, getOutlets } from '@/app/actions/api';
@@ -76,6 +77,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Kasir', href: '/dashboard/kasir', icon: Store },
     { name: 'Pelanggan', href: '/dashboard/pelanggan', icon: Users },
     { name: 'Pembelian', href: '/dashboard/pembelian', icon: ShoppingCart },
+    { name: 'Keuangan', href: '/dashboard/keuangan', icon: Wallet },
     { name: 'Laporan', href: '/dashboard/laporan', icon: BarChart3 },
   ];
 

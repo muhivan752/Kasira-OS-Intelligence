@@ -25,6 +25,12 @@ UNIT_ALIASES = {
     "pcs": ("pcs", 1), "butir": ("pcs", 1), "buah": ("pcs", 1), "biji": ("pcs", 1),
     "tray": ("pcs", 30), "dus": ("pcs", 12), "lusin": ("pcs", 12),
     "bungkus": ("bungkus", 1), "bks": ("bungkus", 1), "pack": ("bungkus", 1),
+    # tambahan 2026-09-02 — satuan yang sering muncul di nota pasar
+    "ons": ("gram", 100), "kwintal": ("gram", 100000),
+    "cc": ("ml", 1), "galon": ("ml", 19000),
+    "ekor": ("pcs", 1), "ikat": ("pcs", 1), "botol": ("pcs", 1), "kaleng": ("pcs", 1),
+    "lembar": ("pcs", 1), "papan": ("pcs", 30), "sisir": ("pcs", 1), "porsi": ("pcs", 1),
+    "sachet": ("bungkus", 1), "pak": ("bungkus", 1), "renceng": ("bungkus", 1),
 }
 
 

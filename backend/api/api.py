@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect, ai, reservations, loyalty, media, customers, tables, tabs, webhook, ingredients, recipes, knowledge_graph, superadmin, billing, referrals, platform, embeddings, analytics, invoice_ocr, waitlist, landing, purchasing
+from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect, ai, reservations, loyalty, media, customers, tables, tabs, webhook, ingredients, recipes, knowledge_graph, superadmin, billing, referrals, platform, embeddings, analytics, invoice_ocr, waitlist, landing, purchasing, finance
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -41,3 +41,4 @@ api_router.include_router(waitlist.router, prefix="/waitlist", tags=["waitlist"]
 # route: GET /api/v1/auth/app/version — dipanggil dari SplashPage
 api_router.include_router(purchasing.suppliers_router, prefix="/suppliers", tags=["purchasing"])
 api_router.include_router(purchasing.purchases_router, prefix="/purchases", tags=["purchasing"])
+api_router.include_router(finance.router, prefix="/finance", tags=["finance"])
