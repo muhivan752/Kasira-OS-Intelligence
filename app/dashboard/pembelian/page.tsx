@@ -19,7 +19,7 @@ interface Supplier {
   purchase_count: number; purchase_total: string; outstanding_total: string;
 }
 interface PurchaseLine {
-  id: string; ingredient_id?: string | null; product_id?: string | null; name: string;
+  id: string; ingredient_id?: string | null; product_id?: string | null; is_other?: boolean; name: string;
   quantity: number; unit?: string | null; qty_base?: number | null;
   unit_price: string; total_price: string; cost_before?: string | null; cost_after?: string | null;
 }
@@ -34,7 +34,8 @@ interface Summary {
   next_due_at?: string | null; next_due_supplier?: string | null; next_due_amount?: string | null;
 }
 interface Target { key: string; kind: 'ingredient' | 'product'; id: string; name: string; unit: string; hint?: string }
-interface DraftLine { key: string; targetKey: string; quantity: string; unit: string; unit_price: string; total_price: string; rawName?: string }
+interface DraftLine { key: string; targetKey: string; quantity: string; unit: string; unit_price: string; total_price: string; rawName?: string; newName?: string; newBaseUnit?: string; newSellPrice?: string }
+// targetKey khusus: '__other' (bukan stok), '__new_ing' (bahan baru, Pro), '__new_prod' (produk baru)
 
 const rp = (n: number | string | null | undefined) =>
   'Rp ' + Math.round(Number(n || 0)).toLocaleString('id-ID');
@@ -367,7 +368,11 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
     const valid = lines.filter(l => l.targetKey && Number(l.quantity) > 0);
     if (!valid.length) { setError('Isi minimal satu baris: pilih bahan/produk dan jumlahnya.'); return; }
     const unmatched = lines.filter(l => !l.targetKey && (l.rawName || l.quantity));
-    if (unmatched.length) { setError(`Ada ${unmatched.length} baris belum dicocokkan ke bahan/produk: ${unmatched.map(l => l.rawName || 'baris kosong').join(', ')}. Pilih atau hapus barisnya.`); return; }
+    if (unmatched.length) { setError(`Ada ${unmatched.length} baris belum dicocokkan: ${unmatched.map(l => l.rawName || 'baris kosong').join(', ')}. Pilih bahan/produk, atau pilih "Lainnya" kalau bukan stok.`); return; }
+    const noName = valid.filter(l => (l.targetKey === '__other' || l.targetKey === '__new_ing' || l.targetKey === '__new_prod') && !(l.newName || l.rawName || '').trim());
+    if (noName.length) { setError('Baris "Lainnya" / bahan baru / produk baru harus diisi namanya.'); return; }
+    const noPrice = valid.filter(l => l.targetKey === '__new_prod' && !(Number(l.newSellPrice) > 0));
+    if (noPrice.length) { setError('Produk baru butuh harga jual — itu yang dipakai di kasir.'); return; }
     if (payMode === 'utang' && Number(paidAmount || 0) >= total) { setError('Kalau belum lunas, nominal dibayar harus lebih kecil dari total.'); return; }
 
     setSaving(true);
@@ -383,15 +388,18 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
         paid_amount: payMode === 'lunas' ? null : Number(paidAmount || 0),
         due_at: payMode === 'utang' && dueAt ? new Date(dueAt + 'T12:00:00').toISOString() : null,
         items: valid.map(l => {
-          const t = targetByKey[l.targetKey];
-          return {
-            ingredient_id: t.kind === 'ingredient' ? t.id : null,
-            product_id: t.kind === 'product' ? t.id : null,
+          const base = {
             quantity: Number(l.quantity),
             unit: l.unit || null,
             unit_price: Number(l.unit_price) || (Number(l.total_price) / Number(l.quantity)) || 0,
             total_price: Number(l.total_price) || null,
           };
+          const name = (l.newName || l.rawName || '').trim();
+          if (l.targetKey === '__other') return { ...base, name };
+          if (l.targetKey === '__new_ing') return { ...base, new_ingredient: { name, base_unit: l.newBaseUnit || null } };
+          if (l.targetKey === '__new_prod') return { ...base, new_product: { name, sell_price: Number(l.newSellPrice) } };
+          const t = targetByKey[l.targetKey];
+          return { ...base, ingredient_id: t.kind === 'ingredient' ? t.id : null, product_id: t.kind === 'product' ? t.id : null };
         }),
       };
       const saved = await createPurchase(payload);
@@ -449,10 +457,15 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
                 <div key={l.key} className={`rounded-lg border p-2.5 ${!l.targetKey && l.rawName ? 'border-amber-300 bg-amber-50' : 'border-gray-200'}`}>
                   {l.rawName && !l.targetKey && <p className="text-xs text-amber-700 mb-1">Dari nota: <b>{l.rawName}</b> — cocokkan ke bahan/produk:</p>}
                   <div className="grid gap-2 sm:grid-cols-[1.6fr_0.7fr_0.8fr_1fr_1fr_auto]">
-                    <select value={l.targetKey} onChange={e => updateLine(l.key, { targetKey: e.target.value })} className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0">
+                    <select value={l.targetKey} onChange={e => updateLine(l.key, { targetKey: e.target.value, newName: l.newName || l.rawName || '' })} className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0">
                       <option value="">Pilih bahan / produk…</option>
                       {ingredientTargets.length > 0 && <optgroup label="Bahan baku">{ingredientTargets.map(x => <option key={x.key} value={x.key}>{x.name}{x.hint ? ` · ${x.hint}` : ''}</option>)}</optgroup>}
                       {productTargets.length > 0 && <optgroup label="Produk">{productTargets.map(x => <option key={x.key} value={x.key}>{x.name}{x.hint ? ` · ${x.hint}` : ''}</option>)}</optgroup>}
+                      <optgroup label="Belum ada di daftar">
+                        {isPro && <option value="__new_ing">+ Bahan baku baru…</option>}
+                        <option value="__new_prod">+ Produk jadi baru…</option>
+                        <option value="__other">Lainnya — bukan stok (gas, plastik, tisu)</option>
+                      </optgroup>
                     </select>
                     <input type="number" inputMode="decimal" min="0" step="any" value={l.quantity} onChange={e => updateLine(l.key, { quantity: e.target.value })} placeholder="Jml" className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0" />
                     <input list="units" value={l.unit} onChange={e => updateLine(l.key, { unit: e.target.value })} placeholder={t?.unit || 'satuan'} className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0" />
@@ -462,6 +475,25 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
                   </div>
                   {t?.kind === 'ingredient' && l.unit && l.unit !== t.unit && (
                     <p className="text-xs text-gray-500 mt-1">Dikonversi ke {t.unit} otomatis (mis. 2 kg → 2000 gram).</p>
+                  )}
+                  {(l.targetKey === '__other' || l.targetKey === '__new_ing' || l.targetKey === '__new_prod') && (
+                    <div className="mt-2 grid gap-2 sm:grid-cols-[1.6fr_1fr_1fr]">
+                      <input value={l.newName ?? ''} onChange={e => updateLine(l.key, { newName: e.target.value })}
+                        placeholder={l.targetKey === '__other' ? 'Nama, mis. Gas 3kg' : l.targetKey === '__new_ing' ? 'Nama bahan, mis. Susu UHT' : 'Nama produk, mis. Roti Bakar'}
+                        className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0" />
+                      {l.targetKey === '__new_ing' && (
+                        <select value={l.newBaseUnit ?? ''} onChange={e => updateLine(l.key, { newBaseUnit: e.target.value })} className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0">
+                          <option value="">Satuan stok: ikut nota</option>
+                          <option value="gram">gram</option><option value="ml">ml</option><option value="pcs">pcs</option><option value="bungkus">bungkus</option>
+                        </select>
+                      )}
+                      {l.targetKey === '__new_prod' && (
+                        <input type="number" min="0" value={l.newSellPrice ?? ''} onChange={e => updateLine(l.key, { newSellPrice: e.target.value })} placeholder="Harga jual di kasir" className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0" />
+                      )}
+                      <p className="text-xs text-gray-500 self-center">
+                        {l.targetKey === '__other' ? 'Ikut total & utang, stok nggak disentuh.' : l.targetKey === '__new_ing' ? 'Dibikin otomatis waktu nota disimpan.' : 'Dibikin dengan stok awal = jumlah di nota.'}
+                      </p>
+                    </div>
                   )}
                 </div>
               );
@@ -537,7 +569,7 @@ function DetailModal({ purchase, onClose, onPaid }: { purchase: Purchase; onClos
             return (
               <div key={i.id} className="px-3 py-2 text-sm flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-medium text-gray-900">{i.name}</p>
+                  <p className="font-medium text-gray-900">{i.name}{i.is_other && <span className="ml-2 text-[10px] font-semibold uppercase text-gray-400">bukan stok</span>}</p>
                   <p className="text-gray-500">{i.quantity} {i.unit || ''}{i.qty_base && i.qty_base !== i.quantity ? ` (= ${i.qty_base})` : ''} × {rp(i.unit_price)}</p>
                   {changed && (
                     <p className={`text-xs flex items-center gap-1 ${after > before ? 'text-amber-600' : 'text-green-600'}`}>

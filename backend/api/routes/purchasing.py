@@ -66,6 +66,7 @@ def _po_to_response(po: PurchaseOrder, effects: Optional[list] = None) -> Purcha
             id=it.id,
             ingredient_id=it.ingredient_id,
             product_id=it.product_id,
+            is_other=it.is_other,
             name=it.display_name,
             quantity=it.quantity,
             unit=it.unit,

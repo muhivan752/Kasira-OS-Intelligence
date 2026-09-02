@@ -49,10 +49,33 @@ class SupplierResponse(BaseModel):
 
 # ── Nota belanja ──
 
+class NewIngredientIn(BaseModel):
+    """Bahan yang belum ada di daftar — dibikin on the fly waktu nota disimpan (Pro)."""
+    name: str = Field(..., min_length=1, max_length=120)
+    # gram / ml / pcs / bungkus. Kalau kosong, diturunin dari satuan di baris
+    # (kg → gram, liter → ml, dus → pcs).
+    base_unit: Optional[str] = None
+
+
+class NewProductIn(BaseModel):
+    """Produk jadi yang belum ada — dibikin dengan tracking stok aktif."""
+    name: str = Field(..., min_length=1, max_length=120)
+    sell_price: Decimal = Field(..., ge=0)
+
+
 class PurchaseLineIn(BaseModel):
-    """Satu baris nota. Tepat satu dari ingredient_id / product_id."""
+    """
+    Satu baris nota. Tepat satu target:
+      - ingredient_id / product_id  → barang yang udah ada di daftar
+      - new_ingredient / new_product → dibikin dulu, lalu diperlakukan sama
+      - name (tanpa target)          → "lainnya": gas, plastik, tisu — gak
+                                        nyentuh stok, cuma ikut total & utang
+    """
     ingredient_id: Optional[UUID] = None
     product_id: Optional[UUID] = None
+    new_ingredient: Optional[NewIngredientIn] = None
+    new_product: Optional[NewProductIn] = None
+    name: Optional[str] = Field(None, max_length=120)
     quantity: float = Field(..., gt=0)
     # Satuan di nota. Kosong = dianggap base_unit bahan (atau pcs buat produk).
     unit: Optional[str] = None
@@ -63,9 +86,16 @@ class PurchaseLineIn(BaseModel):
 
     @model_validator(mode='after')
     def one_target(self):
-        if bool(self.ingredient_id) == bool(self.product_id):
-            raise ValueError("Tiap baris harus nunjuk satu: bahan (ingredient_id) ATAU produk (product_id)")
+        targets = sum(1 for t in (self.ingredient_id, self.product_id, self.new_ingredient, self.new_product) if t)
+        if targets > 1:
+            raise ValueError("Tiap baris cuma boleh satu target: bahan, produk, bahan baru, atau produk baru")
+        if targets == 0 and not (self.name or "").strip():
+            raise ValueError("Baris tanpa bahan/produk harus punya nama (mis. 'Gas 3kg', 'Kantong plastik')")
         return self
+
+    @property
+    def is_other(self) -> bool:
+        return not any((self.ingredient_id, self.product_id, self.new_ingredient, self.new_product))
 
 
 class PurchaseCreate(BaseModel):
@@ -87,6 +117,7 @@ class PurchaseLineResponse(BaseModel):
     id: UUID
     ingredient_id: Optional[UUID] = None
     product_id: Optional[UUID] = None
+    is_other: bool = False
     name: str
     quantity: float
     unit: Optional[str] = None

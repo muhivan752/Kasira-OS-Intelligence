@@ -98,7 +98,7 @@ class PurchaseOrder(BaseModel):
 class PurchaseOrderItem(BaseModel):
     __tablename__ = "purchase_order_items"
     __table_args__ = (
-        CheckConstraint('ingredient_id IS NOT NULL OR product_id IS NOT NULL', name='chk_poi_target'),
+        CheckConstraint('ingredient_id IS NOT NULL OR product_id IS NOT NULL OR name_snapshot IS NOT NULL', name='chk_poi_target'),
     )
 
     purchase_order_id = Column(UUID(as_uuid=True), ForeignKey('purchase_orders.id', ondelete='CASCADE'), nullable=False)
@@ -119,6 +119,11 @@ class PurchaseOrderItem(BaseModel):
     purchase_order = relationship("PurchaseOrder", back_populates="items")
     ingredient = relationship("Ingredient")
     product = relationship("Product")
+
+    @property
+    def is_other(self) -> bool:
+        """Baris tanpa target stok (gas, plastik, tisu) — cuma ikut total."""
+        return self.ingredient_id is None and self.product_id is None
 
     @property
     def display_name(self) -> str:

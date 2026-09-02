@@ -86,6 +86,28 @@ def moving_average(old_qty: float, old_cost: Decimal, add_qty: float, add_cost: 
     return _q2((Decimal(str(old_qty)) * old_cost + Decimal(str(add_qty)) * add_cost) / total_qty)
 
 
+def _unit_type_for(base_unit: str) -> str:
+    fam = {"gram": "WEIGHT", "ml": "VOLUME", "pcs": "COUNT", "bungkus": "COUNT"}
+    return fam.get((base_unit or "").lower().strip(), "CUSTOM")
+
+
+def _base_unit_from(unit: Optional[str]) -> str:
+    """Satuan di nota → base_unit bahan baru: kg→gram, liter→ml, dus→pcs, kosong→pcs."""
+    u = (unit or "").lower().strip()
+    if not u:
+        return "pcs"
+    alias = UNIT_ALIASES.get(u)
+    return alias[0] if alias else u
+
+
+async def _brand_for_outlet(db: AsyncSession, outlet: Outlet, brand_ids: list[UUID]) -> UUID:
+    if outlet.brand_id:
+        return outlet.brand_id
+    if brand_ids:
+        return brand_ids[0]
+    raise HTTPException(status_code=400, detail="Tenant belum punya brand — bikin bahan/produk baru gak bisa")
+
+
 async def _brand_ids_for_tenant(db: AsyncSession, tenant_id: UUID) -> list[UUID]:
     rows = (await db.execute(
         select(Brand.id).where(Brand.tenant_id == tenant_id, Brand.deleted_at.is_(None))
@@ -198,7 +220,87 @@ async def receive_purchase(
         line_total = _q2(line.total_price) if line.total_price is not None else _q2(Decimal(str(qty)) * unit_price)
         total += line_total
 
-        if line.ingredient_id:
+        # ── "Lainnya": gas, plastik, tisu — gak nyentuh stok, cuma ikut total ──
+        if line.is_other:
+            other_name = (line.name or "").strip()
+            db.add(PurchaseOrderItem(
+                purchase_order_id=po.id,
+                name_snapshot=other_name,
+                quantity=qty,
+                unit=(line.unit or None),
+                qty_base=None,
+                unit_price=unit_price,
+                total_price=line_total,
+                received_quantity=qty,
+            ))
+            effects.append({"name": other_name, "cost_before": None, "cost_after": None, "unit": line.unit})
+            event_lines.append({"other": True, "name": other_name, "qty": qty, "total": str(line_total)})
+            continue
+
+        # ── Bahan baru: dibikin dulu, lalu jalan sebagai baris bahan biasa ──
+        ingredient_id = line.ingredient_id
+        if line.new_ingredient:
+            if not is_pro:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Bahan baku & resep itu fitur Pro. Di paket Starter, catat sebagai produk atau 'Lainnya'.",
+                )
+            base_unit = (line.new_ingredient.base_unit or "").lower().strip() or _base_unit_from(line.unit)
+            brand_id = await _brand_for_outlet(db, outlet, brand_ids)
+            dup = (await db.execute(
+                select(Ingredient).where(
+                    Ingredient.brand_id == brand_id,
+                    Ingredient.deleted_at.is_(None),
+                    func.lower(Ingredient.name) == line.new_ingredient.name.strip().lower(),
+                )
+            )).scalar_one_or_none()
+            if dup:
+                ingredient_id = dup.id
+            else:
+                new_ing = Ingredient(
+                    brand_id=brand_id,
+                    name=line.new_ingredient.name.strip(),
+                    tracking_mode="simple",
+                    base_unit=base_unit,
+                    unit_type=_unit_type_for(base_unit),
+                    buy_price=Decimal("0"),
+                    buy_qty=1,
+                    cost_per_base_unit=Decimal("0"),
+                )
+                db.add(new_ing)
+                await db.flush()
+                ingredient_id = new_ing.id
+                logger.info("nota %s bikin bahan baru %s (%s)", po.po_number, new_ing.name, base_unit)
+
+        # ── Produk baru: dibikin dengan tracking stok aktif, stok awal dari nota ──
+        product_id = line.product_id
+        if line.new_product:
+            brand_id = await _brand_for_outlet(db, outlet, brand_ids)
+            dup = (await db.execute(
+                select(Product).where(
+                    Product.brand_id == brand_id,
+                    Product.deleted_at.is_(None),
+                    func.lower(Product.name) == line.new_product.name.strip().lower(),
+                )
+            )).scalar_one_or_none()
+            if dup:
+                product_id = dup.id
+            else:
+                new_prod = Product(
+                    brand_id=brand_id,
+                    name=line.new_product.name.strip(),
+                    base_price=_q2(line.new_product.sell_price),
+                    buy_price=None,
+                    is_active=True,
+                    stock_enabled=True,
+                    stock_qty=0,
+                )
+                db.add(new_prod)
+                await db.flush()
+                product_id = new_prod.id
+                logger.info("nota %s bikin produk baru %s", po.po_number, new_prod.name)
+
+        if ingredient_id:
             if not is_pro:
                 raise HTTPException(
                     status_code=403,
@@ -206,7 +308,7 @@ async def receive_purchase(
                 )
             ing = (await db.execute(
                 select(Ingredient).where(
-                    Ingredient.id == line.ingredient_id,
+                    Ingredient.id == ingredient_id,
                     Ingredient.brand_id.in_(brand_ids),
                     Ingredient.deleted_at.is_(None),
                 )
@@ -271,7 +373,7 @@ async def receive_purchase(
         else:
             prod = (await db.execute(
                 select(Product).where(
-                    Product.id == line.product_id,
+                    Product.id == product_id,
                     Product.brand_id.in_(brand_ids),
                     Product.deleted_at.is_(None),
                 )
