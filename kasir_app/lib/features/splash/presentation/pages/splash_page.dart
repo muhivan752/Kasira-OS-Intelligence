@@ -183,7 +183,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
               Text('Selaris', style: KasiraDS.display(size: 34, color: Colors.white)),
               const SizedBox(height: 8),
               Text(
-                'Kasir yang ngisi pembukuan kamu sendiri',
+                'Kasir yang mengisi pembukuan Anda sendiri',
                 style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
               ),
               const SizedBox(height: 64),

@@ -324,7 +324,7 @@ class _RegisterPageState extends State<RegisterPage> {
               const SizedBox(height: 6),
               Text(
                 _step == RegStep.inputInfo ? 'Ceritain usahamu'
-                    : _step == RegStep.inputOtp ? 'Cek WhatsApp kamu'
+                    : _step == RegStep.inputOtp ? 'Periksa WhatsApp Anda'
                     : 'Buat PIN kasir',
                 style: KasiraDS.display(size: 26, color: KasiraDS.textStrong),
               ),
@@ -415,12 +415,12 @@ class _RegisterPageState extends State<RegisterPage> {
                 TextField(
                   onChanged: (v) => _referralCode = v,
                   style: KasiraDS.sans(size: 15, color: KasiraDS.textStrong),
-                  decoration: _deco(hint: 'Dari teman yang udah pakai Selaris'),
+                  decoration: _deco(hint: 'Dari teman yang sudah memakai Selaris'),
                 ),
                 const SizedBox(height: 24),
                 _primary(_isLoading ? null : _sendOtp, 'Lanjut → kirim kode WhatsApp'),
                 const SizedBox(height: 10),
-                Center(child: Text('Dengan lanjut, kamu setuju Ketentuan & Privasi Selaris.',
+                Center(child: Text('Dengan melanjutkan, Anda menyetujui Ketentuan & Privasi Selaris.',
                     textAlign: TextAlign.center, style: KasiraDS.sans(size: 11, color: KasiraDS.textMuted))),
               ],
 
@@ -459,7 +459,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 const SizedBox(height: 24),
                 _primary(_isLoading ? null : _setPin, 'Mulai pakai Selaris'),
                 const SizedBox(height: 10),
-                Center(child: Text('Lupa PIN? Masuk lagi pakai OTP WhatsApp.',
+                Center(child: Text('Lupa PIN? Masuk kembali dengan OTP WhatsApp.',
                     style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted))),
               ],
             ],
@@ -517,7 +517,7 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Widget _buildDomainSuggestionCard() {
-    final displayName = _detectedDisplayName ?? 'bisnis kamu';
+    final displayName = _detectedDisplayName ?? 'bisnis Anda';
     final domainLabel = _domainLabel(_detectedDomain);
     final emoji = _domainEmoji(_detectedDomain);
 

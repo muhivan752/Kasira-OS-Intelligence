@@ -316,7 +316,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              '$featureName adalah fitur F&B, tapi kami lagi ngebangun versi $domainLabel yang khusus buat kamu:',
+              '$featureName adalah fitur makanan dan minuman, tapi kami sedang menyiapkan versi $domainLabel khusus untuk Anda:',
               textAlign: TextAlign.center,
               style: const TextStyle(color: KasiraDS.textMuted, fontSize: 13, height: 1.4),
             ),
@@ -355,7 +355,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   Icon(LucideIcons.percent, size: 16, color: KasiraDS.success),
                   SizedBox(width: 6),
                   Text(
-                    'Waitlist dapet diskon 50% saat launch',
+                    'Daftar tunggu dapat diskon 50% saat rilis',
                     style: TextStyle(color: KasiraDS.success, fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -659,7 +659,7 @@ class _DashboardContent extends ConsumerWidget {
     // teks cadangan walaupun nama aslinya udah dapet sedetik kemudian.
     final outlet = ref.watch(outletNameProvider).value ??
         SessionCache.instance.outletName ??
-        'Toko kamu';
+        'Toko Anda';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -916,7 +916,7 @@ class _DashboardContent extends ConsumerWidget {
         final soldTxt = sold != null ? '$sold porsi ' : '';
         return 'Menu terlaris hari ini: $soldTxt$name. Sudah ${stats.orderCount} transaksi '
             '(rata-rata ${_currencyFmt.format(stats.avgOrderValue)}/order). '
-            'Siapin stok $name lebih banyak biar gak kehabisan pas ramai.';
+            'Siapkan stok $name lebih banyak supaya tidak kehabisan saat ramai.';
       }
     }
     if (stats.orderCount > 0) {
@@ -1128,8 +1128,8 @@ class _WaitlistJoinButtonState extends State<_WaitlistJoinButton> {
       SnackBar(
         content: Text(
           isFirstTime
-              ? 'Mantap! Kamu masuk antrean prioritas. Kami kabari via WhatsApp saat fiturnya rilis.'
-              : 'Kamu sudah ada di waitlist, tunggu kabar dari kami ya.',
+              ? 'Anda masuk antrean prioritas. Kami kabari lewat WhatsApp saat fiturnya rilis.'
+              : 'Anda sudah ada di daftar tunggu, tunggu kabar dari kami ya.',
         ),
         backgroundColor: KasiraDS.success,
         behavior: SnackBarBehavior.floating,
@@ -1166,7 +1166,7 @@ class _WaitlistJoinButtonState extends State<_WaitlistJoinButton> {
 
 /// Coming Soon banner di dashboard home — muncul HANYA untuk user Non-F&B.
 /// Subtle, tappable → trigger waitlist sheet. Kalau udah joined → tampilin
-/// "Kamu di waitlist ✓" status.
+/// "Anda di daftar tunggu ✓" status.
 class _ComingSoonBanner extends StatefulWidget {
   const _ComingSoonBanner();
 
@@ -1260,7 +1260,7 @@ class _ComingSoonBannerState extends State<_ComingSoonBanner> {
                       Text(
                         _joined
                             ? 'Kami kabari saat fiturnya rilis'
-                            : 'Daftar waitlist → dapet diskon 50% saat launch',
+                            : 'Masuk daftar tunggu, dapat diskon 50% saat rilis',
                         style: const TextStyle(fontSize: 11, color: KasiraDS.textMuted),
                       ),
                     ],

@@ -25,18 +25,18 @@ class _WelcomePageState extends State<WelcomePage> {
   static const _slides = [
     (
       icon: LucideIcons.camera,
-      title: 'Foto nota belanja,\nHPP ke-update sendiri',
-      body: 'Stok bahan naik, harga modal dihitung ulang, utang supplier kecatat. Kamu cuma foto notanya.',
+      title: 'Foto nota belanja,\nharga modal terisi sendiri',
+      body: 'Stok bahan bertambah, harga modal dihitung ulang, dan utang supplier tercatat. Anda cukup memfoto notanya.',
     ),
     (
       icon: LucideIcons.receipt,
       title: 'Satu meja,\ntiap orang bayar sendiri',
-      body: 'Split bill ala warkop: ada yang QRIS, ada yang cash, ada yang nyusul. Struknya per orang.',
+      body: 'Ada yang membayar dengan QRIS, ada yang tunai, ada yang menyusul. Struknya terbit per orang.',
     ),
     (
       icon: LucideIcons.messageCircle,
-      title: 'Struk ke WhatsApp,\npelanggan kebentuk sendiri',
-      body: 'Nomor pelanggan ketangkap di struk. Siapa yang setia dan siapa yang mulai jarang jadi kelihatan.',
+      title: 'Struk ke WhatsApp,\ndata pelanggan terbentuk sendiri',
+      body: 'Nomor pelanggan tercatat dari struk. Siapa yang setia dan siapa yang mulai jarang datang jadi terlihat.',
     ),
   ];
 

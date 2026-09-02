@@ -321,7 +321,7 @@ class CartPanel extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Pesanan sudah masuk ke dapur.\nBisa tambah pesanan lagi atau bayar nanti di Tab/Bon.',
+                'Pesanan sudah masuk ke dapur.\nBisa menambah pesanan lagi atau membayar nanti di halaman Tab.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: KasiraDS.textMuted),
               ),

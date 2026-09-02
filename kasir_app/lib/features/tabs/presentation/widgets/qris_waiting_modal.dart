@@ -318,7 +318,7 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Webhook Xendit tetap update tab kalau customer akhirnya bayar, kamu bisa cek tab list nanti.',
+              'Tab tetap diperbarui otomatis kalau pelanggan akhirnya membayar. Bisa diperiksa lagi di daftar tab.',
               style: TextStyle(fontSize: 11, color: KasiraDS.textMuted),
               textAlign: TextAlign.center,
             ),

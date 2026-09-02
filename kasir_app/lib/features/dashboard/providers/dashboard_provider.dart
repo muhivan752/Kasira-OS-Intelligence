@@ -80,7 +80,7 @@ final dashboardProvider = AsyncNotifierProvider<DashboardNotifier, DashboardStat
 ///
 /// SessionCache.outletName diisi lewat fetch fire-and-forget pas init, jadi
 /// pas Beranda pertama kali dirender nilainya sering masih null dan sapaannya
-/// jatuh ke teks cadangan "Toko kamu" — dan gak pernah berubah karena gak ada
+/// jatuh ke teks cadangan "Toko Anda" — dan gak pernah berubah karena gak ada
 /// yang nyuruh rebuild waktu fetch-nya kelar. Provider ini yang nungguin
 /// fetch-nya, jadi begitu nama aslinya dapet, sapaannya ikut ke-update.
 final outletNameProvider = FutureProvider<String?>((ref) async {

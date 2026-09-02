@@ -121,12 +121,12 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
       }
 
       if (response.statusCode == 429) {
-        _setError(assistantMsg.id, 'Quota AI harian habis. Coba lagi besok atau upgrade ke Business.');
+        _setError(assistantMsg.id, 'Kuota AI harian sudah habis. Coba lagi besok atau naikkan paket ke Business.');
         return;
       }
 
       if (response.statusCode != 200) {
-        _setError(assistantMsg.id, 'Gagal memuat pesan. Coba lagi ya.');
+        _setError(assistantMsg.id, 'Gagal memuat pesan. Silakan coba lagi.');
         return;
       }
 

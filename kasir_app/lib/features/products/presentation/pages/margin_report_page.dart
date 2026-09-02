@@ -310,7 +310,7 @@ class _ActionFocusBanner extends StatelessWidget {
             padding: EdgeInsets.only(left: 26),
             child: Text(
               'Modal = harga beli ke supplier (bukan stok). '
-              'Tanpa modal, margin gak bisa dihitung. '
+              'Tanpa harga modal, margin tidak bisa dihitung. '
               'Contoh: jual nasi 18rb, beli bahan 8rb → modal = 8rb.',
               style: TextStyle(
                 fontSize: 11,
@@ -323,7 +323,7 @@ class _ActionFocusBanner extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.only(left: 26),
             child: Text(
-              'Cara isi: tab Stok → tap produk → field "Harga Beli per Unit".',
+              'Cara mengisi: tab Stok, pilih produk, lalu isi "Harga Beli per Unit".',
               style: TextStyle(
                 fontSize: 11,
                 color: Color(0xFF92400E),

@@ -42,13 +42,13 @@ class ReadyPage extends StatelessWidget {
               Text('$bizName siap jualan 🎉', style: KasiraDS.display(size: 26, color: KasiraDS.textStrong)),
               const SizedBox(height: KasiraDS.space2),
               Text(
-                'Tiga langkah biar transaksi pertama lancar. Bisa dilewati, nanti tetap bisa diatur dari Pengaturan.',
+                'Tiga langkah supaya transaksi pertama lancar. Bisa dilewati, pengaturannya tetap tersedia nanti.',
                 style: KasiraDS.sans(size: 14, color: KasiraDS.textMuted, height: 1.5),
               ),
               const SizedBox(height: KasiraDS.space5),
               _Step(done: true, index: 0, title: 'Akun & PIN', subtitle: phone.isNotEmpty ? '+$phone' : 'Sudah dibuat'),
               const SizedBox(height: KasiraDS.space2),
-              _Step(index: 1, title: 'Tambah 3 menu terlaris', subtitle: 'Cukup nama & harga. Resep nanti.', onTap: () => _done(context, '/dashboard')),
+              _Step(index: 1, title: 'Tambah 3 menu terlaris', subtitle: 'Cukup nama dan harga. Resep bisa menyusul.', onTap: () => _done(context, '/dashboard')),
               const SizedBox(height: KasiraDS.space2),
               _Step(
                 index: 2,
@@ -59,7 +59,7 @@ class ReadyPage extends StatelessWidget {
                 },
               ),
               const SizedBox(height: KasiraDS.space2),
-              _Step(index: 3, title: 'Buka shift & mulai kasir', subtitle: 'Isi modal awal laci, langsung bisa transaksi.', onTap: () => _done(context, '/shift/open')),
+              _Step(index: 3, title: 'Buka shift & mulai kasir', subtitle: 'Isi modal awal laci, kasir langsung siap dipakai.', onTap: () => _done(context, '/shift/open')),
               const Spacer(),
               SizedBox(
                 height: 54,

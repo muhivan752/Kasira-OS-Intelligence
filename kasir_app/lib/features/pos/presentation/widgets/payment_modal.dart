@@ -711,7 +711,7 @@ class _PaymentModalState extends State<PaymentModal> {
         children: [
           const Icon(LucideIcons.creditCard, size: 30, color: KasiraDS.textMuted),
           const SizedBox(height: 10),
-          Text('Gesek/tap di mesin EDC, lalu tekan Konfirmasi pembayaran.',
+          Text('Gesek atau tap di mesin EDC, lalu tekan Konfirmasi pembayaran.',
               textAlign: TextAlign.center,
               style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
         ],

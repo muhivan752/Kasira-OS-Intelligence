@@ -622,7 +622,7 @@ class _SendReceiptWaDialogState extends State<SendReceiptWaDialog> {
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
                 subtitle: const Text(
-                  'Nomor WA disimpan biar gak perlu input ulang next order',
+                  'Nomor WhatsApp disimpan agar tidak perlu diketik ulang di pesanan berikutnya',
                   style: TextStyle(fontSize: 11, color: KasiraDS.textMuted),
                 ),
               ),

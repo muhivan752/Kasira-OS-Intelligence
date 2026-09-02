@@ -207,7 +207,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Tanya apa saja tentang bisnis kamu.\nOmzet, stok, produk terlaris, dan lainnya.',
+            'Tanya apa saja tentang bisnis Anda.\nOmzet, stok, produk terlaris, dan lainnya.',
             textAlign: TextAlign.center,
             style: TextStyle(color: KasiraDS.textMuted, fontSize: 13),
           ),

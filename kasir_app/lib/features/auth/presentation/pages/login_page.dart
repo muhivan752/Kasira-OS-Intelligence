@@ -503,7 +503,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Nomor WhatsApp kamu', style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
+        Text('Nomor WhatsApp Anda', style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
         const SizedBox(height: 6),
         Text('Kode masuk dikirim ke WhatsApp. Nggak ada password.',
             style: KasiraDS.sans(size: 13.5, color: KasiraDS.textMuted)),
@@ -570,7 +570,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     return Column(
       children: [
-        Text('Cek WhatsApp kamu', style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
+        Text('Periksa WhatsApp Anda', style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
         const SizedBox(height: 6),
         Text(
           'Kode 6 angka dikirim ke +${state.phone}',
