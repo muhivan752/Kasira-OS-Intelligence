@@ -717,3 +717,86 @@ export async function refreshCrmStats() {
     return data.success === true;
   } catch { return false; }
 }
+
+// ── Purchasing (nota belanja + supplier) ─────────────────────────────
+
+export async function getSuppliers(includeInactive = false) {
+  try {
+    const res = await fetchWithAuth(`/suppliers${includeInactive ? '?include_inactive=true' : ''}`);
+    const data = await res.json();
+    return data.data || [];
+  } catch { return []; }
+}
+
+export async function createSupplier(payload: { name: string; phone?: string; address?: string; notes?: string; payment_terms_days?: number }) {
+  const res = await fetchWithAuth('/suppliers', { method: 'POST', body: JSON.stringify(payload) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(extractError(data, 'Gagal menambah supplier'));
+  return data.data;
+}
+
+export async function updateSupplier(id: string, payload: Record<string, unknown>) {
+  const res = await fetchWithAuth(`/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(extractError(data, 'Gagal mengubah supplier'));
+  return data.data;
+}
+
+export async function deleteSupplier(id: string) {
+  const res = await fetchWithAuth(`/suppliers/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(extractError(data, 'Gagal menghapus supplier'));
+  return true;
+}
+
+export async function getPurchaseSummary(outletId: string) {
+  try {
+    const res = await fetchWithAuth(`/purchases/summary?outlet_id=${outletId}`);
+    const data = await res.json();
+    return data.data;
+  } catch { return null; }
+}
+
+export async function getPurchases(outletId: string, opts?: { unpaidOnly?: boolean; supplierId?: string }) {
+  try {
+    let url = `/purchases?outlet_id=${outletId}`;
+    if (opts?.unpaidOnly) url += '&unpaid_only=true';
+    if (opts?.supplierId) url += `&supplier_id=${opts.supplierId}`;
+    const res = await fetchWithAuth(url);
+    const data = await res.json();
+    return data.data || [];
+  } catch { return []; }
+}
+
+export async function createPurchase(payload: Record<string, unknown>) {
+  const res = await fetchWithAuth('/purchases', { method: 'POST', body: JSON.stringify(payload) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(extractError(data, 'Gagal mencatat nota'));
+  return data.data;
+}
+
+export async function payPurchase(id: string, amount: number, rowVersion: number) {
+  const res = await fetchWithAuth(`/purchases/${id}/pay`, {
+    method: 'POST',
+    body: JSON.stringify({ amount, row_version: rowVersion }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(extractError(data, 'Gagal mencatat pembayaran'));
+  return data.data;
+}
+
+/** Foto nota → baris terisi (Claude Vision). Endpoint lama /invoice-ocr/scan dipakai ulang. */
+export async function scanInvoice(formData: FormData) {
+  const token = await getAuthToken();
+  const cookieStore = await cookies();
+  const tenantId = cookieStore.get('tenant_id')?.value;
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (tenantId) headers['X-Tenant-ID'] = tenantId;
+  const res = await fetch(`${API_URL}/invoice-ocr/scan`, { method: 'POST', headers, body: formData });
+  const data = await res.json();
+  if (!res.ok || data.success === false) {
+    return { success: false, message: extractError(data, 'Nota tidak terbaca'), data: null };
+  }
+  return { success: true, message: data.message, data: data.data };
+}
