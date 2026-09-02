@@ -64,8 +64,8 @@ export function Logo({
         )}
         {/* Logo resmi Selaris (file dari Ivan, 2 Sep): dua pil naik ke kanan,
             pil atas ungu→pink, pil bawah pink→ungu. Palet #FF3D63 / #8A16D6. */}
-        <rect x="15" y="14" width="42" height="18" rx="9" transform="rotate(-30 36 23)" fill={mono ? 'currentColor' : 'url(#selaris-a)'} />
-        <rect x="7" y="32" width="42" height="18" rx="9" transform="rotate(-30 28 41)" fill={mono ? 'currentColor' : 'url(#selaris-b)'} />
+        <rect x="15.5" y="12" width="34" height="13.5" rx="6.75" transform="rotate(-32 32.5 18.75)" fill={mono ? 'currentColor' : 'url(#selaris-a)'} />
+        <rect x="15" y="37.25" width="34" height="13.5" rx="6.75" transform="rotate(-32 32 44)" fill={mono ? 'currentColor' : 'url(#selaris-b)'} />
       </svg>
       {showWordmark && (
         <div

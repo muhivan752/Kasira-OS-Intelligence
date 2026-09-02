@@ -27,8 +27,8 @@ export default function Icon() {
       <linearGradient id="ga" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#8A16D6"/><stop offset="1" stopColor="#FF3D63"/></linearGradient>
       <linearGradient id="gb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#FF3D63"/><stop offset="1" stopColor="#8A16D6"/></linearGradient>
     </defs>
-    <rect x="15" y="14" width="42" height="18" rx="9" transform="rotate(-30 36 23)" fill="url(#ga)"/>
-    <rect x="7" y="32" width="42" height="18" rx="9" transform="rotate(-30 28 41)" fill="url(#gb)"/>
+    <rect x="15.5" y="12" width="34" height="13.5" rx="6.75" transform="rotate(-32 32.5 18.75)" fill="url(#ga)"/>
+    <rect x="15" y="37.25" width="34" height="13.5" rx="6.75" transform="rotate(-32 32 44)" fill="url(#gb)"/>
         </svg>
       </div>
     ),
