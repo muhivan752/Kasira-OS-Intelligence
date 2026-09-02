@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/services/session_cache.dart';
@@ -70,11 +71,40 @@ class _PaymentModalState extends State<PaymentModal> {
   // Inline error untuk cash payment
   String? _cashError;
 
+  // Rule #5: idempotency key per percobaan bayar. Sinyal jelek → respons
+  // sukses hilang → kasir tekan Bayar lagi → server balikin payment yang
+  // SAMA (200), bukan 400 "sudah dibayar". Satu key per modal per metode.
+  String? _cashIdemKey;
+  String? _qrisIdemKey;
+
+  // Timeout terima 30 dtk (dulu 10): bayar itu jalur paling kritis, dan
+  // 10 dtk di data seluler lagi jelek kelewat gampang putus (2 Sep 2026:
+  // bayar 37.800 sukses di server dalam 3 dtk, HP-nya bilang gagal).
   Dio get _dio => Dio(BaseOptions(
     baseUrl: AppConfig.apiV1,
-    connectTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 10),
+    connectTimeout: const Duration(seconds: 15),
+    receiveTimeout: const Duration(seconds: 30),
   ));
+
+  /// Cek ke server apakah order-nya udah lunas — dipakai waktu respons bayar
+  /// nggak nyampe (timeout / koneksi putus) supaya kasir nggak disuruh bayar
+  /// ulang buat order yang sebenarnya udah selesai.
+  Future<bool> _orderAlreadyPaid(String oid) async {
+    try {
+      final r = await _dio.get('/orders/$oid', options: Options(headers: _cache.authHeaders));
+      final d = r.data?['data'];
+      return d != null && (d['status'] == 'completed' || d['payment_status'] == 'paid');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _finishCashSuccess(double amountPaid, String oid) {
+    if (!mounted) return;
+    setState(() => _isLoadingQris = false);
+    widget.onPaymentSuccess(_paymentMethod, amountPaid, oid);
+    Navigator.pop(context);
+  }
   SessionCache get _cache => SessionCache.instance;
 
   Future<void> _submitCashPayment(double amountPaid, {String apiMethod = 'cash'}) async {
@@ -112,20 +142,30 @@ class _PaymentModalState extends State<PaymentModal> {
           'amount_paid': paid,
           'change_amount': change < 0 ? 0 : change,
           if (shiftId != null) 'shift_session_id': shiftId,
+          'idempotency_key': _cashIdemKey ??= const Uuid().v4(),
         },
       );
 
-      if (mounted) {
-        setState(() => _isLoadingQris = false);
-        widget.onPaymentSuccess(_paymentMethod, amountPaid, oid);
-        Navigator.pop(context);
-      }
+      _finishCashSuccess(amountPaid, oid);
     } on DioException catch (e) {
-      final detail = e.response?.data?['detail'] ?? 'Gagal memproses pembayaran';
+      final detail = e.response?.data?['detail']?.toString();
+      // Respons sukses yang pertama hilang di jaringan (retry tanpa key dari
+      // versi lama, atau key beda): order-nya SUDAH lunas → ini sukses.
+      if (e.response?.statusCode == 400 && (detail ?? '').contains('sudah dibayar')) {
+        _finishCashSuccess(amountPaid, oid);
+        return;
+      }
+      // Nggak ada respons sama sekali (timeout / putus): tanya server dulu
+      // sebelum bilang gagal — jangan suruh kasir bayar 2x.
+      if (e.response == null && await _orderAlreadyPaid(oid)) {
+        _finishCashSuccess(amountPaid, oid);
+        return;
+      }
       if (mounted) {
         setState(() {
           _isLoadingQris = false;
-          _cashError = detail.toString();
+          _cashError = detail ??
+              'Koneksi lambat, pembayaran belum terkonfirmasi. Tekan Bayar lagi — aman, tidak dobel.';
         });
       }
     } catch (e) {
@@ -311,6 +351,7 @@ class _PaymentModalState extends State<PaymentModal> {
           'amount_paid': widget.totalAmount,
           'change_amount': 0,
           if (shiftId != null) 'shift_session_id': shiftId,
+          'idempotency_key': _qrisIdemKey ??= const Uuid().v4(),
         },
       );
 

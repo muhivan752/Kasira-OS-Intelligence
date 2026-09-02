@@ -293,7 +293,15 @@ class CartNotifier extends StateNotifier<CartState> {
     if (n > 50) n = 50;
     state = state.copyWith(guestCount: n);
   }
-  void clearCart() => state = const CartState();
+  // Id order dibikin di HP, dipakai ulang kalau submit di-retry sesudah
+  // timeout. Server balikin order yang sama → nggak ada order kembar, stok
+  // nggak kepotong 2x. Di-reset begitu order kebentuk / keranjang dikosongin.
+  String? _clientOrderId;
+
+  void clearCart() {
+    _clientOrderId = null;
+    state = const CartState();
+  }
 
   /// For dine-in Pro: open or reuse tab, create order, link to tab — NO payment yet.
   /// ONLINE ONLY — Tab is a server-side feature, cannot work offline.
@@ -389,6 +397,7 @@ class CartNotifier extends StateNotifier<CartState> {
           '/orders/',
           options: Options(headers: headers),
           data: {
+            'id': _clientOrderId ??= const Uuid().v4(),
             'outlet_id': outletId,
             if (shiftId != null) 'shift_session_id': shiftId,
             'order_type': 'dine_in',
@@ -413,6 +422,7 @@ class CartNotifier extends StateNotifier<CartState> {
           },
         );
         orderId = orderRes.data?['data']?['id']?.toString();
+        if (orderId != null) _clientOrderId = null;
       } on DioException catch (e) {
         // Order failed — cancel tab if we just created it (prevent orphan)
         if (tabWasCreated) {
@@ -498,6 +508,7 @@ class CartNotifier extends StateNotifier<CartState> {
         '/orders/',
         options: Options(headers: _cache.authHeaders),
         data: {
+          'id': _clientOrderId ??= const Uuid().v4(),
           'outlet_id': outletId,
           if (shiftId != null) 'shift_session_id': shiftId,
           'order_type': state.orderType.toLowerCase().replaceAll(' ', '_'),
@@ -527,6 +538,7 @@ class CartNotifier extends StateNotifier<CartState> {
         state = state.copyWith(isSubmitting: false, error: 'Response pesanan tidak valid');
         return null;
       }
+      _clientOrderId = null;
       state = state.copyWith(
           isSubmitting: false, submittedOrderId: orderId, wasOffline: false);
       return orderId;

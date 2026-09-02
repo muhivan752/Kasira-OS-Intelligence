@@ -52,6 +52,22 @@ async def create_order(
     if not outlet:
         raise HTTPException(status_code=403, detail="Outlet tidak ditemukan atau bukan milik tenant Anda")
 
+    # Idempotent: id dari klien udah ada → ini retry (respons pertama hilang
+    # di jaringan). Balikin order yang sama, jangan bikin lagi + potong stok 2x.
+    if order_in.id:
+        existing = (await db.execute(
+            select(Order)
+            .options(selectinload(Order.items).selectinload(OrderItem.product))
+            .where(Order.id == order_in.id, Order.outlet_id == order_in.outlet_id)
+        )).scalar_one_or_none()
+        if existing:
+            return StandardResponse(
+                success=True,
+                message="Order already exists (idempotent)",
+                data=OrderResponse.model_validate(existing),
+                request_id=request.state.request_id,
+            )
+
     # Validasi table untuk dine_in
     # Pro: wajib pilih meja. Starter: boleh dine-in tanpa meja.
     tenant_stmt = select(Tenant).where(Tenant.id == current_user.tenant_id)
@@ -165,6 +181,7 @@ async def create_order(
     total_amount = calculated_total if (tax_config and (tax_config.pb1_enabled or tax_config.service_charge_enabled)) else (order_in.total_amount if order_in.total_amount > 0 else calculated_total)
 
     order = Order(
+        **({"id": order_in.id} if order_in.id else {}),
         outlet_id=order_in.outlet_id,
         shift_session_id=order_in.shift_session_id,
         customer_id=order_in.customer_id,

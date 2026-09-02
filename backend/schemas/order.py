@@ -58,6 +58,11 @@ class OrderBase(BaseModel):
 
 class OrderCreate(OrderBase):
     items: List[OrderItemCreate]
+    # Opsional, dibikin di HP (uuid v4). Retry sesudah timeout ngirim id yang
+    # sama → server balikin order yang udah ada, bukan bikin kembaran.
+    # Kegigit 2 Sep 2026: sinyal jelek → app kira gagal → order 'pending'
+    # yatim numpuk (ORD-5404, ORD-5406) + bayar dobel ditolak 400.
+    id: Optional[UUID] = None
 
 class OrderUpdateStatus(BaseModel):
     status: OrderStatus
