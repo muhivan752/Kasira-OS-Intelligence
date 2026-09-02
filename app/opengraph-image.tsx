@@ -1,102 +1,98 @@
 import { ImageResponse } from 'next/og';
 
-export const alt = 'Kasira — POS Digital untuk UMKM Indonesia';
+export const alt = 'Selaris — Kasir yang ngisi pembukuan kamu sendiri';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
+/**
+ * Gambar share (WA/IG/Twitter). Palet Aurora: kanvas neutral-50, tinta
+ * neutral-900, gradien pink → ungu buat mark + satu aksen. Font system —
+ * next/og nggak bisa muat Gabarito tanpa fetch, dan preview share nggak
+ * butuh presisi tipografi.
+ */
 export default function OGImage() {
   return new ImageResponse(
     (
       <div
         style={{
-          background: 'linear-gradient(135deg, #ecfdf5 0%, #ffffff 50%, #f0fdf4 100%)',
           width: '100%',
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: 'space-between',
+          padding: 72,
+          background: '#FCF7FB',
           fontFamily: 'system-ui, sans-serif',
+          position: 'relative',
         }}
       >
+        {/* glow atas ala hero */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            marginBottom: 24,
+            position: 'absolute',
+            top: -200,
+            left: 300,
+            width: 600,
+            height: 500,
+            borderRadius: 9999,
+            background: 'radial-gradient(circle, rgba(255,46,126,0.22) 0%, rgba(124,58,237,0.06) 55%, rgba(0,0,0,0) 80%)',
           }}
-        >
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              background: '#10b981',
-              borderRadius: 16,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: 36,
-              fontWeight: 900,
-            }}
-          >
-            K
+        />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <svg width="56" height="56" viewBox="0 0 64 64">
+            <defs>
+              <linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
+                <stop offset="0" stopColor="#7C3AED" />
+                <stop offset="1" stopColor="#FF2E7E" />
+              </linearGradient>
+            </defs>
+            <rect x="16" y="4" width="46" height="23" rx="11.5" transform="rotate(28 39 15.5)" fill="url(#g)" />
+            <rect x="2" y="37" width="46" height="23" rx="11.5" transform="rotate(28 25 48.5)" fill="url(#g)" />
+          </svg>
+          <span style={{ fontSize: 44, fontWeight: 800, color: '#1C1426', letterSpacing: -1.5 }}>Selaris</span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div style={{ fontSize: 64, fontWeight: 800, color: '#1C1426', lineHeight: 1.05, letterSpacing: -2, maxWidth: 980 }}>
+            Kasir yang ngisi pembukuan kamu sendiri.
           </div>
-          <span style={{ fontSize: 48, fontWeight: 900, color: '#111827' }}>
-            kasira
-          </span>
-          <span style={{ fontSize: 48, fontWeight: 900, color: '#10b981' }}>
-            .
-          </span>
+          <div style={{ fontSize: 26, color: '#4C3E4F', maxWidth: 900, lineHeight: 1.4 }}>
+            Transaksi, nota belanja, dan nomor WA pelanggan otomatis jadi stok, HPP, utang supplier, dan daftar pelanggan yang perlu disapa.
+          </div>
         </div>
-        <div
-          style={{
-            fontSize: 36,
-            fontWeight: 800,
-            color: '#111827',
-            textAlign: 'center',
-            maxWidth: 800,
-            lineHeight: 1.3,
-          }}
-        >
-          Kasir Digital yang Benar-Benar Simpel
-        </div>
-        <div
-          style={{
-            fontSize: 20,
-            color: '#6b7280',
-            marginTop: 16,
-            textAlign: 'center',
-            maxWidth: 600,
-          }}
-        >
-          POS modern + storefront gratis + QRIS tanpa komisi untuk cafe dan UMKM Indonesia
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            gap: 32,
-            marginTop: 40,
-          }}
-        >
-          {['Setup 5 Menit', 'Zero Komisi', 'Offline Mode'].map((text) => (
+
+        <div style={{ display: 'flex', gap: 14 }}>
+          {['Kasir offline', 'Foto nota → HPP', 'QRIS 0% komisi', 'Gratis 30 hari'].map((t) => (
             <div
-              key={text}
+              key={t}
               style={{
                 display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                background: '#f0fdf4',
-                padding: '10px 20px',
-                borderRadius: 12,
-                border: '1px solid #bbf7d0',
+                padding: '12px 22px',
+                borderRadius: 999,
+                background: '#FFFFFF',
+                border: '1px solid #ECE0EA',
+                fontSize: 20,
+                fontWeight: 600,
+                color: '#1C1426',
               }}
             >
-              <span style={{ color: '#10b981', fontSize: 16 }}>&#10003;</span>
-              <span style={{ fontSize: 16, fontWeight: 600, color: '#065f46' }}>{text}</span>
+              {t}
             </div>
           ))}
+          <div
+            style={{
+              display: 'flex',
+              padding: '12px 22px',
+              borderRadius: 999,
+              background: 'linear-gradient(120deg, #FF2E7E 0%, #7C3AED 100%)',
+              fontSize: 20,
+              fontWeight: 700,
+              color: '#FFFFFF',
+            }}
+          >
+            selaris.id
+          </div>
         </div>
       </div>
     ),

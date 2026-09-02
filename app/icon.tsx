@@ -4,31 +4,33 @@ export const size = { width: 32, height: 32 };
 export const contentType = 'image/png';
 
 /**
- * Tanda Kasira: struk dengan tepi bawah bergerigi.
- * Gerigi sengaja cuma 4 dan dibikin dalam — versi 6 gigi yang dangkal hilang
- * jadi garis samar begitu ikonnya mengecil ke 16px.
+ * Favicon Selaris: dua pil miring bergradien pink → ungu (logo Selaris,
+ * sama dengan components/ui/logo.tsx dan public/favicon.svg). Di 16px dua
+ * pilnya masih kebaca sebagai bentuk "S" miring — makanya mark-nya cuma
+ * dua elemen, tanpa detail kecil.
  */
 export default function Icon() {
   return new ImageResponse(
     (
       <div
         style={{
-          background: '#0B7A55',
           width: '100%',
           height: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: 7,
+          background: 'transparent',
         }}
       >
-        <svg width="24" height="24" viewBox="0 0 48 48">
-          <path
-            d="M13.5 13a2.5 2.5 0 0 1 2.5-2.5h16a2.5 2.5 0 0 1 2.5 2.5v18l-2.625 6-2.625-6-2.625 6-2.625-6-2.625 6-2.625-6-2.625 6-2.625-6z"
-            fill="#fff"
-          />
-          <rect x="18" y="16.5" width="12" height="3.1" rx="1.55" fill="#0B7A55" />
-          <rect x="18" y="22.5" width="7.5" height="3.1" rx="1.55" fill="#0B7A55" />
+        <svg width="32" height="32" viewBox="0 0 64 64">
+          <defs>
+            <linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
+              <stop offset="0" stopColor="#7C3AED" />
+              <stop offset="1" stopColor="#FF2E7E" />
+            </linearGradient>
+          </defs>
+          <rect x="16" y="4" width="46" height="23" rx="11.5" transform="rotate(28 39 15.5)" fill="url(#g)" />
+          <rect x="2" y="37" width="46" height="23" rx="11.5" transform="rotate(28 25 48.5)" fill="url(#g)" />
         </svg>
       </div>
     ),

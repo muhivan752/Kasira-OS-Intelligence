@@ -1,6 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Kasira">
-  <rect width="48" height="48" rx="11" fill="#0B7A55"/>
-  <path d="M13.5 13a2.5 2.5 0 0 1 2.5-2.5h16a2.5 2.5 0 0 1 2.5 2.5v18l-2.625 6-2.625-6-2.625 6-2.625-6-2.625 6-2.625-6-2.625 6-2.625-6z" fill="#fff"/>
-  <rect x="18" y="16.5" width="12" height="3.1" rx="1.55" fill="#0B7A55"/>
-  <rect x="18" y="22.5" width="7.5" height="3.1" rx="1.55" fill="#0B7A55"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Selaris">
+  <defs>
+    <linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#FF2E7E"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="4" width="46" height="23" rx="11.5" transform="rotate(28 39 15.5)" fill="url(#g)"/>
+  <rect x="2" y="37" width="46" height="23" rx="11.5" transform="rotate(28 25 48.5)" fill="url(#g)"/>
 </svg>
