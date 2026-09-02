@@ -16,6 +16,11 @@ export default function StorefrontPage() {
   const [loading, setLoading] = useState(true);
   const [storeData, setStoreData] = useState<any>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  // Hook WAJIB di atas semua `return` awal (loading / not found). Dulu
+  // ditaruh di bawah — begitu data toko masuk, jumlah hook berubah dan
+  // React lempar error #310 → storefront crash "Terjadi Kesalahan" buat
+  // SEMUA pelanggan sejak varian dirilis (22 Jul). Ketahuan 2 Sep.
+  const [variantProduct, setVariantProduct] = useState<any>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -60,7 +65,6 @@ export default function StorefrontPage() {
       : products.filter((p: any) => p.category_id === selectedCategory);
 
   // Produk yang lagi dipilih variannya. Non-null = modal varian kebuka.
-  const [variantProduct, setVariantProduct] = useState<any>(null);
 
   const addLine = (product: any, variant: any | null) => {
     addItem({
