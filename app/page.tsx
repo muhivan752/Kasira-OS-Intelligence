@@ -56,6 +56,13 @@ const SHOTS = [
   { src: '/app/keranjang.webp', title: 'Keranjang & bayar', body: 'Diskon, data pelanggan, dan saran menu yang sering dibeli bersamaan. Bayar sekarang atau simpan ke meja.' },
 ];
 
+// Tangkapan layar dashboard pemilik (browser 1440x900, diambil dari data demo).
+const DASH_SHOTS = [
+  { src: '/app/dash-overview.webp', title: 'Ringkasan harian', body: 'Omzet, jumlah pesanan, shift yang sedang berjalan, dan menu terlaris. Terbentuk dari transaksi kasir, tanpa rekap manual.', wide: true },
+  { src: '/app/dash-keuangan.webp', title: 'Laba rugi dan arus kas', body: 'Pendapatan, harga modal terjual, pengeluaran, dan posisi kas per akun. Tanpa satu pun jurnal diketik.', wide: false },
+  { src: '/app/dash-pembelian.webp', title: 'Pembelian dan utang supplier', body: 'Nota belanja bulan ini, tagihan yang belum lunas, dan jatuh tempo terdekat.', wide: false },
+];
+
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   ada: { text: 'Sudah jalan', cls: 'bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-[var(--success)]' },
   baru: { text: 'Baru dirilis', cls: 'bg-[var(--brand-tint)] text-[var(--brand-primary)]' },
@@ -123,6 +130,25 @@ const faqLd = {
   '@type': 'FAQPage',
   mainEntity: FAQS.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
 };
+
+/// Bingkai jendela browser buat tangkapan layar dashboard. Tiga titik di kiri
+/// dan pil alamat bikin gambarnya kebaca sebagai layar komputer, bukan gambar
+/// lepas yang ngambang di tengah halaman.
+function _Browser({ src, alt }: { src: string; alt: string }) {
+  return (
+    <div className="overflow-hidden rounded-[16px] border border-[var(--border-default)] bg-[var(--surface-card)] shadow-[0_24px_60px_-32px_rgba(20,10,40,0.45)]">
+      <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3.5 py-2.5">
+        <span className="flex gap-1.5" aria-hidden="true">
+          {['#ff5f57', '#febc2e', '#28c840'].map((c) => (
+            <span key={c} className="h-2.5 w-2.5 rounded-full" style={{ background: c }} />
+          ))}
+        </span>
+        <span className="ml-1 truncate rounded-full bg-[var(--surface-card)] px-3 py-1 text-[11px] text-[var(--text-muted)]">selaris.id/dashboard</span>
+      </div>
+      <img src={src} alt={alt} width={1440} height={900} loading="lazy" className="block w-full" />
+    </div>
+  );
+}
 
 export default function LandingPage() {
   return (
@@ -298,7 +324,37 @@ export default function LandingPage() {
           ))}
         </div>
 
-        <div className="mt-10 flex flex-wrap items-center gap-3">
+        <div className="mt-16 border-t border-[var(--border-subtle)] pt-12">
+          <p className="ks-eyebrow text-[var(--brand-secondary)]">Dashboard pemilik</p>
+          <h3 className="ks-display mt-3 max-w-[620px] text-[24px] leading-[1.15] text-[var(--text-strong)] sm:text-[30px]" style={{ textWrap: 'balance' }}>
+            Yang kasir kerjakan, langsung terbaca di layar Anda.
+          </h3>
+
+          <div className="mt-8 space-y-6">
+            {DASH_SHOTS.filter((d) => d.wide).map((d) => (
+              <figure key={d.src}>
+                <_Browser src={d.src} alt={`${BRAND} ${d.title}`} />
+                <figcaption className="mt-4 max-w-[640px]">
+                  <p className="ks-display text-[17px] text-[var(--text-strong)]">{d.title}</p>
+                  <p className="mt-1.5 text-[14px] leading-[1.6] text-[var(--text-muted)]">{d.body}</p>
+                </figcaption>
+              </figure>
+            ))}
+            <div className="grid gap-6 md:grid-cols-2">
+              {DASH_SHOTS.filter((d) => !d.wide).map((d) => (
+                <figure key={d.src}>
+                  <_Browser src={d.src} alt={`${BRAND} ${d.title}`} />
+                  <figcaption className="mt-4">
+                    <p className="ks-display text-[16px] text-[var(--text-strong)]">{d.title}</p>
+                    <p className="mt-1.5 text-[13.5px] leading-[1.55] text-[var(--text-muted)]">{d.body}</p>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-12 flex flex-wrap items-center gap-3">
           <Link href="/download" className="ks-btn ks-btn-outline !w-auto">Unduh aplikasinya</Link>
           <Link href={`/${DEMO_SLUG}`} className="text-[14px] font-semibold text-[var(--brand-primary)] transition hover:opacity-80">Lihat toko demo</Link>
         </div>
