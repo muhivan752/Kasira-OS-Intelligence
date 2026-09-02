@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../pos/utils/post_payment_refresh.dart';
 import '../../../../core/sync/sync_provider.dart';
 
 class SyncSettingsPage extends ConsumerStatefulWidget {
@@ -62,6 +63,12 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
         _lastSyncTime = 'Baru saja';
       }
     });
+
+    // Data baru turun ke Drift — provider yang bacanya harus diperbarui,
+    // kalau nggak layar produk & pemilih varian masih pakai isi lama.
+    if (syncService.status == SyncStatus.success) {
+      schedulePostPaymentRefresh(ref);
+    }
 
     final (msg, color) = switch (syncService.status) {
       SyncStatus.success => ('Sinkronisasi data berhasil.', KasiraDS.success),

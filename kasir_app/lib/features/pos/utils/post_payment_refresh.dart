@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../dashboard/providers/dashboard_provider.dart';
 import '../../orders/providers/orders_provider.dart';
 import '../../products/providers/products_provider.dart';
+import '../../products/providers/variants_provider.dart';
 import '../../tabs/providers/tab_provider.dart';
 
 /// P3 Quick Win #1: post-payment / post-sync provider refresh helper.
@@ -24,6 +25,11 @@ void schedulePostPaymentRefresh(
     ref.invalidate(dashboardProvider);
     ref.invalidate(ordersProvider);
     ref.invalidate(productsProvider);
+    // Varian dibaca dari Drift, dan Drift baru keisi SESUDAH sync. Tanpa ini
+    // provider-nya cuma jalan sekali pas app dibuka — pas Drift masih kosong —
+    // jadi sesudah sync pertama yang berhasil pun pemilih Panas/Dingin nggak
+    // pernah nongol sampai app-nya dimatiin dan dibuka lagi (2 Sep 2026).
+    ref.invalidate(productVariantsProvider);
     if (includeTabs) {
       // HARUS fetchTabs(), BUKAN invalidate(activeTabsCountProvider).
       // activeTabsCountProvider itu Provider turunan yang cuma `ref.watch(tabProvider).tabs`
