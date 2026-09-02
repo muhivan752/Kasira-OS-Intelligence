@@ -44,8 +44,7 @@ export function Logo({
   else if (variant === 'mono') textColor = '';
 
   const mono = variant === 'mono';
-  const fill = mono ? 'currentColor' : 'url(#selaris-mark)';
-
+  
   return (
     <div className={cn('flex items-center select-none', s.gap, className)}>
       <svg
@@ -59,14 +58,14 @@ export function Logo({
       >
         {!mono && (
           <defs>
-            <linearGradient id="selaris-mark" x1="0" y1="64" x2="64" y2="0" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="var(--violet-500, #7C3AED)" />
-              <stop offset="1" stopColor="var(--pink-500, #FF2E7E)" />
-            </linearGradient>
+            <linearGradient id="selaris-a" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#8A16D6" /><stop offset="1" stopColor="#FF3D63" /></linearGradient>
+            <linearGradient id="selaris-b" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#FF3D63" /><stop offset="1" stopColor="#8A16D6" /></linearGradient>
           </defs>
         )}
-        <rect x="16" y="4" width="46" height="23" rx="11.5" transform="rotate(28 39 15.5)" fill={fill} />
-        <rect x="2" y="37" width="46" height="23" rx="11.5" transform="rotate(28 25 48.5)" fill={fill} />
+        {/* Logo resmi Selaris (file dari Ivan, 2 Sep): dua pil naik ke kanan,
+            pil atas ungu→pink, pil bawah pink→ungu. Palet #FF3D63 / #8A16D6. */}
+        <rect x="15" y="14" width="42" height="18" rx="9" transform="rotate(-30 36 23)" fill={mono ? 'currentColor' : 'url(#selaris-a)'} />
+        <rect x="7" y="32" width="42" height="18" rx="9" transform="rotate(-30 28 41)" fill={mono ? 'currentColor' : 'url(#selaris-b)'} />
       </svg>
       {showWordmark && (
         <div

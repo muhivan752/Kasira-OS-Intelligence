@@ -27,3 +27,4 @@ from .landing_chat_log import LandingChatLog
 from .purchasing import Supplier, IngredientSupplier, PurchaseOrder, PurchaseOrderItem, SupplierPriceHistory
 from .finance import Expense, CashAccount
 from .crm import CustomerTag, CustomerTagLink, CustomerTimeline, Voucher, VoucherRedemption
+from .campaign import Campaign, CampaignMessage
