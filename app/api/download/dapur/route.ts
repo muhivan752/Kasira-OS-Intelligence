@@ -16,7 +16,7 @@ export async function GET() {
       return new NextResponse(file, {
         headers: {
           'Content-Type': 'application/vnd.android.package-archive',
-          'Content-Disposition': 'attachment; filename="kasira-dapur.apk"',
+          'Content-Disposition': 'attachment; filename="selaris-dapur.apk"',
           'Content-Length': file.byteLength.toString(),
         },
       });

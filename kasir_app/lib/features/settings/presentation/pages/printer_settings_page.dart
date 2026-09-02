@@ -251,7 +251,7 @@ Uint8List _buildTestPrint() {
   bytes.addAll(EscPos.boldOn);
   bytes.addAll(EscPos.line('--- TES PRINTER ---'));
   bytes.addAll(EscPos.boldOff);
-  bytes.addAll(EscPos.line('Kasira POS'));
+  bytes.addAll(EscPos.line('Selaris POS'));
   bytes.addAll(EscPos.line('Printer terhubung dengan baik'));
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);

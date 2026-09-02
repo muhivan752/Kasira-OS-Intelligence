@@ -4,7 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme/kasira_ds.dart';
 
-/// Product tile — ported 1:1 from the "Kasira POS.dc.html" Kasir grid card:
+/// Product tile — ported 1:1 from the "Selaris POS.dc.html" Kasir grid card:
 /// white surface-card, radius-20, subtle border + soft shadow, an icon/photo
 /// tile, name, price in Gabarito, and a gradient add button (glow-pink) that
 /// swaps to a −/qty/+ stepper once the item is in the cart.

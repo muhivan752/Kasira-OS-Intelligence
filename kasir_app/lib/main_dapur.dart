@@ -70,7 +70,7 @@ class KasiraDapurApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Kasira Dapur',
+      title: 'Selaris Dapur',
       theme: AppTheme.lightTheme.copyWith(
         // Override scaffold background to dark for kitchen mode
         scaffoldBackgroundColor: const Color(0xFF0F0F1A),

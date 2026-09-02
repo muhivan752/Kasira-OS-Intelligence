@@ -88,7 +88,7 @@ class _DapurSplashPageState extends State<DapurSplashPage>
               ),
               const SizedBox(height: 8),
               Text(
-                'Kasira Kitchen Display',
+                'Selaris Kitchen Display',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.5),
                   fontSize: 14,

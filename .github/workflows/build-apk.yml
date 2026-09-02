@@ -1,4 +1,4 @@
-name: Build & Release Kasira Flutter APK
+name: Build & Release Selaris Flutter APK
 
 on:
   workflow_dispatch:
@@ -79,7 +79,7 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
               <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
               <application
-                  android:label="Kasira"
+                  android:label="Selaris"
                   android:name="${applicationName}"
                   android:icon="@mipmap/ic_launcher"
                   android:usesCleartextTraffic="true">
@@ -130,7 +130,7 @@ jobs:
         run: |
           VERSION="${{ github.event.inputs.version }}"
           mv build/app/outputs/flutter-apk/app-release.apk \
-             build/app/outputs/flutter-apk/kasira-pos-v${VERSION}.apk
+             build/app/outputs/flutter-apk/selaris-pos-v${VERSION}.apk
         working-directory: kasir_app
 
       - name: Build Dapur APK Release
@@ -141,7 +141,7 @@ jobs:
         run: |
           VERSION="${{ github.event.inputs.version }}"
           mv build/app/outputs/flutter-apk/app-release.apk \
-             build/app/outputs/flutter-apk/kasira-dapur-v${VERSION}.apk
+             build/app/outputs/flutter-apk/selaris-dapur-v${VERSION}.apk
         working-directory: kasir_app
 
       # ── Generate version.json → commit ke repo (Flutter baca via raw.githubusercontent.com) ──
@@ -197,13 +197,13 @@ jobs:
             "pos": {
               "version": "${VERSION}",
               "is_mandatory": ${IS_MANDATORY},
-              "download_url": "${BASE_URL}/kasira-pos-v${VERSION}.apk",
+              "download_url": "${BASE_URL}/selaris-pos-v${VERSION}.apk",
               "release_notes": "${NOTES}"
             },
             "dapur": {
               "version": "${VERSION}",
               "is_mandatory": ${IS_MANDATORY},
-              "download_url": "${BASE_URL}/kasira-dapur-v${VERSION}.apk",
+              "download_url": "${BASE_URL}/selaris-dapur-v${VERSION}.apk",
               "release_notes": "${NOTES}"
             }
           }
@@ -224,18 +224,18 @@ jobs:
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Kasira-Release-APKs-v${{ github.event.inputs.version }}
+          name: Selaris-Release-APKs-v${{ github.event.inputs.version }}
           path: |
-            kasir_app/build/app/outputs/flutter-apk/kasira-pos-v${{ github.event.inputs.version }}.apk
-            kasir_app/build/app/outputs/flutter-apk/kasira-dapur-v${{ github.event.inputs.version }}.apk
+            kasir_app/build/app/outputs/flutter-apk/selaris-pos-v${{ github.event.inputs.version }}.apk
+            kasir_app/build/app/outputs/flutter-apk/selaris-dapur-v${{ github.event.inputs.version }}.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.event.inputs.version }}
-          name: Kasira v${{ github.event.inputs.version }}
+          name: Selaris v${{ github.event.inputs.version }}
           body: |
-            ## Kasira v${{ github.event.inputs.version }}
+            ## Selaris v${{ github.event.inputs.version }}
 
             ${{ steps.gen_version.outputs.release_notes }}
 
@@ -247,8 +247,8 @@ jobs:
             ### APK yang Tersedia
             | APK | Deskripsi |
             |-----|-----------|
-            | `kasira-pos-v*.apk` | Aplikasi kasir utama (POS) |
-            | `kasira-dapur-v*.apk` | Aplikasi kitchen display untuk dapur |
+            | `selaris-pos-v*.apk` | Aplikasi kasir utama (POS) |
+            | `selaris-dapur-v*.apk` | Aplikasi kitchen display untuk dapur |
 
             ### version.json URL (untuk Flutter update checker)
             ```
@@ -262,7 +262,7 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            kasir_app/build/app/outputs/flutter-apk/kasira-pos-v${{ github.event.inputs.version }}.apk
-            kasir_app/build/app/outputs/flutter-apk/kasira-dapur-v${{ github.event.inputs.version }}.apk
+            kasir_app/build/app/outputs/flutter-apk/selaris-pos-v${{ github.event.inputs.version }}.apk
+            kasir_app/build/app/outputs/flutter-apk/selaris-dapur-v${{ github.event.inputs.version }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

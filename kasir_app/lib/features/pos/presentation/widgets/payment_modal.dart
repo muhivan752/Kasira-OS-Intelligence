@@ -473,7 +473,7 @@ class _PaymentModalState extends State<PaymentModal> {
     );
   }
 
-  // ─── Narrow layout (phone) — ports "Kasira POS.dc.html" CHECKOUT screen ──────
+  // ─── Narrow layout (phone) — ports "Selaris POS.dc.html" CHECKOUT screen ──────
   Widget _buildNarrowLayout(BuildContext context) {
     final change = _amountReceived - widget.totalAmount;
     final isCash = _paymentMethod == 'Cash';

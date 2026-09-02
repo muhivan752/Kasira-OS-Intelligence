@@ -54,7 +54,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
     required this.changeAmount,
     required this.paymentMethod,
     required this.items,
-    this.outletName = 'Kasira Outlet',
+    this.outletName = 'Selaris Outlet',
     this.outletAddress = 'Jl. Sudirman No.1, Jakarta',
     this.tax,
     this.serviceCharge,
@@ -73,7 +73,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
       amountPaid: 100000,
       changeAmount: 25000,
       paymentMethod: 'Cash',
-      outletName: 'Kasira Coffee',
+      outletName: 'Selaris Coffee',
       outletAddress: 'Jl. Sudirman No. 88, Jakarta',
       tax: 7500,
       serviceCharge: 3750,
@@ -293,7 +293,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
                           Text(
                             (customFooter != null && customFooter.isNotEmpty)
                                 ? 'Terima kasih atas kunjungan Anda!\n$customFooter'
-                                : 'Terima kasih atas kunjungan Anda!\nPowered by Kasira',
+                                : 'Terima kasih atas kunjungan Anda!\nPowered by Selaris',
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: KasiraDS.textMuted,

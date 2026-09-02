@@ -95,7 +95,7 @@ final _router = GoRouter(
           changeAmount: (extra['changeAmount'] as num?)?.toDouble() ?? 0,
           paymentMethod: extra['paymentMethod'] as String? ?? 'Cash',
           items: (extra['items'] as List<ReceiptItem>?) ?? [],
-          outletName: extra['outletName'] as String? ?? 'Kasira Outlet',
+          outletName: extra['outletName'] as String? ?? 'Selaris Outlet',
           outletAddress: extra['outletAddress'] as String? ?? '',
           tax: (extra['tax'] as num?)?.toDouble(),
           serviceCharge: (extra['serviceCharge'] as num?)?.toDouble(),
@@ -126,7 +126,7 @@ final _router = GoRouter(
 
 void main() async {
   // Global error boundary — catch uncaught errors sebelum bikin app crash.
-  // Kasira dipake kasir di lapangan (Dita Coffee, dll), force-close =
+  // Selaris dipake kasir di lapangan (Dita Coffee, dll), force-close =
   // potensi kehilangan transaksi. Log + tetep biarin app hidup.
   runZonedGuarded<Future<void>>(() async {
     WidgetsFlutterBinding.ensureInitialized();
@@ -174,7 +174,7 @@ class KasiraApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Kasira POS',
+      title: 'Selaris POS',
       theme: AppTheme.auroraTheme,
       debugShowCheckedModeBanner: false,
       routerConfig: _router,

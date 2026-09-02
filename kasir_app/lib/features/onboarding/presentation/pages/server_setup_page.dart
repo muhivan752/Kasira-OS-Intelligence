@@ -224,7 +224,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Terhubung! Kasira v$_serverVersion\nMasuk ke halaman login...',
+                              'Terhubung! Selaris v$_serverVersion\nMasuk ke halaman login...',
                               style: const TextStyle(
                                   color: KasiraDS.success,
                                   fontWeight: FontWeight.w600),

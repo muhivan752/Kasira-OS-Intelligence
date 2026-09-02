@@ -170,7 +170,7 @@ class _DapurSettingsPageState extends ConsumerState<DapurSettingsPage> {
           // Version info
           Center(
             child: Text(
-              'Kasira Dapur v1.0.0',
+              'Selaris Dapur v1.0.0',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.2),
                 fontSize: 12,

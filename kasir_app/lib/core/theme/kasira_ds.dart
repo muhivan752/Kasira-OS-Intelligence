@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// KASIRA "Aurora" Design System — ported 1:1 from the SEFREKUENSI design
-/// system (claude.ai/design 629d2b64) used by `Kasira POS.dc.html`.
+/// system (claude.ai/design 629d2b64) used by `Selaris POS.dc.html`.
 ///
 /// Palette: hot-pink → electric-violet on warm plum-tinted neutrals.
 /// Light default (the POS redesign is light-mode). Dark aliases included

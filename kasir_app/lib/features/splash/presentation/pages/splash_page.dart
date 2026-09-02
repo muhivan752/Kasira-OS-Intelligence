@@ -221,7 +221,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Versi baru Kasira tersedia. Silakan update untuk melanjutkan.',
+                  'Versi baru Selaris tersedia. Silakan update untuk melanjutkan.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: KasiraDS.textMuted),
                 ),

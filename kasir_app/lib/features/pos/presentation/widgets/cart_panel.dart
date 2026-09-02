@@ -19,7 +19,7 @@ import '../../utils/post_payment_refresh.dart';
 
 // Tier is now read from SessionCache (0ms, in-memory)
 
-/// Cart panel — ports the "Kasira POS.dc.html" CART SHEET (Pesanan):
+/// Cart panel — ports the "Selaris POS.dc.html" CART SHEET (Pesanan):
 /// item rows with icon tile + gradient stepper pill, dashed-border totals,
 /// and gradient-frekuensi checkout buttons. Aurora light theme (KasiraDS).
 class CartPanel extends ConsumerWidget {

@@ -108,7 +108,7 @@ class SettingsPage extends ConsumerWidget {
                 _buildSettingTile(
                   icon: LucideIcons.helpCircle,
                   title: 'Pusat Bantuan',
-                  subtitle: 'Hubungi tim support Kasira',
+                  subtitle: 'Hubungi tim support Selaris',
                   onTap: () {},
                 ),
 

@@ -366,7 +366,7 @@ class _PosPageState extends ConsumerState<PosPage> {
     );
   }
 
-  /// Floating cart bar — ports the "Kasira POS.dc.html" Kasir bottom bar:
+  /// Floating cart bar — ports the "Selaris POS.dc.html" Kasir bottom bar:
   /// gradient-frekuensi pill, count badge + total + "Lihat pesanan →".
   Widget _buildCartBar(BuildContext context, int itemCount, double total) {
     final rp = NumberFormat.currency(

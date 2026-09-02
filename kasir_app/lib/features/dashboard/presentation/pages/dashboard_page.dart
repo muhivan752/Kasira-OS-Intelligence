@@ -310,7 +310,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             Text(emoji, style: const TextStyle(fontSize: 44)),
             const SizedBox(height: 12),
             Text(
-              'Kasira Pro untuk $domainLabel\nsedang disiapkan!',
+              'Selaris Pro untuk $domainLabel\nsedang disiapkan!',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: KasiraDS.textStrong, height: 1.3),
             ),
@@ -380,7 +380,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 
   static void _openWhatsApp() {
-    final uri = Uri.parse('https://wa.me/6285270782220?text=${Uri.encodeComponent("Halo Kasira, saya sudah transfer untuk upgrade Pro. Mohon diaktivasi.")}');
+    final uri = Uri.parse('https://wa.me/6285270782220?text=${Uri.encodeComponent("Halo Selaris, saya sudah transfer untuk upgrade Pro. Mohon diaktivasi.")}');
     launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 

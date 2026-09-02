@@ -84,7 +84,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Asisten Kasira',
+                Text('Asisten Selaris',
                     style: KasiraDS.display(size: 16, color: KasiraDS.textStrong)),
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   Container(width: 6, height: 6,
@@ -146,7 +146,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                       textInputAction: TextInputAction.send,
                       style: const TextStyle(fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: 'Tanya sesuatu ke Kasira AI...',
+                        hintText: 'Tanya sesuatu ke Selaris AI...',
                         hintStyle: const TextStyle(color: KasiraDS.textMuted, fontSize: 14),
                         filled: true,
                         fillColor: KasiraDS.surfaceSunken,
@@ -202,7 +202,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           ),
           const SizedBox(height: 20),
           const Text(
-            'Halo! Saya AI Asisten Kasira',
+            'Halo! Saya AI Asisten Selaris',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
@@ -320,7 +320,7 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-/// Typing indicator dengan teks "Kasira AI sedang berpikir..." — muncul saat
+/// Typing indicator dengan teks "Selaris AI sedang berpikir..." — muncul saat
 /// assistant bubble masih kosong (pre-first-chunk). Dots pakai pulse animation
 /// subtle biar kasir tau AI lagi proses, bukan freeze.
 class _TypingIndicator extends StatefulWidget {
@@ -384,7 +384,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
         ),
         const SizedBox(width: 10),
         const Text(
-          'Kasira AI sedang berpikir...',
+          'Selaris AI sedang berpikir...',
           style: TextStyle(
             fontSize: 12.5,
             color: KasiraDS.textMuted,

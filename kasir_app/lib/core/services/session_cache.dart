@@ -192,7 +192,7 @@ class SessionCache {
   };
 
   /// Fetch outlet info dari GET /outlets/{outletId} — prime cache biar
-  /// receipt/print gak pake fallback 'Kasira Outlet' di first transaction.
+  /// receipt/print gak pake fallback 'Selaris Outlet' di first transaction.
   /// Fire-and-forget, silent on error (graceful degrade).
   Future<void> fetchAndCacheOutletInfo() async {
     if (outletId == null || accessToken == null) return;
@@ -221,7 +221,7 @@ class SessionCache {
         prefs.setString('c_outlet_address', address);
       }
     } catch (_) {
-      // Silent — fallback chain (SessionCache → SharedPreferences → 'Kasira Outlet') tetap works
+      // Silent — fallback chain (SessionCache → SharedPreferences → 'Selaris Outlet') tetap works
     }
   }
 

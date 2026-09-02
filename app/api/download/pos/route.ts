@@ -16,7 +16,7 @@ export async function GET() {
       return new NextResponse(file, {
         headers: {
           'Content-Type': 'application/vnd.android.package-archive',
-          'Content-Disposition': 'attachment; filename="kasira-pos.apk"',
+          'Content-Disposition': 'attachment; filename="selaris-pos.apk"',
           'Content-Length': file.byteLength.toString(),
         },
       });

@@ -163,7 +163,7 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
                 conversationId: _currentConversationId,
               );
             } else if (type == 'error') {
-              _setError(assistantMsg.id, event['message'] as String? ?? 'Kasira AI mengalami masalah.');
+              _setError(assistantMsg.id, event['message'] as String? ?? 'Selaris AI mengalami masalah.');
             }
           } catch (_) {
             // Skip unparseable lines

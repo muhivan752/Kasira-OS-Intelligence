@@ -8,7 +8,7 @@ import '../services/session_cache.dart';
 import '../theme/kasira_ds.dart';
 import '../utils/phone_normalize.dart';
 
-/// Warna resmi WhatsApp — sengaja BUKAN token brand Kasira. Tombol WA di
+/// Warna resmi WhatsApp — sengaja BUKAN token brand Selaris. Tombol WA di
 /// [showTabReceiptSheet] juga pakai hijau ini, jadi kasir lihat warna yang sama
 /// dari tombol yang dia pencet sampai dialog yang kebuka.
 const _waGreen = Color(0xFF25D366);

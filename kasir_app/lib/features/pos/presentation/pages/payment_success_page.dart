@@ -55,7 +55,7 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
 
   final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
-  String _outletName = 'Kasira Outlet';
+  String _outletName = 'Selaris Outlet';
   String _outletAddress = '';
   bool _autoPrintAttempted = false;
 
@@ -89,14 +89,14 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
   }
 
   Future<void> _loadOutletInfoAndMaybeAutoPrint() async {
-    // Fallback chain: SessionCache (in-memory) → SharedPreferences → 'Kasira Outlet'
+    // Fallback chain: SessionCache (in-memory) → SharedPreferences → 'Selaris Outlet'
     final cache = SessionCache.instance;
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
       _outletName = cache.outletName
           ?? prefs.getString('c_outlet_name')
-          ?? 'Kasira Outlet';
+          ?? 'Selaris Outlet';
       _outletAddress = cache.outletAddress
           ?? prefs.getString('c_outlet_address')
           ?? '';

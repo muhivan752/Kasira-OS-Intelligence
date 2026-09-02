@@ -472,7 +472,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
 
     // Outlet info dari SharedPreferences cache (terisi pas online)
     final prefs = await SharedPreferences.getInstance();
-    final outletName = prefs.getString('c_outlet_name') ?? 'Kasira';
+    final outletName = prefs.getString('c_outlet_name') ?? 'Selaris';
     final outletAddress = prefs.getString('c_outlet_address') ?? '';
     final taxNumber = prefs.getString('c_outlet_tax_number');
     final customFooter = prefs.getString('c_outlet_custom_footer');
@@ -523,7 +523,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
     try {
       // Ambil outlet info dari cache (diisi saat reprint/receipt online) — offline-first
       final prefs = await SharedPreferences.getInstance();
-      String outletName = prefs.getString('c_outlet_name') ?? 'Kasira';
+      String outletName = prefs.getString('c_outlet_name') ?? 'Selaris';
       String outletAddress = prefs.getString('c_outlet_address') ?? '';
       String? taxNumber = prefs.getString('c_outlet_tax_number');
       String? customFooter = prefs.getString('c_outlet_custom_footer');

@@ -329,7 +329,7 @@ class ReceiptData {
       );
     }).toList();
     return ReceiptData(
-      outletName: (j['outlet_name'] ?? 'Kasira').toString(),
+      outletName: (j['outlet_name'] ?? 'Selaris').toString(),
       outletAddress: (j['outlet_address'] ?? '').toString(),
       orderNumber: (j['order_number'] ?? '').toString(),
       dateTime: (j['date_time'] ?? '').toString(),
@@ -431,7 +431,7 @@ class SplitReceiptData {
       );
     }).toList();
     return SplitReceiptData(
-      outletName: (j['outlet_name'] ?? 'Kasira').toString(),
+      outletName: (j['outlet_name'] ?? 'Selaris').toString(),
       outletAddress: (j['outlet_address'] ?? '').toString(),
       taxNumber: j['tax_number']?.toString(),
       customFooter: j['custom_footer']?.toString(),
@@ -591,7 +591,7 @@ Uint8List buildReceipt(ReceiptData d) {
       bytes.addAll(EscPos.line(l));
     }
   } else {
-    bytes.addAll(EscPos.line('Powered by Kasira'));
+    bytes.addAll(EscPos.line('Powered by Selaris'));
   }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);
@@ -676,7 +676,7 @@ Uint8List buildRefundReceipt(RefundReceiptData d) {
       bytes.addAll(EscPos.line(l));
     }
   } else {
-    bytes.addAll(EscPos.line('Powered by Kasira'));
+    bytes.addAll(EscPos.line('Powered by Selaris'));
   }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);
@@ -738,7 +738,7 @@ class ItemsReceiptData {
       );
     }).toList();
     return ItemsReceiptData(
-      outletName: (j['outlet_name'] ?? 'Kasira').toString(),
+      outletName: (j['outlet_name'] ?? 'Selaris').toString(),
       outletAddress: (j['outlet_address'] ?? '').toString(),
       taxNumber: j['tax_number']?.toString(),
       customFooter: j['custom_footer']?.toString(),
@@ -852,7 +852,7 @@ Uint8List buildItemsReceipt(ItemsReceiptData d) {
       bytes.addAll(EscPos.line(l));
     }
   } else {
-    bytes.addAll(EscPos.line('Powered by Kasira'));
+    bytes.addAll(EscPos.line('Powered by Selaris'));
   }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);
@@ -980,7 +980,7 @@ Uint8List buildSplitReceipt(SplitReceiptData d) {
       bytes.addAll(EscPos.line(l));
     }
   } else {
-    bytes.addAll(EscPos.line('Powered by Kasira'));
+    bytes.addAll(EscPos.line('Powered by Selaris'));
   }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);

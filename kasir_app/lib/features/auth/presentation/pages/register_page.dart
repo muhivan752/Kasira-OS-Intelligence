@@ -305,14 +305,14 @@ class _RegisterPageState extends State<RegisterPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _step == RegStep.inputInfo ? 'Daftar Kasira'
+                _step == RegStep.inputInfo ? 'Daftar Selaris'
                     : _step == RegStep.inputOtp ? 'Verifikasi OTP'
                     : 'Buat PIN',
                 style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
               Text(
-                _step == RegStep.inputInfo ? 'Mulai kelola usahamu dengan Kasira POS'
+                _step == RegStep.inputInfo ? 'Mulai kelola usahamu dengan Selaris POS'
                     : _step == RegStep.inputOtp ? 'Masukkan kode OTP yang dikirim ke WhatsApp'
                     : 'Buat PIN 6 digit untuk login cepat',
                 style: TextStyle(color: Colors.grey[400], fontSize: 14),
@@ -437,7 +437,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     child: _isLoading
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Mulai Pakai Kasira', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                        : const Text('Mulai Pakai Selaris', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
                   ),
                 ),
               ],
