@@ -294,6 +294,10 @@ async def sync_data(
                             product_name=product.name,
                         )
                     else:
+                        # allow_partial: penjualannya udah kejadian di HP. Sisa
+                        # dipotong sampai 0, kekurangannya jadi tanda
+                        # "terjual melebihi tercatat" buat pemilik, bukan
+                        # cuma baris log yang nggak dibaca siapa pun.
                         await svc_deduct_stock(
                             db,
                             product=product,
@@ -302,6 +306,7 @@ async def sync_data(
                             order_id=order_id_val,
                             user_id=current_user.id,
                             tier=tier,
+                            allow_partial=True,
                         )
                 except HTTPException as e:
                     # Insufficient stock saat offline order overshoot — log & lanjut

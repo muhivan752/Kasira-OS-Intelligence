@@ -58,6 +58,24 @@ class _PosPageState extends ConsumerState<PosPage> {
     _initConnectivity();
     _connectivitySub =
         Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
+    // Sync berkala selama online. Dulu HP cuma narik data waktu dibuka atau
+    // waktu jaringan balik, jadi dua kasir bisa lama sekali nggak lihat
+    // penjualan satu sama lain dan sama-sama mengira "sisa 3". Tiap 5 menit
+    // jendela itu mengecil ke hitungan menit. Nggak jalan kalau offline atau
+    // sync lain masih berjalan.
+    _periodicSync = Timer.periodic(const Duration(minutes: 5), (_) => _syncIfIdle());
+  }
+
+  Timer? _periodicSync;
+
+  Future<void> _syncIfIdle() async {
+    if (!mounted || _isOffline) return;
+    final syncSvc = ref.read(syncServiceProvider);
+    if (syncSvc.status == SyncStatus.syncing) return;
+    await syncSvc.sync();
+    if (mounted && syncSvc.status == SyncStatus.success) {
+      schedulePostPaymentRefresh(ref);
+    }
   }
 
   Future<void> _initConnectivity() async {
@@ -106,6 +124,7 @@ class _PosPageState extends ConsumerState<PosPage> {
   @override
   void dispose() {
     _connectivitySub?.cancel();
+    _periodicSync?.cancel();
     _searchController.dispose();
     _searchDebounce?.cancel();
     super.dispose();

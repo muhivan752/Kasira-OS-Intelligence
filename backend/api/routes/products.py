@@ -20,8 +20,7 @@ from backend.models.outlet import Outlet
 from backend.models.recipe import Recipe, RecipeIngredient
 from backend.schemas.product import (
     ProductCreate, ProductUpdate, ProductResponse,
-    ProductVariantResponse, ProductVariantBulkSet,
-)
+    ProductVariantResponse, ProductVariantBulkSet, ProductStockCount)
 from backend.schemas.stock import ProductRestock
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
@@ -169,6 +168,47 @@ async def restock_product(
         request_id=request.state.request_id,
         message=f"Berhasil restock {restock_in.quantity} item",
     )
+
+@router.post("/{product_id}/stock-count", response_model=StandardResponse[ProductResponse])
+async def stock_count_product(
+    request: Request,
+    product_id: UUID,
+    body: ProductStockCount,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Stok opname: angka fisik jadi kebenaran, tanda "terjual melebihi
+    tercatat" hilang, selisih ke bawah jadi beban selisih_stok di Keuangan."""
+    from backend.services.stock_service import count_product as svc_count
+    product = await validate_product_ownership(db, product_id, current_user.tenant_id)
+    if not product.stock_enabled:
+        raise HTTPException(status_code=400, detail="Tracking stok tidak aktif untuk produk ini")
+    tenant = (await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))).scalar_one_or_none()
+    tier = getattr(getattr(tenant, "subscription_tier", None), "value", "starter")
+    before = {"stock_qty": product.stock_qty, "oversell_qty": product.oversell_qty}
+    product, loss = await svc_count(
+        db, product=product, counted_qty=body.counted_qty, outlet_id=body.outlet_id,
+        user_id=current_user.id, tenant_id=current_user.tenant_id, notes=body.notes, tier=tier,
+    )
+    await log_audit(
+        db=db, action="STOCK_COUNT", entity="product", entity_id=product.id,
+        before_state=before,
+        after_state={"stock_qty": product.stock_qty, "delta": body.counted_qty - before["stock_qty"], "loss_value": loss, "notes": body.notes},
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+    )
+    await db.commit()
+    result = await db.execute(select(Product).options(selectinload(Product.category)).where(Product.id == product_id))
+    product = result.scalar_one()
+    delta = body.counted_qty - before["stock_qty"]
+    if delta < 0:
+        msg = f"Stok dicatat {body.counted_qty}. Selisih {abs(delta)} masuk Keuangan sebagai selisih stok" + (f" (Rp {loss:,.0f})" if loss else "") + "."
+    elif delta > 0:
+        msg = f"Stok dicatat {body.counted_qty}. Lebih {delta} dari tercatat, kemungkinan ada barang masuk yang belum dinota."
+    else:
+        msg = f"Stok dicatat {body.counted_qty}, sesuai."
+    return StandardResponse(success=True, data=ProductResponse.model_validate(product),
+                            request_id=request.state.request_id, message=msg)
+
 
 @router.post("/", response_model=StandardResponse[ProductResponse])
 async def create_product(

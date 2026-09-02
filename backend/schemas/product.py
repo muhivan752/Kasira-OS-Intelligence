@@ -87,6 +87,8 @@ class ProductUpdate(BaseModel):
     row_version: int
 
 class ProductResponse(ProductBase):
+    # Terjual melebihi stok tercatat, belum di-opname (mig 100).
+    oversell_qty: int = 0
     id: UUID
     brand_id: UUID
     category_id: Optional[UUID] = None
@@ -124,3 +126,10 @@ class ProductResponse(ProductBase):
         return self.stock_qty
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProductStockCount(BaseModel):
+    """Stok opname: angka hasil hitung fisik."""
+    outlet_id: UUID
+    counted_qty: int = Field(..., ge=0)
+    notes: Optional[str] = None

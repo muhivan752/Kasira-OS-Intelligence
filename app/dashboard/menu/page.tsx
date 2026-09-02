@@ -523,6 +523,11 @@ export default function MenuPage() {
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                             p.stock_qty <= 5 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
                           }`}>{p.stock_qty}</span>
+                          {p.oversell_qty > 0 && (
+                            <span className="ml-1.5 px-1.5 py-0.5 bg-amber-50 text-amber-700 text-xs rounded-full" title="Terjual melebihi stok tercatat (rekonsiliasi sync offline). Hitung fisik dari aplikasi kasir, tab Stok.">
+                              +{p.oversell_qty} terjual di luar catatan
+                            </span>
+                          )}
                         </td>
                       )}
                       <td className="px-4 py-3">

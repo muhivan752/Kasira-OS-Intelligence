@@ -23,6 +23,9 @@ class Product(BaseModel):
     stock_qty = Column(Integer, server_default='0', nullable=False)
     stock_low_threshold = Column(Integer, server_default='5', nullable=False)
     stock_auto_hide = Column(Boolean, server_default='true', nullable=False)
+    # Terjual melebihi stok tercatat (rekonsiliasi sync offline), belum di-opname.
+    # Cache dari event stock.oversell / stock.count (mig 100).
+    oversell_qty = Column(Integer, server_default='0', nullable=False)
     sold_today = Column(Integer, server_default='0', nullable=False)
     sold_total = Column(Integer, server_default='0', nullable=False)
     last_restock_at = Column(DateTime(timezone=True), nullable=True)

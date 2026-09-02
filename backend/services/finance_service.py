@@ -271,6 +271,9 @@ async def _cash_block(db: AsyncSession, tenant_id: UUID, outlet: Outlet, start: 
         select(Expense.cash_account_id, Expense.payment_method, func.coalesce(func.sum(Expense.amount), 0))
         .where(
             Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None), Expense.purchase_id.is_(None),
+            # 'none' = beban non-kas (selisih stok dari opname): masuk laba rugi,
+            # bukan arus kas — nggak ada uang yang keluar dari laci.
+            Expense.payment_method != "none",
             or_(Expense.outlet_id == outlet.id, Expense.outlet_id.is_(None)),
             Expense.paid_at >= start, Expense.paid_at < end,
         ).group_by(Expense.cash_account_id, Expense.payment_method)

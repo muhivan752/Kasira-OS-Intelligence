@@ -57,9 +57,16 @@ async def deduct_stock(
     order_id: UUID,
     user_id: Optional[UUID],
     tier: str = "starter",
+    allow_partial: bool = False,
 ) -> Product:
     """
     Deduct stock dari transaksi (sale event).
+
+    allow_partial (rekonsiliasi sync offline): penjualannya udah kejadian dan
+    uangnya udah di tangan, jadi nolak nggak ada gunanya. Sisa yang ada
+    dipotong sampai 0, kekurangannya dicatat sebagai event `stock.oversell` +
+    `products.oversell_qty` supaya pemilik lihat "terjual N lebih dari
+    tercatat, cek fisik", bukan cuma satu baris log.
     - Tulis event stock.sale ke events table (append-only)
     - Update products.stock_qty cache dengan optimistic lock
     - Auto-hide produk jika stok = 0
@@ -77,8 +84,13 @@ async def deduct_stock(
         logger.info(f"stock.sale already recorded for order {order_id}, skipping deduct")
         return product
 
+    shortage = 0
     if product.stock_qty < quantity:
-        raise HTTPException(
+        if allow_partial:
+            shortage = quantity - product.stock_qty
+            quantity = product.stock_qty
+        else:
+          raise HTTPException(
             status_code=400,
             detail={
                 "code": "STOCK_INSUFFICIENT",
@@ -121,6 +133,23 @@ async def deduct_stock(
         },
     )
     db.add(event)
+
+    if shortage > 0:
+        db.add(Event(
+            outlet_id=outlet_id,
+            stream_id=f"product:{product.id}",
+            event_type="stock.oversell",
+            event_data={
+                "product_id": str(product.id),
+                "outlet_id": str(outlet_id),
+                "quantity_short": shortage,
+                "order_id": str(order_id),
+            },
+            event_metadata={"tier": tier, "user_id": str(user_id) if user_id else None,
+                            "ts": datetime.now(timezone.utc).isoformat()},
+        ))
+        product.oversell_qty = (product.oversell_qty or 0) + shortage
+        logger.warning("stock.oversell product=%s order=%s short=%s", product.id, order_id, shortage)
 
     # 2. Update cache dengan optimistic lock — Rule #30: retry max 3x → baru error
     for attempt in range(3):
@@ -466,3 +495,75 @@ async def recompute_stock_from_events(
             stock = data.get("stock_after", stock)
 
     return max(stock, 0)
+
+
+
+async def count_product(
+    db: AsyncSession,
+    *,
+    product: Product,
+    counted_qty: int,
+    outlet_id: UUID,
+    user_id: Optional[UUID],
+    tenant_id: UUID,
+    notes: Optional[str] = None,
+    tier: str = "starter",
+) -> tuple[Product, Optional[float]]:
+    """Stok opname: angka fisik jadi kebenaran.
+
+    - Event `stock.count` (delta = fisik − tercatat), cache diset ke angka fisik,
+      tanda oversell di-nol-kan.
+    - Fisik LEBIH KECIL dari tercatat → selisihnya jadi beban `selisih_stok`
+      di Keuangan (harga modal × qty). Bukan kas keluar (payment_method
+      'none'), jadi cuma masuk laba rugi, nggak masuk arus kas.
+    - Fisik lebih besar → cuma dicatat; kemungkinan ada barang masuk yang
+      belum dinota (urusan gelombang berikutnya).
+
+    Balik (product, nilai_selisih_rp | None).
+    """
+    from decimal import Decimal
+    from backend.models.finance import Expense
+
+    before = product.stock_qty
+    delta = counted_qty - before
+
+    db.add(Event(
+        outlet_id=outlet_id,
+        stream_id=f"product:{product.id}",
+        event_type="stock.count",
+        event_data={
+            "product_id": str(product.id),
+            "outlet_id": str(outlet_id),
+            "stock_before": before,
+            "counted_qty": counted_qty,
+            "delta": delta,
+            "oversell_cleared": product.oversell_qty or 0,
+            "notes": notes,
+        },
+        event_metadata={"tier": tier, "user_id": str(user_id) if user_id else None,
+                        "ts": datetime.now(timezone.utc).isoformat()},
+    ))
+
+    product.stock_qty = counted_qty
+    product.oversell_qty = 0
+    if counted_qty > 0 and not product.is_active and product.stock_auto_hide:
+        product.is_active = True
+    product.row_version = (product.row_version or 0) + 1
+
+    loss_value = None
+    if delta < 0:
+        unit_cost = Decimal(product.buy_price or 0)
+        loss_value = float(unit_cost * Decimal(-delta))
+        if loss_value > 0:
+            db.add(Expense(
+                tenant_id=tenant_id,
+                outlet_id=outlet_id,
+                category="selisih_stok",
+                amount=Decimal(str(round(loss_value, 2))),
+                paid_at=datetime.now(timezone.utc),
+                payment_method="none",
+                note=f"Selisih stok {product.name}: tercatat {before}, fisik {counted_qty}" + (f". {notes}" if notes else ""),
+                recorded_by=user_id,
+            ))
+    await db.flush()
+    return product, loss_value

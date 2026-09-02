@@ -21,6 +21,7 @@ EXPENSE_CATEGORIES: list[tuple[str, str]] = [
     ("peralatan", "Peralatan & perbaikan"),
     ("transport", "Transport & ongkir"),
     ("langganan", "Langganan & aplikasi"),
+    ("selisih_stok", "Selisih stok"),
     ("lainnya", "Lainnya"),
 ]
 EXPENSE_CATEGORY_KEYS = {k for k, _ in EXPENSE_CATEGORIES}

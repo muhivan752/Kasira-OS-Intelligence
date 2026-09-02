@@ -21,6 +21,9 @@ class ProductModel {
   final int rowVersion;
   final int soldTotal;
   final bool isBestSeller;
+  /// Terjual melebihi stok tercatat (rekonsiliasi sync offline), belum
+  /// di-opname. Cuma datang dari server; dari Drift selalu 0.
+  final int oversellQty;
 
   const ProductModel({
     required this.id,
@@ -36,6 +39,7 @@ class ProductModel {
     this.rowVersion = 0,
     this.soldTotal = 0,
     this.isBestSeller = false,
+    this.oversellQty = 0,
   });
 
   /// Margin per unit (Rp). Null kalau buyPrice belum diisi.
@@ -60,6 +64,7 @@ class ProductModel {
       rowVersion: rowVersion,
       soldTotal: soldTotal,
       isBestSeller: isBestSeller ?? this.isBestSeller,
+      oversellQty: oversellQty,
     );
   }
 
@@ -72,6 +77,7 @@ class ProductModel {
       // bisa string Decimal "8500.00", atau num.
       buyPrice: _toDoubleOrNull(json['buy_price']),
       stock: (json['stock_qty'] as num?)?.toInt() ?? 0,
+      oversellQty: (json['oversell_qty'] as num?)?.toInt() ?? 0,
       stockEnabled: (json['stock_enabled'] as bool?) ?? false,
       imageUrl: json['image_url'] as String?,
       categoryId: json['category_id'] as String?,

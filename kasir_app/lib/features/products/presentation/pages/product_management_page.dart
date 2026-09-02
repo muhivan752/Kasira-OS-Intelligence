@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../../core/config/app_config.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:intl/intl.dart';
@@ -80,6 +82,80 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
           ),
         );
       }
+    }
+  }
+
+  /// Stok opname satu produk: ketik angka fisik → POST /stock-count.
+  Future<void> _stockCountSheet(ProductModel product) async {
+    final ctrl = TextEditingController(text: '${product.stock}');
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          decoration: const BoxDecoration(
+            color: KasiraDS.surfaceCard,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Hitung fisik ${product.name}', style: KasiraDS.display(size: 20)),
+              const SizedBox(height: 6),
+              Text(
+                'Tercatat ${product.stock}, tapi terjual ${product.oversellQty} lebih dari itu. Hitung yang ada di rak sekarang, lalu masukkan angkanya. Kalau lebih kecil dari tercatat, selisihnya masuk Keuangan sebagai selisih stok.',
+                style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Jumlah fisik',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Catat hasil hitung', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (ok != true) return;
+    final counted = int.tryParse(ctrl.text.trim());
+    if (counted == null || counted < 0) return;
+    try {
+      final cache = SessionCache.instance;
+      final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1,
+          connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 15)));
+      final res = await dio.post('/products/${product.id}/stock-count',
+          options: Options(headers: cache.authHeaders),
+          data: {'outlet_id': cache.outletId, 'counted_qty': counted});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(res.data['message']?.toString() ?? 'Hasil hitung dicatat'),
+        behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 4),
+      ));
+      ref.read(productsProvider.notifier).refresh();
+    } on DioException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text((e.response?.data?['detail'] ?? 'Gagal mencatat hasil hitung. Butuh koneksi.').toString()),
+        backgroundColor: KasiraDS.danger, behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 
@@ -314,6 +390,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
           itemBuilder: (context, index) {
             final product = filtered[index];
             return _ProductTile(
+              onStockCount: () => _stockCountSheet(product),
               product: product,
               currency: _currency,
               onToggle: () async => _toggleAvailability(product),
@@ -333,6 +410,8 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
 
 class _ProductTile extends StatefulWidget {
   final ProductModel product;
+  /// Tap tanda "terjual lebih dari tercatat" → stok opname (di page, butuh ref).
+  final VoidCallback? onStockCount;
   final NumberFormat currency;
   final Future<void> Function() onToggle;
   final VoidCallback? onTap;
@@ -342,6 +421,7 @@ class _ProductTile extends StatefulWidget {
     required this.currency,
     required this.onToggle,
     this.onTap,
+    this.onStockCount,
   });
 
   @override
@@ -434,6 +514,20 @@ class _ProductTileState extends State<_ProductTile> {
                       ),
                     ],
                   ),
+                  // Terjual melebihi stok tercatat (dua HP offline bersamaan,
+                  // atau barang masuk yang belum dinota). Tap = stok opname.
+                  if (widget.product.oversellQty > 0) ...[
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onTap: widget.onStockCount,
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(LucideIcons.alertTriangle, size: 12, color: KasiraDS.warning),
+                        const SizedBox(width: 4),
+                        Text('Terjual ${widget.product.oversellQty} lebih dari tercatat · cek fisik',
+                            style: const TextStyle(fontSize: 11, color: KasiraDS.warning, fontWeight: FontWeight.w700)),
+                      ]),
+                    ),
+                  ],
                 ],
               ),
             ),
