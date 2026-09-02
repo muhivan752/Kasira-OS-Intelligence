@@ -5,13 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { sendOtp, registerTenant } from '@/app/actions/auth';
 import { Logo } from '@/components/ui/logo';
-import { Loader2, ArrowLeft, Coffee, Utensils, Store, ShoppingBag, Gift } from 'lucide-react';
+import { Loader2, ArrowLeft, Coffee, Utensils, Store, ShoppingBag, Gift, Phone, User, Lock, Ticket } from 'lucide-react';
 
 type Step = 'phone' | 'otp' | 'details';
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[var(--text-muted)]" /></div>}>
       <RegisterContent />
     </Suspense>
   );
@@ -40,7 +40,6 @@ function RegisterContent() {
     const ref = searchParams.get('ref');
     if (ref) {
       setReferralCode(ref.toUpperCase());
-      // Validate referral code
       fetch(`/api/v1/referrals/validate/${ref}`)
         .then(r => r.json())
         .then(data => {
@@ -83,66 +82,80 @@ function RegisterContent() {
     router.push('/onboarding');
   }
 
+  const stepLabel = step === 'phone' ? '// Langkah 1 dari 3' : step === 'otp' ? '// Langkah 2 dari 3' : '// Langkah 3 dari 3';
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        <div className="flex justify-center mb-8">
-          <Logo size="lg" variant="light" />
+    <main className="relative min-h-screen flex flex-col items-center justify-center px-4 py-10 overflow-hidden">
+      {/* Aurora glow backdrop */}
+      <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'var(--gradient-glow)' }} />
+      <div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-[420px] w-[620px] rounded-full blur-3xl opacity-40" style={{ background: 'var(--gradient-aurora)' }} />
+
+      <div className="relative w-full max-w-[440px]">
+        <div className="flex flex-col items-center text-center mb-6">
+          <Logo size="lg" variant="brand" />
+          <p className="ks-eyebrow mt-2">{stepLabel}</p>
         </div>
 
         {referrerName && (
-          <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
-            <Gift className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+          <div
+            className="mb-4 rounded-[var(--radius-lg)] p-4 flex items-start gap-3"
+            style={{ background: 'var(--brand-tint-2)', border: '1px solid color-mix(in srgb, var(--brand-secondary) 25%, transparent)' }}
+          >
+            <Gift className="w-5 h-5 text-[var(--brand-secondary)] mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-emerald-800">Diundang oleh {referrerName}</p>
-              <p className="text-xs text-emerald-600 mt-0.5">Kode referral: {referralCode}</p>
+              <p className="text-sm font-semibold text-[var(--text-strong)]">Diundang oleh {referrerName}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5 ks-mono">{referralCode}</p>
             </div>
           </div>
         )}
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+        <div className="ks-card p-7 sm:p-8">
           {/* STEP 1: Phone */}
           {step === 'phone' && (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Daftar Kasira</h1>
-              <p className="text-gray-500 mb-6">Masukkan nomor WhatsApp aktif kamu</p>
+              <h1 className="ks-display text-[28px] font-extrabold text-[var(--text-strong)] leading-tight mb-1">Daftar Kasira</h1>
+              <p className="text-sm text-[var(--text-muted)] mb-6">Masukkan nomor WhatsApp aktif kamu.</p>
               <form onSubmit={handleSendOtp} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nomor WhatsApp</label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="08xx atau 628xx"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-lg"
-                  />
+                  <label className="ks-field-label">Nomor WhatsApp</label>
+                  <div className="ks-field">
+                    <span className="ks-field-icon"><Phone className="h-[18px] w-[18px]" /></span>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      required
+                      autoFocus
+                      placeholder="08xx atau 628xx"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      className="ks-mono"
+                    />
+                  </div>
                 </div>
                 {!referrerName && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Kode Referral <span className="text-gray-400">(opsional)</span></label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: KAS-XXXXX"
-                      value={referralCode}
-                      onChange={e => setReferralCode(e.target.value.toUpperCase())}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none uppercase"
-                    />
+                    <label className="ks-field-label">Kode Referral <span className="normal-case font-normal text-[var(--text-muted)]">(opsional)</span></label>
+                    <div className="ks-field">
+                      <span className="ks-field-icon"><Ticket className="h-[18px] w-[18px]" /></span>
+                      <input
+                        type="text"
+                        placeholder="Contoh: KAS-XXXXX"
+                        value={referralCode}
+                        onChange={e => setReferralCode(e.target.value.toUpperCase())}
+                        className="ks-mono uppercase"
+                      />
+                    </div>
                   </div>
                 )}
-                {error && <p className="text-red-500 text-sm">{error}</p>}
-                <button
-                  type="submit"
-                  disabled={loading || !phone}
-                  className="w-full py-3 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                >
+                {error && <p className="text-[var(--danger)] text-sm">{error}</p>}
+                <button type="submit" disabled={loading || !phone} className="ks-btn ks-btn-lg">
                   {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                   Kirim OTP via WhatsApp
                 </button>
               </form>
-              <p className="mt-6 text-center text-sm text-gray-500">
+              <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
                 Sudah punya akun?{' '}
-                <Link href="/login" className="text-emerald-600 font-semibold hover:underline">Login</Link>
+                <Link href="/login" className="text-[var(--brand-secondary)] font-semibold hover:underline">Login</Link>
               </p>
             </>
           )}
@@ -150,28 +163,27 @@ function RegisterContent() {
           {/* STEP 2: OTP */}
           {step === 'otp' && (
             <>
-              <button onClick={() => setStep('phone')} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4">
+              <button onClick={() => setStep('phone')} className="inline-flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-body)] mb-4 transition-colors">
                 <ArrowLeft className="w-4 h-4" /> Ganti nomor
               </button>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Masukkan OTP</h1>
-              <p className="text-gray-500 mb-6">Kode OTP dikirim ke WhatsApp <span className="font-semibold text-gray-800">{phone}</span></p>
+              <h1 className="ks-display text-[28px] font-extrabold text-[var(--text-strong)] leading-tight mb-1">Masukkan OTP</h1>
+              <p className="text-sm text-[var(--text-muted)] mb-6">Kode dikirim ke <span className="ks-mono text-[var(--text-body)]">{phone}</span></p>
               <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  required
-                  placeholder="6 digit OTP"
-                  value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-2xl tracking-widest text-center font-mono"
-                />
-                {error && <p className="text-red-500 text-sm">{error}</p>}
-                <button
-                  type="submit"
-                  disabled={otp.length !== 6}
-                  className="w-full py-3 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors"
-                >
+                <div className="ks-field">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    autoFocus
+                    placeholder="••••••"
+                    value={otp}
+                    onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                    className="ks-mono text-center !text-2xl tracking-[0.5em]"
+                  />
+                </div>
+                {error && <p className="text-[var(--danger)] text-sm">{error}</p>}
+                <button type="submit" disabled={otp.length !== 6} className="ks-btn ks-btn-lg">
                   Verifikasi OTP
                 </button>
               </form>
@@ -181,94 +193,77 @@ function RegisterContent() {
           {/* STEP 3: Details */}
           {step === 'details' && (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Info Bisnis</h1>
-              <p className="text-gray-500 mb-6">Lengkapi data untuk membuat akun</p>
+              <h1 className="ks-display text-[28px] font-extrabold text-[var(--text-strong)] leading-tight mb-1">Info Bisnis</h1>
+              <p className="text-sm text-[var(--text-muted)] mb-6">Lengkapi data untuk membuat akun.</p>
               <form onSubmit={handleRegister} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tipe Bisnis</label>
+                  <label className="ks-field-label">Tipe Bisnis</label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { id: 'cafe', name: 'Cafe', icon: Coffee },
                       { id: 'resto', name: 'Restoran', icon: Utensils },
                       { id: 'warung', name: 'Warung', icon: Store },
                       { id: 'other', name: 'Lainnya', icon: ShoppingBag },
-                    ].map((t) => (
-                      <label key={t.id} className={`flex items-center gap-2 p-3 cursor-pointer rounded-xl border-2 transition-all ${
-                        businessType === t.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:border-emerald-300'
-                      }`}>
-                        <input type="radio" name="btype" value={t.id} checked={businessType === t.id}
-                          onChange={e => setBusinessType(e.target.value)} className="sr-only" />
-                        <t.icon className={`w-5 h-5 ${businessType === t.id ? 'text-emerald-600' : 'text-gray-400'}`} />
-                        <span className={`text-sm font-medium ${businessType === t.id ? 'text-emerald-900' : 'text-gray-700'}`}>{t.name}</span>
-                      </label>
-                    ))}
+                    ].map((t) => {
+                      const active = businessType === t.id;
+                      return (
+                        <label
+                          key={t.id}
+                          className="flex items-center gap-2 p-3 cursor-pointer rounded-[var(--radius-md)] border-2 transition-all"
+                          style={{
+                            borderColor: active ? 'var(--brand-primary)' : 'var(--border-subtle)',
+                            background: active ? 'var(--brand-tint)' : 'transparent',
+                          }}
+                        >
+                          <input type="radio" name="btype" value={t.id} checked={active} onChange={e => setBusinessType(e.target.value)} className="sr-only" />
+                          <t.icon className="w-5 h-5" style={{ color: active ? 'var(--brand-primary)' : 'var(--text-muted)' }} />
+                          <span className="text-sm font-medium" style={{ color: active ? 'var(--text-strong)' : 'var(--text-body)' }}>{t.name}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Bisnis</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: Kopi Nusantara"
-                    value={businessName}
-                    onChange={e => setBusinessName(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                  />
+                  <label className="ks-field-label">Nama Bisnis</label>
+                  <div className="ks-field">
+                    <span className="ks-field-icon"><Store className="h-[18px] w-[18px]" /></span>
+                    <input type="text" required placeholder="Contoh: Kopi Nusantara" value={businessName} onChange={e => setBusinessName(e.target.value)} />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Pemilik</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nama lengkap"
-                    value={ownerName}
-                    onChange={e => setOwnerName(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                  />
+                  <label className="ks-field-label">Nama Pemilik</label>
+                  <div className="ks-field">
+                    <span className="ks-field-icon"><User className="h-[18px] w-[18px]" /></span>
+                    <input type="text" required placeholder="Nama lengkap" value={ownerName} onChange={e => setOwnerName(e.target.value)} />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">PIN (6 digit)</label>
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={6}
-                    required
-                    placeholder="------"
-                    value={pin}
-                    onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-center tracking-widest text-xl font-mono"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="ks-field-label">PIN (6 digit)</label>
+                    <div className="ks-field">
+                      <input type="password" inputMode="numeric" maxLength={6} required placeholder="••••••" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} className="ks-mono text-center tracking-[0.35em]" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="ks-field-label">Konfirmasi PIN</label>
+                    <div className="ks-field">
+                      <input type="password" inputMode="numeric" maxLength={6} required placeholder="••••••" value={pinConfirm} onChange={e => setPinConfirm(e.target.value.replace(/\D/g, ''))} className="ks-mono text-center tracking-[0.35em]" />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Konfirmasi PIN</label>
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={6}
-                    required
-                    placeholder="------"
-                    value={pinConfirm}
-                    onChange={e => setPinConfirm(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-center tracking-widest text-xl font-mono"
-                  />
-                </div>
-                {error && <p className="text-red-500 text-sm">{error}</p>}
-                <button
-                  type="submit"
-                  disabled={loading || !businessName || !ownerName || pin.length !== 6}
-                  className="w-full py-3 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                >
+                {error && <p className="text-[var(--danger)] text-sm">{error}</p>}
+                <button type="submit" disabled={loading || !businessName || !ownerName || pin.length !== 6} className="ks-btn ks-btn-lg">
                   {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                   Buat Akun
                 </button>
-                <p className="text-center text-xs text-gray-500 pt-2">
-                  Dengan mendaftar, Anda menyetujui <Link href="/terms" className="text-emerald-600 hover:underline">Syarat & Ketentuan</Link> dan <Link href="/privacy" className="text-emerald-600 hover:underline">Kebijakan Privasi</Link> Kasira.
+                <p className="text-center text-xs text-[var(--text-muted)] leading-relaxed pt-1">
+                  Dengan mendaftar, kamu setuju pada <Link href="/terms" className="font-semibold text-[var(--text-body)] hover:underline">Syarat</Link> &amp; <Link href="/privacy" className="font-semibold text-[var(--text-body)] hover:underline">Privasi</Link> Kasira.
                 </p>
               </form>
             </>
           )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

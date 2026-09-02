@@ -1,5 +1,5 @@
 import type {Metadata} from 'next';
-import { Plus_Jakarta_Sans, Syne } from 'next/font/google';
+import { Plus_Jakarta_Sans, Gabarito, Space_Mono } from 'next/font/google';
 import './globals.css'; // Global styles
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -8,9 +8,19 @@ const plusJakarta = Plus_Jakarta_Sans({
   display: 'swap',
 });
 
-const syne = Syne({
+// Display font for the "Aurora" redesign (headlines, brand wordmark, buttons)
+const gabarito = Gabarito({
   subsets: ['latin'],
-  variable: '--font-syne',
+  weight: ['400', '500', '600', '700', '800', '900'],
+  variable: '--font-gabarito',
+  display: 'swap',
+});
+
+// Mono for numeric / receipt-style values
+const spaceMono = Space_Mono({
+  subsets: ['latin'],
+  weight: ['400', '700'],
+  variable: '--font-space-mono',
   display: 'swap',
 });
 
@@ -22,7 +32,7 @@ export const metadata: Metadata = {
     default: 'Kasira — POS Digital untuk UMKM Indonesia',
     template: '%s | Kasira',
   },
-  description: 'Kasir digital modern dengan storefront gratis, QRIS tanpa komisi, dan AI insight untuk bisnis F&B dan UMKM Indonesia. Setup 5 menit, langsung jalan.',
+  description: 'Kasir digital yang ngisi pembukuan sendiri: stok, HPP, utang supplier, dan pelanggan terbentuk otomatis dari transaksi, nota belanja, dan nomor WA. Untuk cafe & UMKM Indonesia.',
   keywords: [
     'POS', 'kasir digital', 'kasir online', 'QRIS', 'aplikasi kasir',
     'storefront', 'cafe', 'UMKM', 'Indonesia', 'point of sale',
@@ -35,13 +45,13 @@ export const metadata: Metadata = {
     locale: 'id_ID',
     url: SITE_URL,
     siteName: 'Kasira',
-    title: 'Kasira — POS Digital untuk UMKM Indonesia',
-    description: 'POS modern + storefront gratis + QRIS tanpa komisi. Masuk lewat WhatsApp, langsung jalan.',
+    title: 'Kasira — Kasir yang ngisi pembukuan sendiri',
+    description: 'Kasir + stok + pembelian + pelanggan dalam satu aplikasi. Foto nota, HPP ke-update. QRIS tanpa komisi.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Kasira — POS Digital untuk UMKM Indonesia',
-    description: 'POS modern + storefront gratis + QRIS tanpa komisi untuk cafe dan UMKM Indonesia.',
+    title: 'Kasira — Kasir yang ngisi pembukuan sendiri',
+    description: 'Kasir + stok + pembelian + pelanggan dalam satu aplikasi untuk cafe dan UMKM Indonesia.',
   },
   robots: {
     index: true,
@@ -63,7 +73,7 @@ const GA_ID = process.env.NEXT_PUBLIC_GA_ID || '';
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="id" className={`${plusJakarta.variable} ${syne.variable}`}>
+    <html lang="id" className={`${plusJakarta.variable} ${gabarito.variable} ${spaceMono.variable}`}>
       <head>
         {GA_ID && (
           <>

@@ -1,6 +1,372 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: var(--font-plus-jakarta), sans-serif;
-  --font-syne: var(--font-syne), sans-serif;
+/* ============================================================
+   KASIRA DESIGN SYSTEM — "Aurora" (redesign 2026-07)
+   Single source of truth. Every web surface (login, register,
+   landing, dashboard) consumes these tokens. Ported faithfully
+   from the Kasira F&B Redesign design-component.
+   Palette: pink → violet → coral → mint. Light default + dark.
+   Apply dark via <html class="dark"> or [data-theme="dark"].
+   ============================================================ */
+
+:root {
+  /* ---- Raw palette ---- */
+  --neutral-0:   #FFFFFF;
+  --neutral-50:  #FCF7FB;
+  --neutral-100: #F6EEF4;
+  --neutral-200: #ECE0EA;
+  --neutral-300: #DCCBD8;
+  --neutral-400: #BCA8B8;
+  --neutral-500: #927E8F;
+  --neutral-600: #6B596A;
+  --neutral-700: #4C3E4F;
+  --neutral-800: #2E2436;
+  --neutral-900: #1C1426;
+  --neutral-950: #120B19;
+
+  --pink-50:  #FFF0F6;
+  --pink-100: #FFE0EC;
+  --pink-200: #FFB8D2;
+  --pink-300: #FF8AB6;
+  --pink-400: #FF5C97;
+  --pink-500: #FF2E7E;
+  --pink-600: #ED1268;
+  --pink-700: #C70A55;
+  --pink-800: #9E0944;
+  --pink-900: #7A0B38;
+
+  --violet-50:  #F4EEFE;
+  --violet-100: #E9DEFD;
+  --violet-200: #D0BAFB;
+  --violet-300: #B492F6;
+  --violet-400: #9966EF;
+  --violet-500: #7C3AED;
+  --violet-600: #6A28D9;
+  --violet-700: #561FB5;
+  --violet-800: #441A8E;
+  --violet-900: #34176C;
+
+  --coral-300: #FFB59B;
+  --coral-400: #FF9466;
+  --coral-500: #FF7A4D;
+  --coral-600: #F2602F;
+
+  --mint-300: #7DF5CE;
+  --mint-400: #3DF0B5;
+  --mint-500: #12E0A0;
+  --mint-600: #06B884;
+
+  --amber-400: #FFC24B;
+  --amber-500: #FFB23E;
+  --blue-400:  #5C9DFF;
+  --blue-500:  #3A86FF;
+  --red-400:   #FF6B6B;
+  --red-500:   #FB4D4D;
+  --red-600:   #E23030;
+
+  /* ---- Gradients ---- */
+  --gradient-frekuensi: linear-gradient(120deg, var(--pink-500) 0%, var(--violet-500) 100%);
+  --gradient-frekuensi-soft: linear-gradient(120deg, var(--pink-400) 0%, var(--violet-400) 100%);
+  --gradient-hangat: linear-gradient(120deg, var(--coral-400) 0%, var(--pink-500) 60%, var(--violet-500) 100%);
+  --gradient-aurora: linear-gradient(135deg, #FF2E7E 0%, #C03BE6 45%, #7C3AED 100%);
+  --gradient-glow: radial-gradient(120% 120% at 50% 0%, rgba(255,46,126,0.20) 0%, rgba(124,58,237,0.05) 55%, transparent 80%);
+
+  /* ---- Semantic aliases — LIGHT (default) ---- */
+  --bg-base:        var(--neutral-50);
+  --bg-subtle:      var(--neutral-100);
+  --surface-card:   var(--neutral-0);
+  --surface-raised: var(--neutral-0);
+  --surface-sunken: var(--neutral-100);
+  --surface-inverse: var(--neutral-900);
+
+  --border-subtle:  var(--neutral-200);
+  --border-default: var(--neutral-300);
+  --border-strong:  var(--neutral-400);
+
+  --text-strong:  var(--neutral-900);
+  --text-body:    var(--neutral-700);
+  --text-muted:   var(--neutral-500);
+  --text-inverse: var(--neutral-0);
+  --text-on-brand: #FFFFFF;
+
+  --brand-primary:    var(--pink-500);
+  --brand-primary-hover: var(--pink-600);
+  --brand-secondary:  var(--violet-500);
+  --brand-secondary-hover: var(--violet-600);
+  --brand-tint:       var(--pink-50);
+  --brand-tint-2:     var(--violet-50);
+
+  --success: var(--mint-600);
+  --warning: var(--amber-500);
+  --danger:  var(--red-500);
+  --info:    var(--blue-500);
+
+  --focus-ring: var(--violet-400);
+
+  /* ---- Typography (next/font exposes families as CSS vars) ---- */
+  --font-display: var(--font-gabarito), var(--font-plus-jakarta), system-ui, sans-serif;
+  --font-sans:    var(--font-plus-jakarta), system-ui, -apple-system, sans-serif;
+  --font-mono:    var(--font-space-mono), ui-monospace, 'SF Mono', monospace;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extrabold: 800;
+  --weight-black: 900;
+
+  --leading-tight: 1.05;
+  --leading-snug: 1.2;
+  --leading-normal: 1.45;
+  --leading-relaxed: 1.65;
+
+  /* ---- Radii ---- */
+  --radius-xs:  6px;
+  --radius-sm:  10px;
+  --radius-md:  14px;
+  --radius-lg:  20px;
+  --radius-xl:  28px;
+  --radius-2xl: 36px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+
+  /* ---- Shadows (light) ---- */
+  --shadow-xs: 0 1px 2px rgba(46, 36, 54, 0.06);
+  --shadow-sm: 0 2px 6px rgba(46, 36, 54, 0.08);
+  --shadow-md: 0 6px 18px rgba(46, 36, 54, 0.10);
+  --shadow-lg: 0 16px 38px rgba(46, 36, 54, 0.14);
+  --shadow-xl: 0 28px 64px rgba(46, 36, 54, 0.20);
+
+  --glow-pink:   0 8px 30px rgba(255, 46, 126, 0.40);
+  --glow-violet: 0 8px 30px rgba(124, 58, 237, 0.40);
+  --glow-brand:  0 10px 34px rgba(255, 46, 126, 0.28), 0 4px 14px rgba(124, 58, 237, 0.24);
+  --ring-focus:  0 0 0 3px rgba(124, 58, 237, 0.35);
+
+  /* ---- Motion ---- */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --dur-slower: 520ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
+  --press-scale: 0.96;
+  --hover-lift: -2px;
+}
+
+.dark,
+[data-theme="dark"] {
+  --bg-base:        var(--neutral-950);
+  --bg-subtle:      #1A1023;
+  --surface-card:   var(--neutral-900);
+  --surface-raised: #251A30;
+  --surface-sunken: var(--neutral-950);
+  --surface-inverse: var(--neutral-50);
+
+  --border-subtle:  rgba(255,255,255,0.07);
+  --border-default: rgba(255,255,255,0.12);
+  --border-strong:  rgba(255,255,255,0.22);
+
+  --text-strong:  #F8F1F6;
+  --text-body:    #D7C7D4;
+  --text-muted:   #9A879A;
+  --text-inverse: var(--neutral-950);
+  --text-on-brand: #FFFFFF;
+
+  --brand-primary:    var(--pink-400);
+  --brand-primary-hover: var(--pink-300);
+  --brand-secondary:  var(--violet-400);
+  --brand-secondary-hover: var(--violet-300);
+  --brand-tint:       rgba(255,46,126,0.14);
+  --brand-tint-2:     rgba(124,58,237,0.16);
+
+  --focus-ring: var(--violet-300);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.50);
+  --shadow-lg: 0 18px 42px rgba(0, 0, 0, 0.58);
+  --shadow-xl: 0 30px 70px rgba(0, 0, 0, 0.66);
+
+  --glow-pink:   0 8px 34px rgba(255, 46, 126, 0.55);
+  --glow-violet: 0 8px 34px rgba(124, 58, 237, 0.55);
+  --glow-brand:  0 10px 38px rgba(255, 46, 126, 0.38), 0 4px 16px rgba(124, 58, 237, 0.34);
+  --ring-focus:  0 0 0 3px rgba(180, 146, 246, 0.45);
+}
+
+/* ------------------------------------------------------------
+   Tailwind v4 bridge — expose tokens as utility-friendly names.
+   Enables bg-brand, text-strong, text-brand, rounded-pill, etc.
+   ------------------------------------------------------------ */
+@theme inline {
+  --font-sans: var(--font-plus-jakarta), system-ui, sans-serif;
+  --font-display: var(--font-gabarito), var(--font-plus-jakarta), sans-serif;
+  --font-mono: var(--font-space-mono), ui-monospace, monospace;
+
+  --color-brand: var(--brand-primary);
+  --color-brand-hover: var(--brand-primary-hover);
+  --color-brand-2: var(--brand-secondary);
+  --color-brand-tint: var(--brand-tint);
+  --color-base: var(--bg-base);
+  --color-subtle: var(--bg-subtle);
+  --color-surface: var(--surface-card);
+  --color-strong: var(--text-strong);
+  --color-body: var(--text-body);
+  --color-muted: var(--text-muted);
+  --color-line: var(--border-default);
+  --color-line-subtle: var(--border-subtle);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --color-pink-500: var(--pink-500);
+  --color-violet-500: var(--violet-500);
+
+  --radius-pill: var(--radius-pill);
+}
+
+/* ------------------------------------------------------------
+   Base — scoped so not-yet-migrated pages (landing/dashboard set
+   their own bg + explicit utility colors) are unaffected.
+   ------------------------------------------------------------ */
+body {
+  background: var(--bg-base);
+  color: var(--text-body);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--brand-tint); color: var(--text-strong); }
+
+/* ------------------------------------------------------------
+   Reusable component helpers (login / register / auth surfaces)
+   ------------------------------------------------------------ */
+.ks-display { font-family: var(--font-display); font-weight: var(--weight-extrabold); letter-spacing: -0.02em; }
+.ks-mono    { font-family: var(--font-mono); }
+
+.ks-gradient-text {
+  background: var(--gradient-aurora);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.ks-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Field — ports SEFREKUENSI <Input>: bordered wrapper (1.5px, white
+   surface, radius-md, min-height 48) + bare input, optional leading icon.
+   Focus → violet (brand-secondary) border + ring. Wrap markup as
+   <div class="ks-field"><span class="ks-field-icon">…</span><input/></div>. */
+.ks-field-label {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--text-strong);
+  margin-bottom: 6px;
+}
+.ks-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  background: var(--surface-card);
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-md);
+  transition: border-color var(--dur-base) var(--ease-standard),
+              box-shadow var(--dur-base) var(--ease-standard);
+}
+.ks-field:focus-within {
+  border-color: var(--brand-secondary);
+  box-shadow: var(--ring-focus);
+}
+.ks-field.is-error { border-color: var(--danger); }
+.ks-field.is-error:focus-within { box-shadow: none; }
+.ks-field-icon { display: flex; flex-shrink: 0; color: var(--text-muted); }
+.ks-field input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-strong);
+  padding: 12px 0;
+}
+.ks-field input::placeholder { color: var(--text-muted); }
+
+/* Eyebrow — SEFREKUENSI mono step label (// Langkah 2 dari 3) */
+.ks-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand-primary);
+}
+
+/* Button — ports SEFREKUENSI <Button>: font-sans 700, pill, primary =
+   frekuensi gradient + neon glow, press-scale on active (no hover lift). */
+.ks-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 11px 22px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  color: var(--text-on-brand);
+  background: var(--gradient-frekuensi);
+  box-shadow: var(--glow-brand);
+  transition: transform var(--dur-fast) var(--ease-spring),
+              box-shadow var(--dur-base) var(--ease-out),
+              opacity var(--dur-base) var(--ease-standard);
+  -webkit-tap-highlight-color: transparent;
+}
+.ks-btn:active:not(:disabled) { transform: scale(var(--press-scale)); }
+.ks-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+/* Sizes */
+.ks-btn-lg { min-height: 54px; padding: 15px 28px; font-size: 16px; gap: 10px; }
+.ks-btn-sm { min-height: 36px; padding: 8px 16px; font-size: 13px; gap: 6px; }
+
+/* Variants */
+.ks-btn-outline {
+  background: transparent;
+  color: var(--text-strong);
+  border: 1.5px solid var(--border-default);
+  box-shadow: none;
+}
+.ks-btn-soft {
+  background: var(--brand-tint);
+  color: var(--brand-primary);
+  box-shadow: none;
+}
+.ks-btn-ghost {
+  background: transparent;
+  color: var(--text-body);
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
