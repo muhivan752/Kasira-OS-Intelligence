@@ -36,6 +36,11 @@ class _PosPageState extends ConsumerState<PosPage> {
   String _selectedCategoryId = 'all';
   String _searchQuery = '';
   bool _isOffline = false;
+  // Sync pertama tiap app dibuka. Dulu sync CUMA jalan waktu HP pindah
+  // offline → online, jadi install baru / login ulang yang sinyalnya stabil
+  // nggak pernah narik data: Drift kosong → halaman Stok, varian, bahan baku
+  // semua "Belum ada" walau API-nya penuh (kegigit 2 Sep 2026, v1.6.7).
+  bool _syncedThisSession = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   final _searchController = TextEditingController();
   // P3 Quick Win #6: debounce search 250ms — pre-fix tiap keystroke trigger
@@ -64,7 +69,8 @@ class _PosPageState extends ConsumerState<PosPage> {
 
   void _updateConnectionStatus(List<ConnectivityResult> result) {
     final offline = result.contains(ConnectivityResult.none) || result.isEmpty;
-    if (_isOffline && !offline) {
+    if ((_isOffline || !_syncedThisSession) && !offline) {
+      _syncedThisSession = true;
       final syncSvc = ref.read(syncServiceProvider);
       syncSvc.sync().then((_) {
         // P3 Quick Win #1: defer cascade ke microtask via shared helper
