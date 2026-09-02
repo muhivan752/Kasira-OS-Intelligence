@@ -758,6 +758,8 @@ class SyncService {
     'hlc': p.lastModifiedHlc,
   };
 
+  // Waktu dikirim UTC eksplisit (`toUtc()`): DateTime lokal Dart nggak bawa
+  // zona, dan server tadinya nyimpan 23.30 WIB sebagai 23.30 UTC.
   Map<String, dynamic> _orderToJson(OrderLocal o) => {
     'id': o.id,
     'outlet_id': o.outletId,
@@ -775,8 +777,8 @@ class SyncService {
     'discount_amount': o.discountAmount,
     'total_amount': o.totalAmount,
     'notes': o.notes,
-    'created_at': o.createdAt?.toIso8601String(),
-    'updated_at': o.updatedAt?.toIso8601String(),
+    'created_at': o.createdAt?.toUtc().toIso8601String(),
+    'updated_at': o.updatedAt?.toUtc().toIso8601String(),
     'row_version': o.rowVersion,
     'is_deleted': o.isDeleted,
     'hlc': o.lastModifiedHlc,
@@ -809,7 +811,7 @@ class SyncService {
     'payment_method': p.paymentMethod,
     'status': p.status,
     'reference_number': p.referenceNumber,
-    'paid_at': p.paidAt?.toIso8601String(),
+    'paid_at': p.paidAt?.toUtc().toIso8601String(),
     'row_version': p.rowVersion,
     'is_deleted': p.isDeleted,
     'hlc': p.lastModifiedHlc,
@@ -820,8 +822,8 @@ class SyncService {
     'outlet_id': s.outletId,
     'user_id': s.userId,
     'status': s.status,
-    'start_time': s.startTime.toIso8601String(),
-    'end_time': s.endTime?.toIso8601String(),
+    'start_time': s.startTime.toUtc().toIso8601String(),
+    'end_time': s.endTime?.toUtc().toIso8601String(),
     'starting_cash': s.startingCash,
     'ending_cash': s.endingCash,
     'expected_ending_cash': s.expectedEndingCash,

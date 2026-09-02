@@ -26,6 +26,52 @@ from backend.models.recipe import Recipe, RecipeIngredient
 
 logger = logging.getLogger(__name__)
 
+# ── pembersih paket push ──────────────────────────────────────────────────
+_UUID_FIELDS = {
+    "orders": ("shift_session_id", "customer_id", "table_id", "tab_id", "user_id", "discount_approved_by"),
+    "order_items": ("product_id", "product_variant_id", "order_id"),
+    "payments": ("order_id", "shift_session_id", "customer_id"),
+    "shifts": ("user_id", "closed_by_user_id", "locked_user_id"),
+    "cash_activities": ("shift_id",),
+    "products": ("category_id", "brand_id"),
+}
+_TS_FIELDS = ("created_at", "updated_at", "paid_at", "start_time", "end_time", "deleted_at")
+
+
+def _normalize_push(changes, syncing_user_id: str, tz_name: str) -> None:
+    from datetime import datetime as _dt, timezone as _tz
+    from zoneinfo import ZoneInfo
+    try:
+        tz = ZoneInfo(tz_name or "Asia/Jakarta")
+    except Exception:
+        tz = ZoneInfo("Asia/Jakarta")
+
+    def fix_ts(v):
+        if not isinstance(v, str) or not v:
+            return v
+        try:
+            d = _dt.fromisoformat(v.replace("Z", "+00:00"))
+        except ValueError:
+            return v
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=tz)
+        return d.astimezone(_tz.utc).isoformat()
+
+    for table, uuid_fields in _UUID_FIELDS.items():
+        rows = getattr(changes, table, None) or []
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            for f in uuid_fields:
+                if f in r and r[f] == "":
+                    r[f] = None
+            if table == "orders" and not r.get("user_id"):
+                r["user_id"] = syncing_user_id
+            for f in _TS_FIELDS:
+                if f in r:
+                    r[f] = fix_ts(r[f])
+
+
 router = APIRouter()
 
 @router.post("/", response_model=SyncResponse)
@@ -125,6 +171,19 @@ async def sync_data(
             request.cursor_hlc[:30] if len(request.cursor_hlc) > 30 else request.cursor_hlc,
         )
     if request.changes and push_claimed and not is_pagination_continuation:
+        # Rapikan paket dari HP sebelum masuk model (kegigit 2 Sep 2026, tes
+        # offline Ivan: SEMUA order offline ditolak 500 `invalid UUID ''`).
+        #  - user_id '' (SessionCache.userId nggak pernah di-set di app lama)
+        #    → akun yang nge-sync; kolom UUID lain yang '' → NULL.
+        #  - created_at tanpa zona waktu (DateTime lokal Dart) → dianggap waktu
+        #    outlet, dikonversi ke UTC. Tanpa ini 23.30 WIB tercatat 23.30 UTC,
+        #    tujuh jam di masa depan.
+        # Satu baris rusak = seluruh sync 500, jadi ini dibersihkan di sini,
+        # bukan dipercayakan ke versi APK.
+        _outlet_tz = (await db.execute(
+            text("SELECT timezone FROM outlets WHERE id = :oid"), {"oid": str(outlet_id)}
+        )).scalar() or "Asia/Jakarta"
+        _normalize_push(request.changes, str(current_user.id), _outlet_tz)
         if request.changes.categories:
             await process_table_sync(db, Category, request.changes.categories, {"brand_id": brand_id}, server_hlc)
         if request.changes.products:

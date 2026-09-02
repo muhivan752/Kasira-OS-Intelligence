@@ -235,6 +235,27 @@ class SessionCache {
     }
   }
 
+  /// Pastikan userId ada. `setUserId` sudah lama didefinisikan tapi nggak
+  /// pernah dipanggil di alur login, jadi order offline dikirim dengan
+  /// `user_id: ''` dan SELURUH sync ditolak server (`invalid UUID ''`),
+  /// kegigit 2 Sep 2026. Server sekarang juga memaafkan, tapi yang benar
+  /// tetap: HP tahu siapa dirinya.
+  Future<void> ensureUserId() async {
+    if ((userId != null && userId!.isNotEmpty) || accessToken == null) return;
+    try {
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiV1,
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ));
+      final res = await dio.get('/auth/me', options: Options(headers: authHeaders));
+      final id = res.data['data']?['id']?.toString();
+      if (id != null && id.isNotEmpty) await setUserId(id);
+    } catch (_) {
+      // Offline: dicoba lagi di login/app start berikutnya; server memaafkan sementara.
+    }
+  }
+
   // ── Tier check (convenience) ───────────────────────────────────────────────
   bool get isPro => const {'pro', 'business', 'enterprise'}
       .contains((subscriptionTier ?? 'starter').toLowerCase());

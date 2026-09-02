@@ -351,6 +351,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         receiveTimeout: const Duration(seconds: 10),
       ));
 
+      // Identitas akun buat order offline (lihat SessionCache.ensureUserId).
+      await cache.ensureUserId();
+
       final response = await dio.get(
         '/shifts/current',
         queryParameters: {'outlet_id': outletId},
