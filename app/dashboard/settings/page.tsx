@@ -41,6 +41,7 @@ export default function SettingsPage() {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    whatsapp_number: '',
     address: '',
     opening_hours: '',
     is_open: true,
@@ -61,6 +62,7 @@ export default function SettingsPage() {
         setFormData({
           name: data.name || '',
           phone: data.phone || '',
+          whatsapp_number: data.whatsapp_number || '',
           address: data.address || '',
           opening_hours: typeof data.opening_hours === 'string' ? data.opening_hours : '',
           is_open: data.is_open !== false,
@@ -300,6 +302,18 @@ export default function SettingsPage() {
                   placeholder="628123456789"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nomor WhatsApp toko <span className="text-gray-400 font-normal">(tampil di storefront)</span></label>
+                <input
+                  type="tel"
+                  value={formData.whatsapp_number}
+                  onChange={e => setFormData({ ...formData, whatsapp_number: e.target.value.replace(/\D/g, '') })}
+                  placeholder="628123456789"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">Pelanggan yang buka storefront bisa langsung chat ke nomor ini buat tanya menu / pesan. Kosongkan kalau nggak mau tombol WA muncul.</p>
               </div>
 
               <div>

@@ -190,6 +190,8 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
             "slug": outlet.slug,
             "address": outlet.address,
             "phone": mask_phone(outlet.phone),
+            # Sengaja TIDAK di-mask: ini nomor yang pemilik publikasikan buat pelanggan.
+            "whatsapp": (outlet.whatsapp_number or "").strip() or None,
             "cover_image_url": outlet.cover_image_url,
             "is_open": outlet.is_open,
             "opening_hours": outlet.opening_hours if isinstance(outlet.opening_hours, str) else "",

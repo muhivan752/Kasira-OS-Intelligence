@@ -11,6 +11,8 @@ class Outlet(BaseModel):
     slug = Column(String, nullable=False, unique=True)
     address = Column(String, nullable=True)
     phone = Column(String, nullable=True)
+    # Nomor WA yang DIPUBLIKASIKAN di storefront (beda dari phone yang di-mask).
+    whatsapp_number = Column(String(20), nullable=True)
     is_active = Column(Boolean(), default=True)
     is_open = Column(Boolean(), default=True)
     opening_hours = Column(JSONB, nullable=True)
@@ -34,6 +36,9 @@ class Outlet(BaseModel):
 
     xendit_business_id = Column(String, nullable=True) # sub-account id (xenPlatform Phase 2)
     xendit_connected_at = Column(DateTime(timezone=True), nullable=True)
+    # Nomor WA toko buat tombol chat di storefront — dikirim UTUH ke publik.
+    # Token Fonnte milik toko (promo WA dikirim dari nomor mereka sendiri).
+    fonnte_token = Column(EncryptedString, nullable=True)
     xendit_api_key = Column(EncryptedString, nullable=True)  # AES-256-GCM at rest (TypeDecorator transparent encrypt/decrypt)
     xendit_callback_token = Column(EncryptedString, nullable=True)  # BYOK Phase 2 — per-merchant webhook verify (DEFERRED actual wire-up)
 
@@ -42,3 +47,7 @@ class Outlet(BaseModel):
     brand = relationship("Brand", back_populates="outlets")
     orders = relationship("Order", back_populates="outlet")
 
+    @property
+    def wa_connected(self) -> bool:
+        """Toko udah pasang token Fonnte sendiri (buat promo WA)."""
+        return bool(self.fonnte_token)

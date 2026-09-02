@@ -49,7 +49,7 @@ flutter_launcher_icons:
   android: true
   ios: false
   image_path: "assets/icon/kasira_icon.png"
-  adaptive_icon_background: "#0B7A55"
+  adaptive_icon_background: "#FFFFFF"
   # Foreground dibikin terpisah tanpa background dan isinya dikecilin ke ~62%,
   # supaya nggak kepotong waktu Android nge-mask jadi bulat di sebagian HP.
   adaptive_icon_foreground: "assets/icon/kasira_icon_fg.png"

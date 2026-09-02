@@ -97,10 +97,13 @@ export default function StorefrontPage() {
     addLine(product, null);
   };
 
+  // `outlet.phone` di-mask API (0852***220) — dulu tombol ini buka wa.me ke
+  // nomor bintang, mati. Sekarang pakai `whatsapp` = nomor yang pemilik
+  // sengaja publikasikan (Settings → Nomor WhatsApp toko). Kosong = disembunyiin.
+  const waNumber: string | null = outlet.whatsapp ? String(outlet.whatsapp).replace(/\D/g, '').replace(/^0/, '62') : null;
   const handleWhatsApp = () => {
-    if (!outlet.phone) return;
-    const phone = outlet.phone.startsWith('0') ? '62' + outlet.phone.slice(1) : outlet.phone;
-    window.open(`https://wa.me/${phone}?text=Halo%20${outlet.name},%20saya%20ingin%20bertanya%20tentang%20menu%20Anda.`, '_blank');
+    if (!waNumber) return;
+    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(`Halo ${outlet.name}, saya mau tanya soal menu.`)}`, '_blank');
   };
 
   // Pro: identify top 3 products by sold_total for "Populer" badge
@@ -167,7 +170,7 @@ export default function StorefrontPage() {
             <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
             <span className="text-sm font-medium text-blue-900">Terverifikasi {BRAND} · Zero Komisi</span>
             <div className="ml-auto flex items-center gap-3">
-              <button onClick={handleWhatsApp} className="flex items-center gap-1.5 text-green-700 hover:text-green-800 text-sm font-medium">
+              <button hidden={!waNumber} onClick={handleWhatsApp} className="flex items-center gap-1.5 text-green-700 hover:text-green-800 text-sm font-medium">
                 <MessageCircle className="w-4 h-4" /><span className="hidden sm:inline">WhatsApp</span>
               </button>
             </div>
@@ -299,7 +302,7 @@ export default function StorefrontPage() {
                   <CalendarDays className="w-4 h-4" /><span className="hidden sm:inline">Reservasi</span>
                 </button>
               )}
-              <button onClick={handleWhatsApp}
+              <button hidden={!waNumber} onClick={handleWhatsApp}
                 className="flex items-center gap-1.5 text-green-700 hover:text-green-800 text-sm font-medium transition-colors">
                 <MessageCircle className="w-4 h-4" /><span className="hidden sm:inline">WhatsApp</span>
               </button>
@@ -426,7 +429,7 @@ export default function StorefrontPage() {
                 )}
               </div>
 
-              <button onClick={handleWhatsApp}
+              <button hidden={!waNumber} onClick={handleWhatsApp}
                 className="mt-3 w-full py-2.5 bg-gray-900 text-green-400 font-medium rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 text-sm border border-gray-800">
                 <MessageCircle className="w-4 h-4" /> Hubungi via WhatsApp
               </button>
@@ -446,7 +449,7 @@ export default function StorefrontPage() {
                   <CalendarDays className="w-6 h-6" />
                 </button>
               )}
-              <button onClick={handleWhatsApp}
+              <button hidden={!waNumber} onClick={handleWhatsApp}
                 className="w-12 h-12 bg-green-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-green-600 transition-colors">
                 <MessageCircle className="w-6 h-6" />
               </button>
@@ -518,7 +521,7 @@ export default function StorefrontPage() {
             </>
           )}
         </div>
-        <button onClick={handleWhatsApp}
+        <button hidden={!waNumber} onClick={handleWhatsApp}
           className="mt-3 w-full py-2.5 bg-green-50 text-green-700 font-medium rounded-xl hover:bg-green-100 transition-colors flex items-center justify-center gap-2 text-sm border border-green-200">
           <MessageCircle className="w-4 h-4" /> Hubungi via WhatsApp
         </button>
@@ -538,7 +541,7 @@ export default function StorefrontPage() {
                 <CalendarDays className="w-6 h-6" />
               </button>
             )}
-            <button onClick={handleWhatsApp}
+            <button hidden={!waNumber} onClick={handleWhatsApp}
               className="w-12 h-12 bg-green-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-green-600 transition-colors">
               <MessageCircle className="w-6 h-6" />
             </button>

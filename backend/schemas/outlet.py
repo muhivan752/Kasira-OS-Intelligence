@@ -6,6 +6,7 @@ class OutletBase(BaseModel):
     name: str
     address: Optional[str] = None
     phone: Optional[str] = None
+    whatsapp_number: Optional[str] = None
     is_active: Optional[bool] = True
     tenant_id: UUID4
     brand_id: Optional[UUID4] = None
@@ -17,6 +18,9 @@ class OutletUpdate(BaseModel):
     name: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
+    whatsapp_number: Optional[str] = None
+    # Token Fonnte toko (promo WA dari nomor sendiri). Write-only — response cuma bilang terpasang/nggak.
+    fonnte_token: Optional[str] = None
     is_open: Optional[bool] = None
     opening_hours: Optional[Any] = None
     cover_image_url: Optional[str] = None
@@ -44,6 +48,7 @@ class OutletLocationUpdate(BaseModel):
 
 
 class OutletInDBBase(OutletBase):
+    wa_connected: bool = False
     id: UUID4
     slug: Optional[str] = None
     is_open: Optional[bool] = True
