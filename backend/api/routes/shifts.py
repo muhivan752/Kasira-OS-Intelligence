@@ -1,6 +1,6 @@
 from typing import Any, List, Optional
 from uuid import UUID
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,10 +95,40 @@ async def open_shift(
     existing_shift = result.scalar_one_or_none()
     
     if existing_shift:
-        raise HTTPException(
-            status_code=400, 
-            detail="Shift sudah terbuka, tutup dulu"
+        # Dulu: 400 "Shift sudah terbuka, tutup dulu" — tapi app yang baru
+        # di-install / storage-nya bersih nggak punya shift_session_id lokal,
+        # jadi dia nyoba buka lagi, ditolak, dan nggak ada jalan ke tutup
+        # shift. Deadlock (kegigit Ivan 2026-09-02: shift open sejak 15 Jun).
+        #
+        # Sekarang:
+        #  - shift masih segar (< 20 jam)  → RESUME: balikin shift itu, app
+        #    nyimpen id-nya dan lanjut. Nggak bikin shift dobel.
+        #  - shift basi (≥ 20 jam)         → tutup otomatis dengan catatan,
+        #    lalu buka shift baru. Laporan per shift tetap bener.
+        age = datetime.now(timezone.utc) - existing_shift.start_time
+        if age < timedelta(hours=20):
+            await log_audit(
+                db=db, action="RESUME_SHIFT", entity="shift", entity_id=existing_shift.id,
+                after_state={"age_hours": round(age.total_seconds() / 3600, 1)},
+                user_id=current_user.id, tenant_id=current_user.tenant_id,
+            )
+            await db.commit()
+            return StandardResponse(
+                success=True,
+                data=ShiftResponse.model_validate(existing_shift),
+                request_id=request.state.request_id,
+                message="Melanjutkan shift yang masih terbuka",
+            )
+        existing_shift.status = ShiftStatus.closed
+        existing_shift.end_time = datetime.now(timezone.utc)
+        existing_shift.notes = ((existing_shift.notes or "") + " | Ditutup otomatis: shift dibiarkan terbuka "
+                                f"{age.days} hari, kasir buka shift baru").strip(" |")
+        existing_shift.row_version = (existing_shift.row_version or 0) + 1
+        await log_audit(
+            db=db, action="AUTO_CLOSE_STALE_SHIFT", entity="shift", entity_id=existing_shift.id,
+            after_state={"age_days": age.days}, user_id=current_user.id, tenant_id=current_user.tenant_id,
         )
+        await db.flush()
 
     shift = Shift(
         outlet_id=outlet_id,
