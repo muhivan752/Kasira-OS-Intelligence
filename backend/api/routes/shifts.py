@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
 from backend.models.user import User
+from backend.models.outlet import Outlet
 from backend.models.shift import Shift, CashActivity, ShiftStatus, CashActivityType
 from backend.schemas.shift import (
     ShiftCreate, ShiftClose, ShiftResponse, ShiftWithActivitiesResponse,
@@ -84,15 +85,18 @@ async def open_shift(
     """
     Open a new shift for the current user in the specified outlet.
     """
-    # Check if there's already an open shift for this user in this outlet
+    # Shift itu PER OUTLET (laci bersama), bukan per kasir — keputusan Ivan
+    # 2026-09-02: "di resto yang nyata modal jadi satu". Yang pertama buka
+    # shift pegang laci; kasir lain yang login tinggal GABUNG ke shift itu.
+    # Siapa input apa tetap kecatat per akun lewat orders.user_id.
+    # Shift per kasir (multi laci) = nanti, lewat setting outlet.
     query = select(Shift).where(
         Shift.outlet_id == outlet_id,
-        Shift.user_id == current_user.id,
         Shift.status == ShiftStatus.open,
         Shift.deleted_at.is_(None)
-    )
+    ).order_by(Shift.start_time.desc())
     result = await db.execute(query)
-    existing_shift = result.scalar_one_or_none()
+    existing_shift = result.scalars().first()
     
     if existing_shift:
         # Dulu: 400 "Shift sudah terbuka, tutup dulu" — tapi app yang baru
@@ -107,17 +111,20 @@ async def open_shift(
         #    lalu buka shift baru. Laporan per shift tetap bener.
         age = datetime.now(timezone.utc) - existing_shift.start_time
         if age < timedelta(hours=20):
+            joining = existing_shift.user_id != current_user.id
             await log_audit(
-                db=db, action="RESUME_SHIFT", entity="shift", entity_id=existing_shift.id,
-                after_state={"age_hours": round(age.total_seconds() / 3600, 1)},
+                db=db, action="JOIN_SHIFT" if joining else "RESUME_SHIFT", entity="shift", entity_id=existing_shift.id,
+                after_state={"age_hours": round(age.total_seconds() / 3600, 1), "opened_by": str(existing_shift.user_id)},
                 user_id=current_user.id, tenant_id=current_user.tenant_id,
             )
             await db.commit()
+            opener = await db.get(User, existing_shift.user_id)
             return StandardResponse(
                 success=True,
                 data=ShiftResponse.model_validate(existing_shift),
                 request_id=request.state.request_id,
-                message="Melanjutkan shift yang masih terbuka",
+                message=(f"Gabung ke shift yang dibuka {opener.full_name if opener else 'kasir lain'}"
+                         if joining else "Melanjutkan shift yang masih terbuka"),
             )
         existing_shift.status = ShiftStatus.closed
         existing_shift.end_time = datetime.now(timezone.utc)
@@ -170,12 +177,14 @@ async def get_current_shift(
     """
     query = select(Shift).options(selectinload(Shift.activities)).where(
         Shift.outlet_id == outlet_id,
-        Shift.user_id == current_user.id,
+        # per outlet — laci bersama, semua kasir lihat shift yang sama
         Shift.status == ShiftStatus.open,
         Shift.deleted_at.is_(None)
-    )
+    ).order_by(Shift.start_time.desc())
     result = await db.execute(query)
-    shift = result.scalar_one_or_none()
+    # Bisa ada >1 shift open (data lama sebelum laci bersama) — ambil yang
+    # paling baru, jangan scalar_one_or_none (MultipleResultsFound → 500).
+    shift = result.scalars().first()
     
     if not shift:
         return StandardResponse(
@@ -213,7 +222,11 @@ async def close_shift(
     if shift.status == ShiftStatus.closed:
         raise HTTPException(status_code=400, detail="Shift sudah ditutup")
         
-    if shift.user_id != current_user.id and not current_user.is_superuser:
+    # Laci bersama: siapa pun kasir di tenant ini boleh nutup (yang buka bisa
+    # aja udah pulang). Siapa yang nutup kecatat di audit + closed_by lewat
+    # user_id audit; outlet harus milik tenant yang sama.
+    outlet = await db.get(Outlet, shift.outlet_id)
+    if not outlet or outlet.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Tidak berwenang menutup shift ini")
 
     # Calculate expected cash
