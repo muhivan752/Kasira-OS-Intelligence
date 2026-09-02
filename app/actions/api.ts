@@ -853,3 +853,14 @@ export async function copyRecurringExpenses(outletId: string, month: string) {
   if (!res.ok) throw new Error(extractError(data, 'Gagal menyalin'));
   return { items: data.data || [], message: data.message };
 }
+
+// ── WhatsApp toko (token Fonnte per outlet — promo dikirim dari nomor toko) ──
+export async function setupOutletWhatsApp(outletId: string, fonnteToken: string) {
+  const res = await fetchWithAuth(`/outlets/${outletId}/whatsapp-setup`, {
+    method: 'POST',
+    body: JSON.stringify({ fonnte_token: fonnteToken }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(extractError(data, 'Gagal menyimpan token Fonnte'));
+  return { connected: !!data.data?.wa_connected, message: data.message as string };
+}

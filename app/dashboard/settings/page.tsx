@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { getOutlets, updateOutlet, updateStockMode, getCurrentUser, getTaxConfig, updateTaxConfig, getReferralCode, getReferralStats } from '@/app/actions/api';
-import { Loader2, Store, Clock, Link as LinkIcon, CreditCard, Upload, ImageOff, Image, Package, Receipt, Gift, Copy, Share2, Check } from 'lucide-react';
+import { getOutlets, updateOutlet, updateStockMode, getCurrentUser, getTaxConfig, updateTaxConfig, getReferralCode, getReferralStats, setupOutletWhatsApp
+} from '@/app/actions/api';
+import { Loader2, Store, Clock, Link as LinkIcon, CreditCard, Upload, ImageOff, Image, Package, Receipt, Gift, Copy, Share2, Check, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
 
 export default function SettingsPage() {
@@ -411,6 +412,9 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* WhatsApp toko — token Fonnte buat promo dari nomor sendiri */}
+          <WhatsAppTokenCard outletId={outlet?.id} connected={!!outlet?.wa_connected} onChanged={(v) => setOutlet((o: any) => ({ ...o, wa_connected: v }))} />
+
           {/* Stock Mode (Pro only) */}
           {isPro && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -814,6 +818,70 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+/** Kartu token Fonnte. Promo/campaign WA (menu Pelanggan) dikirim dari nomor
+ *  WhatsApp toko sendiri lewat Fonnte — bukan dari nomor Selaris. Token
+ *  dicek ke Fonnte waktu disimpan, jadi token salah ketahuan di sini, bukan
+ *  waktu promo pertama gagal senyap. */
+function WhatsAppTokenCard({ outletId, connected, onChanged }: { outletId?: string; connected: boolean; onChanged: (v: boolean) => void }) {
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [open, setOpen] = useState(false);
+
+  const save = async (value: string) => {
+    if (!outletId) return;
+    setBusy(true); setMsg(null);
+    try {
+      const r = await setupOutletWhatsApp(outletId, value);
+      onChanged(r.connected); setToken(''); setOpen(false);
+      setMsg({ ok: true, text: r.message });
+    } catch (e: any) { setMsg({ ok: false, text: e.message }); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="w-5 h-5 text-gray-500" />
+          <h2 className="text-lg font-bold text-gray-900">WhatsApp Toko untuk Promo</h2>
+        </div>
+        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+          {connected ? 'Tersambung' : 'Belum tersambung'}
+        </span>
+      </div>
+      <div className="p-6 space-y-3">
+        <p className="text-sm text-gray-600">
+          Promo dan pesan ke pelanggan (menu Pelanggan) dikirim dari <b>nomor WhatsApp toko kamu sendiri</b>, bukan dari Selaris.
+          Caranya: daftar di <a href="https://fonnte.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">fonnte.com</a>,
+          hubungkan nomor WA toko (scan QR), lalu salin <b>Token</b> dari dashboard Fonnte ke sini. Struk & OTP tetap lewat Selaris.
+        </p>
+        {msg && <p className={`text-sm ${msg.ok ? 'text-green-700' : 'text-red-600'}`}>{msg.text}</p>}
+        {open || !connected ? (
+          <div className="flex gap-2">
+            <input
+              type="password"
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              placeholder="Tempel token Fonnte"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+            <button onClick={() => save(token.trim())} disabled={busy || !token.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {busy ? 'Mengecek…' : 'Sambungkan'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <button onClick={() => setOpen(true)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">Ganti token</button>
+            <button onClick={() => { if (confirm('Putus WhatsApp toko? Promo nggak bisa dikirim sampai disambung lagi.')) save(''); }} disabled={busy} className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg">Putus</button>
+          </div>
+        )}
       </div>
     </div>
   );
