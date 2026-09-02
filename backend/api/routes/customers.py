@@ -168,6 +168,12 @@ def _summary(c: Customer) -> dict:
         "last_visit_at": c.last_visit_at.isoformat() if c.last_visit_at else None,
         "wa_marketing_consent": bool(c.wa_marketing_consent),
         "created_at": c.created_at.isoformat() if c.created_at else None,
+        # CRM gelombang 3 — diisi crm_service.refresh_segments (lazy 6 jam)
+        "rfm_segment": getattr(c, "segment", None),
+        "rfm_recency_days": getattr(c, "rfm_recency_days", None),
+        "rfm_frequency_90d": int(getattr(c, "rfm_frequency_90d", 0) or 0),
+        "rfm_monetary_90d": float(getattr(c, "rfm_monetary_90d", 0) or 0),
+        "birthday": c.birthday.isoformat() if getattr(c, "birthday", None) else None,
     }
 
 
@@ -177,6 +183,7 @@ async def crm_list(
     search: Optional[str] = None,
     sort: str = "last_visit",   # last_visit | spent | visits | name | newest
     segment: Optional[str] = None,  # lapse | repeat | top | baru | belum_belanja
+    rfm: Optional[str] = None,      # segmen gelombang 3: baru|setia|vip|biasa|mulai_jarang|hilang
     skip: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
@@ -195,6 +202,8 @@ async def crm_list(
     # warung itu "siapa yang perlu disapa", bukan angka yang harus ditafsirkan.
     from datetime import datetime as _dt, timedelta as _td, timezone as _tz
     now = _dt.now(_tz.utc)
+    if rfm:
+        base.append(Customer.segment == rfm)
     if segment == "lapse":
         # Pernah belanja, tapi 30 hari terakhir nggak kelihatan.
         base += [Customer.total_visits > 0, Customer.last_visit_at < now - _td(days=30)]
