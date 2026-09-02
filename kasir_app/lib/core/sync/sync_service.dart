@@ -359,6 +359,16 @@ class SyncService {
     }
   }
 
+  /// Tulis data server ke Drift.
+  ///
+  /// **Semua angka WAJIB lewat `_toDouble` / `_toDoubleOrNull`, jangan
+  /// `as num`.** Backend nyerialisasi kolom `Decimal` jadi STRING —
+  /// `"15000.00"`, bukan `15000.0` — jadi `as num` ngelempar TypeError.
+  /// Karena seluruh apply jalan dalam SATU transaksi Drift, satu baris gagal
+  /// bikin SEMUA-nya di-rollback: HTTP 200, tapi Drift tetap kosong dan
+  /// kasir lihat "Sinkronisasi gagal" + produk/stok/varian nggak ada.
+  /// Kegigit 2 Sep 2026 — `products.base_price` jadi baris pertama yang mati,
+  /// jadi nol tabel pernah keisi sejak backend pindah ke string Decimal.
   Future<void> _applyServerChanges(Map<String, dynamic> changes) async {
     await db.transaction(() async {
       // Apply Products — CRDT merge: gabungkan counter lokal & server
@@ -374,7 +384,7 @@ class SyncService {
 
           String mergedPos = serverPos;
           String mergedNeg = serverNeg;
-          double mergedStock = (p['stock_qty'] as num?)?.toDouble() ?? 0.0;
+          double mergedStock = _toDouble(p['stock_qty']);
 
           if (existing != null && existing.stockEnabled) {
             // Finding 1 proper fix — SERVER-AUTHORITATIVE (tiru recipe/outlet_stock).
@@ -400,7 +410,7 @@ class SyncService {
               categoryId: p['category_id'],
               name: p['name'],
               description: p['description'],
-              basePrice: (p['base_price'] as num).toDouble(),
+              basePrice: _toDouble(p['base_price']),
               // buy_price (Decimal) datang sebagai string "8500.00" atau null
               // dari backend. Server adalah source of truth — Flutter gak
               // pernah push, jadi langsung overwrite local dengan server val.
@@ -437,11 +447,11 @@ class SyncService {
               displayNumber: o['display_number'],
               status: o['status'],
               orderType: o['order_type'],
-              subtotal: (o['subtotal'] as num).toDouble(),
-              serviceChargeAmount: (o['service_charge_amount'] as num).toDouble(),
-              taxAmount: (o['tax_amount'] as num).toDouble(),
-              discountAmount: (o['discount_amount'] as num).toDouble(),
-              totalAmount: (o['total_amount'] as num).toDouble(),
+              subtotal: _toDouble(o['subtotal']),
+              serviceChargeAmount: _toDouble(o['service_charge_amount']),
+              taxAmount: _toDouble(o['tax_amount']),
+              discountAmount: _toDouble(o['discount_amount']),
+              totalAmount: _toDouble(o['total_amount']),
               notes: o['notes'],
               createdAt: o['created_at'] != null ? DateTime.parse(o['created_at']) : null,
               updatedAt: o['updated_at'] != null ? DateTime.parse(o['updated_at']) : null,
@@ -464,9 +474,9 @@ class SyncService {
               productId: oi['product_id'],
               productVariantId: oi['product_variant_id'],
               quantity: oi['quantity'],
-              unitPrice: (oi['unit_price'] as num).toDouble(),
-              discountAmount: (oi['discount_amount'] as num).toDouble(),
-              totalPrice: (oi['total_price'] as num).toDouble(),
+              unitPrice: _toDouble(oi['unit_price']),
+              discountAmount: _toDouble(oi['discount_amount']),
+              totalPrice: _toDouble(oi['total_price']),
               // jsonEncode, BUKAN .toString(). Server ngirim modifiers sebagai
               // objek JSON; `Map.toString()` di Dart ngasih `{variant_name:
               // Dingin}` yang BUKAN JSON valid — jadi struk cetak-ulang offline
@@ -495,8 +505,8 @@ class SyncService {
               orderId: p['order_id'],
               outletId: p['outlet_id'],
               shiftSessionId: p['shift_session_id'],
-              amountDue: (p['amount_due'] as num).toDouble(),
-              amountPaid: (p['amount_paid'] as num).toDouble(),
+              amountDue: _toDouble(p['amount_due']),
+              amountPaid: _toDouble(p['amount_paid']),
               paymentMethod: p['payment_method'],
               status: p['status'],
               referenceNumber: p['reference_number'],
@@ -521,9 +531,9 @@ class SyncService {
               status: s['status'],
               startTime: DateTime.parse(s['start_time']),
               endTime: s['end_time'] != null ? DateTime.parse(s['end_time']) : null,
-              startingCash: (s['starting_cash'] as num).toDouble(),
-              endingCash: (s['ending_cash'] as num?)?.toDouble(),
-              expectedEndingCash: (s['expected_ending_cash'] as num?)?.toDouble(),
+              startingCash: _toDouble(s['starting_cash']),
+              endingCash: _toDoubleOrNull(s['ending_cash']),
+              expectedEndingCash: _toDoubleOrNull(s['expected_ending_cash']),
               notes: s['notes'],
               rowVersion: s['row_version'] ?? 0,
               isDeleted: s['is_deleted'] ?? false,
@@ -542,7 +552,7 @@ class SyncService {
               id: ca['id'],
               shiftId: ca['shift_id'],
               activityType: ca['activity_type'],
-              amount: (ca['amount'] as num).toDouble(),
+              amount: _toDouble(ca['amount']),
               description: ca['description'],
               rowVersion: ca['row_version'] ?? 0,
               isDeleted: ca['is_deleted'] ?? false,
