@@ -104,6 +104,12 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
         grep -q "Widget build" $f && ! grep -q KasiraDS $f && echo $f
       done   # kosong = app POS udah full Aurora
       ```
+29. **Purchasing (nota belanja) — SHIPPED 2026-09-02, gelombang 1 "ERP yang ngisi sendiri".** Tabel `suppliers`/`ingredient_suppliers`/`purchase_orders`/`purchase_order_items`/`supplier_price_history` udah ada sejak mig 008–044 tapi nol model/route/baris sampai mig `091` (kasus persis `product_variants`). Kalau nemu tabel di DB yang gak ada modelnya, cek `\d` dulu sebelum bikin tabel baru.
+    - **Nota = `PurchaseOrder` status `received` yang dibuat langsung.** `supplier_id` nullable (beli di pasar). Baris boleh `ingredient_id` ATAU `product_id` (CHECK). Starter non-F&B nyatet produk jadi; baris bahan ditolak 403 buat Starter.
+    - **HPP = rata-rata bergerak** (`purchasing_service.moving_average`): stok lama × cost lama + qty baru × cost baru. Stok lama 0 / cost lama 0 → harga baru dipakai apa adanya. `ingredient.buy_price/buy_qty` = "terakhir beli". Konversi satuan nota → base_unit pakai `unit_utils.UNIT_ALIASES` yang sama dengan HPP compute (gotcha #11) — jangan bikin tabel konversi kedua.
+    - **Restock bahan lewat `restock_ingredient_stock()`** (ditarik dari route `/ingredients/{id}/restock`, dua jalur satu kode). Restock produk lewat `stock_service.restock_product` (bug drift CRDT simple-mode di ARCHITECTURE.md tetap berlaku).
+    - Event `purchase.received` / `purchase.paid` di stream `purchase:{id}` = bahan projector ledger gelombang 2. Utang = `total_amount − paid_amount`, `due_at` dari `supplier.payment_terms_days` (default 7).
+    - Dashboard `/dashboard/pembelian`, actions di `app/actions/api.ts` (getPurchases/createPurchase/payPurchase/getSuppliers/scanInvoice). OCR pakai `/invoice-ocr/scan` yang lama — `apply` lama (update harga tanpa stok) sekarang jalur kedua, jangan dipakai dari UI baru.
 28. **`flutter analyze` di VPS SELALU keluar 9 error `productVariants` — itu BUKAN bug.** `lib/core/database/app_database.g.dart` (drift generated) belum di-regenerate lokal sejak kerjaan varian. CI jalanin `dart run build_runner build` di step 49 **sebelum** `flutter analyze` di step 122, jadi di CI bersih. Flutter ADA di VPS (`/opt/flutter/bin`) — analyze lokal dulu sebelum bakar CI run, tapi saring dulu:
     ```bash
     /opt/flutter/bin/flutter analyze 2>&1 | grep 'error •' \
@@ -132,6 +138,7 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 - [ ] `backend/services/stock_service.py` — simple mode deduct + restore
 - [ ] `backend/services/ingredient_stock_service.py` — recipe mode deduct + restore
 - [ ] `backend/api/routes/sync.py` — offline order sync stock deduction (line ~76)
+- [ ] `backend/services/purchasing_service.py` — nota belanja: restock bahan (via `restock_ingredient_stock`) + produk (via `restock_product`) + HPP rata-rata bergerak
 - [ ] `backend/api/routes/products.py` — `compute_recipe_stock()` display (shared, juga dipakai connect.py storefront)
 - [ ] `kasir_app/lib/features/pos/providers/cart_provider.dart` — offline deduction
 - [ ] `kasir_app/lib/features/products/providers/products_provider.dart` — offline display

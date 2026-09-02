@@ -60,7 +60,8 @@ Kalau lo edit salah satu, **cek semua yang lain**.
 | **Sync offline order** | `svc_deduct_stock()` | ✅ `svc_deduct_ingredients()` (recipe) — branch by stock_mode | `sync.py:192-212` |
 | **Flutter offline order** | PNCounter on `products.crdtNegative` | Deduct `outletStocks.computedStock` | `cart_provider.dart:300-327` |
 | **Product restock** | `products.stock_qty += qty` | N/A (use ingredient restock) | `products.py:85-` |
-| **Ingredient restock** | N/A | `outlet_stock.computed_stock += qty` | `ingredients.py:295-383` |
+| **Ingredient restock** | N/A | `restock_ingredient_stock()` helper | `ingredient_stock_service.py` — dipanggil route `ingredients.py` restock DAN `purchasing_service.receive_purchase` (nota belanja). Jangan tulis ulang di tempat ketiga |
+| **Nota belanja (purchasing)** | `restock_product()` per baris produk | `restock_ingredient_stock()` per baris bahan + `cost_per_base_unit` = rata-rata bergerak | `purchasing_service.py:receive_purchase` — event `purchase.received`. Tabel purchase_orders/suppliers hidup sejak mig 091 (2026-09-02) |
 | **Display stock (API)** | `products.stock_qty` | `compute_recipe_stock()` | `products.py:278-301` |
 | **Display stock (storefront)** | `products.stock_qty` | Inline recipe calc | `connect.py:140-199` |
 | **Display stock (Flutter offline)** | `products.stockQty` | `_computeRecipeStockLocal()` | `products_provider.dart:108-` |
