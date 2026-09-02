@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Search, Users, RefreshCw, Download, X, Star, Loader2 } from 'lucide-react';
 import { getCrmCustomers, getCrmCustomerDetail, refreshCrmStats } from '@/app/actions/api';
+import { getSegmentSummary } from '@/app/actions/crm';
+import Link from 'next/link';
 
 type Customer = {
   id: string;
@@ -70,6 +72,8 @@ export default function PelangganPage() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('last_visit');
   const [segment, setSegment] = useState('');
+  const [rfm, setRfm] = useState('');
+  const [rfmSegments, setRfmSegments] = useState<{ key: string; label: string; hint: string; count: number; reachable: number }[]>([]);
   const [segCounts, setSegCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -79,7 +83,7 @@ export default function PelangganPage() {
   const load = useCallback(async (opts: { silent?: boolean } = {}) => {
     if (!opts.silent) setLoading(true);
     try {
-      const data = await getCrmCustomers({ search, sort, segment });
+      const data = await getCrmCustomers({ search, sort, segment, rfm });
       setItems(data?.items ?? []);
       setTotal(data?.total ?? 0);
       setRepeat(data?.repeat_customers ?? 0);
@@ -90,7 +94,9 @@ export default function PelangganPage() {
     } finally {
       setLoading(false);
     }
-  }, [sort, search, segment]);
+  }, [sort, search, segment, rfm]);
+
+  useEffect(() => { getSegmentSummary().then(setRfmSegments); }, []);
 
   // Debounce pencarian — tiap ketikan jangan langsung nembak server.
   useEffect(() => {
@@ -168,6 +174,25 @@ export default function PelangganPage() {
         <Stat label="Pelanggan balik lagi" value={String(repeat)} hint={total ? `${Math.round((repeat / total) * 100)}% dari total` : undefined} />
         <Stat label="Total belanja tercatat" value={rp(spentAll)} />
       </div>
+
+      {/* Segmen otomatis (gelombang 3): dihitung dari order lunas 90 hari */}
+      {rfmSegments.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Segmen otomatis</p>
+            {rfm && <Link href={`/dashboard/promo?target=segment:${rfm}`} className="text-xs font-semibold text-blue-600 hover:underline">Kirim promo WA ke segmen ini →</Link>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setRfm('')} className={`rounded-full border px-3 py-1.5 text-sm font-medium ${!rfm ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-700'}`}>Semua</button>
+            {rfmSegments.map((sg) => (
+              <button key={sg.key} onClick={() => setRfm(sg.key)} title={sg.hint} className={`rounded-full border px-3 py-1.5 text-sm font-medium ${rfm === sg.key ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}>
+                {sg.label} <span className={rfm === sg.key ? 'ml-1 text-blue-100' : 'ml-1 text-gray-400'}>{sg.count}</span>
+              </button>
+            ))}
+          </div>
+          {rfm && <p className="mt-2 text-xs text-gray-500">{rfmSegments.find(s => s.key === rfm)?.hint} · {rfmSegments.find(s => s.key === rfm)?.reachable ?? 0} setuju dikirimi promo WA.</p>}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {SEGMENTS.map((sg) => {

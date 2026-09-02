@@ -690,12 +690,13 @@ export async function getReferralStats() {
 // backend lewat jaringan internal Docker, bypass nginx.
 
 export async function getCrmCustomers(
-  params: { search?: string; sort?: string; segment?: string } = {}
+  params: { search?: string; sort?: string; segment?: string; rfm?: string } = {}
 ) {
   try {
     const qs = new URLSearchParams({ sort: params.sort || 'last_visit', limit: '200' });
     if (params.search?.trim()) qs.set('search', params.search.trim());
     if (params.segment) qs.set('segment', params.segment);
+    if (params.rfm) qs.set('rfm', params.rfm);
     const res = await fetchWithAuth(`/customers/crm?${qs}`);
     const data = await res.json();
     return data.data ?? null;
