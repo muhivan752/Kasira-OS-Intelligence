@@ -140,7 +140,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'KASIRA',
+                    'SELARIS',
                     style: TextStyle(
                       color: KasiraDS.brandPrimary,
                       fontSize: 28,

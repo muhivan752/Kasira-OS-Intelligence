@@ -114,16 +114,22 @@ class _PosPageState extends ConsumerState<PosPage> {
         initialChildSize: 0.85,
         maxChildSize: 0.95,
         minChildSize: 0.4,
-        builder: (_, controller) => Container(
+        builder: (sheetCtx, controller) => Container(
           decoration: const BoxDecoration(
             color: KasiraDS.surfaceCard,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           // Sheet-nya nempel sampai pinggir bawah layar, jadi tombol "Bayar
-          // sekarang" keteken tombol navigasi sistem di HP 3-button (kelihatan
-          // di device 2026-09-02). Padding ini ngangkat isi sheet ke atas zona
-          // navigasi.
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+          // sekarang" keteken tombol navigasi sistem di HP 3-button.
+          //
+          // WAJIB pakai context SHEET (sheetCtx), bukan context halaman:
+          // halaman POS hidup di body Scaffold yang punya bottomNavigationBar,
+          // dan Scaffold NGABISIN padding.bottom buat nav bar-nya sendiri —
+          // jadi dari context halaman nilainya 0 dan fix v1.6.4 nggak ngefek
+          // (kelihatan lagi di device 2026-09-02). Context sheet = route modal
+          // di root, padding-nya utuh. viewPadding dipakai biar tetap bener
+          // walau keyboard nyala.
+          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetCtx).viewPadding.bottom),
           child: Column(
             children: [
               const SizedBox(height: 12),

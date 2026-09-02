@@ -145,7 +145,7 @@ class _ShiftOpenPageState extends State<ShiftOpenPage> {
                     ),
                     const SizedBox(width: 12),
                     const Text(
-                      'KASIRA',
+                      'SELARIS',
                       style: TextStyle(
                         color: KasiraDS.brandPrimary,
                         fontSize: 24,

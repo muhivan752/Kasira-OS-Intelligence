@@ -492,7 +492,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ),
         const SizedBox(width: 16),
         Text(
-          'KASIRA',
+          'SELARIS',
           style: Theme.of(context).textTheme.displaySmall?.copyWith(
                 color: KasiraDS.brandPrimary,
                 fontWeight: FontWeight.w800,

@@ -164,7 +164,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
               ),
               const SizedBox(height: 24),
               const Text(
-                'KASIRA',
+                'SELARIS',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 40,
@@ -174,7 +174,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
               ),
               const SizedBox(height: 8),
               Text(
-                'Smart POS untuk Cafe Indonesia',
+                'Kasir yang ngisi pembukuan kamu sendiri',
                 style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
               ),
               const SizedBox(height: 64),

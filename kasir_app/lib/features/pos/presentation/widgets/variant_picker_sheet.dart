@@ -8,7 +8,12 @@ import '../../../products/providers/variants_provider.dart';
 
 /// Hasil pilihan varian.
 class VariantChoice {
-  final ProductVariantModel variant;
+  /// `null` = kasir milih versi dasar produk (harga dasar, tanpa varian).
+  /// Pemilik sering cuma nambah varian yang HARGANYA BEDA — "Dingin +2000"
+  /// doang, yang panas = harga dasar. Tanpa opsi ini, produk yang cuma punya
+  /// satu varian jadi nggak bisa dijual versi dasarnya (kegigit di Teh
+  /// Manis, 2026-09-02).
+  final ProductVariantModel? variant;
   final double price;
 
   const VariantChoice({required this.variant, required this.price});
@@ -109,6 +114,16 @@ class _VariantPickerSheet extends StatelessWidget {
             child: SingleChildScrollView(
               child: Column(
                 children: [
+                  // Opsi dasar selalu ada di paling atas — harga dasar produk.
+                  _BaseTile(
+                    price: basePrice,
+                    currency: currency,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      Navigator.pop(context, VariantChoice(variant: null, price: basePrice));
+                    },
+                  ),
+                  const SizedBox(height: KasiraDS.space2),
                   for (final v in variants) ...[
                     _VariantTile(
                       variant: v,
@@ -225,6 +240,57 @@ class _VariantTile extends StatelessWidget {
               ),
               const SizedBox(width: KasiraDS.space2),
               const Icon(LucideIcons.chevronRight, size: 18, color: KasiraDS.textMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Tile "Biasa" — versi dasar produk tanpa varian. Ditaruh sebelum daftar
+/// varian; harganya harga dasar, jadi kalau pemilik cuma nambah "Dingin
+/// +2000", yang panas tetap kepilih di sini.
+class _BaseTile extends StatelessWidget {
+  final double price;
+  final NumberFormat currency;
+  final VoidCallback onTap;
+
+  const _BaseTile({required this.price, required this.currency, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: KasiraDS.brMd,
+        child: Container(
+          height: 64,
+          padding: const EdgeInsets.symmetric(horizontal: KasiraDS.space4),
+          decoration: BoxDecoration(
+            color: KasiraDS.surfaceCard,
+            borderRadius: KasiraDS.brMd,
+            border: Border.all(color: KasiraDS.borderDefault),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Biasa',
+                        style: KasiraDS.sans(size: 16, weight: FontWeight.w700, color: KasiraDS.textStrong)),
+                    const SizedBox(height: 2),
+                    Text('Tanpa varian · harga dasar',
+                        style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted)),
+                  ],
+                ),
+              ),
+              Text(currency.format(price),
+                  style: KasiraDS.display(size: 17, color: KasiraDS.textStrong)),
             ],
           ),
         ),
