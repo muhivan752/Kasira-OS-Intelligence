@@ -7,6 +7,9 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/selaris_mark.dart';
+import '../../../onboarding/presentation/pages/welcome_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -19,6 +22,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   String _statusText = 'Memuat...';
+  int _logoTaps = 0;
   bool _isMandatoryUpdate = false;
   String? _updateUrl;
 
@@ -136,7 +140,12 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
       return;
     }
 
-    if (mounted) context.go('/login');
+    // Sekali per instalasi: layar sambutan dulu, baru login. Layar URL
+    // server sengaja nggak masuk alur (tap logo 5× di splash kalau butuh).
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool(WelcomePage.prefsKey) ?? false;
+    if (!mounted) return;
+    context.go(seen ? '/login' : '/welcome');
   }
 
   @override
@@ -146,32 +155,32 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
     }
 
     return Scaffold(
-      backgroundColor: KasiraDS.brandPrimary,
-      body: FadeTransition(
+      body: Container(
+        decoration: const BoxDecoration(gradient: KasiraDS.gradientFrekuensi),
+        child: FadeTransition(
         opacity: _fadeAnim,
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(28),
-                ),
-                child: const Icon(Icons.point_of_sale_rounded, color: Colors.white, size: 56),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'SELARIS',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 40,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -1,
+              GestureDetector(
+                // Pintu rahasia ke layar URL server: tap logo 5×.
+                onTap: () {
+                  _logoTaps++;
+                  if (_logoTaps >= 5 && mounted) context.go('/setup');
+                },
+                child: Container(
+                  width: 104,
+                  height: 104,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: const Center(child: SelarisMark(size: 72, color: Colors.white)),
                 ),
               ),
+              const SizedBox(height: 22),
+              Text('Selaris', style: KasiraDS.display(size: 34, color: Colors.white)),
               const SizedBox(height: 8),
               Text(
                 'Kasir yang ngisi pembukuan kamu sendiri',
@@ -194,6 +203,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
             ],
           ),
         ),
+      ),
       ),
     );
   }

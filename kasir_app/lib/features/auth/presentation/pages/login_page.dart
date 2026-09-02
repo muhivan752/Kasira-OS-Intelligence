@@ -9,6 +9,7 @@ import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/selaris_mark.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/session_cache.dart';
 
@@ -428,7 +429,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
 
     return Scaffold(
-      backgroundColor: KasiraDS.brandPrimary,
+      backgroundColor: KasiraDS.bgBase,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -478,27 +479,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: KasiraDS.brandPrimary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.point_of_sale_rounded, 
-            color: KasiraDS.brandPrimary, 
-            size: 32
-          ),
-        ),
-        const SizedBox(width: 16),
-        Text(
-          'SELARIS',
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: KasiraDS.brandPrimary,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -1,
-              ),
-        ),
+        const SelarisMark(size: 36),
+        const SizedBox(width: 10),
+        Text('Selaris', style: KasiraDS.display(size: 26, color: KasiraDS.textStrong)),
       ],
     );
   }
@@ -518,44 +501,62 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   Widget _buildInputPhone(AuthState state) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Masukkan Nomor HP',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Format: 628xxx',
-          style: TextStyle(color: KasiraDS.textMuted),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Server: ${AppConfig.baseUrl}',
-          style: const TextStyle(color: Colors.grey, fontSize: 10),
-        ),
-        const SizedBox(height: 24),
+        Text('Nomor WhatsApp kamu', style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
+        const SizedBox(height: 6),
+        Text('Kode masuk dikirim ke WhatsApp. Nggak ada password.',
+            style: KasiraDS.sans(size: 13.5, color: KasiraDS.textMuted)),
+        const SizedBox(height: 20),
+        Text('NOMOR HP', style: KasiraDS.eyebrow()),
+        const SizedBox(height: 6),
+        // Prefix +62 tetap, user ketik tanpa 0. Yang dikirim ke server tetap
+        // "628…" (provider nerima format lama). Nol di depan dibuang otomatis.
         TextField(
           controller: _phoneController,
           keyboardType: TextInputType.phone,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          style: KasiraDS.sans(size: 17, weight: FontWeight.w600, color: KasiraDS.textStrong),
           decoration: InputDecoration(
-            hintText: '628...',
-            prefixIcon: const Icon(Icons.phone),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            hintText: '812 3456 7890',
+            prefixIcon: Padding(
+              padding: const EdgeInsets.only(left: 14, right: 8),
+              child: Text('🇮🇩 +62', style: KasiraDS.sans(size: 15, weight: FontWeight.w600, color: KasiraDS.textMuted)),
+            ),
+            prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+            filled: true,
+            fillColor: KasiraDS.surfaceCard,
+            border: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.borderDefault)),
+            enabledBorder: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.borderDefault)),
+            focusedBorder: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 1.5)),
           ),
-          onChanged: (val) => ref.read(authProvider.notifier).setPhone(val),
+          onChanged: (val) {
+            var d = val;
+            if (d.startsWith('62')) d = d.substring(2);
+            while (d.startsWith('0')) { d = d.substring(1); }
+            ref.read(authProvider.notifier).setPhone(d.isEmpty ? '' : '62$d');
+          },
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: KasiraDS.surfaceSunken, borderRadius: KasiraDS.brSm),
+          child: Text('Nomor ini juga jadi nomor WA pemilik buat struk & laporan pagi.',
+              style: KasiraDS.sans(size: 11.5, color: KasiraDS.textBody)),
+        ),
+        const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
-            onPressed: state.isLoading ? null : () {
-              ref.read(authProvider.notifier).sendOtp();
-            },
-            child: state.isLoading 
-                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('Kirim OTP'),
+          height: 54,
+          child: FilledButton(
+            onPressed: state.isLoading ? null : () => ref.read(authProvider.notifier).sendOtp(),
+            style: FilledButton.styleFrom(
+              backgroundColor: KasiraDS.brandPrimary,
+              shape: RoundedRectangleBorder(borderRadius: KasiraDS.brPill),
+            ),
+            child: state.isLoading
+                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Text('Kirim kode ke WhatsApp →', style: KasiraDS.sans(size: 15.5, weight: FontWeight.w700, color: KasiraDS.textOnBrand)),
           ),
         ),
       ],
@@ -569,14 +570,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     return Column(
       children: [
+        Text('Cek WhatsApp kamu', style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
+        const SizedBox(height: 6),
         Text(
-          'Verifikasi OTP',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Kode dikirim ke ${state.phone}',
-          style: const TextStyle(color: KasiraDS.textMuted),
+          'Kode 6 angka dikirim ke +${state.phone}',
+          style: KasiraDS.sans(size: 13.5, color: KasiraDS.textMuted),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
@@ -627,7 +625,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ref.read(authProvider.notifier).sendOtp();
                 } : null,
                 child: Text(
-                  'Kirim Ulang OTP',
+                  'Belum dapat? Kirim ulang',
                   style: TextStyle(color: state.canResendOtp ? KasiraDS.brandPrimary : Colors.grey),
                 ),
               ),

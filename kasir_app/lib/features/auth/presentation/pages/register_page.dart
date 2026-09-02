@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/selaris_mark.dart';
 
 enum RegStep { inputInfo, inputOtp, setPin }
 
@@ -153,8 +154,16 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  /// +62 tetap di UI; yang dikirim ke server '62…'. 0 di depan dibuang.
+  String get _phoneNormalized {
+    var d = _phoneCtrl.text.replaceAll(RegExp(r'\D'), '');
+    if (d.startsWith('62')) d = d.substring(2);
+    while (d.startsWith('0')) { d = d.substring(1); }
+    return d.isEmpty ? '' : '62$d';
+  }
+
   Future<void> _sendOtp() async {
-    final phone = _phoneCtrl.text.trim();
+    final phone = _phoneNormalized;
     final name = _nameCtrl.text.trim();
     final business = _businessCtrl.text.trim();
 
@@ -209,7 +218,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
     try {
       final resp = await _dio.post('/api/v1/auth/register', data: {
-        'phone': _phoneCtrl.text.trim(),
+        'phone': _phoneNormalized,
         'owner_name': _nameCtrl.text.trim(),
         'business_name': _businessCtrl.text.trim(),
         'business_type': _businessType,
@@ -224,7 +233,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
       final token = data['access_token']?.toString() ?? '';
       await _cache.setAccessToken(token);
-      await _cache.setPhone(_phoneCtrl.text.trim());
+      await _cache.setPhone(_phoneNormalized);
       if (data['tenant_id'] != null) await _cache.setTenantId(data['tenant_id'].toString());
       if (data['outlet_id'] != null) await _cache.setOutletId(data['outlet_id'].toString());
       await _cache.setStockMode(data['stock_mode']?.toString() ?? 'simple');
@@ -275,7 +284,7 @@ class _RegisterPageState extends State<RegisterPage> {
       }
 
       if (!mounted) return;
-      context.go('/dashboard');
+      context.go('/ready');
     } catch (e) {
       setState(() { _isLoading = false; _error = 'Gagal menyimpan PIN'; });
     }
@@ -283,115 +292,136 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
+    final stepNo = _step == RegStep.inputInfo ? 1 : _step == RegStep.inputOtp ? 2 : 3;
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0E14),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {
-            if (_step == RegStep.inputOtp) {
-              setState(() { _step = RegStep.inputInfo; _error = null; });
-            } else {
-              context.go('/login');
-            }
-          },
-        ),
-      ),
+      backgroundColor: KasiraDS.bgBase,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                _step == RegStep.inputInfo ? 'Daftar Selaris'
-                    : _step == RegStep.inputOtp ? 'Verifikasi OTP'
-                    : 'Buat PIN',
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: KasiraDS.textStrong),
+                    onPressed: () {
+                      if (_step == RegStep.inputOtp) {
+                        setState(() { _step = RegStep.inputInfo; _error = null; });
+                      } else {
+                        context.go('/welcome');
+                      }
+                    },
+                  ),
+                  const Spacer(),
+                  const SelarisMark(size: 24),
+                  const SizedBox(width: 6),
+                  Text('Selaris', style: KasiraDS.display(size: 18, color: KasiraDS.textStrong)),
+                ],
               ),
               const SizedBox(height: 8),
+              Text('Langkah $stepNo dari 3', style: KasiraDS.eyebrow(color: KasiraDS.brandPrimary)),
+              const SizedBox(height: 6),
               Text(
-                _step == RegStep.inputInfo ? 'Mulai kelola usahamu dengan Selaris POS'
-                    : _step == RegStep.inputOtp ? 'Masukkan kode OTP yang dikirim ke WhatsApp'
-                    : 'Buat PIN 6 digit untuk login cepat',
-                style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                _step == RegStep.inputInfo ? 'Ceritain usahamu'
+                    : _step == RegStep.inputOtp ? 'Cek WhatsApp kamu'
+                    : 'Buat PIN kasir',
+                style: KasiraDS.display(size: 26, color: KasiraDS.textStrong),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 6),
+              Text(
+                _step == RegStep.inputInfo ? 'Nama & jenis usaha nentuin menu awal dan mode stok. Bisa diubah nanti.'
+                    : _step == RegStep.inputOtp ? 'Kode 6 angka dikirim ke +$_phoneNormalized'
+                    : '6 angka. Dipakai buat masuk cepat tiap hari tanpa nunggu OTP.',
+                style: KasiraDS.sans(size: 13.5, color: KasiraDS.textMuted, height: 1.45),
+              ),
+              const SizedBox(height: 24),
 
               if (_error != null)
                 Container(
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                    color: KasiraDS.danger.withOpacity(0.08),
+                    borderRadius: KasiraDS.brSm,
+                    border: Border.all(color: KasiraDS.danger.withOpacity(0.3)),
                   ),
-                  child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+                  child: Text(_error!, style: KasiraDS.sans(size: 13, color: KasiraDS.danger)),
                 ),
 
               if (_step == RegStep.inputInfo) ...[
-                _buildField('Nomor WhatsApp', _phoneCtrl, hint: '628123456789', keyboardType: TextInputType.phone),
-                const SizedBox(height: 16),
-                _buildField('Nama Pemilik', _nameCtrl, hint: 'Ivan'),
-                const SizedBox(height: 16),
-                _buildField(
-                  'Nama Usaha',
-                  _businessCtrl,
-                  hint: 'Warung Kopi Ivan',
-                  onChanged: _onBusinessNameChanged,
+                _label('Nomor WhatsApp'),
+                TextField(
+                  controller: _phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: KasiraDS.sans(size: 16, weight: FontWeight.w600, color: KasiraDS.textStrong),
+                  decoration: _deco(hint: '812 3456 7890').copyWith(
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(left: 14, right: 8),
+                      child: Text('🇮🇩 +62', style: KasiraDS.sans(size: 15, weight: FontWeight.w600, color: KasiraDS.textMuted)),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                  ),
                 ),
-                // Suggestion card — muncul saat classify detect Non-F&B
+                const SizedBox(height: 14),
+                _label('Nama pemilik'),
+                _buildField('', _nameCtrl, hint: 'Ivan'),
+                const SizedBox(height: 14),
+                _label('Nama usaha'),
+                _buildField('', _businessCtrl, hint: 'Kopi Senja', onChanged: _onBusinessNameChanged),
                 if (_showDomainSuggestion && _detectedDomain != null)
                   _buildDomainSuggestionCard(),
-                const SizedBox(height: 16),
-                // Business type
-                Text('Jenis Usaha', style: TextStyle(color: Colors.grey[300], fontSize: 13, fontWeight: FontWeight.w500)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: ['cafe', 'warung', 'resto', 'other'].map((t) {
-                    final label = {'cafe': 'Cafe', 'warung': 'Warung', 'resto': 'Resto', 'other': 'Lainnya'}[t]!;
-                    final selected = _businessType == t;
-                    return ChoiceChip(
-                      label: Text(label),
-                      selected: selected,
-                      onSelected: (_) => setState(() => _businessType = t),
-                      selectedColor: KasiraDS.brandPrimary,
-                      labelStyle: TextStyle(color: selected ? Colors.white : Colors.grey[300]),
-                      backgroundColor: const Color(0xFF1A1F2B),
+                const SizedBox(height: 14),
+                _label('Jenis usaha'),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  childAspectRatio: 3.1,
+                  children: const [
+                    ('cafe', '☕', 'Coffee shop'),
+                    ('warung', '🍛', 'Warung makan'),
+                    ('resto', '🍽️', 'Resto bermeja'),
+                    ('other', '🛍️', 'Toko / lainnya'),
+                  ].map((t) {
+                    final selected = _businessType == t.$1;
+                    return InkWell(
+                      onTap: () => setState(() => _businessType = t.$1),
+                      borderRadius: KasiraDS.brMd,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: selected ? KasiraDS.brandTint : KasiraDS.surfaceCard,
+                          borderRadius: KasiraDS.brMd,
+                          border: Border.all(color: selected ? KasiraDS.brandPrimary : KasiraDS.borderSubtle, width: selected ? 1.5 : 1),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(t.$2, style: const TextStyle(fontSize: 18)),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(t.$3, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: KasiraDS.sans(size: 13.5, weight: FontWeight.w700, color: selected ? KasiraDS.brandPrimary : KasiraDS.textStrong))),
+                          ],
+                        ),
+                      ),
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 16),
-                // Referral (optional)
+                const SizedBox(height: 14),
+                _label('Kode referral (opsional)'),
                 TextField(
                   onChanged: (v) => _referralCode = v,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Kode Referral (opsional)',
-                    labelStyle: TextStyle(color: Colors.grey[500]),
-                    filled: true,
-                    fillColor: const Color(0xFF141820),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
+                  style: KasiraDS.sans(size: 15, color: KasiraDS.textStrong),
+                  decoration: _deco(hint: 'Dari teman yang udah pakai Selaris'),
                 ),
                 const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _sendOtp,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: KasiraDS.brandPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Kirim OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-                  ),
-                ),
+                _primary(_isLoading ? null : _sendOtp, 'Lanjut → kirim kode WhatsApp'),
+                const SizedBox(height: 10),
+                Center(child: Text('Dengan lanjut, kamu setuju Ketentuan & Privasi Selaris.',
+                    textAlign: TextAlign.center, style: KasiraDS.sans(size: 11, color: KasiraDS.textMuted))),
               ],
 
               if (_step == RegStep.inputOtp) ...[
@@ -399,21 +429,20 @@ class _RegisterPageState extends State<RegisterPage> {
                   controller: _otpCtrl,
                   keyboardType: TextInputType.number,
                   maxLength: 6,
+                  autofocus: true,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontSize: 28, letterSpacing: 12),
+                  style: KasiraDS.mono(size: 28, weight: FontWeight.w700, color: KasiraDS.textStrong, letterSpacing: 12),
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(
-                    counterText: '',
-                    filled: true,
-                    fillColor: const Color(0xFF141820),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
+                  decoration: _deco(hint: '••••••').copyWith(counterText: ''),
                   onChanged: (v) { if (v.length == 6) _register(v); },
                 ),
+                const SizedBox(height: 12),
+                Center(child: Text('Kode otomatis terbaca kalau WA di HP ini',
+                    style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted))),
                 const SizedBox(height: 16),
                 if (_countdown > 0)
-                  Text('OTP berlaku ${_countdown ~/ 60}:${(_countdown % 60).toString().padLeft(2, '0')}',
-                      style: TextStyle(color: Colors.grey[500])),
+                  Center(child: Text('Belum dapat? Kirim ulang · ${_countdown ~/ 60}:${(_countdown % 60).toString().padLeft(2, '0')}',
+                      style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted))),
                 if (_isLoading)
                   const Padding(
                     padding: EdgeInsets.only(top: 16),
@@ -422,24 +451,16 @@ class _RegisterPageState extends State<RegisterPage> {
               ],
 
               if (_step == RegStep.setPin) ...[
-                _buildField('PIN Baru (6 digit)', _pinCtrl, obscure: true, keyboardType: TextInputType.number, maxLength: 6),
-                const SizedBox(height: 16),
-                _buildField('Konfirmasi PIN', _pinConfirmCtrl, obscure: true, keyboardType: TextInputType.number, maxLength: 6),
+                _label('PIN baru (6 angka)'),
+                _buildField('', _pinCtrl, obscure: true, keyboardType: TextInputType.number, maxLength: 6, hint: '••••••'),
+                const SizedBox(height: 14),
+                _label('Ulangi PIN'),
+                _buildField('', _pinConfirmCtrl, obscure: true, keyboardType: TextInputType.number, maxLength: 6, hint: '••••••'),
                 const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _setPin,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: KasiraDS.brandPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Mulai Pakai Selaris', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-                  ),
-                ),
+                _primary(_isLoading ? null : _setPin, 'Mulai pakai Selaris'),
+                const SizedBox(height: 10),
+                Center(child: Text('Lupa PIN? Masuk lagi pakai OTP WhatsApp.',
+                    style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted))),
               ],
             ],
           ),
@@ -447,6 +468,37 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
     );
   }
+
+  Widget _label(String t) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text(t.toUpperCase(), style: KasiraDS.eyebrow()),
+      );
+
+  InputDecoration _deco({String? hint}) => InputDecoration(
+        hintText: hint,
+        hintStyle: KasiraDS.sans(size: 15, color: KasiraDS.textMuted),
+        filled: true,
+        fillColor: KasiraDS.surfaceCard,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.borderDefault)),
+        enabledBorder: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.borderDefault)),
+        focusedBorder: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 1.5)),
+      );
+
+  Widget _primary(VoidCallback? onPressed, String label) => SizedBox(
+        width: double.infinity,
+        height: 54,
+        child: FilledButton(
+          onPressed: onPressed,
+          style: FilledButton.styleFrom(
+            backgroundColor: KasiraDS.brandPrimary,
+            shape: RoundedRectangleBorder(borderRadius: KasiraDS.brPill),
+          ),
+          child: _isLoading
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Text(label, style: KasiraDS.sans(size: 15.5, weight: FontWeight.w700, color: KasiraDS.textOnBrand)),
+        ),
+      );
 
   Widget _buildField(String label, TextEditingController ctrl, {
     String? hint, bool obscure = false, TextInputType? keyboardType, int? maxLength,
@@ -457,19 +509,10 @@ class _RegisterPageState extends State<RegisterPage> {
       obscureText: obscure,
       keyboardType: keyboardType,
       maxLength: maxLength,
-      style: const TextStyle(color: Colors.white),
+      style: KasiraDS.sans(size: 15, weight: FontWeight.w600, color: KasiraDS.textStrong),
       inputFormatters: keyboardType == TextInputType.number ? [FilteringTextInputFormatter.digitsOnly] : null,
       onChanged: onChanged,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        labelStyle: TextStyle(color: Colors.grey[400]),
-        hintStyle: TextStyle(color: Colors.grey[600]),
-        counterText: '',
-        filled: true,
-        fillColor: const Color(0xFF141820),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      ),
+      decoration: _deco(hint: hint).copyWith(counterText: '', labelText: label.isEmpty ? null : label),
     );
   }
 
