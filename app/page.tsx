@@ -133,7 +133,7 @@ export default function LandingPage() {
           </nav>
           <div className="flex items-center gap-2.5">
             <Link href="/login" className="hidden px-3 py-2 text-[14.5px] font-semibold text-[var(--text-body)] transition hover:text-[var(--text-strong)] sm:block">Masuk</Link>
-            <Link href="/register" className="ks-btn ks-btn-sm">Coba gratis</Link>
+            <Link href="/register" className="ks-btn ks-btn-sm !w-auto">Coba gratis</Link>
           </div>
         </div>
       </header>
@@ -156,10 +156,10 @@ export default function LandingPage() {
                 dan daftar pelanggan yang perlu disapa. Kamu jualan, {BRAND} yang nyatat.
               </p>
               <div className="mt-7 flex flex-wrap items-center gap-3">
-                <Link href="/register" className="ks-btn ks-btn-lg">
+                <Link href="/register" className="ks-btn ks-btn-lg !w-auto">
                   Coba gratis 30 hari <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link href={`/${DEMO_SLUG}`} className="ks-btn ks-btn-lg ks-btn-outline">Lihat demo toko</Link>
+                <Link href={`/${DEMO_SLUG}`} className="ks-btn ks-btn-lg ks-btn-outline !w-auto">Lihat demo toko</Link>
               </div>
               <ul className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-medium text-[var(--text-muted)]">
                 {['Tanpa kartu kredit', 'Batal kapan aja', 'Server di Indonesia'].map((t) => (
