@@ -31,7 +31,7 @@ from typing import Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.shift import Shift, CashActivity, ShiftStatus, CashActivityType
@@ -106,6 +106,7 @@ async def ensure_open_shift(
     tenant_id: Optional[UUID] = None,
     *,
     source: str = "transaction",
+    strict: bool = True,
 ) -> Shift:
     """Ambil shift terbuka di outlet; kalau nggak ada, buka sendiri.
 
@@ -115,7 +116,22 @@ async def ensure_open_shift(
     """
     shift = await get_open_shift(db, outlet_id)
     if shift:
+        if strict:
+            await assert_can_use_shift(db, shift, user_id)
         return shift
+
+    # Profil Ketat: sesi TIDAK terbuka sendiri. Serah terima modal awal itu
+    # intinya, jadi di sini transaksi memang dihadang — satu-satunya tempat
+    # di seluruh mesin yang boleh bilang "buka kasir dulu".
+    # strict=False (sync offline): penjualannya udah kejadian di HP, nggak
+    # ada gunanya nolak; dibuka otomatis dan dicatat asalnya.
+    if strict and await outlet_shift_mode(db, outlet_id) == "ketat":
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "SHIFT_REQUIRED",
+                    "message": "Sesi kas belum dibuka. Buka kasir dan isi modal awal untuk memulai."},
+        )
 
     shift = Shift(
         outlet_id=outlet_id,
@@ -212,7 +228,7 @@ async def pause_shift(
     shift: Shift,
     user_id: UUID,
     tenant_id: Optional[UUID] = None,
-) -> tuple[Shift, Shift]:
+) -> tuple[Shift, Optional[Shift]]:
     """"Hitung nanti": jeda shift ini, buka shift baru yang langsung aktif.
 
     Modal awal shift baru = perkiraan sisa laci yang dijeda. Di warung uangnya
@@ -227,6 +243,16 @@ async def pause_shift(
     shift.paused_at = now
     shift.expected_ending_cash = expected
     shift.row_version = (shift.row_version or 0) + 1
+
+    if await outlet_shift_mode(db, shift.outlet_id) == "ketat":
+        # Serah terima eksplisit: kasir berikutnya buka sendiri dengan modal
+        # awal. Nggak ada sesi lanjutan otomatis.
+        await log_audit(
+            db=db, action="PAUSE_SHIFT", entity="shift", entity_id=shift.id,
+            after_state={"expected_ending_cash": round(expected, 2), "continued_by": None},
+            user_id=user_id, tenant_id=tenant_id,
+        )
+        return shift, None
 
     new_shift = Shift(
         outlet_id=shift.outlet_id,
@@ -322,6 +348,9 @@ def blind_view(data: dict) -> dict:
             data[k] = None
     for p in data.get("cash_payments") or []:
         p.pop("amount", None); p.pop("net_amount", None); p.pop("change_amount", None)
+    for r in data.get("review") or []:
+        for k in ("cash", "qris", "other", "total"):
+            r[k] = None
     data["blind_close"] = True
     return data
 
@@ -343,3 +372,67 @@ async def uncounted_shifts(db: AsyncSession, outlet_id: UUID, days: int = 14) ->
             Shift.start_time >= since,
         ).order_by(Shift.start_time.desc())
     )).scalars().all())
+
+
+
+# ───────────────────────── gelombang 3: Ketat ─────────────────────────
+
+async def assert_can_use_shift(db: AsyncSession, shift: Shift, user_id: UUID) -> None:
+    """Lockdown: laci yang dikunci cuma bisa dipakai kasir pemegangnya.
+    Pemilik menerobos (rujukan Toast: manager override)."""
+    locked = getattr(shift, "locked_user_id", None)
+    if not locked or locked == user_id:
+        return
+    from backend.models.user import User
+    user = await db.get(User, user_id)
+    if user and await is_owner(db, user):
+        return
+    holder = await db.get(User, locked)
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=403,
+        detail={"code": "SHIFT_LOCKED",
+                "message": f"Laci sedang dipegang {holder.full_name if holder else 'kasir lain'}. "
+                           "Minta dia menjeda atau menutup sesinya dulu (serah terima)."},
+    )
+
+
+async def shift_review(db: AsyncSession, shift: Shift) -> list[dict]:
+    """Rekap per kasir: pesanan, tunai, QRIS, total. Dihitung dari orders dan
+    payments di sesi ini; bahan layar tutup kasir dan dashboard pemilik."""
+    from backend.models.order import Order
+    from backend.models.user import User
+
+    rows = (await db.execute(
+        select(
+            Order.user_id,
+            func.count(func.distinct(Order.id)).label("orders"),
+            func.coalesce(func.sum(
+                case((Payment.payment_method == "cash",
+                           Payment.amount_paid - func.coalesce(Payment.change_amount, 0)), else_=0)
+            ), 0).label("cash"),
+            func.coalesce(func.sum(
+                case((Payment.payment_method == "qris", Payment.amount_paid), else_=0)
+            ), 0).label("qris"),
+            func.coalesce(func.sum(
+                case((Payment.payment_method.notin_(["cash", "qris"]), Payment.amount_paid), else_=0)
+            ), 0).label("other"),
+        )
+        .select_from(Order)
+        .outerjoin(Payment, (Payment.order_id == Order.id) & (Payment.status == "paid") & (Payment.deleted_at.is_(None)))
+        .where(Order.shift_session_id == shift.id, Order.deleted_at.is_(None), Order.user_id.isnot(None))
+        .group_by(Order.user_id)
+    )).all()
+    if not rows:
+        return []
+    names = {u.id: u.full_name for u in (await db.execute(
+        select(User.id, User.full_name).where(User.id.in_([r.user_id for r in rows])))).all()}
+    out = []
+    for r in rows:
+        out.append({
+            "user_id": str(r.user_id), "name": names.get(r.user_id) or "Kasir",
+            "orders": int(r.orders), "cash": float(r.cash), "qris": float(r.qris), "other": float(r.other),
+            "total": float(r.cash) + float(r.qris) + float(r.other),
+        })
+    out.sort(key=lambda d: -d["total"])
+    return out

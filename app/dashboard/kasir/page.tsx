@@ -31,7 +31,8 @@ export default function KasirPage() {
 
   async function loadShift(id: string) {
     const [cur, unc] = await Promise.all([getCurrentShift(id), getUncountedShifts(id)]);
-    setShift(cur);
+    // Tanpa sesi server tetap kirim { status: null, shift_mode } — bukan sesi.
+    setShift(cur && cur.id ? cur : null);
     setUncounted(unc || []);
   }
 
@@ -186,8 +187,21 @@ export default function KasirPage() {
           ) : (
             <div className="mt-3 space-y-2 text-sm">
               <p className="text-gray-600">Dibuka {tgl(shift.start_time)}{shift.opened_by_name ? ` oleh ${shift.opened_by_name}` : ''}{shift.opened_by === 'auto' ? ' (otomatis)' : ''}</p>
-              {shift.participants?.length > 0 && (
-                <p className="text-gray-600">Yang jaga: {shift.participants.map((p: any) => `${p.name}${p.orders ? ` (${p.orders} pesanan)` : ''}`).join(', ')}</p>
+              {shift.locked_to_name && (
+                <p className="text-amber-700">Laci terkunci ke {shift.locked_to_name} (mode Ketat)</p>
+              )}
+              {shift.review?.length > 0 && (
+                <div className="pt-1">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Rekap per kasir</p>
+                  <ul className="mt-1 divide-y divide-gray-100">
+                    {shift.review.map((r: any) => (
+                      <li key={r.user_id} className="flex items-center justify-between py-1.5">
+                        <span className="text-gray-900">{r.name} <span className="text-gray-400">· {r.orders} pesanan</span></span>
+                        <span className="text-gray-700">tunai {rp(r.cash)} · QRIS {rp(r.qris)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Modal awal</p><p className="font-semibold text-gray-900">{rp(shift.starting_cash)}</p></div>

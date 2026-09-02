@@ -107,6 +107,8 @@ async def open_shift(
         existing_shift.starting_cash = shift_in.starting_cash
         existing_shift.opened_by = "manual"
         existing_shift.user_id = current_user.id
+        if await shift_service.outlet_shift_mode(db, outlet_id) == "ketat":
+            existing_shift.locked_user_id = current_user.id
         if shift_in.notes:
             existing_shift.notes = shift_in.notes
         existing_shift.row_version = (existing_shift.row_version or 0) + 1
@@ -168,7 +170,9 @@ async def open_shift(
         user_id=current_user.id,
         status=ShiftStatus.open,
         starting_cash=shift_in.starting_cash,
-        notes=shift_in.notes
+        notes=shift_in.notes,
+        # Profil Ketat: laci dikunci ke yang membuka (lockdown).
+        locked_user_id=current_user.id if await shift_service.outlet_shift_mode(db, outlet_id) == "ketat" else None,
     )
     db.add(shift)
     await db.commit()
@@ -213,9 +217,13 @@ async def get_current_shift(
     shift = result.scalars().first()
     
     if not shift:
+        # Tanpa sesi tetap kirim profilnya: di Ketat app harus ngarahin ke
+        # halaman buka kasir, di Ringan/Standar cukup diam. `status: None`
+        # jadi pembeda dari sesi sungguhan.
         return StandardResponse(
             success=True,
-            data=None,
+            data={"status": None, "shift_mode": await shift_service.outlet_shift_mode(db, outlet_id),
+                  "uncounted_count": len(await shift_service.uncounted_shifts(db, outlet_id))},
             request_id=request.state.request_id,
             message="No open shift found"
         )
@@ -234,6 +242,12 @@ async def get_current_shift(
     opener = next((p for p in data["participants"] if p.get("opened")), None)
     data["opened_by_name"] = opener["name"] if opener else None
     data["uncounted_count"] = len(await shift_service.uncounted_shifts(db, outlet_id))
+    data["review"] = await shift_service.shift_review(db, shift)
+    data["locked_to_name"] = None
+    if shift.locked_user_id:
+        _holder = await db.get(User, shift.locked_user_id)
+        data["locked_to_name"] = _holder.full_name if _holder else "kasir lain"
+        data["locked_to_me"] = shift.locked_user_id == current_user.id
     data["blind_close"] = False
     if shift_service.blind_close_for(mode, owner):
         data = shift_service.blind_view(data)
@@ -312,15 +326,18 @@ async def pause_shift(
     paused, current = await shift_service.pause_shift(db, shift, current_user.id, current_user.tenant_id)
     await db.commit()
     await db.refresh(paused)
-    await db.refresh(current)
+    if current is not None:
+        await db.refresh(current)
     return StandardResponse(
         success=True,
         data=ShiftPauseResponse(
             paused=ShiftResponse.model_validate(paused),
-            current=ShiftResponse.model_validate(current),
+            current=ShiftResponse.model_validate(current) if current is not None else None,
         ),
         request_id=request.state.request_id,
-        message="Sesi dijeda. Sesi baru sudah berjalan, hitung laci kapan saja.",
+        message=("Sesi dijeda. Sesi baru sudah berjalan, hitung laci kapan saja."
+                 if current is not None else
+                 "Sesi dijeda untuk serah terima. Kasir berikutnya membuka sesi dengan modal awal."),
     )
 
 
@@ -351,6 +368,28 @@ async def list_uncounted_shifts(
             d["starting_cash"] = None
         out.append(d)
     return StandardResponse(success=True, data=out, request_id=request.state.request_id)
+
+
+@router.get("/{shift_id}/review", response_model=StandardResponse[List[dict]])
+async def get_shift_review(
+    request: Request,
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Rekap per kasir untuk satu sesi (pesanan, tunai, QRIS, total)."""
+    shift = (await db.execute(select(Shift).where(Shift.id == shift_id, Shift.deleted_at.is_(None)))).scalar_one_or_none()
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift tidak ditemukan")
+    outlet = await db.get(Outlet, shift.outlet_id)
+    if not outlet or outlet.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Tidak berwenang")
+    rows = await shift_service.shift_review(db, shift)
+    if shift_service.blind_close_for(outlet.shift_mode, await shift_service.is_owner(db, current_user)):
+        for r in rows:
+            for k in ("cash", "qris", "other", "total"):
+                r[k] = None
+    return StandardResponse(success=True, data=rows, request_id=request.state.request_id)
 
 
 @router.post("/{shift_id}/activities", response_model=StandardResponse[CashActivityResponse])

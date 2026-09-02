@@ -366,12 +366,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       // Shift otomatis (2 Sep 2026): nggak ada sesi terbuka BUKAN alasan
       // menghadang kasir di halaman "Buka shift". Sesi terbuka sendiri di
       // transaksi pertama; modal awal bisa diisi kapan saja dari Beranda.
+      final mode = data?['shift_mode']?.toString();
+      if (mode != null && mode.isNotEmpty) cache.shiftMode = mode;
       if (data != null && data['status'] == 'open') {
         cache.setShiftSessionId(data['id']);
+        context.go('/dashboard');
       } else {
         cache.setShiftSessionId(null);
+        // Profil Ketat: serah terima modal awal itu wajib, jadi di sini
+        // memang diarahkan ke halaman buka kasir. Profil lain langsung Beranda.
+        context.go(cache.shiftMode == 'ketat' ? '/shift/open' : '/dashboard');
       }
-      context.go('/dashboard');
     } catch (e) {
       // Gagal cek shift (offline, timeout) juga bukan alasan menghadang.
       if (context.mounted) context.go('/dashboard');

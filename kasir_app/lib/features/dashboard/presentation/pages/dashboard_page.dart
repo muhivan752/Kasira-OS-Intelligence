@@ -766,6 +766,7 @@ class _DashboardContent extends ConsumerWidget {
 
   Widget _shiftCard(BuildContext context, DashboardStats stats) {
     final isOpen = stats.shiftStatus == 'open';
+    final ketat = SessionCache.instance.shiftMode == 'ketat';
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -798,12 +799,15 @@ class _DashboardContent extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(isOpen ? 'Sesi kasir aktif' : 'Kasir siap',
+                Text(isOpen ? 'Sesi kasir aktif' : (ketat ? 'Sesi belum dibuka' : 'Kasir siap'),
                     style: KasiraDS.sans(size: 13.5, weight: FontWeight.w700, color: KasiraDS.textStrong)),
                 const SizedBox(height: 2),
-                // Shift otomatis: tanpa sesi pun kasir boleh langsung jualan,
-                // sesinya terbuka sendiri di transaksi pertama.
-                Text(isOpen ? _shiftSubtitle(stats) : 'Sesi terbuka otomatis di transaksi pertama',
+                // Ringan/Standar: tanpa sesi pun kasir boleh langsung jualan,
+                // sesinya terbuka sendiri di transaksi pertama. Ketat: wajib
+                // buka dengan modal awal (serah terima).
+                Text(isOpen
+                        ? _shiftSubtitle(stats)
+                        : (ketat ? 'Buka kasir dan isi modal awal untuk mulai' : 'Sesi terbuka otomatis di transaksi pertama'),
                     maxLines: 2, overflow: TextOverflow.ellipsis,
                     style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted)),
               ],
@@ -825,7 +829,7 @@ class _DashboardContent extends ConsumerWidget {
               shape: RoundedRectangleBorder(borderRadius: KasiraDS.brPill),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             ),
-            child: Text(isOpen ? 'Hitung kas' : 'Modal awal',
+            child: Text(isOpen ? 'Hitung kas' : (ketat ? 'Buka kasir' : 'Modal awal'),
                 style: KasiraDS.sans(size: 12.5, weight: FontWeight.w700, color: KasiraDS.textStrong)),
           ),
         ],

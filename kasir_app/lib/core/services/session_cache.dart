@@ -22,6 +22,9 @@ class SessionCache {
   String? stockMode;
   String? subscriptionTier;
   String? shiftSessionId;
+  // Profil kas outlet: 'ringan' | 'standar' | 'ketat'. Di Ketat, tanpa sesi
+  // app ngarahin ke halaman buka kasir; di dua lainnya sesi terbuka sendiri.
+  String shiftMode = 'ringan';
   String? phone;
   String? userId;
   // Business domain untuk Adaptive UI labels (Batch #26).
@@ -215,6 +218,8 @@ class SessionCache {
       if (data == null) return;
       final name = data['name'] as String?;
       final address = data['address'] as String?;
+      final mode = data['shift_mode'] as String?;
+      if (mode != null && mode.isNotEmpty) shiftMode = mode;
       if (name != null && name.isNotEmpty) {
         outletName = name;
         final prefs = await SharedPreferences.getInstance();

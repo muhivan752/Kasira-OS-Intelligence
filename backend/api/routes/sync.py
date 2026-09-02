@@ -269,7 +269,7 @@ async def sync_data(
         if _null_shift_orders or _null_shift_payments:
             from backend.services.shift_service import ensure_open_shift
             _shift = await ensure_open_shift(
-                db, outlet_id, current_user.id, current_user.tenant_id, source="sync_offline",
+                db, outlet_id, current_user.id, current_user.tenant_id, source="sync_offline", strict=False,
             )
             await db.flush()
             if _null_shift_orders:

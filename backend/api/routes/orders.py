@@ -109,6 +109,9 @@ async def create_order(
         )).scalar_one_or_none()
         if not shift:
             order_in.shift_session_id = None
+        else:
+            from backend.services.shift_service import assert_can_use_shift
+            await assert_can_use_shift(db, shift, current_user.id)
     if not order_in.shift_session_id:
         # Shift otomatis: nggak ada yang terbuka → dibuka sendiri di transaksi
         # pertama. Kasir nggak pernah dihadang "buka shift dulu" lagi.

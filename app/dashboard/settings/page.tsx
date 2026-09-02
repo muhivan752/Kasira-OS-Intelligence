@@ -131,7 +131,7 @@ export default function SettingsPage() {
       setShiftMode(prev);
       setShiftModeMsg({ ok: false, text: res?.message || 'Gagal mengubah mode kas' });
     } else {
-      setShiftModeMsg({ ok: true, text: mode === 'standar' ? 'Mode Standar aktif. Kasir kini menghitung laci tanpa melihat angka harapan.' : 'Mode Ringan aktif.' });
+      setShiftModeMsg({ ok: true, text: mode === 'standar' ? 'Mode Standar aktif. Kasir kini menghitung laci tanpa melihat angka harapan.' : mode === 'ketat' ? 'Mode Ketat aktif. Kasir wajib membuka sesi dengan modal awal; laci terkunci ke pembukanya.' : 'Mode Ringan aktif.' });
     }
   };
 
@@ -535,6 +535,7 @@ export default function SettingsPage() {
                 {([
                   ['ringan', 'Ringan', 'Hitung kas opsional. Kasir melihat angka sistem. Cocok untuk usaha yang dijaga pemiliknya sendiri.'],
                   ['standar', 'Standar', 'Pengingat kalau kas belum dihitung. Kasir mengetik hitungannya tanpa melihat angka harapan; selisih hanya terlihat oleh pemilik.'],
+                  ['ketat', 'Ketat', 'Sesi tidak terbuka sendiri: kasir wajib membuka dengan modal awal, dan laci terkunci ke kasir itu sampai dia menjeda atau menutupnya (serah terima). Untuk kafe dengan pergantian shift resmi.'],
                 ] as const).map(([val, title, desc]) => (
                   <label key={val} className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${shiftMode === val ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
                     <input type="radio" name="shift_mode" value={val} checked={shiftMode === val}
@@ -546,7 +547,7 @@ export default function SettingsPage() {
                   </label>
                 ))}
               </div>
-              <p className="text-xs text-gray-400">Mode Ketat (buka sesi manual dengan serah terima modal, laci per kasir) menyusul.</p>
+              <p className="text-xs text-gray-400">Apa pun modenya, sesi yang tertinggal tetap ditutup sistem pukul 04.00 dan ditandai belum dihitung.</p>
             </div>
           </div>
 

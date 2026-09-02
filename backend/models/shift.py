@@ -42,6 +42,8 @@ class Shift(BaseModel):
     counted_at = Column(DateTime(timezone=True), nullable=True)
     closed_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     paused_at = Column(DateTime(timezone=True), nullable=True)
+    # Profil Ketat (mig 099): laci dikunci ke kasir ini. NULL = laci bersama.
+    locked_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     outlet = relationship("Outlet")
     user = relationship("User", foreign_keys=[user_id])

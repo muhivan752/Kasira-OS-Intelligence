@@ -73,6 +73,7 @@ class _ShiftPageState extends State<ShiftPage> {
       final shiftId = _shift!['id'];
       final res = await _dio.post('/shifts/$shiftId/pause', options: Options(headers: _headers));
       final current = res.data['data']?['current'];
+      // Ketat: nggak ada sesi lanjutan (serah terima eksplisit) → null.
       final newId = current?['id']?.toString();
       await SessionCache.instance.setShiftSessionId(newId);
       if (!mounted) return;
@@ -356,6 +357,25 @@ class _ShiftPageState extends State<ShiftPage> {
     );
   }
 
+  Widget _buildContent2Empty() => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            _uncountedList(),
+            const SizedBox(height: 24),
+            Text(
+              SessionCache.instance.shiftMode == 'ketat'
+                  ? 'Belum ada sesi berjalan. Buka kasir dan isi modal awal untuk mulai.'
+                  : 'Belum ada sesi berjalan. Sesi terbuka sendiri di transaksi pertama.',
+              textAlign: TextAlign.center, style: const TextStyle(color: KasiraDS.textMuted)),
+            if (SessionCache.instance.shiftMode == 'ketat') ...[
+              const SizedBox(height: 16),
+              ElevatedButton(onPressed: () => context.go('/shift/open'), child: const Text('Buka kasir')),
+            ],
+          ],
+        ),
+      );
+
   Widget _buildContent() {
     if (_shift == null) {
       return SingleChildScrollView(
@@ -374,6 +394,10 @@ class _ShiftPageState extends State<ShiftPage> {
     // mengosongkan angka harapan; di sini baris sistemnya nggak dirender
     // supaya hitungannya nggak bisa dicontek.
     final blind = _shift!['blind_close'] == true;
+    // /current tanpa sesi sekarang balik {status: null, shift_mode} — bukan sesi.
+    if (_shift!['id'] == null) {
+      return _buildContent2Empty();
+    }
 
     final startingCash = (_shift!['starting_cash'] as num?)?.toDouble() ?? 0;
     final expectedCash = (_shift!['expected_ending_cash'] as num?)?.toDouble();
@@ -424,6 +448,34 @@ class _ShiftPageState extends State<ShiftPage> {
               const SizedBox(height: 8),
               const Text('Hitung uang di laci, lalu masukkan jumlahnya. Belum sempat? Jeda dulu, penjualan tetap jalan.', textAlign: TextAlign.center, style: TextStyle(color: KasiraDS.textMuted)),
               const SizedBox(height: 32),
+              if (_shift!['locked_to_name'] != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(color: KasiraDS.warning.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                  child: Text('Laci dipegang ${_shift!['locked_to_name']} (mode Ketat)',
+                      style: KasiraDS.sans(size: 12.5, weight: FontWeight.w600, color: KasiraDS.textStrong)),
+                ),
+              ],
+              if ((_shift!['review'] as List?)?.isNotEmpty == true) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Rekap per kasir', style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.textMuted)),
+                ),
+                const SizedBox(height: 6),
+                ...((_shift!['review'] as List).whereType<Map>().map((r) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text('${r['name']} · ${r['orders']} pesanan', style: KasiraDS.sans(size: 13, color: KasiraDS.textStrong))),
+                          if (r['total'] != null)
+                            Text(_currency.format((r['total'] as num).toDouble()), style: KasiraDS.sans(size: 13, weight: FontWeight.w600, color: KasiraDS.textStrong)),
+                        ],
+                      ),
+                    ))),
+                const Divider(height: 24),
+              ],
               if (!blind) ...[
                 _buildRow('Uang Modal Awal', _currency.format(startingCash)),
                 const SizedBox(height: 12),

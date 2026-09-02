@@ -431,7 +431,7 @@ async def create_payment(
         # Id dari cache HP bisa basi (janitor 04.00 udah nutup sesinya). Kalau
         # dibiarkan, pembayaran pagi ini nyangkut di laporan shift kemarin.
         _live = (await db.execute(
-            select(Shift.id).where(
+            select(Shift).where(
                 Shift.id == shift_session_id,
                 Shift.outlet_id == payment_in.outlet_id,
                 Shift.status == ShiftStatus.open,
@@ -440,6 +440,9 @@ async def create_payment(
         )).scalar_one_or_none()
         if not _live:
             shift_session_id = None
+        else:
+            from backend.services.shift_service import assert_can_use_shift
+            await assert_can_use_shift(db, _live, current_user.id)
     if not shift_session_id:
         # Shift otomatis: nggak ada yang terbuka → dibuka sendiri.
         from backend.services.shift_service import ensure_open_shift

@@ -48,6 +48,7 @@ class ShiftResponse(ShiftBase):
     closed_reason: Optional[str] = None
     counted_at: Optional[datetime] = None
     paused_at: Optional[datetime] = None
+    locked_user_id: Optional[UUID] = None
     row_version: int
     created_at: datetime
     updated_at: datetime
@@ -82,4 +83,5 @@ class ShiftWithActivitiesResponse(ShiftResponse):
 
 class ShiftPauseResponse(BaseModel):
     paused: ShiftResponse
-    current: ShiftResponse
+    # None di profil Ketat: serah terima eksplisit, kasir berikutnya buka sendiri.
+    current: Optional[ShiftResponse] = None
