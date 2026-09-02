@@ -496,7 +496,10 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    // Keyboard + nav bar sistem. Tanpa padding.bottom, tombol paling bawah
+    // keteken tombol navigasi di HP 3-button (device 2026-09-02).
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom +
+        MediaQuery.of(context).padding.bottom;
     final stockStr = widget.item.currentStock % 1 == 0
         ? widget.item.currentStock.toInt().toString()
         : widget.item.currentStock.toStringAsFixed(1);

@@ -81,7 +81,9 @@ class _GuestCountSheetState extends State<_GuestCountSheet> {
         left: KasiraDS.space5,
         right: KasiraDS.space5,
         top: KasiraDS.space3,
-        bottom: MediaQuery.of(context).viewInsets.bottom + KasiraDS.space6,
+        bottom: MediaQuery.of(context).viewInsets.bottom +
+            MediaQuery.of(context).padding.bottom +
+            KasiraDS.space6,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

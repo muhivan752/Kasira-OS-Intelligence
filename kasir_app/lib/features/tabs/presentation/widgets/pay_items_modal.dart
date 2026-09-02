@@ -133,7 +133,9 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
         return Padding(
           padding: EdgeInsets.only(
             left: 16, right: 16, top: 16,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).padding.bottom +
+                16,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

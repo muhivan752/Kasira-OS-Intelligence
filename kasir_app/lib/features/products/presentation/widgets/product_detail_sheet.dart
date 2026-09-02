@@ -43,6 +43,7 @@ class ProductDetailSheet extends ConsumerWidget {
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.7,
       ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: KasiraDS.surfaceCard,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
