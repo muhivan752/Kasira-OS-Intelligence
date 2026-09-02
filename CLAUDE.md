@@ -151,6 +151,14 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
     - Halaman yang duduk di IndexedStack dashboard **nggak punya AppBar**, jadi header-nya wajib `SafeArea(top: ...)` sendiri (tab Meja + tab Stok kegigit). Tapi `TableGridPage` juga dipakai EMBED di POS buat pilih meja — di situ `top` harus false, kalau nggak ada pita kosong di atas grid.
     - Padding "ruang buat bar keranjang" WAJIB di dalam `GridView.padding`, bukan `Padding` di luar. Di luar, dia motong tinggi viewport: pita kosong permanen dan baris terakhir nggak pernah kebuka.
 
+40. **Offline-first itu belum selesai kalau cuma ordernya yang disimpan — pembayarannya juga harus** (fix 2 Sep 2026, v1.6.13). `cart_provider._submitOffline()` udah lama nyimpen order ke Drift, tapi `payment_modal` nggak punya jalur offline sama sekali: dia selalu `POST /payments/`, gagal, lalu nampilin "Koneksi lambat, pembayaran belum terkonfirmasi". Hasilnya transaksi TUNAI nggak bisa ditutup pas jaringan mati, padahal itu justru alasan fitur offline ada.
+    - Sisi server udah siap dari dulu: `sync.py` nerima `changes.payments` dan punya cabang khusus buat order offline (poin loyalti + agregat CRM). Yang hilang cuma penulisan lokalnya.
+    - Sekarang lewat `CartNotifier.savePaymentOffline()`: insert `PaymentLocal` (`status: 'paid'`, `isSynced: false`) + update order lokal jadi `completed`. Modal manggilnya lewat callback `onOfflineCash` dari `cart_panel`, karena `PaymentModal` itu StatefulWidget biasa tanpa `ref`.
+    - **Cek online DULUAN, jangan sesudah request gagal.** Kalau requestnya sempat berangkat, server bisa aja udah nerima; nyimpen salinan lokal sesudah itu = pembayaran dobel waktu sync. Cabang timeout yang lama (tanya `GET /orders/{id}` dulu) tetap dipertahankan apa adanya.
+    - QRIS SENGAJA nggak punya jalur offline: QR-nya diterbitkan server.
+    - Struk aman offline: `payment_success_page` ngebangun `ReceiptData` dari data di memori + SharedPreferences, nggak nembak server (Rule #53).
+    - `Connectivity().checkConnectivity()` cuma baca status antarmuka, bukan jangkauan internet beneran. WiFi nyambung ke router tanpa internet tetap kebaca "online" dan bakal jatuh ke cabang timeout. Itu diterima apa adanya, jangan diganti ping ke server (nambah latensi di tiap transaksi).
+
 39. **Teks yang kelihatan user: JANGAN pakai em dash (—) dan JANGAN pakai garis miring sebagai pemisah kata** (keputusan Ivan 2 Sep 2026: "itu terlalu AI slop"). Berlaku di web (`app/**`, `components/**`) dan Flutter (string di `lib/**`), bukan di komentar kode.
     - Ganti em dash dengan kalimat yang bener: titik, koma, titik dua, atau kurung. "Catat nota belanja — stok naik, ..." jadi "Catat nota belanja. Stok naik, ...".
     - Garis miring jadi kata: "Pilih bahan / produk" jadi "Pilih bahan atau produk"; "Diskon / promo" jadi "Diskon atau promo".

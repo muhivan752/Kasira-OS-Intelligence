@@ -656,6 +656,59 @@ class CartNotifier extends StateNotifier<CartState> {
     }
   }
 
+  /// Catat pembayaran tunai waktu device lagi offline.
+  ///
+  /// Tanpa ini offline-first-nya cuma setengah jalan: pesanannya tersimpan di
+  /// Drift, tapi layar bayar tetap nembak `POST /payments/` dan mentok
+  /// "pembayaran belum terkonfirmasi" — kasir nggak bisa nutup transaksi tunai
+  /// sama sekali pas jaringan mati (kegigit 2 Sep 2026).
+  ///
+  /// Sisi server udah lama siap: `sync.py` nerima `changes.payments` dan malah
+  /// punya cabang khusus buat "transaksi yang dibuat pas device lagi offline",
+  /// termasuk poin loyalti dan agregat CRM. Yang hilang cuma baris ini.
+  ///
+  /// QRIS SENGAJA nggak lewat sini: QR-nya diterbitkan server, jadi memang
+  /// nggak bisa offline.
+  Future<bool> savePaymentOffline({
+    required String orderId,
+    required String paymentMethod,
+    required double amountDue,
+    required double amountPaid,
+  }) async {
+    try {
+      final now = DateTime.now();
+      await _db.transaction(() async {
+        await _db.into(_db.payments).insert(PaymentsCompanion(
+          id: drift.Value(_generateUuid()),
+          orderId: drift.Value(orderId),
+          outletId: drift.Value(_cache.outletId ?? ''),
+          shiftSessionId: drift.Value(_cache.shiftSessionId),
+          amountDue: drift.Value(amountDue),
+          amountPaid: drift.Value(amountPaid),
+          paymentMethod: drift.Value(paymentMethod),
+          status: const drift.Value('paid'),
+          paidAt: drift.Value(now),
+          rowVersion: const drift.Value(0),
+          isDeleted: const drift.Value(false),
+          isSynced: const drift.Value(false),
+        ));
+
+        // Ordernya ikut ditutup lokal, kalau nggak dia nangkring "pending" di
+        // Riwayat sampai sync jalan.
+        await (_db.update(_db.orders)..where((o) => o.id.equals(orderId)))
+            .write(OrdersCompanion(
+          status: const drift.Value('completed'),
+          updatedAt: drift.Value(now),
+          isSynced: const drift.Value(false),
+        ));
+      });
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: 'Gagal menyimpan pembayaran offline');
+      return false;
+    }
+  }
+
   /// Deduct ingredient stock offline based on active recipe
   Future<void> _deductIngredientStockOffline(
       String productId, int orderQty, String outletId) async {

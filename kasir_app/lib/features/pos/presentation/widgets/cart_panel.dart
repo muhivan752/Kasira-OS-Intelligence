@@ -372,6 +372,16 @@ class CartPanel extends ConsumerWidget {
           totalAmount: totalAmount,
           orderIdFuture: orderIdFuture,
           orderErrorGetter: () => ref.read(cartProvider).error,
+          // Notifier-nya diambil dari provider, bukan dari widget, jadi aman
+          // dipanggil dari dalam modal (gotcha #22).
+          onOfflineCash: (orderId, method, paid) => ref
+              .read(cartProvider.notifier)
+              .savePaymentOffline(
+                orderId: orderId,
+                paymentMethod: method,
+                amountDue: totalAmount,
+                amountPaid: paid,
+              ),
           onPaymentSuccess: (String paymentMethod, double amountPaid, String orderId) {
             ref.read(cartProvider.notifier).clearCart();
             ref.read(posModeProvider.notifier).state = PosMode.selection;

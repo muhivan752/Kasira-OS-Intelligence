@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -17,12 +18,19 @@ class PaymentModal extends StatefulWidget {
   final String? Function()? orderErrorGetter;
   final void Function(String paymentMethod, double amountPaid, String orderId) onPaymentSuccess;
 
+  /// Simpan pembayaran tunai ke Drift waktu device offline. Dikasih dari
+  /// `cart_panel` yang punya akses provider. Null = jalur offline dimatiin
+  /// (dipakai jalur bayar yang emang wajib online).
+  final Future<bool> Function(String orderId, String method, double amountPaid)?
+      onOfflineCash;
+
   const PaymentModal({
     super.key,
     required this.totalAmount,
     required this.orderIdFuture,
     required this.onPaymentSuccess,
     this.orderErrorGetter,
+    this.onOfflineCash,
   });
 
   @override
@@ -107,6 +115,11 @@ class _PaymentModalState extends State<PaymentModal> {
   }
   SessionCache get _cache => SessionCache.instance;
 
+  Future<bool> _isOnline() async {
+    final r = await Connectivity().checkConnectivity();
+    return r.isNotEmpty && !r.contains(ConnectivityResult.none);
+  }
+
   Future<void> _submitCashPayment(double amountPaid, {String apiMethod = 'cash'}) async {
     setState(() {
       _isLoadingQris = true;
@@ -123,13 +136,32 @@ class _PaymentModalState extends State<PaymentModal> {
       }
       return;
     }
+    final outletId = _cache.outletId ?? '';
+    final shiftId = _cache.shiftSessionId;
+    // Non-cash (kartu) gak ada kembalian, amount_paid = tagihan.
+    final isCashApi = apiMethod == 'cash';
+    final paid = isCashApi ? amountPaid : widget.totalAmount;
+    final change = paid - widget.totalAmount;
+
+    // Jaringan mati: catat lokal, jangan buang 30 detik nembak server yang
+    // jelas nggak kejangkau. Ordernya sendiri udah tersimpan di Drift oleh
+    // submitOrder. Dicek DULUAN, bukan sesudah gagal kirim: kalau requestnya
+    // sempat berangkat, server bisa aja udah nerima, dan nyimpen salinan lokal
+    // bakal jadi pembayaran dobel waktu sync.
+    if (widget.onOfflineCash != null && !await _isOnline()) {
+      final saved = await widget.onOfflineCash!(oid, apiMethod, paid);
+      if (saved) {
+        _finishCashSuccess(amountPaid, oid);
+      } else if (mounted) {
+        setState(() {
+          _isLoadingQris = false;
+          _cashError = 'Gagal menyimpan pembayaran offline.';
+        });
+      }
+      return;
+    }
+
     try {
-      final outletId = _cache.outletId ?? '';
-      final shiftId = _cache.shiftSessionId;
-      // Non-cash (kartu) gak ada kembalian — amount_paid = tagihan.
-      final isCashApi = apiMethod == 'cash';
-      final paid = isCashApi ? amountPaid : widget.totalAmount;
-      final change = paid - widget.totalAmount;
 
       await _dio.post(
         '/payments/',
