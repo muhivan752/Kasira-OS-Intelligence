@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getStorefront } from '@/app/actions/storefront';
 import { useCart, cartLineId } from './CartContext';
+import { BRAND } from '@/lib/brand';
 import { ShoppingBag, MessageCircle, Store, Clock, MapPin, CheckCircle2, Plus, Minus, CalendarDays, Star, Crown, Flame, Sparkles, Utensils } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
 
@@ -164,7 +165,7 @@ export default function StorefrontPage() {
         <div className="bg-blue-50 border-b border-blue-100">
           <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
-            <span className="text-sm font-medium text-blue-900">Terverifikasi Kasira · Zero Komisi</span>
+            <span className="text-sm font-medium text-blue-900">Terverifikasi {BRAND} · Zero Komisi</span>
             <div className="ml-auto flex items-center gap-3">
               <button onClick={handleWhatsApp} className="flex items-center gap-1.5 text-green-700 hover:text-green-800 text-sm font-medium">
                 <MessageCircle className="w-4 h-4" /><span className="hidden sm:inline">WhatsApp</span>
@@ -290,7 +291,7 @@ export default function StorefrontPage() {
         <div className="bg-gradient-to-r from-emerald-50 to-stone-50 border-b border-emerald-100">
           <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="text-sm font-medium text-emerald-900">Terverifikasi Kasira Pro · Zero Komisi</span>
+            <span className="text-sm font-medium text-emerald-900">Terverifikasi {BRAND} Pro · Zero Komisi</span>
             <div className="ml-auto flex items-center gap-3">
               {outlet.reservation_enabled && (
                 <button onClick={() => router.push(`/${slug}/booking`)}

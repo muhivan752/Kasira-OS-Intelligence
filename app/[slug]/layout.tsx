@@ -1,4 +1,4 @@
-import { SITE_URL } from '@/lib/brand';
+import { SITE_URL, BRAND } from '@/lib/brand';
 import type { Metadata } from 'next';
 import { CartProvider } from './CartContext';
 
@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     if (!res.ok) return {};
     const { data } = await res.json();
     const name = data?.outlet?.name || slug;
-    const desc = `Pesan online dari ${name}. Menu lengkap, harga transparan, bayar via QRIS. Powered by Kasira.`;
+    const desc = `Pesan online dari ${name}. Menu lengkap, harga transparan, bayar via QRIS. Powered by ${BRAND}.`;
     return {
       title: `${name} — Menu & Pesan Online`,
       description: desc,
