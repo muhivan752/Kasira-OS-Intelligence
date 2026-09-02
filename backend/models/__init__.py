@@ -24,3 +24,4 @@ from .knowledge_graph import KnowledgeGraphEdge
 from .outlet_tax_config import OutletTaxConfig
 from .subscription_invoice import SubscriptionInvoice
 from .landing_chat_log import LandingChatLog
+from .purchasing import Supplier, IngredientSupplier, PurchaseOrder, PurchaseOrderItem, SupplierPriceHistory

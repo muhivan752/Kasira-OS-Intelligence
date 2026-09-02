@@ -310,57 +310,18 @@ async def restock_ingredient(
     if not ingredient:
         raise HTTPException(status_code=404, detail="Bahan baku tidak ditemukan")
 
-    # Get or create outlet_stock record
-    outlet_stock = (await db.execute(
-        select(OutletStock).where(
-            OutletStock.outlet_id == restock_in.outlet_id,
-            OutletStock.ingredient_id == ingredient_id,
-            OutletStock.deleted_at.is_(None),
-        ).with_for_update()
-    )).scalar_one_or_none()
-
-    if not outlet_stock:
-        outlet_stock = OutletStock(
-            outlet_id=restock_in.outlet_id,
-            ingredient_id=ingredient_id,
-            computed_stock=0.0,
-        )
-        db.add(outlet_stock)
-        await db.flush()
-
-    stock_before = outlet_stock.computed_stock
-    stock_after = stock_before + restock_in.quantity
-
-    # Append event
-    event = Event(
+    # Logika get-or-create outlet_stock + event + optimistic update sekarang
+    # hidup di `ingredient_stock_service.restock_ingredient_stock` — dipakai
+    # juga sama nota belanja (purchasing_service). Jangan ditulis ulang di sini.
+    from backend.services.ingredient_stock_service import restock_ingredient_stock
+    stock_before, stock_after = await restock_ingredient_stock(
+        db,
+        ingredient_id=ingredient_id,
         outlet_id=restock_in.outlet_id,
-        stream_id=f"ingredient:{ingredient_id}",
-        event_type="stock.ingredient_restock",
-        event_data={
-            "ingredient_id": str(ingredient_id),
-            "outlet_id": str(restock_in.outlet_id),
-            "quantity": restock_in.quantity,
-            "stock_before": stock_before,
-            "stock_after": stock_after,
-            "notes": restock_in.notes,
-            "user_id": str(current_user.id),
-        },
+        quantity=restock_in.quantity,
+        user_id=current_user.id,
+        notes=restock_in.notes,
     )
-    db.add(event)
-
-    # Update outlet_stock with optimistic lock
-    result = await db.execute(
-        update(OutletStock).where(
-            OutletStock.id == outlet_stock.id,
-            OutletStock.row_version == outlet_stock.row_version,
-        ).values(
-            computed_stock=stock_after,
-            row_version=OutletStock.row_version + 1,
-            updated_at=datetime.now(timezone.utc),
-        )
-    )
-    if result.rowcount == 0:
-        raise HTTPException(status_code=409, detail="Concurrent update, coba lagi")
 
     await log_audit(
         db=db, action="RESTOCK", entity="ingredients", entity_id=ingredient_id,

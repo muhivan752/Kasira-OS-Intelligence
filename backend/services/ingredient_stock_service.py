@@ -363,3 +363,85 @@ async def restore_ingredients_on_cancel(
         "Ingredient stock restored for cancelled order %s, product %s",
         order_id, product_id,
     )
+
+
+async def restock_ingredient_stock(
+    db: AsyncSession,
+    *,
+    ingredient_id: UUID,
+    outlet_id: UUID,
+    quantity: float,
+    user_id: UUID | None,
+    notes: str | None = None,
+    source: dict | None = None,
+) -> tuple[float, float]:
+    """
+    Tambah stok bahan di satu outlet (terima barang).
+
+    Logika ini dulu inline di route `POST /ingredients/{id}/restock`. Ditarik
+    ke sini supaya jalur kedua — nota belanja (`purchasing_service`) — pakai
+    kode yang PERSIS sama: get-or-create outlet_stock dengan lock, event
+    `stock.ingredient_restock`, update optimistic. Dua tempat = drift
+    (pelajaran compute_recipe_stock di ARCHITECTURE.md).
+
+    `source` opsional masuk ke payload event, mis. {"purchase_id": ...} —
+    biar histori stok bisa nunjuk balik ke nota mana.
+
+    Return (stock_before, stock_after). Tidak commit.
+    """
+    if quantity <= 0:
+        raise HTTPException(status_code=400, detail="Jumlah restock harus > 0")
+
+    outlet_stock = (await db.execute(
+        select(OutletStock).where(
+            OutletStock.outlet_id == outlet_id,
+            OutletStock.ingredient_id == ingredient_id,
+            OutletStock.deleted_at.is_(None),
+        ).with_for_update()
+    )).scalar_one_or_none()
+
+    if not outlet_stock:
+        outlet_stock = OutletStock(
+            outlet_id=outlet_id,
+            ingredient_id=ingredient_id,
+            computed_stock=0.0,
+        )
+        db.add(outlet_stock)
+        await db.flush()
+
+    stock_before = float(outlet_stock.computed_stock or 0)
+    stock_after = stock_before + float(quantity)
+
+    payload = {
+        "ingredient_id": str(ingredient_id),
+        "outlet_id": str(outlet_id),
+        "quantity": quantity,
+        "stock_before": stock_before,
+        "stock_after": stock_after,
+        "notes": notes,
+        "user_id": str(user_id) if user_id else None,
+    }
+    if source:
+        payload.update(source)
+
+    db.add(Event(
+        outlet_id=outlet_id,
+        stream_id=f"ingredient:{ingredient_id}",
+        event_type="stock.ingredient_restock",
+        event_data=payload,
+    ))
+
+    result = await db.execute(
+        update(OutletStock).where(
+            OutletStock.id == outlet_stock.id,
+            OutletStock.row_version == outlet_stock.row_version,
+        ).values(
+            computed_stock=stock_after,
+            row_version=OutletStock.row_version + 1,
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=409, detail="Concurrent update, coba lagi")
+
+    return stock_before, stock_after
