@@ -323,7 +323,7 @@ export default function AIChatPage() {
     }
     for (const prod of menu.products) {
       if (!prod.name.trim() || prod.suggested_price <= 0 || prod.ingredients.length === 0) {
-        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, menuError: `Produk "${prod.name || '(kosong)'}" tidak lengkap — nama, harga, bahan wajib diisi.` } : m));
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, menuError: `Produk "${prod.name || '(kosong)'}" belum lengkap. Nama, harga, dan bahan wajib diisi.` } : m));
         return;
       }
     }
@@ -375,12 +375,12 @@ export default function AIChatPage() {
         lines.push(`${d.created_products.length} menu berhasil dibuat:`);
         d.created_products.forEach((p: any) => {
           const marginTxt = typeof p.margin_pct === 'number' ? ` · Untung ${p.margin_pct}%` : '';
-          lines.push(`  • **${p.name}** — ${rp(p.base_price)} (Modal ${rp(p.hpp)}${marginTxt})`);
+          lines.push(`  • **${p.name}**: ${rp(p.base_price)} (Modal ${rp(p.hpp)}${marginTxt})`);
         });
       }
       if (d.skipped_products?.length) {
         lines.push('', `Dilewati (${d.skipped_products.length}):`);
-        d.skipped_products.forEach((p: any) => lines.push(`  • ${p.name} — ${p.reason}`));
+        d.skipped_products.forEach((p: any) => lines.push(`  • ${p.name}: ${p.reason}`));
       }
       if (d.ingredients_created?.length) {
         lines.push('', `Bahan baru ditambah: ${d.ingredients_created.join(', ')}`);
@@ -413,7 +413,7 @@ export default function AIChatPage() {
     }
     for (const ing of proposal.ingredients) {
       if (!ing.name.trim() || ing.qty <= 0 || ing.buy_price <= 0 || ing.buy_qty <= 0) {
-        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, proposalError: `Bahan "${ing.name || '(kosong)'}" belum lengkap — nama, isi, harga, qty wajib > 0.` } : m));
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, proposalError: `Bahan "${ing.name || '(kosong)'}" belum lengkap. Nama, isi, harga, dan qty wajib lebih dari 0.` } : m));
         return;
       }
     }
@@ -920,7 +920,7 @@ export default function AIChatPage() {
                                 <div className="space-y-0.5 text-[10px] text-gray-700">
                                   {prod.ingredients.map((ing, iIdx) => (
                                     <div key={iIdx} className="flex justify-between">
-                                      <span>{ing.name} — {ing.qty}{ing.unit}</span>
+                                      <span>{ing.name} · {ing.qty}{ing.unit}</span>
                                       <span className="text-gray-400">Rp {Math.round(ing.buy_price / ing.buy_qty).toLocaleString('id-ID')}/{ing.unit}</span>
                                     </div>
                                   ))}

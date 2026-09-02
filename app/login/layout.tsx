@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Login — Kasira POS',
+  title: 'Login · Selaris POS',
   description: 'Masuk ke akun Kasira. Kelola kasir, pantau penjualan, dan atur bisnis dari mana saja.',
 };
 

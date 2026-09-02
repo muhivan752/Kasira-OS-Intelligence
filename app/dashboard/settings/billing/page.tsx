@@ -107,11 +107,11 @@ export default function BillingPage() {
               {unpaidInvoice.status === 'grace' ? 'Pembayaran jatuh tempo!' : 'Ada invoice belum dibayar'}
             </p>
             <p className="text-sm text-amber-700 mt-1">
-              {formatCurrency(unpaidInvoice.amount)} — jatuh tempo {formatDate(unpaidInvoice.due_date)}
+              {formatCurrency(unpaidInvoice.amount)}, jatuh tempo {formatDate(unpaidInvoice.due_date)}
             </p>
             <div className="mt-3 bg-white rounded-lg p-3 border border-amber-200 text-sm">
               <p className="font-semibold text-amber-800 mb-1.5">Transfer ke:</p>
-              <p className="text-amber-700">Bank <strong>Mandiri</strong> — <span className="font-mono font-bold">1060021987147</span></p>
+              <p className="text-amber-700">Bank <strong>Mandiri</strong> <span className="font-mono font-bold">1060021987147</span></p>
               <p className="text-amber-700">a.n. <strong>MIRFAN</strong></p>
               <p className="text-xs text-amber-500 mt-1.5">Konfirmasi pembayaran via WhatsApp setelah transfer.</p>
             </div>
@@ -183,7 +183,7 @@ export default function BillingPage() {
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-xs text-gray-500 mb-2">Pembayaran via transfer bank:</p>
               <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
-                <p>Bank <strong>{billing.bank_transfer.bank}</strong> — <span className="font-mono font-bold">{billing.bank_transfer.account_number}</span></p>
+                <p>Bank <strong>{billing.bank_transfer.bank}</strong> <span className="font-mono font-bold">{billing.bank_transfer.account_number}</span></p>
                 <p>a.n. <strong>{billing.bank_transfer.account_name}</strong></p>
               </div>
             </div>

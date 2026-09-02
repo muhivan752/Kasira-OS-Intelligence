@@ -224,7 +224,7 @@ export default function LaporanPage() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-gray-900">Laporan HPP / Resep</p>
-            <p className="text-xs text-gray-500 truncate">Margin berbasis bahan baku — mode Resep (Pro)</p>
+            <p className="text-xs text-gray-500 truncate">Margin berbasis bahan baku, mode Resep (Pro)</p>
           </div>
           <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 flex-shrink-0" />
         </Link>

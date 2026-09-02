@@ -44,7 +44,7 @@ const rpDec = (n: number | string | null | undefined) => {
   return 'Rp ' + (v % 1 === 0 ? v.toLocaleString('id-ID') : v.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 };
 const tgl = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  iso ? new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
 const newKey = () => Math.random().toString(36).slice(2, 9);
 // Satuan di nota — dipilih, bukan diketik. Konversi ke satuan stok bahan
 // (gram/ml/pcs/bungkus) dikerjain backend (unit_utils.UNIT_ALIASES), jadi
@@ -52,7 +52,7 @@ const newKey = () => Math.random().toString(36).slice(2, 9);
 const UNIT_GROUPS: { label: string; units: { v: string; l: string }[] }[] = [
   { label: 'Berat', units: [{ v: 'gram', l: 'gram (gr)' }, { v: 'ons', l: 'ons (100 gr)' }, { v: 'kg', l: 'kg' }] },
   { label: 'Volume', units: [{ v: 'ml', l: 'ml' }, { v: 'liter', l: 'liter' }, { v: 'galon', l: 'galon (19 L)' }] },
-  { label: 'Hitungan', units: [{ v: 'pcs', l: 'pcs / buah' }, { v: 'butir', l: 'butir' }, { v: 'ekor', l: 'ekor' }, { v: 'ikat', l: 'ikat' }, { v: 'botol', l: 'botol' }, { v: 'kaleng', l: 'kaleng' }, { v: 'sisir', l: 'sisir' }, { v: 'lembar', l: 'lembar' }] },
+  { label: 'Hitungan', units: [{ v: 'pcs', l: 'pcs atau buah' }, { v: 'butir', l: 'butir' }, { v: 'ekor', l: 'ekor' }, { v: 'ikat', l: 'ikat' }, { v: 'botol', l: 'botol' }, { v: 'kaleng', l: 'kaleng' }, { v: 'sisir', l: 'sisir' }, { v: 'lembar', l: 'lembar' }] },
   { label: 'Kemasan', units: [{ v: 'bungkus', l: 'bungkus' }, { v: 'sachet', l: 'sachet' }, { v: 'pak', l: 'pak' }, { v: 'renceng', l: 'renceng' }, { v: 'dus', l: 'dus (12)' }, { v: 'lusin', l: 'lusin (12)' }, { v: 'tray', l: 'tray (30)' }, { v: 'papan', l: 'papan telur (30)' }] },
 ];
 
@@ -123,7 +123,7 @@ export default function PembelianPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Pembelian</h1>
-          <p className="text-gray-500">Catat nota belanja — stok naik, HPP bahan ke-update, utang supplier tercatat. Otomatis.</p>
+          <p className="text-gray-500">Catat nota belanja. Stok naik, HPP bahan ke-update, dan utang supplier tercatat sendiri.</p>
         </div>
         <button onClick={() => setShowNota(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
           <Plus className="w-4 h-4" /> Catat Nota
@@ -252,7 +252,7 @@ export default function PembelianPage() {
             await reload();
             const changes = p.items.filter(i => i.cost_before != null && i.cost_after != null && i.cost_before !== i.cost_after)
               .map(i => `${i.name}: ${rpDec(i.cost_before)} → ${rpDec(i.cost_after)}`);
-            showToast('ok', `Nota ${p.po_number} dicatat. Stok masuk.` + (changes.length ? `\nHPP berubah — ${changes.join(' · ')}` : ''));
+            showToast('ok', `Nota ${p.po_number} dicatat. Stok masuk.` + (changes.length ? `\nHPP berubah: ${changes.join(', ')}` : ''));
           }}
         />
       )}
@@ -285,12 +285,12 @@ function EmptyNota({ onAdd }: { onAdd: () => void }) {
         <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-blue-400" />
         <h2 className="text-lg font-bold text-gray-900">Belum ada nota belanja</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Tiap kali belanja bahan atau stok, catat notanya di sini. Kamu cuma isi apa yang dibeli dan berapa —
-          stok bertambah, harga modal (HPP) dihitung ulang pakai rata-rata, dan utang ke supplier kecatat sendiri.
+          Tiap kali belanja bahan atau stok, catat notanya di sini. Kamu cuma isi apa yang dibeli dan berapa,
+          lalu stok bertambah, harga modal (HPP) dihitung ulang pakai rata-rata, dan utang ke supplier kecatat sendiri.
         </p>
         <div className="mt-5 grid gap-2 text-left text-sm text-gray-600 sm:grid-cols-3">
           <div className="rounded-lg bg-gray-50 p-3"><p className="font-semibold text-gray-900">1. Foto atau ketik</p>Upload foto nota, AI baca barisnya. Atau isi manual.</div>
-          <div className="rounded-lg bg-gray-50 p-3"><p className="font-semibold text-gray-900">2. Cek & simpan</p>Cocokkan ke bahan/produk yang ada, konfirmasi harga.</div>
+          <div className="rounded-lg bg-gray-50 p-3"><p className="font-semibold text-gray-900">2. Cek & simpan</p>Cocokkan ke bahan atau produk yang ada, konfirmasi harga.</div>
           <div className="rounded-lg bg-gray-50 p-3"><p className="font-semibold text-gray-900">3. Selesai</p>Stok, HPP, dan utang ke-update. Menu engineering langsung pakai angka baru.</div>
         </div>
         <button onClick={onAdd} className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
@@ -378,9 +378,9 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
     const unmatched = lines.filter(l => !l.targetKey && (l.rawName || l.quantity));
     if (unmatched.length) { setError(`Ada ${unmatched.length} baris belum dicocokkan: ${unmatched.map(l => l.rawName || 'baris kosong').join(', ')}. Pilih bahan/produk, atau pilih "Lainnya" kalau bukan stok.`); return; }
     const noName = valid.filter(l => (l.targetKey === '__other' || l.targetKey === '__new_ing' || l.targetKey === '__new_prod') && !(l.newName || l.rawName || '').trim());
-    if (noName.length) { setError('Baris "Lainnya" / bahan baru / produk baru harus diisi namanya.'); return; }
+    if (noName.length) { setError('Baris "Lainnya", bahan baru, dan produk baru harus diisi namanya.'); return; }
     const noPrice = valid.filter(l => l.targetKey === '__new_prod' && !(Number(l.newSellPrice) > 0));
-    if (noPrice.length) { setError('Produk baru butuh harga jual — itu yang dipakai di kasir.'); return; }
+    if (noPrice.length) { setError('Produk baru butuh harga jual, itu yang dipakai di kasir.'); return; }
     if (payMode === 'utang' && Number(paidAmount || 0) >= total) { setError('Kalau belum lunas, nominal dibayar harus lebih kecil dari total.'); return; }
 
     setSaving(true);
@@ -424,7 +424,7 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
           <input type="file" accept="image/*" capture="environment" className="hidden" disabled={scanning} onChange={e => { const f = e.target.files?.[0]; if (f) handleScan(f); e.target.value = ''; }} />
           {scanning ? <Loader2 className="w-6 h-6 text-blue-500 animate-spin shrink-0" /> : <Camera className="w-6 h-6 text-blue-500 shrink-0" />}
           <div className="text-sm">
-            <p className="font-semibold text-gray-900">{scanning ? 'Membaca nota…' : photoUrl ? 'Foto tersimpan — scan ulang?' : 'Foto nota, biar AI yang ngisi barisnya'}</p>
+            <p className="font-semibold text-gray-900">{scanning ? 'Membaca nota…' : photoUrl ? 'Foto tersimpan, scan ulang?' : 'Foto nota, biar AI yang ngisi barisnya'}</p>
             <p className="text-gray-500">JPG/PNG maks 10MB. Hasilnya tetap kamu cek dulu sebelum disimpan.</p>
           </div>
         </label>
@@ -434,7 +434,7 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
           <div className="sm:col-span-1">
             <label className="text-xs font-semibold text-gray-500">Supplier</label>
             <select value={supplierChoice} onChange={e => setSupplierChoice(e.target.value)} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-              <option value="">Tanpa supplier (pasar / eceran)</option>
+              <option value="">Tanpa supplier (pasar, eceran)</option>
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               <option value="__new">+ Supplier baru…</option>
             </select>
@@ -456,23 +456,23 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-semibold text-gray-500">Barang yang dibeli</label>
-            {!isPro && <span className="text-xs text-gray-400">Bahan baku & resep ada di paket Pro — di Starter, catat produk jadi.</span>}
+            {!isPro && <span className="text-xs text-gray-400">Bahan baku dan resep ada di paket Pro. Di Starter, catat produk jadi.</span>}
           </div>
           <div className="space-y-2">
             {lines.map(l => {
               const t = targetByKey[l.targetKey];
               return (
                 <div key={l.key} className={`rounded-lg border p-2.5 ${!l.targetKey && l.rawName ? 'border-amber-300 bg-amber-50' : 'border-gray-200'}`}>
-                  {l.rawName && !l.targetKey && <p className="text-xs text-amber-700 mb-1">Dari nota: <b>{l.rawName}</b> — cocokkan ke bahan/produk:</p>}
+                  {l.rawName && !l.targetKey && <p className="text-xs text-amber-700 mb-1">Dari nota: <b>{l.rawName}</b>, cocokkan ke bahan atau produk:</p>}
                   <div className="grid gap-2 sm:grid-cols-[1.6fr_0.7fr_0.8fr_1fr_1fr_auto]">
                     <select value={l.targetKey} onChange={e => updateLine(l.key, { targetKey: e.target.value, newName: l.newName || l.rawName || '' })} className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0">
-                      <option value="">Pilih bahan / produk…</option>
+                      <option value="">Pilih bahan atau produk…</option>
                       {ingredientTargets.length > 0 && <optgroup label="Bahan baku">{ingredientTargets.map(x => <option key={x.key} value={x.key}>{x.name}{x.hint ? ` · ${x.hint}` : ''}</option>)}</optgroup>}
                       {productTargets.length > 0 && <optgroup label="Produk">{productTargets.map(x => <option key={x.key} value={x.key}>{x.name}{x.hint ? ` · ${x.hint}` : ''}</option>)}</optgroup>}
                       <optgroup label="Belum ada di daftar">
                         {isPro && <option value="__new_ing">+ Bahan baku baru…</option>}
                         <option value="__new_prod">+ Produk jadi baru…</option>
-                        <option value="__other">Lainnya — bukan stok (gas, plastik, tisu)</option>
+                        <option value="__other">Lainnya, bukan stok (gas, plastik, tisu)</option>
                       </optgroup>
                     </select>
                     <input type="number" inputMode="decimal" min="0" step="any" value={l.quantity} onChange={e => updateLine(l.key, { quantity: e.target.value })} placeholder="Jml" className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0" />
@@ -522,7 +522,7 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
           <div className="flex gap-2">
             {(['lunas', 'utang'] as const).map(m => (
               <button key={m} onClick={() => setPayMode(m)} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${payMode === m ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600'}`}>
-                {m === 'lunas' ? 'Sudah dibayar lunas' : 'Belum lunas / sebagian'}
+                {m === 'lunas' ? 'Sudah dibayar lunas' : 'Belum lunas atau sebagian'}
               </button>
             ))}
           </div>
@@ -650,7 +650,7 @@ function SupplierModal({ initial, onClose, onSaved }: { initial: Partial<Supplie
   return (
     <Modal title={isEdit ? 'Ubah Supplier' : 'Supplier Baru'} onClose={onClose}>
       <div className="space-y-3">
-        {([['name', 'Nama', 'Toko Berkah'], ['phone', 'No. HP / WA', '0812…'], ['address', 'Alamat', 'Pasar Petisah'], ['notes', 'Catatan', 'Kirim tiap Senin']] as const).map(([k, label, ph]) => (
+        {([['name', 'Nama', 'Toko Berkah'], ['phone', 'No. HP atau WA', '0812…'], ['address', 'Alamat', 'Pasar Petisah'], ['notes', 'Catatan', 'Kirim tiap Senin']] as const).map(([k, label, ph]) => (
           <div key={k}>
             <label className="text-xs font-semibold text-gray-500">{label}</label>
             <input value={(form as any)[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} placeholder={ph} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />

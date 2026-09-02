@@ -166,7 +166,7 @@ export default function PaymentSettingsPage() {
                 type={showToken ? 'text' : 'password'}
                 value={callbackToken}
                 onChange={e => setCallbackToken(e.target.value)}
-                placeholder={paymentStatus?.has_callback_token ? 'Sudah tersimpan — kosongin untuk skip' : 'xnd_callback_token_...'}
+                placeholder={paymentStatus?.has_callback_token ? 'Sudah tersimpan, kosongin untuk skip' : 'xnd_callback_token_...'}
                 className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
               />
               <button type="button" onClick={() => setShowToken(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -175,7 +175,7 @@ export default function PaymentSettingsPage() {
             </div>
             <p className="text-xs text-gray-400 mt-1">
               Untuk verifikasi webhook callback Xendit. Disimpan terenkripsi.
-              <span className="text-amber-600 ml-1">(Tahap awal pakai token global Selaris — token ini akan diaktifkan otomatis saat Anda merchant pertama yang request.)</span>
+              <span className="text-amber-600 ml-1">(Tahap awal pakai token global Selaris. Token ini aktif otomatis saat Anda jadi merchant pertama yang request.)</span>
             </p>
           </div>
 

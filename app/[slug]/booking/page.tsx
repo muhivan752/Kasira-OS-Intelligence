@@ -532,7 +532,7 @@ export default function BookingPage() {
                 <div className="bg-purple-50 rounded-xl p-3 text-center">
                   <Clock className="w-5 h-5 text-purple-600 mx-auto mb-1" />
                   <p className="text-xs text-purple-600 font-medium">Jam</p>
-                  <p className="text-sm font-bold text-gray-900 mt-0.5">{bookingResult.start_time} — {bookingResult.end_time}</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{bookingResult.start_time} sampai {bookingResult.end_time}</p>
                 </div>
               </div>
 

@@ -158,7 +158,7 @@ export default function StorefrontPage() {
             <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-2">
               <Utensils className="w-4 h-4 text-emerald-600 shrink-0" />
               <span className="text-sm font-bold text-emerald-800">Dine In</span>
-              <span className="text-sm text-emerald-700">— Pesanan akan dikirim ke meja Anda</span>
+              <span className="text-sm text-emerald-700">Pesanan akan dikirim ke meja Anda</span>
             </div>
           </div>
         )}
@@ -285,7 +285,7 @@ export default function StorefrontPage() {
             <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-2">
               <Utensils className="w-4 h-4 text-emerald-600 shrink-0" />
               <span className="text-sm font-bold text-emerald-800">Dine In</span>
-              <span className="text-sm text-emerald-700">— Pesanan akan dikirim ke meja Anda</span>
+              <span className="text-sm text-emerald-700">Pesanan akan dikirim ke meja Anda</span>
             </div>
           </div>
         )}

@@ -57,7 +57,7 @@ const UNIT_OPTIONS = [
   { value: 'kg', label: 'Kilogram (kg)', type: 'WEIGHT', example: 'Beras, Ayam, Sayur' },
   { value: 'ml', label: 'Mililiter (ml)', type: 'VOLUME', example: 'Susu, Kecap, Minyak' },
   { value: 'liter', label: 'Liter (L)', type: 'VOLUME', example: 'Air, Minyak Goreng' },
-  { value: 'pcs', label: 'Butir / Pcs', type: 'COUNT', example: 'Telur, Teh Celup, Roti' },
+  { value: 'pcs', label: 'Butir atau Pcs', type: 'COUNT', example: 'Telur, Teh Celup, Roti' },
   { value: 'bungkus', label: 'Bungkus', type: 'COUNT', example: 'Bumbu, Mie Instan' },
 ];
 
@@ -271,7 +271,7 @@ export default function BahanBakuPage() {
       await updateIngredient(editingId, { row_version: form.row_version });
       setShowModal(false);
       resetForm();
-      setSuccessMsg('✅ Harga dikonfirmasi — badge perkiraan AI dihapus');
+      setSuccessMsg('✅ Harga dikonfirmasi, badge perkiraan AI dihapus');
       setTimeout(() => setSuccessMsg(''), 4000);
       await loadData();
     } catch (e: any) {
@@ -432,7 +432,7 @@ export default function BahanBakuPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-900">Tambah bahan baku</p>
                   <p className="text-xs text-gray-500">Klik "Tambah Bahan" di atas. Pilih dari daftar bahan umum atau isi manual.</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Contoh: Kopi Arabica — Rp120.000 / 1 kg</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Contoh: Kopi Arabica, Rp120.000 per 1 kg</p>
                 </div>
               </div>
               <div className="flex gap-3 items-start">
@@ -503,7 +503,7 @@ export default function BahanBakuPage() {
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 transition cursor-pointer"
                           title="Klik untuk cek & konfirmasi harga"
                         >
-                          <AlertTriangle className="w-3 h-3" /> Harga perkiraan AI — klik buat cek
+                          <AlertTriangle className="w-3 h-3" /> Harga perkiraan AI, klik buat cek
                         </button>
                       )}
                     </div>
@@ -680,7 +680,7 @@ export default function BahanBakuPage() {
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
                     <p className="text-xs text-amber-800 leading-relaxed">
                       <strong>Biaya operasional tetap</strong> (es batu, gas, listrik, air) yang susah dihitung per porsi.
-                      Selaris <strong>tidak mengurangi stok</strong> bahan ini per pesanan — cuma dicatat sebagai biaya tetap harian.
+                      Selaris <strong>tidak mengurangi stok</strong> bahan ini per pesanan, cuma dicatat sebagai biaya tetap harian.
                     </p>
                     <div>
                       <label className="block text-xs font-medium text-amber-700 mb-1">Estimasi Biaya per Hari (Rp)</label>
@@ -741,7 +741,7 @@ export default function BahanBakuPage() {
                   <div className={`rounded-lg p-4 space-y-3 ${
                     editingId && form.needs_review ? 'bg-amber-50 border-2 border-amber-200' : 'bg-gray-50'
                   }`}>
-                    <p className="text-sm font-medium text-gray-700">💰 Harga Beli {editingId && form.needs_review && <span className="text-xs text-amber-700 ml-1">(cek dulu — ini perkiraan AI)</span>}</p>
+                    <p className="text-sm font-medium text-gray-700">💰 Harga Beli {editingId && form.needs_review && <span className="text-xs text-amber-700 ml-1">(cek dulu, ini perkiraan AI)</span>}</p>
                     <p className="text-xs text-gray-500">Isi sesuai nota belanja. Contoh: beli 1 kg gula seharga Rp14.000.</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>

@@ -348,7 +348,7 @@ export async function getMarginReport(outletId: string): Promise<{ data: any | n
       const body = await res.json().catch(() => ({}));
       const detail = body?.detail;
       if (res.status === 400 && typeof detail === 'object' && detail?.code === 'STOCK_MODE_NOT_SUPPORTED') {
-        return { data: null, error: detail.message || 'Outlet pakai mode Resep — pakai Laporan HPP.', isRecipeMode: true };
+        return { data: null, error: detail.message || 'Outlet pakai mode Resep, pakai Laporan HPP.', isRecipeMode: true };
       }
       const msg = typeof detail === 'string' ? detail : (detail?.message || `Error ${res.status}`);
       return { data: null, error: msg, isRecipeMode: false };

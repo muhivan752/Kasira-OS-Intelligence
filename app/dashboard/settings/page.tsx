@@ -521,7 +521,7 @@ export default function SettingsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Tampil di header struk (kalau diisi). Kosongkan kalau bukan PKP / belum punya NPWP.
+                    Tampil di header struk (kalau diisi). Kosongkan kalau bukan PKP atau belum punya NPWP.
                   </p>
                 </div>
                 <div>
@@ -533,7 +533,7 @@ export default function SettingsPage() {
                     maxLength={200}
                     value={taxConfig.receipt_footer}
                     onChange={e => setTaxConfig(c => ({ ...c, receipt_footer: e.target.value }))}
-                    placeholder="Contoh: Ikuti IG @kasiracoffee — Promo kopi 10% tiap Jumat!"
+                    placeholder="Contoh: Ikuti IG @kasiracoffee, promo kopi 10% tiap Jumat!"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                   />
                   <p className="text-xs text-gray-500 mt-1">

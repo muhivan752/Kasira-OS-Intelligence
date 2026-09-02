@@ -60,7 +60,7 @@ function daysSince(iso: string | null): number | null {
 }
 
 function tanggal(iso: string | null) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
@@ -278,7 +278,7 @@ export default function PelangganPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{c.phone || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600">{c.phone || '-'}</td>
                       <td className="px-4 py-3 text-right text-gray-900">{c.total_visits}×</td>
                       <td className="px-4 py-3 text-right font-medium text-gray-900">{rp(c.total_spent)}</td>
                       <td className="px-4 py-3 text-gray-600">

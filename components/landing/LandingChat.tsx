@@ -107,7 +107,7 @@ export default function LandingChat({ waLink }: { waLink: string }) {
                 <div className="max-w-[85%] rounded-[16px_16px_16px_4px] border border-[#E7E5DE] bg-white px-3.5 py-2.5 text-[14px] leading-relaxed text-[#0B1512]">
                   Hai! 👋 Aku bantu jelasin Selaris buat cafe kamu.
                   <br />
-                  Tanya apa aja — fitur, harga, cara mulai. Atau pilih di bawah:
+                  Tanya apa aja soal fitur, harga, atau cara mulai. Bisa juga pilih di bawah:
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {SUGGESTIONS.map((s) => (
@@ -167,7 +167,7 @@ export default function LandingChat({ waLink }: { waLink: string }) {
               </button>
             </div>
             <p className="mt-2 text-center text-[11px] text-[#A8B0AA]">
-              Jawaban AI bisa meleset —{' '}
+              Jawaban AI bisa meleset.{' '}
               <a href={waLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--brand-primary)] underline underline-offset-2">
                 tanya orangnya via WhatsApp
               </a>

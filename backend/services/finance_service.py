@@ -95,7 +95,7 @@ def _paid_order_filter():
 DEFAULT_ACCOUNTS = [
     ("Kas Laci", "cash_drawer", ["cash"], 0),
     ("Rekening Bank", "bank", ["transfer", "card"], 1),
-    ("QRIS / Xendit", "settlement", ["qris", "ewallet"], 2),
+    ("QRIS & Xendit", "settlement", ["qris", "ewallet"], 2),
 ]
 
 

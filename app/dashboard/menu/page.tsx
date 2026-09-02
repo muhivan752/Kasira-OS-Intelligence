@@ -30,7 +30,7 @@ function detectUnitWarning(unit: string, qty: number): string | null {
   if ((u === 'g' || u === 'gr' || u === 'gram' || u === 'ml') && qty >= 1000) {
     const inLarger = qty / 1000;
     const largerUnit = (u === 'ml') ? 'liter' : 'kg';
-    return `${qty} ${u} = ${inLarger.toFixed(1)} ${largerUnit}. Pastiin benar — biasanya per porsi lebih kecil.`;
+    return `${qty} ${u} = ${inLarger.toFixed(1)} ${largerUnit}. Pastiin benar, biasanya per porsi lebih kecil.`;
   }
 
   // pcs / buah / butir — qty > 50 untuk 1 porsi biasanya salah
@@ -505,7 +505,7 @@ export default function MenuPage() {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {categories.find(c => c.id === p.category_id)?.name
-                          || <span className="text-gray-300 italic text-xs">—</span>}
+                          || <span className="text-gray-300 italic text-xs">-</span>}
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">
                         {fmt(p.base_price)}
@@ -677,7 +677,7 @@ export default function MenuPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Kategori
-                    {categories.length === 0 && <span className="ml-1 text-xs text-amber-500">— tambah dulu di tab Kategori</span>}
+                    {categories.length === 0 && <span className="ml-1 text-xs text-amber-500">(tambah dulu di tab Kategori)</span>}
                   </label>
                   <select value={productForm.category_id}
                     onChange={e => setProductForm({ ...productForm, category_id: e.target.value })}
@@ -723,9 +723,9 @@ export default function MenuPage() {
                         bukan istilah teknis — Ivan sendiri nggak nemu menu ini
                         waktu namanya cuma "Varian". */}
                     <label className="block text-sm font-semibold text-gray-800">
-                      Pilihan / Varian
+                      Pilihan produk
                       <span className="block text-xs font-normal text-gray-500 mt-0.5">
-                        Panas &amp; Dingin (es), ukuran, level gula — opsional
+                        Panas dan dingin (es), ukuran, level gula. Opsional.
                       </span>
                     </label>
                   </div>
@@ -810,7 +810,7 @@ export default function MenuPage() {
                       </p>
                       {variants.some(v => (parseFloat(productForm.base_price) || 0) + (parseFloat(v.price_adjustment || '0') || 0) < 0) && (
                         <p className="text-xs text-red-600 font-semibold mt-1">
-                          Ada varian yang bikin harga jadi minus — perbaiki dulu sebelum simpan.
+                          Ada varian yang bikin harga jadi minus. Perbaiki dulu sebelum simpan.
                         </p>
                       )}
                     </>
@@ -824,7 +824,7 @@ export default function MenuPage() {
                     (cafe owner) gak bingung antara "modal" vs "stok". */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Harga Beli / Modal (Rp) <span className="text-xs font-normal text-gray-500">— opsional</span>
+                    Harga modal (Rp) <span className="text-xs font-normal text-gray-500">(opsional)</span>
                   </label>
                   <input type="number" min="0" placeholder="0"
                     value={productForm.buy_price}
@@ -840,7 +840,7 @@ export default function MenuPage() {
                       return (
                         <p className={`text-xs mt-1 ${negative ? 'text-red-600 font-semibold' : 'text-green-600'}`}>
                           Margin: Rp {margin.toLocaleString('id-ID')} ({pct.toFixed(1)}%)
-                          {negative && ' — rugi!'}
+                          {negative && ' (rugi!)'}
                         </p>
                       );
                     }

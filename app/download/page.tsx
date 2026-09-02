@@ -14,10 +14,10 @@ import Navbar from '@/components/landing/Navbar';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Download Selaris — Aplikasi Kasir Android',
+  title: 'Download Selaris · Aplikasi Kasir Android',
   description: 'Download aplikasi Selaris POS untuk Android. Kasir digital offline-ready dengan QRIS, sync real-time, dan printer Bluetooth.',
   openGraph: {
-    title: 'Download Selaris — Aplikasi Kasir Android',
+    title: 'Download Selaris · Aplikasi Kasir Android',
     description: 'Kasir digital offline-ready untuk cafe dan UMKM Indonesia. Download APK gratis.',
   },
 };
@@ -140,7 +140,7 @@ export default function DownloadPage() {
                 <Smartphone className="w-6 h-6 text-emerald-600" />
                 <h3 className="text-lg font-bold text-gray-900">App Kasir (Android)</h3>
               </div>
-              <p className="text-sm text-gray-500 mb-4">Untuk kasir di toko — input order, terima bayaran, cetak struk.</p>
+              <p className="text-sm text-gray-500 mb-4">Untuk kasir di toko: input order, terima bayaran, cetak struk.</p>
               <ul className="space-y-2 text-sm">
                 {['Offline mode', 'Printer Bluetooth', 'QRIS Payment', 'PIN login kasir', 'Shift management'].map((f) => (
                   <li key={f} className="flex items-center gap-2 text-gray-600">
@@ -164,9 +164,9 @@ export default function DownloadPage() {
                 <h3 className="text-lg font-bold text-gray-900">App Dapur (Android)</h3>
                 <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full">PRO</span>
               </div>
-              <p className="text-sm text-gray-500 mb-4">Kitchen display — pesanan masuk langsung keliatan di layar dapur.</p>
+              <p className="text-sm text-gray-500 mb-4">Kitchen display, pesanan masuk langsung keliatan di layar dapur.</p>
               <ul className="space-y-2 text-sm">
-                {['Order masuk real-time', 'Status: Proses / Selesai', 'Notifikasi suara', 'Tablet-friendly'].map((f) => (
+                {['Order masuk real-time', 'Status: Proses dan Selesai', 'Notifikasi suara', 'Tablet-friendly'].map((f) => (
                   <li key={f} className="flex items-center gap-2 text-gray-600">
                     <CheckCircle2 className="w-4 h-4 text-amber-500 shrink-0" /> {f}
                   </li>
@@ -185,7 +185,7 @@ export default function DownloadPage() {
                 <Monitor className="w-6 h-6 text-blue-600" />
                 <h3 className="text-lg font-bold text-gray-900">Dashboard Web</h3>
               </div>
-              <p className="text-sm text-gray-500 mb-4">Untuk owner — kelola menu, pantau laporan, atur bisnis dari mana saja.</p>
+              <p className="text-sm text-gray-500 mb-4">Untuk owner: kelola menu, pantau laporan, atur bisnis dari mana saja.</p>
               <ul className="space-y-2 text-sm">
                 {['Akses dari browser', 'Laporan real-time', 'Kelola menu & stok', 'AI Insight (Pro)', 'Reservasi (Pro)'].map((f) => (
                   <li key={f} className="flex items-center gap-2 text-gray-600">

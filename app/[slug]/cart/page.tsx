@@ -446,7 +446,7 @@ export default function CartPage() {
                 >
                   <Bell className="w-4 h-4" />
                   <span className="text-sm font-medium">
-                    {billRequested ? 'Bill Sudah Diminta — Kasir Akan Menghampiri' : 'Minta Bill'}
+                    {billRequested ? 'Bill sudah diminta, kasir akan menghampiri' : 'Minta Bill'}
                   </span>
                 </button>
               )}

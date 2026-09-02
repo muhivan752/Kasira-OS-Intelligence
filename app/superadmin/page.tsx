@@ -72,7 +72,7 @@ export default function SuperadminOverview() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Platform Overview</h1>
-        <p className="text-gray-500 text-sm mt-1">Kasira SaaS — semua tenant & metrik</p>
+        <p className="text-gray-500 text-sm mt-1">Selaris SaaS · semua tenant & metrik</p>
       </div>
 
       {/* Stats Grid */}

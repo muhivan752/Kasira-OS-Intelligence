@@ -9,6 +9,7 @@ import { BRAND, SITE_URL, WA_LINK, DEMO_SLUG } from '@/lib/brand';
 
 const NAV = [
   { label: 'Cara kerja', href: '#cara-kerja' },
+  { label: 'Tampilan', href: '#tampilan' },
   { label: 'Modul', href: '#modul' },
   { label: 'Harga', href: '#harga' },
 ];
@@ -18,7 +19,7 @@ const INPUTS = [
   {
     icon: Smartphone,
     title: 'Transaksi di kasir',
-    body: 'Tiap pesanan yang dibayar — tunai, QRIS, split bill — langsung jadi stok berkurang, omzet, laba per menu, dan riwayat pelanggan.',
+    body: 'Tiap pesanan yang dibayar, entah tunai, QRIS, atau split bill, langsung jadi stok berkurang, omzet, laba per menu, dan riwayat pelanggan.',
     outputs: ['Stok', 'Omzet & laba per menu', 'Riwayat pelanggan'],
   },
   {
@@ -31,20 +32,28 @@ const INPUTS = [
   {
     icon: MessageCircle,
     title: 'Nomor WA di struk',
-    body: 'Kasir ketik nomor pelanggan waktu kirim struk. Profilnya kebentuk sendiri: kunjungan, favorit, poin — dan siapa yang mulai jarang datang.',
+    body: 'Kasir ketik nomor pelanggan waktu kirim struk. Profilnya kebentuk sendiri: kunjungan, favorit, poin, sampai siapa yang mulai jarang datang.',
     outputs: ['Profil pelanggan', 'Poin loyalty', 'Siapa yang perlu disapa'],
   },
 ];
 
 const MODULES = [
   { icon: Store, title: 'Kasir offline', body: 'Mati lampu atau WiFi ngadat, tetap bisa transaksi. Print struk bluetooth, sync otomatis.', status: 'ada' },
-  { icon: Receipt, title: 'Split bill ala warkop', body: 'Satu meja lima orang, tiap orang bayar punyanya sendiri. Ada yang nyusul, ada yang cabut duluan — tab tetap jalan.', status: 'ada' },
+  { icon: Receipt, title: 'Split bill ala warkop', body: 'Satu meja lima orang, tiap orang bayar punyanya sendiri. Ada yang nyusul, ada yang cabut duluan, tab tetap jalan.', status: 'ada' },
   { icon: Package, title: 'Stok, resep & HPP', body: 'Resep per menu, stok bahan berkurang tiap pesanan, HPP segar dari nota belanja terakhir.', status: 'ada', pro: true },
   { icon: Truck, title: 'Pembelian & utang supplier', body: 'Catat nota (atau foto), lihat belanja bulan ini, siapa yang belum dibayar, jatuh tempo kapan.', status: 'baru' },
   { icon: Users, title: 'Pelanggan & loyalty', body: 'Poin otomatis dari transaksi, profil dari nomor WA di struk, struk digital ke WhatsApp.', status: 'ada' },
   { icon: LineChart, title: 'Laba rugi & arus kas', body: 'Pendapatan − HPP − pengeluaran, per bulan, tanpa jurnal. Utang supplier dan kas laci ikut kebaca.', status: 'segera' },
-  { icon: Sparkles, title: 'Segmen pelanggan & promo WA', body: '"Setia", "mulai jarang", "hilang" — kebentuk sendiri dari data kunjungan. Kirim promo ke segmen, ukur yang balik.', status: 'segera', pro: true },
+  { icon: Sparkles, title: 'Segmen pelanggan & promo WA', body: '"Setia", "mulai jarang", "hilang", kebentuk sendiri dari data kunjungan. Kirim promo ke segmen, ukur yang balik.', status: 'segera', pro: true },
   { icon: Bot, title: 'AI asisten di WhatsApp', body: 'Tiap pagi: omzet kemarin, menu yang turun, bahan yang mau habis, saran harga. Nyambung ke data toko kamu.', status: 'ada', pro: true },
+];
+
+// Tangkapan layar asli dari APK kasir (bukan mockup). Rasio 640×1292 dikunci
+// lewat width/height biar layout nggak lompat pas gambarnya belum turun.
+const SHOTS = [
+  { src: '/app/beranda.webp', title: 'Beranda kasir', body: 'Omzet hari ini, shift yang lagi buka, dan satu saran dari AI yang baca data toko kamu sendiri.' },
+  { src: '/app/kasir.webp', title: 'Layar jualan', body: 'Menu bergambar, cari cepat, satu tap masuk keranjang. Tetap jalan waktu internet mati.' },
+  { src: '/app/keranjang.webp', title: 'Keranjang & bayar', body: 'Diskon, pelanggan, saran menu yang sering dibeli bareng. Bayar sekarang atau simpan ke meja.' },
 ];
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
@@ -60,7 +69,7 @@ const PLANS = [
     price: '99rb',
     badge: 'Siap pakai',
     dark: false,
-    features: ['1 kasir + 1 outlet, mode offline', 'Website toko gratis', 'QRIS BYOK — nol komisi', 'Nota belanja & utang supplier', 'Pelanggan & laporan harian'],
+    features: ['1 kasir + 1 outlet, mode offline', 'Website toko gratis', 'QRIS BYOK, nol komisi', 'Nota belanja & utang supplier', 'Pelanggan & laporan harian'],
     cta: 'Mulai gratis 30 hari',
     href: '/register',
   },
@@ -80,7 +89,7 @@ const FAQS = [
   { q: 'Ini POS atau ERP?', a: `Dua-duanya, tapi kamu nggak perlu tahu bedanya. ${BRAND} mulai dari kasir, lalu ngisi sendiri bagian yang di software lain harus diisi manual: stok, HPP, utang supplier, profil pelanggan. Nggak ada jurnal, nggak ada form akuntansi.` },
   { q: 'Beneran gratis 30 hari?', a: 'Ya, 30 hari penuh tanpa kartu kredit. Batal kapan aja, nggak ada penalti.' },
   { q: 'QRIS-nya kena potongan?', a: `Nggak. Kamu daftar Xendit sendiri (BYOK), tempel API key di setelan, dan uang tiap transaksi QRIS langsung masuk ke rekening kamu. ${BRAND} nol komisi, selamanya.` },
-  { q: 'Saya bukan cafe — toko vape / sparepart bisa?', a: 'Bisa. Paket Starter dipakai banyak toko non-F&B: stok produk jadi, nota belanja ke supplier, utang, pelanggan. Yang khusus F&B (resep, bahan baku, meja) ada di Pro.' },
+  { q: 'Saya bukan cafe, toko vape atau sparepart bisa?', a: 'Bisa. Paket Starter dipakai banyak toko non-F&B: stok produk jadi, nota belanja ke supplier, utang, pelanggan. Yang khusus F&B (resep, bahan baku, meja) ada di Pro.' },
   { q: 'Kalau internet mati?', a: 'Kasir tetap bisa transaksi offline. Data otomatis kesinkron begitu internet nyala lagi.' },
   { q: 'Data saya aman?', a: 'Data disimpan di server Indonesia, dipisah per bisnis di level database, dan di-backup otomatis tiap 6 jam.' },
 ];
@@ -146,13 +155,13 @@ export default function LandingPage() {
             <div>
               <span className="ks-eyebrow inline-flex items-center gap-2 text-[var(--brand-primary)]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-primary)]" />
-                Kasir · Stok · Pembelian · Pelanggan — satu aplikasi
+                Kasir · Stok · Pembelian · Pelanggan dalam satu aplikasi
               </span>
               <h1 className="ks-display mt-5 text-[42px] leading-[1.03] text-[var(--text-strong)] sm:text-[54px] lg:text-[62px]" style={{ textWrap: 'balance' }}>
                 Kasir yang ngisi pembukuan kamu <span className="ks-gradient-text">sendiri.</span>
               </h1>
               <p className="mt-5 max-w-[540px] text-[16.5px] leading-[1.6] text-[var(--text-body)]">
-                Tiap transaksi, tiap nota belanja, tiap nomor WA pelanggan — otomatis jadi stok, harga modal, utang supplier,
+                Tiap transaksi, tiap nota belanja, dan tiap nomor WA pelanggan otomatis jadi stok, harga modal, utang supplier,
                 dan daftar pelanggan yang perlu disapa. Kamu jualan, {BRAND} yang nyatat.
               </p>
               <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -258,6 +267,43 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── TAMPILAN APLIKASI ── */}
+      <section id="tampilan" className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
+        <p className="ks-eyebrow text-[var(--brand-primary)]">Tampilan aplikasi</p>
+        <h2 className="ks-display mt-3 max-w-[620px] text-[30px] leading-[1.12] text-[var(--text-strong)] sm:text-[38px]" style={{ textWrap: 'balance' }}>
+          Begini kelihatannya di HP kasir kamu.
+        </h2>
+        <p className="mt-4 max-w-[620px] text-[16px] leading-[1.6] text-[var(--text-body)]">
+          Tangkapan layar asli dari aplikasi yang dipakai hari ini. Bukan gambar rancangan.
+        </p>
+
+        <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+          {SHOTS.map((sh) => (
+            <figure key={sh.src} className="flex flex-col items-center">
+              <div className="w-full max-w-[280px] rounded-[30px] border border-[var(--border-default)] bg-[var(--surface-inverse)] p-2 shadow-[0_24px_60px_-28px_rgba(20,10,40,0.55)]">
+                <img
+                  src={sh.src}
+                  alt={`${BRAND} ${sh.title}`}
+                  width={640}
+                  height={1292}
+                  loading="lazy"
+                  className="w-full rounded-[24px] bg-[var(--surface-card)]"
+                />
+              </div>
+              <figcaption className="mt-5 max-w-[300px] text-center">
+                <p className="ks-display text-[17px] text-[var(--text-strong)]">{sh.title}</p>
+                <p className="mt-1.5 text-[13.5px] leading-[1.55] text-[var(--text-muted)]">{sh.body}</p>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+
+        <div className="mt-10 flex flex-wrap items-center gap-3">
+          <Link href="/download" className="ks-btn ks-btn-outline !w-auto">Unduh aplikasinya</Link>
+          <Link href={`/${DEMO_SLUG}`} className="text-[14px] font-semibold text-[var(--brand-primary)] transition hover:opacity-80">Lihat toko demo</Link>
+        </div>
+      </section>
+
       {/* ── MODUL ── */}
       <section id="modul" className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
         <p className="ks-eyebrow text-[var(--text-muted)]">Apa yang kamu dapat</p>
@@ -292,16 +338,15 @@ export default function LandingPage() {
             <p className="ks-eyebrow text-[var(--brand-primary)]">Split bill warkop</p>
             <h3 className="ks-display mt-3 text-[26px] leading-[1.15] text-[var(--text-strong)]" style={{ textWrap: 'balance' }}>Satu meja, tiap orang bayar punyanya sendiri.</h3>
             <p className="mt-3 text-[15px] leading-[1.62] text-[var(--text-body)]">
-              Ada yang bayar duluan pakai QRIS, ada yang cash, ada yang nyusul jam sepuluh. Kasir tinggal centang item per orang
-              — bukan maksa bagi rata. Struknya per orang, sisa tagihan meja kelihatan terus.
+              Ada yang bayar duluan pakai QRIS, ada yang cash, ada yang nyusul jam sepuluh. Kasir tinggal centang item per orang,
+              bukan maksa bagi rata. Struknya per orang, sisa tagihan meja kelihatan terus.
             </p>
           </article>
           <article>
             <p className="ks-eyebrow text-[var(--brand-primary)]">QRIS BYOK · 0% komisi</p>
             <h3 className="ks-display mt-3 text-[26px] leading-[1.15] text-[var(--text-strong)]" style={{ textWrap: 'balance' }}>Uang QRIS masuk ke rekening kamu. Bukan lewat kami.</h3>
             <p className="mt-3 text-[15px] leading-[1.62] text-[var(--text-body)]">
-              Daftar Xendit atas nama kamu sendiri, tempel API key, selesai. Bukan &ldquo;gratis 6 bulan lalu kena potong&rdquo; —
-              {BRAND} nggak pernah pegang uang transaksi kamu.
+              Daftar Xendit atas nama kamu sendiri, tempel API key, selesai. Bukan &ldquo;gratis 6 bulan lalu kena potong&rdquo;. {BRAND} nggak pernah pegang uang transaksi kamu.
             </p>
           </article>
         </div>

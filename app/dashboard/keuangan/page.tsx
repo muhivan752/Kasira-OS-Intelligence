@@ -138,7 +138,7 @@ export default function KeuanganPage() {
           <Row label="Laba bersih" value={s?.net_profit} bold />
         </div>
         {s && s.cogs_coverage < 0.7 && (
-          <p className="mt-3 text-xs text-amber-700 flex items-start gap-1.5"><Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />Sebagian besar produk belum punya harga modal — laba kotor kelihatan lebih besar dari aslinya. Isi resep (Pro) atau catat nota belanja produk supaya HPP-nya terisi.</p>
+          <p className="mt-3 text-xs text-amber-700 flex items-start gap-1.5"><Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />Sebagian besar produk belum punya harga modal, jadi laba kotor kelihatan lebih besar dari aslinya. Isi resep (Pro) atau catat nota belanja produk supaya HPP-nya terisi.</p>
         )}
       </div>
 
@@ -195,7 +195,7 @@ export default function KeuanganPage() {
         {expenses.length === 0 ? (
           <div className="p-8 text-center text-sm text-gray-500">
             <Wallet className="w-10 h-10 mx-auto mb-2 text-blue-300" />
-            Belum ada. Catat sewa, listrik, gaji, gas — sekali tap. Yang bulanan tandai "ulangi tiap bulan" biar tinggal disalin.
+            Belum ada. Catat sewa, listrik, gaji, gas cuma sekali tap. Yang bulanan tandai "ulangi tiap bulan" biar tinggal disalin.
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -347,14 +347,14 @@ function ExpenseModal({ initial, cats, accounts, suppliers, outletId, onClose, o
             <div>
               <label className="text-xs font-semibold text-gray-500">Dibayar ke supplier (opsional)</label>
               <select value={f.supplier_id} onChange={e => setF({ ...f, supplier_id: e.target.value })} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                <option value="">—</option>
+                <option value="">-</option>
                 {suppliers.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
               </select>
             </div>
           )}
           <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
             <input type="checkbox" checked={f.recurring === 'monthly'} onChange={e => setF({ ...f, recurring: e.target.checked ? 'monthly' : 'none' })} className="mt-0.5" />
-            <span>Ulangi tiap bulan <span className="text-gray-400">— bulan depan tinggal klik "Salin dari bulan lalu"</span></span>
+            <span>Ulangi tiap bulan <span className="text-gray-400">(bulan depan tinggal klik "Salin dari bulan lalu")</span></span>
           </label>
           {error && <p className="text-sm text-red-600 flex items-center gap-2"><AlertTriangle className="w-4 h-4" />{error}</p>}
           <div className="flex justify-end gap-2 pt-1">

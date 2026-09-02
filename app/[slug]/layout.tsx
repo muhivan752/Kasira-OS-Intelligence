@@ -15,10 +15,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     const name = data?.outlet?.name || slug;
     const desc = `Pesan online dari ${name}. Menu lengkap, harga transparan, bayar via QRIS. Powered by ${BRAND}.`;
     return {
-      title: `${name} — Menu & Pesan Online`,
+      title: `${name} · Menu & Pesan Online`,
       description: desc,
       openGraph: {
-        title: `${name} — Menu & Pesan Online`,
+        title: `${name} · Menu & Pesan Online`,
         description: desc,
         url: `${SITE_URL}/${slug}`,
       },

@@ -33,7 +33,7 @@ const PRO_FEATURES = [
   },
   {
     icon: Receipt,
-    name: 'Tab / Bon Pelanggan',
+    name: 'Tab atau Bon Pelanggan',
     description: 'Pembayaran cicil atau bon langganan. Cocok untuk pelanggan tetap.',
   },
   {

@@ -66,7 +66,7 @@ export default function HPPReportPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Laporan HPP</h1>
-        <p className="text-gray-500">Harga Pokok Penjualan — analisis cost vs harga jual per produk</p>
+        <p className="text-gray-500">Harga Pokok Penjualan, analisis modal dibanding harga jual per produk</p>
       </div>
 
       {/* Summary Cards */}

@@ -8,7 +8,7 @@ import {
 import Navbar from '@/components/landing/Navbar';
 
 export const metadata: Metadata = {
-  title: 'Jadi Agen Pulsa KasiraPay — Modal dari Kami',
+  title: 'Jadi Agen Pulsa KasiraPay · Modal dari Kami',
   description:
     'Daftar jadi agen pulsa KasiraPay. Dapat saldo awal dagang dari admin, jualan pulsa & e-money via aplikasi HP. Cocok untuk warung & toko kelontong.',
   alternates: { canonical: `${SITE_URL}/pulsa-agen` },
@@ -68,7 +68,7 @@ const benefits = [
   {
     icon: Sparkles,
     title: 'Untung di Tangan Lo',
-    desc: 'Harga jual ke pelanggan kamu tentukan sendiri — lo lebih tahu kondisi pasar di area lo. Margin yang lo ambil = untung lo.',
+    desc: 'Harga jual ke pelanggan kamu tentukan sendiri, lo lebih tahu kondisi pasar di area lo. Margin yang lo ambil = untung lo.',
   },
 ];
 
@@ -97,7 +97,7 @@ const faq = [
   },
   {
     q: 'Berapa untung per transaksi?',
-    a: 'Untung kamu = harga jual ke pelanggan dikurangi harga beli dari KasiraPay. Harga beli dari kami tampil di aplikasi sebelum kamu klik bayar. Harga jual ke pelanggan kamu tentukan sendiri — lo yang lebih tahu kondisi pasar di area lo. Biasanya agen ambil margin Rp 1.000–3.000 per transaksi.',
+    a: 'Untung kamu = harga jual ke pelanggan dikurangi harga beli dari KasiraPay. Harga beli dari kami tampil di aplikasi sebelum kamu klik bayar. Harga jual ke pelanggan kamu tentukan sendiri, lo yang lebih tahu kondisi pasar di area lo. Biasanya agen ambil margin Rp 1.000–3.000 per transaksi.',
   },
   {
     q: 'Top up saldo gimana?',
@@ -105,7 +105,7 @@ const faq = [
   },
   {
     q: 'Aplikasinya bisa offline?',
-    a: 'Belum, butuh internet aktif untuk transaksi. Tapi aplikasi ringan (PWA) — install di HP tanpa Play Store, jalan di Android & iOS.',
+    a: 'Belum, butuh internet aktif untuk transaksi. Tapi aplikasinya ringan (PWA), install di HP tanpa Play Store, jalan di Android dan iOS.',
   },
   {
     q: 'Kalau KTP saya ditolak gimana?',
@@ -176,7 +176,7 @@ export default function PulsaAgenPage() {
           <div className="text-center">
             <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm font-semibold px-4 py-1.5 rounded-full mb-6">
               <Wallet className="w-4 h-4" />
-              KasiraPay — Agen Pulsa Digital
+              KasiraPay · Agen Pulsa Digital
             </div>
 
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.1] mb-6">
@@ -252,7 +252,7 @@ export default function PulsaAgenPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-4">
-              Cara Daftar — 3 Langkah
+              Cara Daftar, 3 Langkah
             </h2>
             <p className="text-gray-500">Dari klik daftar sampai mulai jualan, max 1 hari.</p>
           </div>
@@ -310,7 +310,7 @@ export default function PulsaAgenPage() {
                   2
                 </span>
                 <span>
-                  Pelanggan kamu mau pulsa Telkomsel 25K. Lo cek di app KasiraPay — harga belinya misal <strong className="text-gray-900">Rp 25.500</strong>. Lo bayar pakai saldo. Saldo tinggal Rp 174.500.
+                  Pelanggan kamu mau pulsa Telkomsel 25K. Lo cek di app KasiraPay, harga belinya misal <strong className="text-gray-900">Rp 25.500</strong>. Lo bayar pakai saldo. Saldo tinggal Rp 174.500.
                 </span>
               </li>
               <li className="flex gap-3">
@@ -331,7 +331,7 @@ export default function PulsaAgenPage() {
               </li>
             </ol>
             <div className="mt-6 rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-sm text-emerald-900">
-              <strong>Inti:</strong> Lo yang tentukan harga jual ke pelanggan — lo paling tahu pasar di area lo. KasiraPay sediakan modal kerja + harga beli yang competitive, untung di tangan lo.
+              <strong>Inti:</strong> Lo yang tentukan harga jual ke pelanggan, lo paling tahu pasar di area lo. KasiraPay sediakan modal kerja + harga beli yang competitive, untung di tangan lo.
             </div>
           </div>
         </div>

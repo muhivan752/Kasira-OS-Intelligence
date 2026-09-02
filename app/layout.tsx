@@ -29,7 +29,7 @@ import { SITE_URL } from '@/lib/brand';
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'Selaris — POS Digital untuk UMKM Indonesia',
+    default: 'Selaris · POS Digital untuk UMKM Indonesia',
     template: '%s | Selaris',
   },
   description: 'Kasir digital yang ngisi pembukuan sendiri: stok, HPP, utang supplier, dan pelanggan terbentuk otomatis dari transaksi, nota belanja, dan nomor WA. Untuk cafe & UMKM Indonesia.',
@@ -45,12 +45,12 @@ export const metadata: Metadata = {
     locale: 'id_ID',
     url: SITE_URL,
     siteName: 'Selaris',
-    title: 'Selaris — Kasir yang ngisi pembukuan sendiri',
+    title: 'Selaris · Kasir yang ngisi pembukuan sendiri',
     description: 'Kasir + stok + pembelian + pelanggan dalam satu aplikasi. Foto nota, HPP ke-update. QRIS tanpa komisi.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Selaris — Kasir yang ngisi pembukuan sendiri',
+    title: 'Selaris · Kasir yang ngisi pembukuan sendiri',
     description: 'Kasir + stok + pembelian + pelanggan dalam satu aplikasi untuk cafe dan UMKM Indonesia.',
   },
   robots: {

@@ -152,7 +152,7 @@ export default function MarginReportPage() {
                       ? 'text-amber-600'
                       : 'text-green-600'
                   }`}>
-                    {summary?.avg_margin_pct != null ? `${summary.avg_margin_pct.toFixed(1)}%` : '—'}
+                    {summary?.avg_margin_pct != null ? `${summary.avg_margin_pct.toFixed(1)}%` : '-'}
                   </p>
                 </div>
               </div>
@@ -270,7 +270,7 @@ export default function MarginReportPage() {
                             <div className="text-xs text-amber-700 italic mt-0.5">Belum diisi harga beli (modal)</div>
                           )}
                           {p.negative_margin && !p.missing_buy_price && (
-                            <div className="text-xs text-red-700 italic mt-0.5">Rugi — modal &gt; jual</div>
+                            <div className="text-xs text-red-700 italic mt-0.5">Rugi, modal lebih besar dari harga jual</div>
                           )}
                         </td>
                         <td className="px-6 py-3 text-sm text-gray-900 text-right">{fmt(p.base_price)}</td>
@@ -278,11 +278,11 @@ export default function MarginReportPage() {
                           {p.buy_price != null ? (
                             <span className="text-gray-900">{fmt(p.buy_price)}</span>
                           ) : (
-                            <span className="text-gray-400">—</span>
+                            <span className="text-gray-400">-</span>
                           )}
                         </td>
                         <td className={`px-6 py-3 text-sm font-semibold text-right ${marginColor(p.negative_margin, p.missing_buy_price)}`}>
-                          {p.margin != null ? fmt(p.margin) : '—'}
+                          {p.margin != null ? fmt(p.margin) : '-'}
                         </td>
                         <td className="px-6 py-3 text-center">
                           {p.margin_pct != null ? (
@@ -300,11 +300,11 @@ export default function MarginReportPage() {
                               {p.margin_pct.toFixed(1)}%
                             </span>
                           ) : (
-                            <span className="text-gray-400 text-xs">—</span>
+                            <span className="text-gray-400 text-xs">-</span>
                           )}
                         </td>
                         <td className="px-6 py-3 text-sm text-gray-600 text-right hidden lg:table-cell">
-                          {p.stock_enabled ? p.stock_qty : '—'}
+                          {p.stock_enabled ? p.stock_qty : '-'}
                         </td>
                         <td className="px-6 py-3 text-sm text-gray-600 text-right hidden lg:table-cell">{p.sold_total}</td>
                       </tr>

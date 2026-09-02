@@ -11,7 +11,7 @@ interface Tag { id: string; name: string; color: string; count: number }
 interface Campaign { id: string; name: string; template: string; target: string; status: string; recipient_count: number; sent_count: number; failed_count: number; started_at?: string | null; finished_at?: string | null; created_at: string }
 
 const TEMPLATES = [
-  { label: 'Kangen', text: 'Halo {nama}! Udah lama nggak mampir ke {toko} 😊 Minggu ini ada diskon 10% buat kamu — tunjukin pesan ini ke kasir ya.' },
+  { label: 'Kangen', text: 'Halo {nama}! Udah lama nggak mampir ke {toko} 😊 Minggu ini ada diskon 10% buat kamu. Tunjukin pesan ini ke kasir ya.' },
   { label: 'Menu baru', text: 'Halo {nama}, {toko} punya menu baru nih! Mampir yuk, cobain duluan sebelum yang lain 🙌' },
   { label: 'Terima kasih', text: 'Makasih udah jadi pelanggan setia {toko}, {nama}! Sebagai apresiasi, kunjungan berikutnya dapet gratis 1 minuman.' },
 ];
@@ -23,7 +23,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   failed: { label: 'Gagal', cls: 'bg-red-100 text-red-700' },
 };
 
-const tgl = (iso?: string | null) => iso ? new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+const tgl = (iso?: string | null) => iso ? new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-';
 
 export default function PromoPage() {
   const [loading, setLoading] = useState(true);
@@ -112,7 +112,7 @@ export default function PromoPage() {
 
       {!waConnected && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-wrap items-center justify-between gap-2">
-          <span className="flex items-center gap-2"><MessageCircle className="w-4 h-4" /> WhatsApp toko belum tersambung — promo belum bisa dikirim.</span>
+          <span className="flex items-center gap-2"><MessageCircle className="w-4 h-4" /> WhatsApp toko belum tersambung, promo belum bisa dikirim.</span>
           <Link href="/dashboard/settings" className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700">Sambungkan di Pengaturan</Link>
         </div>
       )}
