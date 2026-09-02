@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { MessageCircle, Send, Loader2, AlertTriangle, CheckCircle2, Users, Trash2, RefreshCw, Sparkles } from 'lucide-react';
 import { getOutlets } from '@/app/actions/api';
 import { getSegmentSummary, getTags, getCampaigns, previewCampaign, createCampaign, sendCampaign, deleteCampaign, refreshSegments } from '@/app/actions/crm';
@@ -27,7 +26,6 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 const tgl = (iso?: string | null) => iso ? new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
 export default function PromoPage() {
-  const params = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [outletId, setOutletId] = useState('');
   const [waConnected, setWaConnected] = useState(false);
@@ -38,7 +36,9 @@ export default function PromoPage() {
 
   // form
   const [name, setName] = useState('');
-  const [target, setTarget] = useState(params.get('target') || 'all');
+  // ?target=segment:hilang dari halaman Pelanggan. Dibaca di effect, bukan
+  // useSearchParams: hook itu maksa Suspense boundary waktu build statis.
+  const [target, setTarget] = useState('all');
   const [template, setTemplate] = useState(TEMPLATES[0].text);
   const [preview, setPreview] = useState<{ recipient_count: number; sample: { name: string; phone: string }[]; wa_connected: boolean; rendered_example: string } | null>(null);
   const [busy, setBusy] = useState<'preview' | 'send' | ''>('');
@@ -51,6 +51,7 @@ export default function PromoPage() {
   };
 
   useEffect(() => {
+    try { const t = new URLSearchParams(window.location.search).get('target'); if (t) setTarget(t); } catch {}
     (async () => {
       try {
         const outlets = await getOutlets();
