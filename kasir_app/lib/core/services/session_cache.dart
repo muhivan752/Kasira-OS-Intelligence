@@ -157,8 +157,13 @@ class SessionCache {
 
   Future<void> setShiftSessionId(String? value) async {
     shiftSessionId = value;
+    // null WAJIB ikut menghapus dari storage. Dulu cuma nulis kalau non-null,
+    // jadi sesudah tutup kasir id lama bangkit lagi di app start berikutnya
+    // dan dikirim ke server sebagai shift_session_id yang udah ditutup.
     if (value != null) {
       const FlutterSecureStorage().write(key: 'shift_session_id', value: value);
+    } else {
+      const FlutterSecureStorage().delete(key: 'shift_session_id');
     }
   }
 

@@ -14,8 +14,9 @@ from backend.models.outlet import Outlet
 from backend.models.shift import Shift, CashActivity, ShiftStatus, CashActivityType
 from backend.schemas.shift import (
     ShiftCreate, ShiftClose, ShiftResponse, ShiftWithActivitiesResponse,
-    CashActivityCreate, CashActivityResponse, CashPaymentSummary
+    CashActivityCreate, CashActivityResponse, CashPaymentSummary, ShiftPauseResponse,
 )
+from backend.services import shift_service
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.models.payment import Payment
@@ -98,6 +99,31 @@ async def open_shift(
     result = await db.execute(query)
     existing_shift = result.scalars().first()
     
+    if existing_shift and existing_shift.opened_by == "auto":
+        # Sesi ini dibuka sistem di transaksi pertama, modal awalnya cuma
+        # perkiraan. Kasir yang sekarang menekan "Buka kasir" lagi ngasih
+        # angka modal yang sebenarnya: KLAIM sesi itu, jangan bikin yang baru
+        # (transaksi yang udah jalan harus tetap di sesi yang sama).
+        existing_shift.starting_cash = shift_in.starting_cash
+        existing_shift.opened_by = "manual"
+        existing_shift.user_id = current_user.id
+        if shift_in.notes:
+            existing_shift.notes = shift_in.notes
+        existing_shift.row_version = (existing_shift.row_version or 0) + 1
+        await log_audit(
+            db=db, action="CLAIM_SHIFT", entity="shift", entity_id=existing_shift.id,
+            after_state={"starting_cash": float(shift_in.starting_cash)},
+            user_id=current_user.id, tenant_id=current_user.tenant_id,
+        )
+        await db.commit()
+        await db.refresh(existing_shift)
+        return StandardResponse(
+            success=True,
+            data=ShiftResponse.model_validate(existing_shift),
+            request_id=request.state.request_id,
+            message="Modal awal dicatat di sesi yang sedang berjalan",
+        )
+
     if existing_shift:
         # Dulu: 400 "Shift sudah terbuka, tutup dulu" — tapi app yang baru
         # di-install / storage-nya bersih nggak punya shift_session_id lokal,
@@ -126,11 +152,11 @@ async def open_shift(
                 message=(f"Gabung ke shift yang dibuka {opener.full_name if opener else 'kasir lain'}"
                          if joining else "Melanjutkan shift yang masih terbuka"),
             )
-        existing_shift.status = ShiftStatus.closed
-        existing_shift.end_time = datetime.now(timezone.utc)
-        existing_shift.notes = ((existing_shift.notes or "") + " | Ditutup otomatis: shift dibiarkan terbuka "
-                                f"{age.days} hari, kasir buka shift baru").strip(" |")
-        existing_shift.row_version = (existing_shift.row_version or 0) + 1
+        await shift_service.close_shift(
+            db, existing_shift, reason="auto_stale",
+            user_id=current_user.id, tenant_id=current_user.tenant_id,
+            notes=f"Ditutup otomatis: shift dibiarkan terbuka {age.days} hari, kasir buka shift baru",
+        )
         await log_audit(
             db=db, action="AUTO_CLOSE_STALE_SHIFT", entity="shift", entity_id=existing_shift.id,
             after_state={"age_days": age.days}, user_id=current_user.id, tenant_id=current_user.tenant_id,
@@ -209,85 +235,32 @@ async def close_shift(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Any:
-    """
-    Close a shift.
-    """
+    """Hitung kas dan tutup sesi. Berlaku untuk sesi terbuka maupun yang
+    dijeda ("hitung nanti")."""
     query = select(Shift).where(Shift.id == shift_id, Shift.deleted_at.is_(None))
-    result = await db.execute(query)
-    shift = result.scalar_one_or_none()
-    
+    shift = (await db.execute(query)).scalar_one_or_none()
     if not shift:
         raise HTTPException(status_code=404, detail="Shift tidak ditemukan")
-        
     if shift.status == ShiftStatus.closed:
         raise HTTPException(status_code=400, detail="Shift sudah ditutup")
-        
+
     # Laci bersama: siapa pun kasir di tenant ini boleh nutup (yang buka bisa
-    # aja udah pulang). Siapa yang nutup kecatat di audit + closed_by lewat
-    # user_id audit; outlet harus milik tenant yang sama.
+    # aja udah pulang). Siapa yang nutup kecatat di closed_by_user_id.
     outlet = await db.get(Outlet, shift.outlet_id)
     if not outlet or outlet.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Tidak berwenang menutup shift ini")
 
-    # Calculate expected cash
-    # expected_cash = starting_cash + total_income - total_expense + cash_payments
-    # For now, we just sum up cash_activities. In a real scenario, we also need to sum up cash payments from orders.
-    activities_query = select(
-        CashActivity.activity_type, 
-        func.sum(CashActivity.amount).label("total")
-    ).where(
-        CashActivity.shift_id == shift_id,
-        CashActivity.deleted_at.is_(None)
-    ).group_by(CashActivity.activity_type)
-    
-    activities_result = await db.execute(activities_query)
-    totals = {row.activity_type: row.total for row in activities_result.all()}
-    
-    income = totals.get(CashActivityType.income, 0)
-    expense = totals.get(CashActivityType.expense, 0)
-    
-    # Calculate cash payments from orders
-    cash_payments_query = select(
-        func.sum(Payment.amount_paid - Payment.change_amount).label("total_cash")
-    ).where(
-        Payment.shift_session_id == shift_id,
-        Payment.payment_method == 'cash',
-        Payment.status == 'paid',
-        Payment.deleted_at.is_(None)
+    result = await shift_service.close_shift(
+        db, shift, reason="manual",
+        user_id=current_user.id, tenant_id=current_user.tenant_id,
+        ending_cash=shift_in.ending_cash, notes=shift_in.notes,
     )
-    
-    cash_payments_result = await db.execute(cash_payments_query)
-    total_cash_payments = cash_payments_result.scalar() or 0
-    
-    expected_cash = float(shift.starting_cash) + float(income) - float(expense) + float(total_cash_payments)
-
-    shift.status = ShiftStatus.closed
-    shift.end_time = datetime.now(timezone.utc)
-    shift.ending_cash = shift_in.ending_cash
-    shift.expected_ending_cash = expected_cash
-    if shift_in.notes:
-        shift.notes = shift_in.notes
-    shift.row_version += 1
-
     await db.commit()
     await db.refresh(shift)
 
-    await log_audit(
-        db=db,
-        action="CLOSE_SHIFT",
-        entity="shift",
-        entity_id=shift.id,
-        after_state={"ending_cash": float(shift.ending_cash), "expected_ending_cash": float(shift.expected_ending_cash)},
-        user_id=current_user.id,
-        tenant_id=current_user.tenant_id,
-    )
-
-    # Calculate variance
-    variance = float(shift_in.ending_cash) - expected_cash
-    variance_status = 'balanced' if abs(variance) < 1 else ('surplus' if variance > 0 else 'deficit')
-
+    variance = result["variance"] or 0.0
+    variance_status = result["variance_status"] or "balanced"
     resp = ShiftResponse.model_validate(shift)
-
     return StandardResponse(
         success=True,
         data={
@@ -298,6 +271,70 @@ async def close_shift(
         request_id=request.state.request_id,
         message=f"Shift ditutup. {'Kas seimbang' if variance_status == 'balanced' else f'Selisih Rp {abs(variance):,.0f} ({variance_status})'}",
     )
+
+
+@router.post("/{shift_id}/pause", response_model=StandardResponse[ShiftPauseResponse])
+async def pause_shift(
+    request: Request,
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """"Hitung nanti": jeda sesi ini, sesi baru langsung aktif. Penjualan
+    nggak berhenti sementara laci lama dihitung dengan tenang."""
+    shift = (await db.execute(
+        select(Shift).where(Shift.id == shift_id, Shift.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift tidak ditemukan")
+    if shift.status != ShiftStatus.open:
+        raise HTTPException(status_code=400, detail="Hanya shift yang sedang terbuka yang bisa dijeda")
+    outlet = await db.get(Outlet, shift.outlet_id)
+    if not outlet or outlet.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Tidak berwenang")
+
+    paused, current = await shift_service.pause_shift(db, shift, current_user.id, current_user.tenant_id)
+    await db.commit()
+    await db.refresh(paused)
+    await db.refresh(current)
+    return StandardResponse(
+        success=True,
+        data=ShiftPauseResponse(
+            paused=ShiftResponse.model_validate(paused),
+            current=ShiftResponse.model_validate(current),
+        ),
+        request_id=request.state.request_id,
+        message="Sesi dijeda. Sesi baru sudah berjalan, hitung laci kapan saja.",
+    )
+
+
+@router.get("/uncounted", response_model=StandardResponse[List[ShiftResponse]])
+async def list_uncounted_shifts(
+    request: Request,
+    outlet_id: UUID,
+    days: int = 14,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Sesi yang kasnya belum dihitung: dijeda, atau ditutup sistem di 04.00.
+    Bahan pengingat "Kas belum dihitung" di Beranda dan daftar di halaman
+    shift. Yang ditutup kasir dengan hitungan nggak masuk sini."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = (await db.execute(
+        select(Shift).where(
+            Shift.outlet_id == outlet_id,
+            Shift.deleted_at.is_(None),
+            Shift.counted_at.is_(None),
+            Shift.status.in_([ShiftStatus.paused, ShiftStatus.closed]),
+            Shift.start_time >= since,
+        ).order_by(Shift.start_time.desc())
+    )).scalars().all()
+    return StandardResponse(
+        success=True,
+        data=[ShiftResponse.model_validate(r) for r in rows],
+        request_id=request.state.request_id,
+    )
+
 
 @router.post("/{shift_id}/activities", response_model=StandardResponse[CashActivityResponse])
 async def add_cash_activity(
@@ -320,7 +357,9 @@ async def add_cash_activity(
     if shift.status == ShiftStatus.closed:
         raise HTTPException(status_code=400, detail="Tidak bisa tambah aktivitas ke shift yang sudah tutup")
 
-    if shift.user_id != current_user.id and not current_user.is_superuser:
+    # Laci bersama: kasir mana pun di tenant ini boleh catat kas keluar/masuk.
+    outlet = await db.get(Outlet, shift.outlet_id)
+    if not outlet or outlet.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Tidak berwenang menambah aktivitas ke shift ini")
 
     activity = CashActivity(

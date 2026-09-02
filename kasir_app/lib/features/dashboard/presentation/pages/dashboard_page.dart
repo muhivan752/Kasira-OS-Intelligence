@@ -747,17 +747,25 @@ class _DashboardContent extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(isOpen ? 'Shift aktif' : 'Shift tertutup',
+                Text(isOpen ? 'Sesi kasir aktif' : 'Kasir siap',
                     style: KasiraDS.sans(size: 13.5, weight: FontWeight.w700, color: KasiraDS.textStrong)),
                 const SizedBox(height: 2),
-                Text(isOpen ? 'Kasir sedang buka' : 'Buka kasir buat mulai transaksi',
+                // Shift otomatis: tanpa sesi pun kasir boleh langsung jualan,
+                // sesinya terbuka sendiri di transaksi pertama.
+                Text(isOpen ? 'Laci sedang berjalan' : 'Sesi terbuka otomatis di transaksi pertama',
                     style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted)),
               ],
             ),
           ),
           OutlinedButton(
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const ShiftPage()));
+              // Sesi aktif → halaman hitung/tutup kasir. Belum ada → isi modal
+              // awal (opsional; kalau dilewati sesi tetap terbuka sendiri).
+              if (isOpen) {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ShiftPage()));
+              } else {
+                context.push('/shift/open');
+              }
             },
             style: OutlinedButton.styleFrom(
               foregroundColor: KasiraDS.textStrong,
@@ -765,7 +773,7 @@ class _DashboardContent extends ConsumerWidget {
               shape: RoundedRectangleBorder(borderRadius: KasiraDS.brPill),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             ),
-            child: Text(isOpen ? 'Tutup kasir' : 'Buka',
+            child: Text(isOpen ? 'Hitung kas' : 'Modal awal',
                 style: KasiraDS.sans(size: 12.5, weight: FontWeight.w700, color: KasiraDS.textStrong)),
           ),
         ],

@@ -254,6 +254,36 @@ async def sync_data(
                 # dibuat pas device offline juga harus muncul di halaman
                 # Pelanggan begitu batch-nya kepush.
                 await refresh_for_order_id(db, oid)
+        # Order/pembayaran offline yang dibuat waktu HP belum pegang shift
+        # (install baru, atau shift-nya keburu ditutup janitor 04.00) datang
+        # dengan shift_session_id NULL. Tempelkan ke shift terbuka di outlet,
+        # buka sendiri kalau belum ada — sama seperti jalur online.
+        _null_shift_orders = [
+            str(o.get("id")) for o in (request.changes.orders or [])
+            if isinstance(o, dict) and o.get("id") and not o.get("shift_session_id")
+        ]
+        _null_shift_payments = [
+            str(p.get("id")) for p in (request.changes.payments or [])
+            if isinstance(p, dict) and p.get("id") and not p.get("shift_session_id")
+        ]
+        if _null_shift_orders or _null_shift_payments:
+            from backend.services.shift_service import ensure_open_shift
+            _shift = await ensure_open_shift(
+                db, outlet_id, current_user.id, current_user.tenant_id, source="sync_offline",
+            )
+            await db.flush()
+            if _null_shift_orders:
+                await db.execute(
+                    text("UPDATE orders SET shift_session_id = :sid WHERE id = ANY(CAST(:ids AS uuid[])) "
+                         "AND outlet_id = :oid AND shift_session_id IS NULL"),
+                    {"sid": str(_shift.id), "ids": _null_shift_orders, "oid": str(outlet_id)},
+                )
+            if _null_shift_payments:
+                await db.execute(
+                    text("UPDATE payments SET shift_session_id = :sid WHERE id = ANY(CAST(:ids AS uuid[])) "
+                         "AND outlet_id = :oid AND shift_session_id IS NULL"),
+                    {"sid": str(_shift.id), "ids": _null_shift_payments, "oid": str(outlet_id)},
+                )
         if request.changes.shifts:
             await process_table_sync(db, Shift, request.changes.shifts, {"outlet_id": outlet_id}, server_hlc, conflict_strategy="financial_strict")
         if request.changes.cash_activities:

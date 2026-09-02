@@ -61,6 +61,33 @@ class _ShiftPageState extends State<ShiftPage> {
     }
   }
 
+  /// "Hitung nanti": sesi ini dijeda, sesi baru langsung jalan. Laci lama
+  /// bisa dihitung kapan saja lewat daftar "belum dihitung".
+  Future<void> _pauseShift() async {
+    setState(() => _isClosing = true);
+    try {
+      final shiftId = _shift!['id'];
+      final res = await _dio.post('/shifts/$shiftId/pause', options: Options(headers: _headers));
+      final current = res.data['data']?['current'];
+      final newId = current?['id']?.toString();
+      await SessionCache.instance.setShiftSessionId(newId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(res.data['message']?.toString() ?? 'Sesi dijeda, sesi baru sudah berjalan'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      context.go('/dashboard');
+    } on DioException catch (e) {
+      final msg = e.response?.data?['detail'] ?? 'Gagal menjeda sesi';
+      if (mounted) {
+        setState(() => _isClosing = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg.toString()), backgroundColor: KasiraDS.danger, behavior: SnackBarBehavior.floating));
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isClosing = false);
+    }
+  }
+
   Future<void> _closeShift() async {
     final actualCash = double.tryParse(_cashController.text.trim()) ?? 0;
     if (actualCash <= 0) {
@@ -137,7 +164,9 @@ class _ShiftPageState extends State<ShiftPage> {
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  context.go('/shift/open');
+                  // Shift otomatis: sesudah dihitung nggak perlu "buka" lagi,
+                  // sesi berikutnya terbuka sendiri di transaksi pertama.
+                  context.go('/dashboard');
                 },
                 child: const Text('OK'),
               ),
@@ -235,9 +264,9 @@ class _ShiftPageState extends State<ShiftPage> {
             children: [
               const Icon(LucideIcons.clock, size: 48, color: KasiraDS.brandPrimary),
               const SizedBox(height: 24),
-              Text('Tutup Shift Saat Ini', style: Theme.of(context).textTheme.headlineMedium),
+              Text('Hitung Kas & Tutup Sesi', style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 8),
-              const Text('Pastikan jumlah uang di laci kasir sesuai dengan sistem.', textAlign: TextAlign.center, style: TextStyle(color: KasiraDS.textMuted)),
+              const Text('Hitung uang di laci, lalu masukkan jumlahnya. Belum sempat? Jeda dulu, penjualan tetap jalan.', textAlign: TextAlign.center, style: TextStyle(color: KasiraDS.textMuted)),
               const SizedBox(height: 32),
               _buildRow('Uang Modal Awal', _currency.format(startingCash)),
               const SizedBox(height: 12),
@@ -274,7 +303,22 @@ class _ShiftPageState extends State<ShiftPage> {
                   style: ElevatedButton.styleFrom(backgroundColor: KasiraDS.danger),
                   child: _isClosing
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('TUTUP SHIFT & CETAK REKAP', style: TextStyle(fontWeight: FontWeight.bold)),
+                      : const Text('HITUNG & TUTUP SESI', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: _isClosing ? null : _pauseShift,
+                  icon: const Icon(LucideIcons.pauseCircle, size: 18),
+                  label: const Text('Hitung nanti, jeda sesi ini'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: KasiraDS.textStrong,
+                    side: const BorderSide(color: KasiraDS.borderDefault),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ),
             ],

@@ -363,15 +363,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       final data = response.data['data'];
       // debugPrint('[NAV] shift response: status=${data?['status']}');
       if (!context.mounted) return;
+      // Shift otomatis (2 Sep 2026): nggak ada sesi terbuka BUKAN alasan
+      // menghadang kasir di halaman "Buka shift". Sesi terbuka sendiri di
+      // transaksi pertama; modal awal bisa diisi kapan saja dari Beranda.
       if (data != null && data['status'] == 'open') {
         cache.setShiftSessionId(data['id']);
-        context.go('/dashboard');
       } else {
-        context.go('/shift/open');
+        cache.setShiftSessionId(null);
       }
+      context.go('/dashboard');
     } catch (e) {
-      // debugPrint('[NAV] checkShift error: $e');
-      if (context.mounted) context.go('/shift/open');
+      // Gagal cek shift (offline, timeout) juga bukan alasan menghadang.
+      if (context.mounted) context.go('/dashboard');
     }
   }
 

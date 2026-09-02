@@ -172,32 +172,13 @@ async def recalculate_tab(db: AsyncSession, tab: Tab):
 
 
 async def find_active_shift(db: AsyncSession, outlet_id: UUID, user_id: UUID) -> UUID:
-    """Shift terbuka di outlet ini, siapa pun yang membukanya.
+    """Shift buat tab ini. Nggak ada yang terbuka → dibuka sendiri.
 
-    Dulu di-filter `Shift.user_id == user_id` dan itu bikin buntu: laci kas
-    dipakai bareng (gotcha #34), jadi `GET /shifts/current` ngeliat shift rekan
-    kerja sebagai aktif dan Beranda nulis "Shift aktif", tapi begitu kasir mau
-    simpan pesanan ke meja jawabannya "Buka shift dulu". Pesanan biasa dan
-    pembayaran nggak kegigit karena app-nya ngirim `shift_session_id` yang udah
-    dia pegang, cuma jalur tab yang nggak punya jalan itu.
-
-    `user_id` sengaja tetap diterima biar pemanggilnya nggak perlu diubah, dan
-    siapa yang input apa tetap kebaca dari `orders.user_id`.
-
-    `.first()`, bukan `scalar_one_or_none()`: data lama bisa nyimpen lebih dari
-    satu shift terbuka di outlet yang sama.
+    Dulu ini nolak "Buka shift dulu sebelum membuka tab", dan sempat lebih
+    parah lagi: nyaring per user_id padahal laci bersama, jadi Beranda nulis
+    "Shift aktif" tapi simpan ke meja ditolak. Sekarang satu jalan dengan
+    order dan bayar: `shift_service.ensure_open_shift`.
     """
-    shift_q = (
-        select(Shift)
-        .where(
-            Shift.outlet_id == outlet_id,
-            Shift.status == ShiftStatus.open,
-            Shift.deleted_at.is_(None),
-        )
-        .order_by(Shift.start_time.desc())
-    )
-    result = await db.execute(shift_q)
-    shift = result.scalars().first()
-    if not shift:
-        raise HTTPException(status_code=400, detail="Buka shift dulu sebelum membuka tab.")
+    from backend.services.shift_service import ensure_open_shift
+    shift = await ensure_open_shift(db, outlet_id, user_id, source="tab")
     return shift.id

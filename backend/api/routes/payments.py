@@ -427,17 +427,25 @@ async def create_payment(
         
     # Find active shift for the user in this outlet if not provided
     shift_session_id = payment_in.shift_session_id
+    if shift_session_id:
+        # Id dari cache HP bisa basi (janitor 04.00 udah nutup sesinya). Kalau
+        # dibiarkan, pembayaran pagi ini nyangkut di laporan shift kemarin.
+        _live = (await db.execute(
+            select(Shift.id).where(
+                Shift.id == shift_session_id,
+                Shift.outlet_id == payment_in.outlet_id,
+                Shift.status == ShiftStatus.open,
+                Shift.deleted_at.is_(None),
+            )
+        )).scalar_one_or_none()
+        if not _live:
+            shift_session_id = None
     if not shift_session_id:
-        # Shift terbuka di outlet ini, siapa pun yang membukanya (gotcha #34).
-        shift_query = select(Shift).where(
-            Shift.outlet_id == payment_in.outlet_id,
-            Shift.status == ShiftStatus.open,
-            Shift.deleted_at.is_(None)
-        ).order_by(Shift.start_time.desc())
-        shift_result = await db.execute(shift_query)
-        active_shift = shift_result.scalars().first()
-        if not active_shift:
-            raise HTTPException(status_code=400, detail="Anda harus membuka Shift (Buka Kasir) terlebih dahulu sebelum menerima pembayaran.")
+        # Shift otomatis: nggak ada yang terbuka → dibuka sendiri.
+        from backend.services.shift_service import ensure_open_shift
+        active_shift = await ensure_open_shift(
+            db, payment_in.outlet_id, current_user.id, current_user.tenant_id, source="payment",
+        )
         shift_session_id = active_shift.id
         
     # Cash Math Validation

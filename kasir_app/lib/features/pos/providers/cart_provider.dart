@@ -423,6 +423,7 @@ class CartNotifier extends StateNotifier<CartState> {
         );
         orderId = orderRes.data?['data']?['id']?.toString();
         if (orderId != null) _clientOrderId = null;
+        _rememberShiftFrom(orderRes.data?['data']);
       } on DioException catch (e) {
         // Order failed — cancel tab if we just created it (prevent orphan)
         if (tabWasCreated) {
@@ -538,6 +539,7 @@ class CartNotifier extends StateNotifier<CartState> {
         state = state.copyWith(isSubmitting: false, error: 'Response pesanan tidak valid');
         return null;
       }
+      _rememberShiftFrom(response.data?['data']);
       _clientOrderId = null;
       state = state.copyWith(
           isSubmitting: false, submittedOrderId: orderId, wasOffline: false);
@@ -838,6 +840,18 @@ class CartNotifier extends StateNotifier<CartState> {
       }
     }
     return null;
+  }
+
+  /// Sesi kasir sekarang dibuka server di transaksi pertama. Id-nya ikut di
+  /// respons order; simpan supaya bayar/tab berikutnya ngirim id yang sama
+  /// dan Beranda langsung nulis "Sesi kasir aktif". Id lama yang udah ditutup
+  /// janitor 04.00 ikut keganti di sini.
+  void _rememberShiftFrom(dynamic data) {
+    if (data is! Map) return;
+    final sid = data['shift_session_id']?.toString();
+    if (sid != null && sid.isNotEmpty && sid != _cache.shiftSessionId) {
+      _cache.setShiftSessionId(sid);
+    }
   }
 
   Future<bool> _checkOnline() async {

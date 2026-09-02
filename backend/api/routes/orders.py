@@ -94,7 +94,10 @@ async def create_order(
         # Takeaway/delivery should not have table
         order_in.table_id = None
 
-    # Validasi shift terbuka
+    # Validasi shift. HP nyimpen shift_session_id di cache; begitu janitor
+    # nutup sesi di 04.00, id itu basi. Dulu ditolak 400 "sudah ditutup" =
+    # kasir pagi-pagi mentok. Sekarang id basi diperlakukan sama dengan
+    # nggak ngirim: pakai (atau buka) shift yang terbuka di outlet.
     if order_in.shift_session_id:
         shift = (await db.execute(
             select(Shift).where(
@@ -105,20 +108,15 @@ async def create_order(
             )
         )).scalar_one_or_none()
         if not shift:
-            raise HTTPException(status_code=400, detail="Shift tidak ditemukan atau sudah ditutup. Buka shift terlebih dahulu.")
-    else:
-        # Shift terbuka di outlet ini, siapa pun yang membukanya (gotcha #34:
-        # laci kas dipakai bareng). Di-filter per user, kasir kedua yang gabung
-        # shift rekannya bakal ditolak walau lacinya jelas terbuka.
-        open_shift = (await db.execute(
-            select(Shift).where(
-                Shift.outlet_id == order_in.outlet_id,
-                Shift.status == ShiftStatus.open,
-                Shift.deleted_at.is_(None),
-            ).order_by(Shift.start_time.desc())
-        )).scalars().first()
-        if not open_shift:
-            raise HTTPException(status_code=400, detail="Belum ada shift terbuka. Silakan buka shift terlebih dahulu.")
+            order_in.shift_session_id = None
+    if not order_in.shift_session_id:
+        # Shift otomatis: nggak ada yang terbuka → dibuka sendiri di transaksi
+        # pertama. Kasir nggak pernah dihadang "buka shift dulu" lagi.
+        from backend.services.shift_service import ensure_open_shift
+        open_shift = await ensure_open_shift(
+            db, order_in.outlet_id, current_user.id, current_user.tenant_id, source="order",
+        )
+        order_in.shift_session_id = open_shift.id
 
     # 1. Create Order
     result = await db.execute(text("SELECT nextval('order_display_seq')"))

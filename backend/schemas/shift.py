@@ -34,6 +34,7 @@ class ShiftClose(BaseModel):
     ending_cash: float
     notes: Optional[str] = None
 
+
 class ShiftResponse(ShiftBase):
     id: UUID
     outlet_id: UUID
@@ -43,6 +44,10 @@ class ShiftResponse(ShiftBase):
     end_time: Optional[datetime] = None
     ending_cash: Optional[float] = None
     expected_ending_cash: Optional[float] = None
+    opened_by: str = "manual"
+    closed_reason: Optional[str] = None
+    counted_at: Optional[datetime] = None
+    paused_at: Optional[datetime] = None
     row_version: int
     created_at: datetime
     updated_at: datetime
@@ -73,3 +78,8 @@ class ShiftWithActivitiesResponse(ShiftResponse):
     total_qris_sales: float = 0
     variance: Optional[float] = None  # ending_cash - expected_ending_cash
     variance_status: Optional[str] = None  # 'balanced', 'surplus', 'deficit'
+
+
+class ShiftPauseResponse(BaseModel):
+    paused: ShiftResponse
+    current: ShiftResponse

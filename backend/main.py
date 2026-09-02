@@ -112,6 +112,7 @@ async def lifespan(app: FastAPI):
     from backend.tasks.stale_order_cleanup import stale_order_cleanup_loop
     from backend.tasks.sync_idempotency_cleanup import sync_idempotency_cleanup_loop
     from backend.tasks.kg_price_event_loop import kg_price_event_loop
+    from backend.tasks.shift_cutoff import shift_cutoff_loop
     from backend.core.task_supervisor import task_supervisor
 
     # Register semua background loop via factory (bukan panggil langsung).
@@ -126,6 +127,7 @@ async def lifespan(app: FastAPI):
     task_supervisor.register("stale_order_cleanup", lambda: stale_order_cleanup_loop())
     task_supervisor.register("sync_idempotency_cleanup", lambda: sync_idempotency_cleanup_loop())
     task_supervisor.register("kg_price_events", lambda: kg_price_event_loop())
+    task_supervisor.register("shift_cutoff", lambda: shift_cutoff_loop())
 
     yield
 

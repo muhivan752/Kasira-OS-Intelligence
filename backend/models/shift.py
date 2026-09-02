@@ -7,6 +7,9 @@ from .base import BaseModel, utc_now
 class ShiftStatus(str, enum.Enum):
     open = "open"
     closed = "closed"
+    # "Hitung nanti": laci dijeda buat dihitung belakangan, laci baru langsung
+    # jalan. Nggak nerima transaksi baru, tapi masih bisa ditutup (dihitung).
+    paused = "paused"
 
 class CashActivityType(str, enum.Enum):
     income = "income"
@@ -26,8 +29,22 @@ class Shift(BaseModel):
     notes = Column(Text, nullable=True)
     row_version = Column(Integer, default=0, nullable=False)
 
+    # Shift otomatis (mig 097). Yang perlu dipegang:
+    #  - opened_by: 'manual' (kasir tekan Buka Kasir) | 'auto' (transaksi pertama)
+    #  - closed_reason: 'manual' | 'auto_cutoff' (04.00 waktu outlet) |
+    #    'auto_migration' (bersih-bersih 097) | 'auto_stale' (>20 jam saat
+    #    kasir buka baru)
+    #  - counted_at: NULL = kasnya BELUM dihitung. Ini yang membedakan "ditutup
+    #    sistem" dari "ditutup dan dihitung" — jangan pernah nulis
+    #    ending_cash = 0 buat shift yang nggak dihitung, itu klaim palsu.
+    opened_by = Column(String(16), default="manual", server_default="manual", nullable=False)
+    closed_reason = Column(String(24), nullable=True)
+    counted_at = Column(DateTime(timezone=True), nullable=True)
+    closed_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    paused_at = Column(DateTime(timezone=True), nullable=True)
+
     outlet = relationship("Outlet")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
     activities = relationship("CashActivity", back_populates="shift", cascade="all, delete-orphan")
 
 class CashActivity(BaseModel):
