@@ -144,6 +144,20 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
     ```
     Kosong = aman. Kalau lo panik lihat "9 errors" mentah, lo bakal ngejar hantu.
 
+38. **Mode POS itu state TERPISAH dari isi keranjang — kalau salah satu dibuang, buang dua-duanya** (fix 2 Sep 2026, v1.6.12). `clearCart()` ngereset `CartState` (meja ikut hilang) tapi `posModeProvider` nggak ikut. Ikon tong sampah di keranjang cuma manggil `clearCart()`, jadi kasir mendarat di kondisi "dine-in tanpa meja": tombol **Simpan ke meja** tetap muncul tapi `submitDineInOrder()` selalu nolak `Pilih meja terlebih dahulu`, sementara tombol pilih mejanya (`Ganti`) cuma dirender kalau meja UDAH kepilih. Buntu total, dan dari layar itu nggak ada jalan balik.
+    - Gejala yang dilaporin Ivan: "di tab meja gak bisa pesan". Ciri di layar: header Kasir ada panah balik (mode dine-in) tapi pill-nya nulis **Take away** (`cart.tableId == null`).
+    - Tiap `clearCart()` di luar jalur bayar WAJIB dibarengin `posModeProvider = PosMode.selection`. Jalur bayar dan simpan-ke-meja udah bener dari dulu.
+    - `Ganti`/`Pilih meja` WAJIB nutup bottom sheet keranjang dulu (`ModalRoute.of(context) is PopupRoute` → pop). Tanpa itu pemilih mejanya kebuka DI BAWAH sheet dan layar kelihatan beku. Di tablet keranjang nempel di halaman (bukan route), makanya cek PopupRoute-nya wajib.
+    - Halaman yang duduk di IndexedStack dashboard **nggak punya AppBar**, jadi header-nya wajib `SafeArea(top: ...)` sendiri (tab Meja + tab Stok kegigit). Tapi `TableGridPage` juga dipakai EMBED di POS buat pilih meja — di situ `top` harus false, kalau nggak ada pita kosong di atas grid.
+    - Padding "ruang buat bar keranjang" WAJIB di dalam `GridView.padding`, bukan `Padding` di luar. Di luar, dia motong tinggi viewport: pita kosong permanen dan baris terakhir nggak pernah kebuka.
+
+39. **Teks yang kelihatan user: JANGAN pakai em dash (—) dan JANGAN pakai garis miring sebagai pemisah kata** (keputusan Ivan 2 Sep 2026: "itu terlalu AI slop"). Berlaku di web (`app/**`, `components/**`) dan Flutter (string di `lib/**`), bukan di komentar kode.
+    - Ganti em dash dengan kalimat yang bener: titik, koma, titik dua, atau kurung. "Catat nota belanja — stok naik, ..." jadi "Catat nota belanja. Stok naik, ...".
+    - Garis miring jadi kata: "Pilih bahan / produk" jadi "Pilih bahan atau produk"; "Diskon / promo" jadi "Diskon atau promo".
+    - Placeholder sel tabel kosong pakai `-` biasa, bukan `—`.
+    - `·` boleh buat metadata pendek (`Rab, 2 Sep · 21:18`) dan judul halaman (`Selaris · POS Digital`). `&` juga boleh (`Listrik & air`).
+    - Cek cepat sebelum bilang selesai: `grep -rn "—" app components --include=*.tsx | grep -vE ":[0-9]+:\s*(//|\*|\{/\*)"` harus kosong.
+
 ---
 
 ## ✅ CHECKLIST — Kalau Lo Edit...
