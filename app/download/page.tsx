@@ -14,10 +14,10 @@ import Navbar from '@/components/landing/Navbar';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Download Kasira — Aplikasi Kasir Android',
-  description: 'Download aplikasi Kasira POS untuk Android. Kasir digital offline-ready dengan QRIS, sync real-time, dan printer Bluetooth.',
+  title: 'Download Selaris — Aplikasi Kasir Android',
+  description: 'Download aplikasi Selaris POS untuk Android. Kasir digital offline-ready dengan QRIS, sync real-time, dan printer Bluetooth.',
   openGraph: {
-    title: 'Download Kasira — Aplikasi Kasir Android',
+    title: 'Download Selaris — Aplikasi Kasir Android',
     description: 'Kasir digital offline-ready untuk cafe dan UMKM Indonesia. Download APK gratis.',
   },
 };
@@ -42,7 +42,7 @@ export default function DownloadPage() {
             <h1 className="text-4xl md:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.1] mb-6">
               Unduh Aplikasi{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-emerald-700">
-                Kasira POS
+                Selaris POS
               </span>
             </h1>
 
@@ -103,7 +103,7 @@ export default function DownloadPage() {
             {[
               { num: '1', title: 'Download APK', desc: 'Klik tombol download di atas. File APK akan terunduh ke HP kamu.' },
               { num: '2', title: 'Izinkan instalasi', desc: 'Jika muncul peringatan, buka Settings → aktifkan "Install from unknown sources" atau "Allow from this source".' },
-              { num: '3', title: 'Install & buka', desc: 'Tap file APK untuk install. Setelah selesai, buka app Kasira.' },
+              { num: '3', title: 'Install & buka', desc: 'Tap file APK untuk install. Setelah selesai, buka app Selaris.' },
               { num: '4', title: 'Login', desc: 'Masuk dengan nomor WhatsApp yang kamu daftarkan. Masukkan PIN, langsung kasir.' },
             ].map(({ num, title, desc }) => (
               <div key={num} className="flex gap-4">

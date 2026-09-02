@@ -28,6 +28,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from backend.core.database import get_db
+from backend.core.config import settings
 from backend.api.deps import get_current_user, require_pro_tier
 from backend.models.user import User
 from backend.models.tab import Tab, TabSplit
@@ -935,7 +936,7 @@ async def _send_tab_wa_receipts(
             if not customer or not customer.phone:
                 continue
             outlet = await db.get(Outlet, payment.outlet_id)
-            outlet_name = outlet.name if outlet else "Kasira"
+            outlet_name = outlet.name if outlet else settings.BRAND_NAME
             cashier_name = "-"
             if order.user_id:
                 cashier = await db.get(User, order.user_id)
@@ -1690,7 +1691,7 @@ async def get_split_receipt(
     }.get(tab.split_method or "", "")
 
     data = {
-        "outlet_name": outlet.name or "Kasira",
+        "outlet_name": outlet.name or settings.BRAND_NAME,
         "outlet_address": outlet.address or "",
         "tax_number": tax_cfg.tax_number if tax_cfg else None,
         "custom_footer": tax_cfg.receipt_footer if tax_cfg else None,

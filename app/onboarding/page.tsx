@@ -264,13 +264,13 @@ export default function OnboardingPage() {
                   <li>Buka file APK yang sudah diunduh di perangkat Android Anda.</li>
                   <li>Jika muncul peringatan keamanan, pilih <strong>Settings</strong> dan aktifkan <strong>Allow from this source</strong>.</li>
                   <li>Lanjutkan instalasi hingga selesai.</li>
-                  <li>Buka aplikasi Kasira dan login menggunakan nomor HP Anda.</li>
+                  <li>Buka aplikasi Selaris dan login menggunakan nomor HP Anda.</li>
                 </ol>
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <a
-                  href="https://github.com/muhivan752/Kasira-OS-Intelligence/releases/latest"
+                  href="https://github.com/muhivan752/Selaris-OS-Intelligence/releases/latest"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full sm:w-auto flex items-center justify-center px-6 py-3 text-base font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors"

@@ -5,6 +5,13 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Kasira POS API"
     API_V1_STR: str = "/api/v1"
     
+    # Identitas produk + URL kanonik. Rebrand Kasira → Selaris 2026-09-02.
+    # SITE_URL = yang DITAMPILIN ke user (link storefront di struk WA, link
+    # referral, redirect Xendit). API tetap dilayani di kasira.online juga —
+    # APK lama + webhook Xendit tenant nunjuk ke sana. Flip env sesudah DNS.
+    BRAND_NAME: str = "Selaris"
+    SITE_URL: str = "https://selaris.id"
+
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
     

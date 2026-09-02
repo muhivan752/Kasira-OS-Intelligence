@@ -6,8 +6,8 @@ import { MessageCircle, X, Send, Loader2 } from 'lucide-react';
 type Msg = { role: 'user' | 'assistant'; content: string };
 
 const SUGGESTIONS = [
-  { label: 'Kasira cocok buat warkop kecil?', text: 'Kasira cocok buat warkop kecil?' },
-  { label: 'Bedanya sama Moka/Pawoon apa?', text: 'Bedanya Kasira sama Moka atau Pawoon apa?' },
+  { label: 'Selaris cocok buat warkop kecil?', text: 'Selaris cocok buat warkop kecil?' },
+  { label: 'Bedanya sama Moka/Pawoon apa?', text: 'Bedanya Selaris sama Moka atau Pawoon apa?' },
   { label: 'QRIS beneran nol komisi?', text: 'QRIS-nya beneran nol komisi? Jelasin dong' },
   { label: 'Berapa harganya buat 1 cafe?', text: 'Berapa total biayanya buat 1 cafe kecil?' },
 ];
@@ -71,14 +71,14 @@ export default function LandingChat({ waLink }: { waLink: string }) {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label="Tanya Kasira"
+          aria-label="Tanya Selaris"
           className="fixed bottom-5 right-5 z-[120] flex items-center gap-2.5 rounded-full bg-[#0B1512] py-3.5 pl-4 pr-5 text-white shadow-[0_18px_40px_-12px_rgba(11,21,18,0.55)] transition hover:scale-[1.03] active:scale-95"
         >
           <span className="relative flex h-7 w-7 items-center justify-center rounded-full bg-[#10B981]">
             <MessageCircle className="h-4 w-4 text-[#04231A]" />
             <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0B1512] bg-[#34D399]" />
           </span>
-          <span className="text-[14.5px] font-semibold">Tanya Kasira</span>
+          <span className="text-[14.5px] font-semibold">Tanya Selaris</span>
         </button>
       )}
 
@@ -90,7 +90,7 @@ export default function LandingChat({ waLink }: { waLink: string }) {
               k
             </span>
             <div className="flex-1">
-              <p className="text-[14.5px] font-bold leading-tight">Tanya Kasira</p>
+              <p className="text-[14.5px] font-bold leading-tight">Tanya Selaris</p>
               <p className="flex items-center gap-1.5 text-[11.5px] text-[#8CA095]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" />
                 Biasanya bales instan
@@ -105,7 +105,7 @@ export default function LandingChat({ waLink }: { waLink: string }) {
             {messages.length === 0 && (
               <>
                 <div className="max-w-[85%] rounded-[16px_16px_16px_4px] border border-[#E7E5DE] bg-white px-3.5 py-2.5 text-[14px] leading-relaxed text-[#0B1512]">
-                  Hai! 👋 Aku bantu jelasin Kasira buat cafe kamu.
+                  Hai! 👋 Aku bantu jelasin Selaris buat cafe kamu.
                   <br />
                   Tanya apa aja — fitur, harga, cara mulai. Atau pilih di bawah:
                 </div>
@@ -114,7 +114,7 @@ export default function LandingChat({ waLink }: { waLink: string }) {
                     <button
                       key={s.label}
                       onClick={() => send(s.text)}
-                      className="rounded-full border border-[#E7E5DE] bg-white px-3 py-1.5 text-[12.5px] font-semibold text-[#3F4A45] transition hover:border-[#059669] hover:text-[#059669]"
+                      className="rounded-full border border-[#E7E5DE] bg-white px-3 py-1.5 text-[12.5px] font-semibold text-[#3F4A45] transition hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)]"
                     >
                       {s.label}
                     </button>
@@ -154,21 +154,21 @@ export default function LandingChat({ waLink }: { waLink: string }) {
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && send(draft)}
                 maxLength={2000}
-                placeholder="Tanya soal Kasira…"
-                className="min-w-0 flex-1 rounded-xl border border-[#E7E5DE] bg-[#FAFAF7] px-3.5 py-2.5 text-[14px] text-[#0B1512] outline-none transition placeholder:text-[#A8B0AA] focus:border-[#059669]"
+                placeholder="Tanya soal Selaris…"
+                className="min-w-0 flex-1 rounded-xl border border-[#E7E5DE] bg-[#FAFAF7] px-3.5 py-2.5 text-[14px] text-[#0B1512] outline-none transition placeholder:text-[#A8B0AA] focus:border-[var(--brand-primary)]"
               />
               <button
                 onClick={() => send(draft)}
                 disabled={loading || !draft.trim()}
                 aria-label="Kirim"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#059669] text-white transition disabled:opacity-40"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-primary)] text-white transition disabled:opacity-40"
               >
                 <Send className="h-4 w-4" />
               </button>
             </div>
             <p className="mt-2 text-center text-[11px] text-[#A8B0AA]">
               Jawaban AI bisa meleset —{' '}
-              <a href={waLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#059669] underline underline-offset-2">
+              <a href={waLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--brand-primary)] underline underline-offset-2">
                 tanya orangnya via WhatsApp
               </a>
             </p>

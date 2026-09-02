@@ -27,6 +27,10 @@ from backend.services.audit import log_audit
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+def _site_host() -> str:
+    return settings.SITE_URL.replace("https://", "").replace("http://", "").rstrip("/")
+
+
 @router.post("/otp/send", response_model=StandardResponse[dict])
 async def send_otp(
     request: OTPSendRequest,
@@ -75,7 +79,7 @@ async def send_otp(
         await redis.incr(rate_limit_key)
     
     # Send via Fonnte
-    message = f"Your Kasira OTP code is: {otp}. It will expire in 5 minutes. Do not share this code with anyone."
+    message = f"Kode OTP {settings.BRAND_NAME} kamu: *{otp}*. Berlaku 5 menit. Jangan bagikan kode ini ke siapa pun."
     success = await send_whatsapp_message(request.phone, message)
     
     if not success:
@@ -517,15 +521,15 @@ async def _send_welcome_wa(phone: str, owner_name: str, business_name: str):
     try:
         msg = (
             f"Halo {owner_name}! 👋\n\n"
-            f"Selamat datang di *Kasira POS*! Bisnis *{business_name}* kamu sudah terdaftar.\n\n"
+            f"Selamat datang di *{settings.BRAND_NAME}*! Bisnis *{business_name}* kamu sudah terdaftar.\n\n"
             f"🚀 *Langkah selanjutnya:*\n"
             f"1. Tambah menu pertama di halaman Onboarding\n"
-            f"2. Download APK Kasir di kasira.online/download\n"
+            f"2. Download APK Kasir di {_site_host()}/download\n"
             f"3. Login pakai PIN yang kamu buat tadi\n"
             f"4. Mulai terima pesanan!\n\n"
             f"💡 *Tips:* Bagikan kode referral kamu ke teman pebisnis untuk dapat bonus Pro gratis!\n\n"
             f"Butuh bantuan? Balas pesan ini kapan saja.\n"
-            f"— Tim Kasira"
+            f"— Tim {settings.BRAND_NAME}"
         )
         await send_whatsapp_message(phone, msg)
     except Exception:

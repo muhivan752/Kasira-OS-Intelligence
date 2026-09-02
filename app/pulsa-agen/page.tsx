@@ -1,3 +1,4 @@
+import { SITE_URL } from '@/lib/brand';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
@@ -10,12 +11,12 @@ export const metadata: Metadata = {
   title: 'Jadi Agen Pulsa KasiraPay — Modal dari Kami',
   description:
     'Daftar jadi agen pulsa KasiraPay. Dapat saldo awal dagang dari admin, jualan pulsa & e-money via aplikasi HP. Cocok untuk warung & toko kelontong.',
-  alternates: { canonical: 'https://kasira.online/pulsa-agen' },
+  alternates: { canonical: `${SITE_URL}/pulsa-agen` },
   openGraph: {
     title: 'Jadi Agen Pulsa KasiraPay',
     description:
       'Modal dari kami, jualan pulsa harian, top up gampang via TF. Daftar online 5 menit.',
-    url: 'https://kasira.online/pulsa-agen',
+    url: `${SITE_URL}/pulsa-agen`,
     type: 'website',
   },
   twitter: {
@@ -123,11 +124,11 @@ const serviceLd = {
   provider: {
     '@type': 'Organization',
     name: 'KasiraPay',
-    url: 'https://kasira.online/pulsa-agen',
+    url: `${SITE_URL}/pulsa-agen`,
     parentOrganization: {
       '@type': 'Organization',
       name: 'Kasira',
-      url: 'https://kasira.online',
+      url: SITE_URL,
     },
   },
   areaServed: { '@type': 'Country', name: 'Indonesia' },
@@ -155,8 +156,8 @@ const breadcrumbLd = {
   '@context': 'https://schema.org',
   '@type': 'BreadcrumbList',
   itemListElement: [
-    { '@type': 'ListItem', position: 1, name: 'Kasira', item: 'https://kasira.online' },
-    { '@type': 'ListItem', position: 2, name: 'Agen Pulsa', item: 'https://kasira.online/pulsa-agen' },
+    { '@type': 'ListItem', position: 1, name: 'Selaris', item: SITE_URL },
+    { '@type': 'ListItem', position: 2, name: 'Agen Pulsa', item: `${SITE_URL}/pulsa-agen` },
   ],
 };
 

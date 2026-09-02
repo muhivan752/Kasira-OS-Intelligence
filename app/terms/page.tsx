@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 
 export const metadata = {
   title: 'Syarat & Ketentuan',
-  description: 'Syarat dan Ketentuan (Terms of Service) penggunaan aplikasi dan layanan Kasira.',
+  description: 'Syarat dan Ketentuan (Terms of Service) penggunaan aplikasi dan layanan Selaris.',
 };
 
 export default function TermsOfServicePage() {
@@ -20,19 +20,19 @@ export default function TermsOfServicePage() {
         
         <div className="prose prose-emerald max-w-none text-gray-700">
           <p>
-            Dengan mendaftar dan menggunakan Kasira ("Layanan"), Anda menyetujui syarat dan ketentuan berikut ("Ketentuan Layanan"). Harap baca dengan saksama sebelum menggunakan Layanan kami.
+            Dengan mendaftar dan menggunakan Selaris ("Layanan"), Anda menyetujui syarat dan ketentuan berikut ("Ketentuan Layanan"). Harap baca dengan saksama sebelum menggunakan Layanan kami.
           </p>
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">1. Akun dan Registrasi</h2>
           <ul className="list-disc pl-6 space-y-2 mb-6">
             <li>Anda harus memberikan informasi yang akurat, termasuk nomor WhatsApp aktif dan informasi bisnis, saat mendaftar.</li>
-            <li>Anda bertanggung jawab menjaga kerahasiaan PIN dan akses ke akun Kasira Anda.</li>
-            <li>Kasira berhak menolak pendaftaran atau membatalkan akun jika ditemukan pelanggaran, penipuan, atau aktivitas ilegal.</li>
+            <li>Anda bertanggung jawab menjaga kerahasiaan PIN dan akses ke akun Selaris Anda.</li>
+            <li>Selaris berhak menolak pendaftaran atau membatalkan akun jika ditemukan pelanggaran, penipuan, atau aktivitas ilegal.</li>
           </ul>
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">2. Layanan dan Ketersediaan (SLA)</h2>
           <ul className="list-disc pl-6 space-y-2 mb-6">
-            <li>Kasira disediakan dengan upaya terbaik (<i>best-effort</i>). Kami tidak menjamin 100% <i>uptime</i> (SLA tertulis).</li>
+            <li>Selaris disediakan dengan upaya terbaik (<i>best-effort</i>). Kami tidak menjamin 100% <i>uptime</i> (SLA tertulis).</li>
             <li>Aplikasi kasir dirancang dengan <strong>Offline Mode</strong>, memungkinkan Anda tetap melakukan transaksi saat koneksi internet terputus. Namun, sinkronisasi data ke cloud memerlukan koneksi internet aktif.</li>
             <li>Jika terjadi gangguan server di luar pemeliharaan terjadwal selama lebih dari 24 jam berturut-turut, kompensasi <i>prorate</i> (perpanjangan masa berlangganan) akan diberikan untuk hari yang terdampak.</li>
           </ul>
@@ -46,19 +46,19 @@ export default function TermsOfServicePage() {
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">4. Penggunaan QRIS dan Payment Gateway</h2>
           <ul className="list-disc pl-6 space-y-2 mb-6">
-            <li>Kasira tidak memungut komisi tambahan untuk transaksi QRIS jika Anda menghubungkan akun Payment Gateway (Xendit) Anda sendiri (<i>Bring Your Own Key</i>).</li>
+            <li>Selaris tidak memungut komisi tambahan untuk transaksi QRIS jika Anda menghubungkan akun Payment Gateway (Xendit) Anda sendiri (<i>Bring Your Own Key</i>).</li>
             <li>Anda bertanggung jawab atas kepatuhan terhadap kebijakan Payment Gateway (seperti dilarang menjual barang ilegal).</li>
-            <li>Kasira tidak bertanggung jawab atas penahanan dana (<i>fund hold</i>) yang dilakukan oleh pihak Payment Gateway atas indikasi <i>fraud</i> atau perselisihan (<i>dispute</i>).</li>
+            <li>Selaris tidak bertanggung jawab atas penahanan dana (<i>fund hold</i>) yang dilakukan oleh pihak Payment Gateway atas indikasi <i>fraud</i> atau perselisihan (<i>dispute</i>).</li>
           </ul>
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">5. Pembatasan Tanggung Jawab</h2>
           <p>
-            Kasira tidak bertanggung jawab atas kerugian finansial langsung, tidak langsung, insidental, atau konsekuensial yang diakibatkan oleh penggunaan atau ketidakmampuan menggunakan Layanan kami, termasuk namun tidak terbatas pada hilangnya data, hilangnya keuntungan bisnis, atau gangguan layanan yang disebabkan oleh Force Majeure.
+            Selaris tidak bertanggung jawab atas kerugian finansial langsung, tidak langsung, insidental, atau konsekuensial yang diakibatkan oleh penggunaan atau ketidakmampuan menggunakan Layanan kami, termasuk namun tidak terbatas pada hilangnya data, hilangnya keuntungan bisnis, atau gangguan layanan yang disebabkan oleh Force Majeure.
           </p>
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">6. Perubahan Syarat & Ketentuan</h2>
           <p>
-            Kasira berhak untuk memperbarui atau mengubah Syarat & Ketentuan ini kapan saja. Kami akan memberikan pemberitahuan yang wajar (seperti via aplikasi atau WhatsApp) tentang perubahan material apa pun. Jika Anda terus menggunakan Layanan setelah perubahan efektif, Anda dianggap telah menyetujui ketentuan yang direvisi.
+            Selaris berhak untuk memperbarui atau mengubah Syarat & Ketentuan ini kapan saja. Kami akan memberikan pemberitahuan yang wajar (seperti via aplikasi atau WhatsApp) tentang perubahan material apa pun. Jika Anda terus menggunakan Layanan setelah perubahan efektif, Anda dianggap telah menyetujui ketentuan yang direvisi.
           </p>
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">7. Hukum yang Berlaku</h2>

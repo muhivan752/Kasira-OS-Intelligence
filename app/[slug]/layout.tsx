@@ -1,3 +1,4 @@
+import { SITE_URL } from '@/lib/brand';
 import type { Metadata } from 'next';
 import { CartProvider } from './CartContext';
 
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       openGraph: {
         title: `${name} — Menu & Pesan Online`,
         description: desc,
-        url: `https://kasira.online/${slug}`,
+        url: `${SITE_URL}/${slug}`,
       },
     };
   } catch {

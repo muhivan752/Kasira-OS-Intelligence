@@ -162,7 +162,7 @@ async def generate_invoices():
                     xendit_resp = await xendit_service.create_invoice(
                         external_id=external_id,
                         amount=price,
-                        payer_email=tenant.owner_email or f"{tenant.schema_name}@kasira.online",
+                        payer_email=tenant.owner_email or f"{tenant.schema_name}@selaris.id",
                         description=f"Langganan Kasira {tier_label} - {period_start.strftime('%b %Y')}",
                     )
                     invoice.xendit_invoice_id = xendit_resp.get("id")

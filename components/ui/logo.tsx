@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { BRAND } from '@/lib/brand';
 
 interface LogoProps {
   className?: string;
@@ -15,8 +16,12 @@ interface LogoProps {
 }
 
 /**
- * Kasira "Aurora" brand mark — aurora-gradient rounded square with a
- * white equalizer / soundwave motif. Wordmark in Gabarito.
+ * Selaris brand mark — dua pil miring bergradien pink → ungu (logo Selaris
+ * milik Ivan, sama dengan favicon selaris.id), wordmark Gabarito.
+ *
+ * Mark lama (kotak hijau bermotif struk) dibuang bareng rebrand 2026-09-02.
+ * Gradien pakai token Aurora (pink-500 → violet-500) biar satu palet dengan
+ * app POS dan dashboard, bukan hex terpisah.
  */
 export function Logo({
   className,
@@ -39,13 +44,14 @@ export function Logo({
   else if (variant === 'mono') textColor = '';
 
   const mono = variant === 'mono';
+  const fill = mono ? 'currentColor' : 'url(#selaris-mark)';
 
   return (
     <div className={cn('flex items-center select-none', s.gap, className)}>
       <svg
         width={s.svg}
         height={s.svg}
-        viewBox="0 0 48 48"
+        viewBox="0 0 64 64"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="shrink-0"
@@ -53,22 +59,14 @@ export function Logo({
       >
         {!mono && (
           <defs>
-            <linearGradient id="kasira-mark" x1="6" y1="6" x2="42" y2="42" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#0E8F63" />
-              <stop offset="1" stopColor="#0B7A55" />
+            <linearGradient id="selaris-mark" x1="0" y1="64" x2="64" y2="0" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="var(--violet-500, #7C3AED)" />
+              <stop offset="1" stopColor="var(--pink-500, #FF2E7E)" />
             </linearGradient>
           </defs>
         )}
-        {/* Struk dengan tepi bawah bergerigi. Menggantikan motif equalizer —
-            equalizer itu bahasa visual audio (identitas Sefrekuensi), bukan kasir.
-            Gerigi cuma 4 dan dalam, supaya tetap kebaca waktu ikon mengecil. */}
-        <rect x="0" y="0" width="48" height="48" rx="11" fill={mono ? 'currentColor' : 'url(#kasira-mark)'} />
-        <path
-          d="M13.5 13a2.5 2.5 0 0 1 2.5-2.5h16a2.5 2.5 0 0 1 2.5 2.5v18l-2.625 6-2.625-6-2.625 6-2.625-6-2.625 6-2.625-6-2.625 6-2.625-6z"
-          fill={mono ? 'var(--surface-card, #fff)' : '#fff'}
-        />
-        <rect x="18" y="16.5" width="12" height="3.1" rx="1.55" fill={mono ? 'currentColor' : '#0B7A55'} />
-        <rect x="18" y="22.5" width="7.5" height="3.1" rx="1.55" fill={mono ? 'currentColor' : '#0B7A55'} />
+        <rect x="16" y="4" width="46" height="23" rx="11.5" transform="rotate(28 39 15.5)" fill={fill} />
+        <rect x="2" y="37" width="46" height="23" rx="11.5" transform="rotate(28 25 48.5)" fill={fill} />
       </svg>
       {showWordmark && (
         <div
@@ -79,7 +77,7 @@ export function Logo({
             s.text
           )}
         >
-          Kasira
+          {BRAND}
         </div>
       )}
     </div>

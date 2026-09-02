@@ -200,7 +200,7 @@ export default function LoginPage() {
         <p className="mt-6 text-center text-xs text-[var(--text-muted)] leading-relaxed">
           Dengan masuk, kamu setuju pada{' '}
           <a href="/terms" className="font-semibold text-[var(--text-body)] hover:underline">Syarat</a> &amp;{' '}
-          <a href="/privacy" className="font-semibold text-[var(--text-body)] hover:underline">Privasi</a> Kasira.
+          <a href="/privacy" className="font-semibold text-[var(--text-body)] hover:underline">Privasi</a> Selaris.
         </p>
       </div>
     </main>

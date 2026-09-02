@@ -113,7 +113,7 @@ function RegisterContent() {
           {/* STEP 1: Phone */}
           {step === 'phone' && (
             <>
-              <h1 className="ks-display text-[28px] font-extrabold text-[var(--text-strong)] leading-tight mb-1">Daftar Kasira</h1>
+              <h1 className="ks-display text-[28px] font-extrabold text-[var(--text-strong)] leading-tight mb-1">Daftar Selaris</h1>
               <p className="text-sm text-[var(--text-muted)] mb-6">Masukkan nomor WhatsApp aktif kamu.</p>
               <form onSubmit={handleSendOtp} className="space-y-4">
                 <div>
@@ -257,7 +257,7 @@ function RegisterContent() {
                   Buat Akun
                 </button>
                 <p className="text-center text-xs text-[var(--text-muted)] leading-relaxed pt-1">
-                  Dengan mendaftar, kamu setuju pada <Link href="/terms" className="font-semibold text-[var(--text-body)] hover:underline">Syarat</Link> &amp; <Link href="/privacy" className="font-semibold text-[var(--text-body)] hover:underline">Privasi</Link> Kasira.
+                  Dengan mendaftar, kamu setuju pada <Link href="/terms" className="font-semibold text-[var(--text-body)] hover:underline">Syarat</Link> &amp; <Link href="/privacy" className="font-semibold text-[var(--text-body)] hover:underline">Privasi</Link> Selaris.
                 </p>
               </form>
             </>

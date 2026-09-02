@@ -5,15 +5,7 @@ import {
 } from 'lucide-react';
 import LandingChat from '@/components/landing/LandingChat';
 import { Logo } from '@/components/ui/logo';
-
-// Nama merek ditaruh SATU tempat — rencana ganti ke domain baru (selaris.id)
-// tinggal ganti di sini + layout metadata, bukan hunting string di 500 baris.
-const BRAND = 'Kasira';
-const DOMAIN = 'kasira.online';
-
-const WA_NUMBER = '6285270782220';
-const WA_LINK = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Halo ${BRAND}, saya tertarik coba`)}`;
-const DEMO_SLUG = 'kasira-coffee';
+import { BRAND, SITE_URL, WA_LINK, DEMO_SLUG } from '@/lib/brand';
 
 const NAV = [
   { label: 'Cara kerja', href: '#cara-kerja' },
@@ -100,7 +92,7 @@ const jsonLd = {
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'Android, Web',
   description: 'Kasir digital yang ngisi pembukuan sendiri: stok, HPP, utang supplier, dan pelanggan terbentuk otomatis dari transaksi, nota belanja, dan nomor WA. Untuk cafe & UMKM Indonesia.',
-  url: `https://${DOMAIN}`,
+  url: SITE_URL,
   offers: [
     { '@type': 'Offer', name: 'Starter', price: '99000', priceCurrency: 'IDR', description: 'POS offline + storefront + QRIS BYOK + pembelian + laporan' },
     { '@type': 'Offer', name: 'Pro', price: '299000', priceCurrency: 'IDR', description: 'Semua Starter + resep/HPP + split bill + loyalty + AI asisten' },
@@ -111,8 +103,8 @@ const organizationLd = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
   name: BRAND,
-  url: `https://${DOMAIN}`,
-  logo: `https://${DOMAIN}/favicon.svg`,
+  url: SITE_URL,
+  logo: `${SITE_URL}/favicon.svg`,
   description: 'Platform kasir + ERP ringan + CRM untuk UMKM dan bisnis F&B Indonesia.',
   contactPoint: { '@type': 'ContactPoint', telephone: '+62-852-7078-2220', contactType: 'customer service', availableLanguage: 'Indonesian' },
 };

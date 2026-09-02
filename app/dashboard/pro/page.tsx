@@ -49,7 +49,7 @@ const PRO_FEATURES = [
 ];
 
 const WA_NUMBER = '6285270782220';
-const WA_MESSAGE = encodeURIComponent('Halo Kasira, saya tertarik upgrade ke Pro. Bisa info lebih lanjut?');
+const WA_MESSAGE = encodeURIComponent('Halo Selaris, saya tertarik upgrade ke Pro. Bisa info lebih lanjut?');
 
 function ProContent() {
   const searchParams = useSearchParams();
@@ -76,7 +76,7 @@ function ProContent() {
       <div className="text-center max-w-2xl mx-auto">
         <div className="inline-flex items-center gap-2 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-1.5 rounded-full text-sm font-semibold mb-4">
           <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-          Kasira Pro
+          Selaris Pro
         </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-3">Tingkatkan Bisnis Anda</h1>
         <p className="text-gray-500 text-base">

@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 
 from backend.core.database import get_db
+from backend.core.config import settings
 from backend.utils.phone import mask_phone
 from backend.api.deps import get_current_user
 from backend.models.user import User
@@ -188,7 +189,7 @@ async def _handle_tab_payment_webhook_paid(db: AsyncSession, payment: Payment) -
             if not customer or not customer.phone:
                 continue
             outlet = await db.get(Outlet, payment.outlet_id)
-            outlet_name = outlet.name if outlet else "Kasira"
+            outlet_name = outlet.name if outlet else settings.BRAND_NAME
             cashier_name = "-"
             if order.user_id:
                 cashier = await db.get(_UserModel, order.user_id)
@@ -596,7 +597,7 @@ async def create_payment(
                 customer = await db.get(Customer, order.customer_id)
                 if customer and customer.phone:
                     outlet = await db.get(Outlet, payment_in.outlet_id)
-                    outlet_name = outlet.name if outlet else "Kasira"
+                    outlet_name = outlet.name if outlet else settings.BRAND_NAME
                     cashier_name = "-"
                     if order.user_id:
                         cashier = await db.get(UserModel, order.user_id)
@@ -958,7 +959,7 @@ async def xendit_webhook(
                         customer = await db.get(Customer, order.customer_id)
                         if customer and customer.phone:
                             outlet = await db.get(Outlet, payment.outlet_id)
-                            outlet_name = outlet.name if outlet else "Kasira"
+                            outlet_name = outlet.name if outlet else settings.BRAND_NAME
                             cashier_name = "-"
                             if order.user_id:
                                 cashier = await db.get(UserModel, order.user_id)
@@ -1284,8 +1285,8 @@ def _build_receipt_text(
     if outlet_slug:
         lines.append(f"")
         lines.append(f"📱 Pesan lagi via online:")
-        lines.append(f"https://kasira.online/{outlet_slug}")
-    lines.append(f"_Powered by Kasira_")
+        lines.append(f"{settings.SITE_URL}/{outlet_slug}")
+    lines.append(f"_Powered by {settings.BRAND_NAME}_")
     return "\n".join(lines)
 
 
@@ -1324,7 +1325,7 @@ async def send_receipt_whatsapp(
     outlet = await db.get(Outlet, order.outlet_id)
     if not outlet or outlet.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Order bukan milik tenant Anda")
-    outlet_name = outlet.name if outlet else "Kasira"
+    outlet_name = outlet.name if outlet else settings.BRAND_NAME
 
     # Phone validation + normalization
     phone = _normalize_phone(body.phone)

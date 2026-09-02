@@ -24,13 +24,13 @@ const spaceMono = Space_Mono({
   display: 'swap',
 });
 
-const SITE_URL = 'https://kasira.online';
+import { SITE_URL } from '@/lib/brand';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'Kasira — POS Digital untuk UMKM Indonesia',
-    template: '%s | Kasira',
+    default: 'Selaris — POS Digital untuk UMKM Indonesia',
+    template: '%s | Selaris',
   },
   description: 'Kasir digital yang ngisi pembukuan sendiri: stok, HPP, utang supplier, dan pelanggan terbentuk otomatis dari transaksi, nota belanja, dan nomor WA. Untuk cafe & UMKM Indonesia.',
   keywords: [
@@ -38,19 +38,19 @@ export const metadata: Metadata = {
     'storefront', 'cafe', 'UMKM', 'Indonesia', 'point of sale',
     'kasir gratis', 'manajemen stok', 'laporan penjualan',
   ],
-  authors: [{ name: 'Kasira' }],
-  creator: 'Kasira',
+  authors: [{ name: 'Selaris' }],
+  creator: 'Selaris',
   openGraph: {
     type: 'website',
     locale: 'id_ID',
     url: SITE_URL,
-    siteName: 'Kasira',
-    title: 'Kasira — Kasir yang ngisi pembukuan sendiri',
+    siteName: 'Selaris',
+    title: 'Selaris — Kasir yang ngisi pembukuan sendiri',
     description: 'Kasir + stok + pembelian + pelanggan dalam satu aplikasi. Foto nota, HPP ke-update. QRIS tanpa komisi.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Kasira — Kasir yang ngisi pembukuan sendiri',
+    title: 'Selaris — Kasir yang ngisi pembukuan sendiri',
     description: 'Kasir + stok + pembelian + pelanggan dalam satu aplikasi untuk cafe dan UMKM Indonesia.',
   },
   robots: {

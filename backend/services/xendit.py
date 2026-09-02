@@ -244,7 +244,7 @@ class XenditService:
         amount: int,
         payer_email: str,
         description: str,
-        success_redirect_url: str = "https://kasira.online/dashboard/settings/billing",
+        success_redirect_url: str | None = None,
         invoice_duration_seconds: int = 86400,
     ) -> Dict[str, Any]:
         """Buat Xendit Invoice untuk subscription billing."""
@@ -253,7 +253,7 @@ class XenditService:
             "amount": amount,
             "payer_email": payer_email,
             "description": description,
-            "success_redirect_url": success_redirect_url,
+            "success_redirect_url": success_redirect_url or f"{settings.SITE_URL}/dashboard/settings/billing",
             "invoice_duration": invoice_duration_seconds,
             "currency": "IDR",
         }

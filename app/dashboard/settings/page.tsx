@@ -519,7 +519,7 @@ export default function SettingsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Ganti "Powered by Kasira" di bawah struk dengan pesan kamu. Max 200 karakter.
+                    Ganti "Powered by Selaris" di bawah struk dengan pesan kamu. Max 200 karakter.
                     {taxConfig.receipt_footer.length > 0 && (
                       <span className="ml-2 text-gray-400">({taxConfig.receipt_footer.length}/200)</span>
                     )}
@@ -704,7 +704,7 @@ export default function SettingsPage() {
               </div>
               <div className="p-6 space-y-4">
                 <p className="text-sm text-gray-600">
-                  Ajak pebisnis lain pakai Kasira. Kamu dapat <span className="font-bold text-emerald-700">20% komisi</span> dari langganan mereka setiap bulan!
+                  Ajak pebisnis lain pakai Selaris. Kamu dapat <span className="font-bold text-emerald-700">20% komisi</span> dari langganan mereka setiap bulan!
                 </p>
 
                 {/* Code + Copy */}

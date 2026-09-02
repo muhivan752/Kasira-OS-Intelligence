@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from backend.core.database import get_db
+from backend.core.config import settings
 from backend.api.deps import get_current_user
 from backend.models.user import User
 from backend.models.tenant import Tenant
@@ -53,10 +54,10 @@ async def get_my_referral_code(
     return StandardResponse(data={
         "referral_code": tenant.referral_code,
         "commission_pct": COMMISSION_PCT,
-        "share_url": f"https://kasira.online/register?ref={tenant.referral_code}",
+        "share_url": f"{settings.SITE_URL}/register?ref={tenant.referral_code}",
         "share_text": (
-            f"Pakai Kasira POS buat bisnis kamu! Daftar gratis di "
-            f"https://kasira.online/register?ref={tenant.referral_code} "
+            f"Pakai {settings.BRAND_NAME} buat bisnis kamu! Daftar gratis di "
+            f"{settings.SITE_URL}/register?ref={tenant.referral_code} "
             f"— POS digital lengkap untuk UMKM."
         ),
     })

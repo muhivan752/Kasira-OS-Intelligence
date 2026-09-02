@@ -1,5 +1,7 @@
 'use client';
 
+import { SITE_URL } from '@/lib/brand';
+
 import { useState, useEffect } from 'react';
 import { getOutlets, getPaymentStatus, setupPaymentOwnKey, removePaymentOwnKey } from '@/app/actions/api';
 import { Loader2, CreditCard, CheckCircle2, AlertCircle, Eye, EyeOff, Trash2 } from 'lucide-react';
@@ -173,7 +175,7 @@ export default function PaymentSettingsPage() {
             </div>
             <p className="text-xs text-gray-400 mt-1">
               Untuk verifikasi webhook callback Xendit. Disimpan terenkripsi.
-              <span className="text-amber-600 ml-1">(Tahap awal pakai token global Kasira — token ini akan diaktifkan otomatis saat Anda merchant pertama yang request.)</span>
+              <span className="text-amber-600 ml-1">(Tahap awal pakai token global Selaris — token ini akan diaktifkan otomatis saat Anda merchant pertama yang request.)</span>
             </p>
           </div>
 
@@ -219,7 +221,7 @@ export default function PaymentSettingsPage() {
           <p className="font-semibold mb-1">Webhook Token (opsional, untuk keamanan ekstra):</p>
           <ol className="list-decimal list-inside space-y-1 text-amber-700">
             <li>Pergi ke <strong>Settings → Webhooks</strong></li>
-            <li>Set Webhook URL ke: <code className="bg-amber-100 px-1 rounded text-xs">https://kasira.online/api/v1/payments/webhook/xendit</code></li>
+            <li>Set Webhook URL ke: <code className="bg-amber-100 px-1 rounded text-xs">{SITE_URL}/api/v1/payments/webhook/xendit</code></li>
             <li>Copy <strong>Webhook Verification Token</strong> dan paste di kolom di atas</li>
           </ol>
         </div>

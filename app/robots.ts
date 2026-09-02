@@ -1,3 +1,4 @@
+import { SITE_URL } from '@/lib/brand';
 import { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
@@ -9,6 +10,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/dashboard/', '/api/', '/onboarding/', '/superadmin/'],
       },
     ],
-    sitemap: 'https://kasira.online/sitemap.xml',
+    sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }

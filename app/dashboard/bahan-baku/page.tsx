@@ -680,7 +680,7 @@ export default function BahanBakuPage() {
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
                     <p className="text-xs text-amber-800 leading-relaxed">
                       <strong>Biaya operasional tetap</strong> (es batu, gas, listrik, air) yang susah dihitung per porsi.
-                      Kasira <strong>tidak mengurangi stok</strong> bahan ini per pesanan — cuma dicatat sebagai biaya tetap harian.
+                      Selaris <strong>tidak mengurangi stok</strong> bahan ini per pesanan — cuma dicatat sebagai biaya tetap harian.
                     </p>
                     <div>
                       <label className="block text-xs font-medium text-amber-700 mb-1">Estimasi Biaya per Hari (Rp)</label>

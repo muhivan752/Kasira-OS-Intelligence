@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 
 export const metadata = {
   title: 'Kebijakan Privasi',
-  description: 'Kebijakan Privasi (Privacy Policy) Kasira. Menjelaskan bagaimana kami mengumpulkan, menggunakan, dan melindungi data Anda sesuai UU PDP.',
+  description: 'Kebijakan Privasi (Privacy Policy) Selaris. Menjelaskan bagaimana kami mengumpulkan, menggunakan, dan melindungi data Anda sesuai UU PDP.',
 };
 
 export default function PrivacyPolicyPage() {
@@ -20,7 +20,7 @@ export default function PrivacyPolicyPage() {
         
         <div className="prose prose-emerald max-w-none text-gray-700">
           <p>
-            Selamat datang di Kasira. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, mengungkapkan, dan melindungi informasi pribadi Anda saat Anda menggunakan aplikasi Kasira, situs web, dan layanan terkait (secara kolektif disebut "Layanan").
+            Selamat datang di Selaris. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, mengungkapkan, dan melindungi informasi pribadi Anda saat Anda menggunakan aplikasi Selaris, situs web, dan layanan terkait (secara kolektif disebut "Layanan").
           </p>
           <p>
             Dengan menggunakan Layanan kami, Anda menyetujui pengumpulan dan penggunaan informasi sesuai dengan kebijakan ini. Kebijakan ini tunduk pada hukum Republik Indonesia, termasuk Undang-Undang Pelindungan Data Pribadi (UU PDP).
@@ -29,7 +29,7 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">1. Informasi yang Kami Kumpulkan</h2>
           <ul className="list-disc pl-6 space-y-2 mb-6">
             <li><strong>Informasi Pendaftaran:</strong> Nama, nomor telepon (WhatsApp), email, nama bisnis, jenis bisnis, dan PIN kasir yang Anda berikan saat mendaftar.</li>
-            <li><strong>Informasi Transaksi:</strong> Data pesanan, produk, harga, dan metode pembayaran yang diproses melalui Kasira. Kami tidak menyimpan informasi lengkap kartu kredit Anda (diproses oleh Payment Gateway resmi).</li>
+            <li><strong>Informasi Transaksi:</strong> Data pesanan, produk, harga, dan metode pembayaran yang diproses melalui Selaris. Kami tidak menyimpan informasi lengkap kartu kredit Anda (diproses oleh Payment Gateway resmi).</li>
             <li><strong>Data Penggunaan & Perangkat:</strong> Alamat IP, jenis browser, versi aplikasi, waktu akses, dan interaksi dalam aplikasi (dikumpulkan secara anonim untuk peningkatan fitur).</li>
             <li><strong>Informasi Pelanggan Anda:</strong> Nama dan kontak pelanggan Anda (jika dimasukkan), yang dikumpulkan atas nama Anda sebagai Pengendali Data.</li>
           </ul>
@@ -37,7 +37,7 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">2. Bagaimana Kami Menggunakan Informasi Anda</h2>
           <p>Kami menggunakan data yang dikumpulkan untuk:</p>
           <ul className="list-disc pl-6 space-y-2 mb-6">
-            <li>Menyediakan, mengoperasikan, dan memelihara Layanan Kasira.</li>
+            <li>Menyediakan, mengoperasikan, dan memelihara Layanan Selaris.</li>
             <li>Memproses transaksi dan mengirim pemberitahuan (seperti OTP dan struk digital via WhatsApp).</li>
             <li>Mengirimkan informasi berlangganan, tagihan, dan peringatan teknis.</li>
             <li>Meningkatkan kualitas Layanan dan mengembangkan fitur baru (seperti AI insight).</li>

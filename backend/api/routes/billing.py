@@ -216,7 +216,7 @@ async def retry_invoice_payment(
         xendit_resp = await xendit_service.create_invoice(
             external_id=external_id,
             amount=invoice.amount,
-            payer_email=tenant.owner_email or f"{tenant.schema_name}@kasira.online",
+            payer_email=tenant.owner_email or f"{tenant.schema_name}@selaris.id",
             description=f"Langganan Kasira {tier_label} - {invoice.billing_period_start.strftime('%b %Y')}",
         )
 
