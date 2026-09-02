@@ -8,6 +8,13 @@ class DashboardStats {
   final int orderCount;
   final double avgOrderValue;
   final String shiftStatus;
+  // Shift otomatis (gelombang 2): siapa yang buka, sejak kapan, siapa saja
+  // yang jaga, dan sesi yang kasnya belum dihitung.
+  final String? shiftOpenedBy;
+  final DateTime? shiftStartedAt;
+  final List<String> shiftParticipants;
+  final int uncountedShifts;
+  final DateTime? uncountedSince;
   final List<Map<String, dynamic>> topProducts;
   final Map<String, double> paymentBreakdown;
 
@@ -16,6 +23,11 @@ class DashboardStats {
     required this.orderCount,
     required this.avgOrderValue,
     required this.shiftStatus,
+    this.shiftOpenedBy,
+    this.shiftStartedAt,
+    this.shiftParticipants = const [],
+    this.uncountedShifts = 0,
+    this.uncountedSince,
     required this.topProducts,
     required this.paymentBreakdown,
   });
@@ -30,6 +42,11 @@ class DashboardStats {
       orderCount: (json['order_count'] as num? ?? 0).toInt(),
       avgOrderValue: (json['avg_order_value'] as num? ?? 0).toDouble(),
       shiftStatus: json['shift_status'] as String? ?? 'closed',
+      shiftOpenedBy: json['shift_opened_by'] as String?,
+      shiftStartedAt: DateTime.tryParse(json['shift_started_at']?.toString() ?? '')?.toLocal(),
+      shiftParticipants: (json['shift_participants'] as List? ?? []).map((e) => e.toString()).toList(),
+      uncountedShifts: (json['uncounted_shifts'] as num? ?? 0).toInt(),
+      uncountedSince: DateTime.tryParse(json['uncounted_since']?.toString() ?? '')?.toLocal(),
       topProducts: (json['top_products'] as List? ?? [])
           .map((e) => e as Map<String, dynamic>)
           .toList(),

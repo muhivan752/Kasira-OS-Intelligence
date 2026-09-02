@@ -340,6 +340,24 @@ async def get_daily_report(
 
     shift_status = "open" if active_shifts > 0 else "closed"
 
+    # Shift otomatis (gelombang 2): bahan kartu Beranda — siapa yang buka,
+    # sejak kapan, siapa saja yang jaga, dan berapa sesi yang kasnya belum
+    # dihitung (dijeda / ditutup janitor 04.00).
+    from backend.services import shift_service as _ss
+    _open = await _ss.get_open_shift(db, outlet_id)
+    shift_opened_by = None
+    shift_started_at = None
+    shift_participants = []
+    if _open:
+        _parts = await _ss.shift_participants(db, _open)
+        shift_participants = [p["name"] for p in _parts]
+        _opener = next((p for p in _parts if p.get("opened")), None)
+        shift_opened_by = _opener["name"] if _opener else None
+        shift_started_at = _open.start_time.isoformat()
+    _uncounted = await _ss.uncounted_shifts(db, outlet_id)
+    uncounted_shifts = len(_uncounted)
+    uncounted_since = _uncounted[-1].start_time.isoformat() if _uncounted else None
+
     data = {
         "revenue_today": revenue_today,
         "order_count": order_count,
@@ -348,6 +366,11 @@ async def get_daily_report(
         "payment_breakdown": payment_breakdown,
         "active_shifts": active_shifts,
         "shift_status": shift_status,
+        "shift_opened_by": shift_opened_by,
+        "shift_started_at": shift_started_at,
+        "shift_participants": shift_participants,
+        "uncounted_shifts": uncounted_shifts,
+        "uncounted_since": uncounted_since,
         "critical_stock_items": critical_stock_items,
     }
     

@@ -18,6 +18,8 @@ class Outlet(BaseModel):
     opening_hours = Column(JSONB, nullable=True)
     # Sudah ada di DB sejak lama, baru dipakai janitor batas hari usaha (mig 097).
     timezone = Column(String, server_default='Asia/Jakarta', nullable=False)
+    # Profil kas: 'ringan' | 'standar' | 'ketat' (mig 098). Lihat shift_service.
+    shift_mode = Column(String(12), server_default='ringan', nullable=False)
     cover_image_url = Column(String, nullable=True)
 
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)

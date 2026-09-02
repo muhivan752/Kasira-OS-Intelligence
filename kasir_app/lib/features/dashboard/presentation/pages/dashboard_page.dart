@@ -626,6 +626,10 @@ class _DashboardContent extends ConsumerWidget {
                 data: (stats) => Column(
                   children: [
                     _shiftCard(context, stats),
+                    if (stats.uncountedShifts > 0) ...[
+                      const SizedBox(height: 10),
+                      _uncountedBanner(context, stats),
+                    ],
                     const SizedBox(height: 14),
                     _salesHero(context, stats),
                     const SizedBox(height: 14),
@@ -713,6 +717,53 @@ class _DashboardContent extends ConsumerWidget {
     );
   }
 
+  /// "Dibuka Irfan 08.12 · Kasir: Irfan, Khairy". Nama yang jaga dihitung
+  /// dari pesanan yang diinput, jadi yang ketahuan bukan cuma yang buka.
+  String _shiftSubtitle(DashboardStats stats) {
+    final parts = <String>[];
+    if (stats.shiftOpenedBy != null) {
+      final t = stats.shiftStartedAt;
+      parts.add('Dibuka ${stats.shiftOpenedBy}${t != null ? ' ${t.hour.toString().padLeft(2, '0')}.${t.minute.toString().padLeft(2, '0')}' : ''}');
+    }
+    if (stats.shiftParticipants.length > 1) {
+      parts.add('Kasir: ${stats.shiftParticipants.join(', ')}');
+    }
+    return parts.isEmpty ? 'Laci sedang berjalan' : parts.join(' · ');
+  }
+
+  /// Pengingat, bukan penghalang: sesi yang dijeda atau ditutup sistem di
+  /// 04.00 belum dihitung kasnya. Transaksi tetap jalan; ini cuma ngajak.
+  Widget _uncountedBanner(BuildContext context, DashboardStats stats) {
+    final since = stats.uncountedSince;
+    final when = since == null
+        ? ''
+        : ' sejak ${since.day}/${since.month} ${since.hour.toString().padLeft(2, '0')}.${since.minute.toString().padLeft(2, '0')}';
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShiftPage())),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: KasiraDS.warning.withOpacity(0.12),
+          borderRadius: KasiraDS.brMd,
+          border: Border.all(color: KasiraDS.warning.withOpacity(0.5)),
+        ),
+        child: Row(
+          children: [
+            const Icon(LucideIcons.alertCircle, size: 18, color: KasiraDS.warning),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Kas ${stats.uncountedShifts} sesi belum dihitung$when. Hitung sekarang?',
+                style: KasiraDS.sans(size: 12.5, weight: FontWeight.w600, color: KasiraDS.textStrong),
+              ),
+            ),
+            const Icon(LucideIcons.chevronRight, size: 16, color: KasiraDS.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _shiftCard(BuildContext context, DashboardStats stats) {
     final isOpen = stats.shiftStatus == 'open';
     return Container(
@@ -752,7 +803,8 @@ class _DashboardContent extends ConsumerWidget {
                 const SizedBox(height: 2),
                 // Shift otomatis: tanpa sesi pun kasir boleh langsung jualan,
                 // sesinya terbuka sendiri di transaksi pertama.
-                Text(isOpen ? 'Laci sedang berjalan' : 'Sesi terbuka otomatis di transaksi pertama',
+                Text(isOpen ? _shiftSubtitle(stats) : 'Sesi terbuka otomatis di transaksi pertama',
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
                     style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted)),
               ],
             ),

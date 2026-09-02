@@ -12,6 +12,9 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [stockMode, setStockMode] = useState('simple');
+  const [shiftMode, setShiftMode] = useState<'ringan' | 'standar' | 'ketat'>('ringan');
+  const [shiftModeSaving, setShiftModeSaving] = useState(false);
+  const [shiftModeMsg, setShiftModeMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [savingStockMode, setSavingStockMode] = useState(false);
   const [stockModeError, setStockModeError] = useState('');
   const [isPro, setIsPro] = useState(false);
@@ -70,6 +73,7 @@ export default function SettingsPage() {
           cover_image_url: data.cover_image_url || '',
         });
         setStockMode(data.stock_mode || 'simple');
+        setShiftMode(data.shift_mode || 'ringan');
 
         // Load tax config
         try {
@@ -114,6 +118,22 @@ export default function SettingsPage() {
 
   const [showStockModeConfirm, setShowStockModeConfirm] = useState<string | null>(null);
   const [stockModeSuccess, setStockModeSuccess] = useState('');
+
+  const handleShiftModeChange = async (mode: 'ringan' | 'standar' | 'ketat') => {
+    if (!outlet || mode === shiftMode) return;
+    setShiftModeSaving(true);
+    setShiftModeMsg(null);
+    const prev = shiftMode;
+    setShiftMode(mode);
+    const res = await updateOutlet(outlet.id, { shift_mode: mode });
+    setShiftModeSaving(false);
+    if (!res?.success) {
+      setShiftMode(prev);
+      setShiftModeMsg({ ok: false, text: res?.message || 'Gagal mengubah mode kas' });
+    } else {
+      setShiftModeMsg({ ok: true, text: mode === 'standar' ? 'Mode Standar aktif. Kasir kini menghitung laci tanpa melihat angka harapan.' : 'Mode Ringan aktif.' });
+    }
+  };
 
   function handleStockModeClick(mode: string) {
     if (!outlet || mode === stockMode) return;
@@ -498,6 +518,37 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+
+          {/* Mode kas (semua tier). Profil nempel di outlet, bukan tier:
+              satu akun Business bisa punya kios Ringan dan flagship Ketat. */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-bold text-gray-900">Sesi Kas</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                Sesi kas terbuka sendiri di transaksi pertama dan ditutup sendiri pukul 04.00. Yang berbeda antar mode hanya seberapa ketat hitungan lacinya.
+              </p>
+              {shiftModeMsg && <p className={`text-sm ${shiftModeMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{shiftModeMsg.text}</p>}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {([
+                  ['ringan', 'Ringan', 'Hitung kas opsional. Kasir melihat angka sistem. Cocok untuk usaha yang dijaga pemiliknya sendiri.'],
+                  ['standar', 'Standar', 'Pengingat kalau kas belum dihitung. Kasir mengetik hitungannya tanpa melihat angka harapan; selisih hanya terlihat oleh pemilik.'],
+                ] as const).map(([val, title, desc]) => (
+                  <label key={val} className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${shiftMode === val ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input type="radio" name="shift_mode" value={val} checked={shiftMode === val}
+                      onChange={() => handleShiftModeChange(val)} disabled={shiftModeSaving} className="mt-1" />
+                    <div>
+                      <p className="font-semibold text-gray-900">{title}</p>
+                      <p className="text-sm text-gray-600 mt-0.5">{desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400">Mode Ketat (buka sesi manual dengan serah terima modal, laci per kasir) menyusul.</p>
+            </div>
+          </div>
 
           {/* Tax & Service Charge */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

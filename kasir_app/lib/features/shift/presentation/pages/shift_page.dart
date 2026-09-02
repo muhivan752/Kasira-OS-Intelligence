@@ -21,6 +21,7 @@ class _ShiftPageState extends State<ShiftPage> {
   final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
   Map<String, dynamic>? _shift;
+  List<Map<String, dynamic>> _uncounted = const [];
   bool _isLoading = true;
   bool _isClosing = false;
   String? _error;
@@ -50,12 +51,15 @@ class _ShiftPageState extends State<ShiftPage> {
     try {
       final outletId = SessionCache.instance.outletId;
 
-      final res = await _dio.get(
-        '/shifts/current',
-        queryParameters: {'outlet_id': outletId},
-        options: Options(headers: _headers),
-      );
-      setState(() { _shift = res.data['data']; _isLoading = false; });
+      final results = await Future.wait([
+        _dio.get('/shifts/current', queryParameters: {'outlet_id': outletId}, options: Options(headers: _headers)),
+        _dio.get('/shifts/uncounted', queryParameters: {'outlet_id': outletId}, options: Options(headers: _headers)),
+      ]);
+      final unc = (results[1].data['data'] as List? ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      setState(() { _shift = results[0].data['data']; _uncounted = unc; _isLoading = false; });
     } catch (_) {
       setState(() { _error = 'Gagal memuat data shift'; _isLoading = false; });
     }
@@ -88,6 +92,130 @@ class _ShiftPageState extends State<ShiftPage> {
     }
   }
 
+  /// Hitung laci dari sesi yang dijeda atau ditutup sistem di 04.00. Satu
+  /// sheet kecil: ketik uang yang ada, kirim ke /close sesi itu.
+  Future<void> _countUncounted(Map<String, dynamic> sh) async {
+    final ctrl = TextEditingController();
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          decoration: const BoxDecoration(
+            color: KasiraDS.surfaceCard,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Hitung kas sesi ${_fmtSesi(sh)}', style: KasiraDS.display(size: 20)),
+              const SizedBox(height: 6),
+              Text(
+                sh['status'] == 'paused'
+                    ? 'Sesi ini dijeda. Hitung uang di laci yang ditinggalkan, lalu masukkan jumlahnya.'
+                    : 'Sesi ini ditutup sistem pukul 04.00. Masukkan uang yang ada waktu Anda menghitungnya.',
+                style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: 'Uang di laci',
+                  prefixText: 'Rp ',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Catat hitungan', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (ok != true) return;
+    final amount = double.tryParse(ctrl.text.trim());
+    if (amount == null) return;
+    try {
+      final res = await _dio.post('/shifts/${sh['id']}/close',
+          options: Options(headers: _headers), data: {'ending_cash': amount});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(res.data['message']?.toString() ?? 'Hitungan tercatat'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      _loadShift();
+    } on DioException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text((e.response?.data?['detail'] ?? 'Gagal mencatat hitungan').toString()),
+        backgroundColor: KasiraDS.danger, behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  String _fmtSesi(Map<String, dynamic> sh) {
+    final t = DateTime.tryParse(sh['start_time']?.toString() ?? '')?.toLocal();
+    if (t == null) return '';
+    return '${t.day}/${t.month} ${t.hour.toString().padLeft(2, '0')}.${t.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _uncountedList() {
+    if (_uncounted.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: KasiraDS.warning.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: KasiraDS.warning.withOpacity(0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Kas belum dihitung (${_uncounted.length})',
+              style: KasiraDS.sans(size: 14, weight: FontWeight.w700, color: KasiraDS.textStrong)),
+          const SizedBox(height: 4),
+          Text('Sesi yang dijeda atau ditutup sistem pukul 04.00. Transaksi tetap jalan, ini hanya pengingat.',
+              style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted)),
+          const SizedBox(height: 10),
+          ..._uncounted.map((sh) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Sesi ${_fmtSesi(sh)}${sh['opened_by_name'] != null ? ' · ${sh['opened_by_name']}' : ''}',
+                              style: KasiraDS.sans(size: 13, weight: FontWeight.w600, color: KasiraDS.textStrong)),
+                          Text(sh['status'] == 'paused' ? 'Dijeda, belum dihitung' : 'Ditutup sistem 04.00, belum dihitung',
+                              style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted)),
+                        ],
+                      ),
+                    ),
+                    TextButton(onPressed: () => _countUncounted(sh), child: const Text('Hitung')),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
   Future<void> _closeShift() async {
     final actualCash = double.tryParse(_cashController.text.trim()) ?? 0;
     if (actualCash <= 0) {
@@ -112,6 +240,7 @@ class _ShiftPageState extends State<ShiftPage> {
       if (mounted) {
         final data = closeRes.data['data'];
         final variance = (data?['variance'] as num?)?.toDouble() ?? 0;
+        // Blind close: server nggak ngirim status selisih → tampil netral.
         final varianceStatus = data?['variance_status'] as String? ?? 'balanced';
         final message = closeRes.data['message'] as String? ?? 'Shift ditutup';
 
@@ -229,8 +358,22 @@ class _ShiftPageState extends State<ShiftPage> {
 
   Widget _buildContent() {
     if (_shift == null) {
-      return const Center(child: Text('Tidak ada shift aktif', style: TextStyle(color: KasiraDS.textMuted)));
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            _uncountedList(),
+            const SizedBox(height: 24),
+            const Text('Belum ada sesi berjalan. Sesi terbuka sendiri di transaksi pertama.',
+                textAlign: TextAlign.center, style: TextStyle(color: KasiraDS.textMuted)),
+          ],
+        ),
+      );
     }
+    // Blind close (profil Standar/Ketat, bukan pemilik): server sudah
+    // mengosongkan angka harapan; di sini baris sistemnya nggak dirender
+    // supaya hitungannya nggak bisa dicontek.
+    final blind = _shift!['blind_close'] == true;
 
     final startingCash = (_shift!['starting_cash'] as num?)?.toDouble() ?? 0;
     final expectedCash = (_shift!['expected_ending_cash'] as num?)?.toDouble();
@@ -250,6 +393,19 @@ class _ShiftPageState extends State<ShiftPage> {
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
+        child: Column(children: [
+          _uncountedList(),
+          _closeCard(startingCash, totalCashSales, totalQrisSales, cashIn, cashOut, systemTotal, blind),
+        ]),
+      ),
+    );
+  }
+
+  Widget _closeCard(double startingCash, double totalCashSales, double totalQrisSales,
+      double cashIn, double cashOut, double systemTotal, bool blind) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.zero,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 500),
           child: Container(
@@ -268,17 +424,27 @@ class _ShiftPageState extends State<ShiftPage> {
               const SizedBox(height: 8),
               const Text('Hitung uang di laci, lalu masukkan jumlahnya. Belum sempat? Jeda dulu, penjualan tetap jalan.', textAlign: TextAlign.center, style: TextStyle(color: KasiraDS.textMuted)),
               const SizedBox(height: 32),
-              _buildRow('Uang Modal Awal', _currency.format(startingCash)),
-              const SizedBox(height: 12),
-              _buildRow('Penjualan Cash', _currency.format(totalCashSales)),
-              const SizedBox(height: 12),
-              _buildRow('Penjualan QRIS', _currency.format(totalQrisSales)),
-              const SizedBox(height: 12),
-              _buildRow('Penerimaan Kas Lainnya', _currency.format(cashIn)),
-              const SizedBox(height: 12),
-              _buildRow('Pengeluaran Kas', _currency.format(cashOut), isNegative: true),
-              const Divider(height: 32),
-              _buildRow('Total Uang di Laci (Sistem)', _currency.format(systemTotal), isBold: true),
+              if (!blind) ...[
+                _buildRow('Uang Modal Awal', _currency.format(startingCash)),
+                const SizedBox(height: 12),
+                _buildRow('Penjualan Cash', _currency.format(totalCashSales)),
+                const SizedBox(height: 12),
+                _buildRow('Penjualan QRIS', _currency.format(totalQrisSales)),
+                const SizedBox(height: 12),
+                _buildRow('Penerimaan Kas Lainnya', _currency.format(cashIn)),
+                const SizedBox(height: 12),
+                _buildRow('Pengeluaran Kas', _currency.format(cashOut), isNegative: true),
+                const Divider(height: 32),
+                _buildRow('Total Uang di Laci (Sistem)', _currency.format(systemTotal), isBold: true),
+              ] else
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: KasiraDS.surfaceSunken, borderRadius: BorderRadius.circular(12)),
+                  child: Text(
+                    'Hitung uang di laci apa adanya. Angka sistem tidak ditampilkan; pemilik yang akan mencocokkannya.',
+                    style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted),
+                  ),
+                ),
               const SizedBox(height: 32),
               TextField(
                 controller: _cashController,

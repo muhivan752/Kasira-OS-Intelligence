@@ -629,6 +629,29 @@ export async function updateStockMode(outletId: string, stockMode: string) {
   return data.data;
 }
 
+// ── Sesi kas (shift otomatis, gelombang 2) ──
+export async function getCurrentShift(outletId: string) {
+  const res = await fetchWithAuth(`/shifts/current?outlet_id=${outletId}`);
+  const data = await res.json();
+  return res.ok ? data.data : null;
+}
+
+export async function getUncountedShifts(outletId: string) {
+  const res = await fetchWithAuth(`/shifts/uncounted?outlet_id=${outletId}`);
+  const data = await res.json();
+  return res.ok ? (data.data as any[]) : [];
+}
+
+export async function countShift(shiftId: string, endingCash: number, notes?: string) {
+  const res = await fetchWithAuth(`/shifts/${shiftId}/close`, {
+    method: 'POST',
+    body: JSON.stringify({ ending_cash: endingCash, notes }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Gagal mencatat hitungan kas');
+  return data;
+}
+
 export async function getTaxConfig(outletId: string) {
   const res = await fetchWithAuth(`/outlets/${outletId}/tax-config`);
   const data = await res.json();

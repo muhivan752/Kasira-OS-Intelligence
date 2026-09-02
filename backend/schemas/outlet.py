@@ -1,4 +1,4 @@
-from typing import Optional, Any
+from typing import Literal, Optional, Any
 from pydantic import BaseModel, UUID4, Field
 from datetime import datetime
 
@@ -24,6 +24,8 @@ class OutletUpdate(BaseModel):
     is_open: Optional[bool] = None
     opening_hours: Optional[Any] = None
     cover_image_url: Optional[str] = None
+    # Profil kas (mig 098). 'ketat' baru punya perilaku di gelombang 3.
+    shift_mode: Optional[Literal['ringan', 'standar', 'ketat']] = None
 
 class OutletPaymentSetup(BaseModel):
     xendit_business_id: str
@@ -55,6 +57,7 @@ class OutletInDBBase(OutletBase):
     opening_hours: Optional[Any] = None
     cover_image_url: Optional[str] = None
     stock_mode: str = "simple"
+    shift_mode: str = "ringan"
     row_version: int
     created_at: datetime
     updated_at: datetime

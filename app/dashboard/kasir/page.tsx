@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getOutlets, getCashiers, createCashier, toggleCashierActive, resetCashierPin } from '@/app/actions/api';
+import { getOutlets, getCashiers, createCashier, toggleCashierActive, resetCashierPin, getCurrentShift, getUncountedShifts, countShift } from '@/app/actions/api';
 import { Plus, Edit2, Loader2, X, KeyRound } from 'lucide-react';
 
 export default function KasirPage() {
@@ -22,6 +22,39 @@ export default function KasirPage() {
   const [newPin, setNewPin] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Sesi kas (shift otomatis, gelombang 2)
+  const [shift, setShift] = useState<any>(null);
+  const [uncounted, setUncounted] = useState<any[]>([]);
+  const [counting, setCounting] = useState<any>(null);
+  const [countValue, setCountValue] = useState('');
+  const [countSaving, setCountSaving] = useState(false);
+
+  async function loadShift(id: string) {
+    const [cur, unc] = await Promise.all([getCurrentShift(id), getUncountedShifts(id)]);
+    setShift(cur);
+    setUncounted(unc || []);
+  }
+
+  const rp = (n: any) => n == null ? '-' : 'Rp ' + Math.round(Number(n)).toLocaleString('id-ID');
+  const tgl = (iso?: string | null) => iso ? new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-';
+
+  const submitCount = async () => {
+    if (!counting) return;
+    const val = Number(countValue);
+    if (!Number.isFinite(val) || val < 0) return;
+    setCountSaving(true);
+    try {
+      await countShift(counting.id, val);
+      setCounting(null);
+      setCountValue('');
+      if (outletId) await loadShift(outletId);
+    } catch (e: any) {
+      alert(e?.message || 'Gagal mencatat hitungan');
+    } finally {
+      setCountSaving(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -35,6 +68,7 @@ export default function KasirPage() {
         setOutletId(id);
         const data = await getCashiers(id);
         setCashiers(data || []);
+        await loadShift(id);
       }
     } catch (error) {
       console.error('Failed to load cashiers', error);
@@ -137,6 +171,68 @@ export default function KasirPage() {
           Tambah Kasir
         </button>
       </div>
+
+      {/* Sesi kas. Terbuka sendiri di transaksi pertama, tutup sendiri 04.00.
+          Pemilik lihat semua angka; kasir di mode Standar menghitung tanpa
+          melihat angka harapan, jadi selisihnya cuma kelihatan di sini. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-gray-900">Sesi kas sekarang</h2>
+            {shift && <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700">Berjalan</span>}
+          </div>
+          {!shift ? (
+            <p className="mt-3 text-sm text-gray-500">Belum ada sesi berjalan. Sesi terbuka sendiri di transaksi pertama.</p>
+          ) : (
+            <div className="mt-3 space-y-2 text-sm">
+              <p className="text-gray-600">Dibuka {tgl(shift.start_time)}{shift.opened_by_name ? ` oleh ${shift.opened_by_name}` : ''}{shift.opened_by === 'auto' ? ' (otomatis)' : ''}</p>
+              {shift.participants?.length > 0 && (
+                <p className="text-gray-600">Yang jaga: {shift.participants.map((p: any) => `${p.name}${p.orders ? ` (${p.orders} pesanan)` : ''}`).join(', ')}</p>
+              )}
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Modal awal</p><p className="font-semibold text-gray-900">{rp(shift.starting_cash)}</p></div>
+                <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Penjualan tunai</p><p className="font-semibold text-gray-900">{rp(shift.total_cash_sales)}</p></div>
+                <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Penjualan QRIS</p><p className="font-semibold text-gray-900">{rp(shift.total_qris_sales)}</p></div>
+                <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Mode kas</p><p className="font-semibold text-gray-900 capitalize">{shift.shift_mode || 'ringan'}</p></div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <h2 className="font-bold text-gray-900">Kas belum dihitung</h2>
+          {uncounted.length === 0 ? (
+            <p className="mt-3 text-sm text-gray-500">Semua sesi 14 hari terakhir sudah dihitung.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-gray-100">
+              {uncounted.map((u) => (
+                <li key={u.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <div>
+                    <p className="font-medium text-gray-900">{tgl(u.start_time)}{u.opened_by_name ? ` · ${u.opened_by_name}` : ''}</p>
+                    <p className="text-xs text-gray-500">{u.status === 'paused' ? 'Dijeda' : 'Ditutup sistem 04.00'} · perkiraan {rp(u.expected_ending_cash)}</p>
+                  </div>
+                  <button onClick={() => { setCounting(u); setCountValue(''); }} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">Catat hitungan</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {counting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="font-bold text-gray-900">Hitungan kas sesi {tgl(counting.start_time)}</h3>
+            <p className="mt-1 text-sm text-gray-500">Perkiraan sistem {rp(counting.expected_ending_cash)}. Masukkan uang yang benar-benar ada.</p>
+            <input type="number" min="0" value={countValue} onChange={(e) => setCountValue(e.target.value)} placeholder="0"
+              className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setCounting(null)} className="rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">Batal</button>
+              <button onClick={submitCount} disabled={countSaving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{countSaving ? 'Menyimpan…' : 'Simpan'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cashier List */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

@@ -245,3 +245,101 @@ async def pause_shift(
         user_id=user_id, tenant_id=tenant_id,
     )
     return shift, new_shift
+
+
+# ───────────────────────── gelombang 2: profil, peserta, blind close ─────────────────────────
+
+SHIFT_MODES = ("ringan", "standar", "ketat")
+
+
+async def is_owner(db: AsyncSession, user) -> bool:
+    """Pemilik = akun yang daftar (is_superuser) atau peran bernama Owner.
+    Kasir yang dibikin dari dashboard punya role_id NULL dan is_superuser False."""
+    if getattr(user, "is_superuser", False):
+        return True
+    role_id = getattr(user, "role_id", None)
+    if not role_id:
+        return False
+    from backend.models.role import Role
+    role = await db.get(Role, role_id)
+    return bool(role and (role.name or "").strip().lower() == "owner")
+
+
+async def shift_participants(db: AsyncSession, shift: Shift) -> list[dict]:
+    """Daftar hadir: siapa saja yang menginput pesanan di sesi ini, plus yang
+    membuka dan yang menutup. DIHITUNG dari orders.user_id, bukan disimpan —
+    sama prinsipnya dengan laba rugi dan segmen pelanggan: nggak ada tabel
+    yang bisa basi."""
+    from backend.models.order import Order
+    from backend.models.user import User
+
+    rows = (await db.execute(
+        select(
+            Order.user_id,
+            func.count(Order.id).label("orders"),
+            func.min(Order.created_at).label("first_seen"),
+            func.max(Order.created_at).label("last_seen"),
+        )
+        .where(Order.shift_session_id == shift.id, Order.deleted_at.is_(None), Order.user_id.isnot(None))
+        .group_by(Order.user_id)
+    )).all()
+
+    by_user: dict = {}
+    for r in rows:
+        by_user[r.user_id] = {"user_id": str(r.user_id), "orders": int(r.orders),
+                              "first_seen": r.first_seen, "last_seen": r.last_seen}
+    for uid, tag in ((shift.user_id, "opened"), (shift.closed_by_user_id, "closed")):
+        if uid and uid not in by_user:
+            by_user[uid] = {"user_id": str(uid), "orders": 0, "first_seen": None, "last_seen": None}
+        if uid:
+            by_user[uid][tag] = True
+
+    if not by_user:
+        return []
+    users = (await db.execute(select(User.id, User.full_name).where(User.id.in_(list(by_user.keys()))))).all()
+    names = {u.id: u.full_name for u in users}
+    out = []
+    for uid, d in by_user.items():
+        d["name"] = names.get(uid) or "Kasir"
+        d.setdefault("opened", False)
+        d.setdefault("closed", False)
+        out.append(d)
+    out.sort(key=lambda d: (not d["opened"], -(d["orders"])))
+    return out
+
+
+def blind_close_for(mode: str, owner: bool) -> bool:
+    """Blind close (rujukan Toast): kasir mengetik hitungan tanpa lihat angka
+    harapan. Cuma berlaku kalau yang menghitung bukan pemilik, dan profilnya
+    bukan Ringan. Pemilik selalu lihat semua."""
+    return (mode or "ringan") != "ringan" and not owner
+
+
+def blind_view(data: dict) -> dict:
+    """Buang angka yang bikin hitungan bisa dicontek."""
+    for k in ("expected_ending_cash", "total_cash_sales", "total_qris_sales", "starting_cash", "variance", "variance_status"):
+        if k in data:
+            data[k] = None
+    for p in data.get("cash_payments") or []:
+        p.pop("amount", None); p.pop("net_amount", None); p.pop("change_amount", None)
+    data["blind_close"] = True
+    return data
+
+
+async def outlet_shift_mode(db: AsyncSession, outlet_id: UUID) -> str:
+    from backend.models.outlet import Outlet
+    mode = (await db.execute(select(Outlet.shift_mode).where(Outlet.id == outlet_id))).scalar()
+    return mode or "ringan"
+
+
+async def uncounted_shifts(db: AsyncSession, outlet_id: UUID, days: int = 14) -> list[Shift]:
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    return list((await db.execute(
+        select(Shift).where(
+            Shift.outlet_id == outlet_id,
+            Shift.deleted_at.is_(None),
+            Shift.counted_at.is_(None),
+            Shift.status.in_([ShiftStatus.paused, ShiftStatus.closed]),
+            Shift.start_time >= since,
+        ).order_by(Shift.start_time.desc())
+    )).scalars().all())

@@ -191,7 +191,7 @@ async def open_shift(
         message="Shift opened successfully"
     )
 
-@router.get("/current", response_model=StandardResponse[Optional[ShiftWithActivitiesResponse]])
+@router.get("/current", response_model=StandardResponse[Optional[dict]])
 async def get_current_shift(
     request: Request,
     outlet_id: UUID,
@@ -221,13 +221,25 @@ async def get_current_shift(
         )
 
     enriched = await _enrich_shift_with_payments(db, shift)
-    return StandardResponse(
-        success=True,
-        data=enriched,
-        request_id=request.state.request_id
-    )
+    data = enriched.model_dump(mode="json")
+    mode = await shift_service.outlet_shift_mode(db, outlet_id)
+    owner = await shift_service.is_owner(db, current_user)
+    data["shift_mode"] = mode
+    data["is_owner"] = owner
+    data["participants"] = [
+        {**p, "first_seen": p["first_seen"].isoformat() if p.get("first_seen") else None,
+         "last_seen": p["last_seen"].isoformat() if p.get("last_seen") else None}
+        for p in await shift_service.shift_participants(db, shift)
+    ]
+    opener = next((p for p in data["participants"] if p.get("opened")), None)
+    data["opened_by_name"] = opener["name"] if opener else None
+    data["uncounted_count"] = len(await shift_service.uncounted_shifts(db, outlet_id))
+    data["blind_close"] = False
+    if shift_service.blind_close_for(mode, owner):
+        data = shift_service.blind_view(data)
+    return StandardResponse(success=True, data=data, request_id=request.state.request_id)
 
-@router.post("/{shift_id}/close", response_model=StandardResponse[ShiftResponse])
+@router.post("/{shift_id}/close", response_model=StandardResponse[dict])
 async def close_shift(
     request: Request,
     shift_id: UUID,
@@ -261,13 +273,17 @@ async def close_shift(
     variance = result["variance"] or 0.0
     variance_status = result["variance_status"] or "balanced"
     resp = ShiftResponse.model_validate(shift)
+    data = {**resp.model_dump(mode="json"), "variance": round(variance, 2), "variance_status": variance_status}
+    mode = await shift_service.outlet_shift_mode(db, shift.outlet_id)
+    if shift_service.blind_close_for(mode, await shift_service.is_owner(db, current_user)):
+        # Blind close: kasir cuma dapat konfirmasi. Selisihnya dibaca pemilik
+        # di dashboard, bukan jadi bahan tuduh di depan kasir.
+        data = shift_service.blind_view(data)
+        return StandardResponse(success=True, data=data, request_id=request.state.request_id,
+                                message="Hitungan kas tercatat. Terima kasih.")
     return StandardResponse(
         success=True,
-        data={
-            **resp.model_dump(),
-            "variance": round(variance, 2),
-            "variance_status": variance_status,
-        },
+        data=data,
         request_id=request.state.request_id,
         message=f"Shift ditutup. {'Kas seimbang' if variance_status == 'balanced' else f'Selisih Rp {abs(variance):,.0f} ({variance_status})'}",
     )
@@ -308,7 +324,7 @@ async def pause_shift(
     )
 
 
-@router.get("/uncounted", response_model=StandardResponse[List[ShiftResponse]])
+@router.get("/uncounted", response_model=StandardResponse[List[dict]])
 async def list_uncounted_shifts(
     request: Request,
     outlet_id: UUID,
@@ -318,22 +334,23 @@ async def list_uncounted_shifts(
 ) -> Any:
     """Sesi yang kasnya belum dihitung: dijeda, atau ditutup sistem di 04.00.
     Bahan pengingat "Kas belum dihitung" di Beranda dan daftar di halaman
-    shift. Yang ditutup kasir dengan hitungan nggak masuk sini."""
-    since = datetime.now(timezone.utc) - timedelta(days=days)
-    rows = (await db.execute(
-        select(Shift).where(
-            Shift.outlet_id == outlet_id,
-            Shift.deleted_at.is_(None),
-            Shift.counted_at.is_(None),
-            Shift.status.in_([ShiftStatus.paused, ShiftStatus.closed]),
-            Shift.start_time >= since,
-        ).order_by(Shift.start_time.desc())
-    )).scalars().all()
-    return StandardResponse(
-        success=True,
-        data=[ShiftResponse.model_validate(r) for r in rows],
-        request_id=request.state.request_id,
-    )
+    kas. Yang ditutup kasir dengan hitungan nggak masuk sini."""
+    rows = await shift_service.uncounted_shifts(db, outlet_id, days)
+    mode = await shift_service.outlet_shift_mode(db, outlet_id)
+    owner = await shift_service.is_owner(db, current_user)
+    blind = shift_service.blind_close_for(mode, owner)
+    out = []
+    for r in rows:
+        d = ShiftResponse.model_validate(r).model_dump(mode="json")
+        parts = await shift_service.shift_participants(db, r)
+        d["participants"] = [p["name"] for p in parts]
+        opener = next((p for p in parts if p.get("opened")), None)
+        d["opened_by_name"] = opener["name"] if opener else None
+        if blind:
+            d["expected_ending_cash"] = None
+            d["starting_cash"] = None
+        out.append(d)
+    return StandardResponse(success=True, data=out, request_id=request.state.request_id)
 
 
 @router.post("/{shift_id}/activities", response_model=StandardResponse[CashActivityResponse])
