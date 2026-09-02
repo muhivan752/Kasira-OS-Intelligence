@@ -37,7 +37,7 @@ type Detail = Customer & {
 // ditafsirkan dulu.
 const SEGMENTS = [
   { key: '', label: 'Semua' },
-  { key: 'lapse', label: 'Lama nggak mampir', hint: 'Pernah belanja, 30 hari terakhir nggak kelihatan' },
+  { key: 'lapse', label: 'Lama tidak mampir', hint: 'Pernah belanja, tapi 30 hari terakhir tidak terlihat' },
   { key: 'repeat', label: 'Balik lagi', hint: 'Sudah belanja lebih dari sekali' },
   { key: 'baru', label: 'Baru kenal', hint: 'Pertama kali belanja dalam 30 hari terakhir' },
   { key: 'belum_belanja', label: 'Belum pernah belanja', hint: 'Nomornya tersimpan tapi belum ada transaksi' },

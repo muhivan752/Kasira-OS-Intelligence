@@ -602,7 +602,7 @@ export default function BahanBakuPage() {
             {modalStep === 'preset' ? (
               <div>
                 <h2 className="text-lg font-bold">Mau nambah bahan apa?</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Pilih dari daftar di bawah buat isi cepat, atau klik "Lainnya" kalau gak ada.</p>
+                <p className="text-xs text-gray-500 mt-0.5">Pilih dari daftar di bawah untuk mengisi cepat, atau klik "Lainnya" jika tidak tersedia.</p>
               </div>
             ) : (
               <div className="flex items-center gap-2">
@@ -655,7 +655,7 @@ export default function BahanBakuPage() {
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-amber-900">Harga ini dari AI (perkiraan)</p>
                         <p className="text-xs text-amber-700 mt-0.5">
-                          Cek sesuai <strong>nota belanja asli</strong> lo. Kalau sama, klik <strong>"Harga udah benar"</strong> di bawah.
+                          Cek sesuai <strong>nota belanja asli</strong> lo. Kalau sama, klik <strong>"Harga sudah benar"</strong> di bawah.
                           Kalau beda, edit angka "Total Harga" + "Dapat" terus klik <strong>Simpan</strong>.
                         </p>
                       </div>
@@ -664,7 +664,7 @@ export default function BahanBakuPage() {
                       onClick={handleConfirmPrice}
                       className="w-full flex items-center justify-center gap-2 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition text-sm font-medium"
                     >
-                      <CheckCircle2 className="w-4 h-4" /> Harga udah benar, konfirmasi aja
+                      <CheckCircle2 className="w-4 h-4" /> Harga sudah benar, konfirmasi
                     </button>
                   </div>
                 )}
@@ -773,7 +773,7 @@ export default function BahanBakuPage() {
                       <p className="text-sm font-medium text-blue-900">Stok Awal</p>
                       <span className="text-xs text-blue-600">(opsional)</span>
                     </div>
-                    <p className="text-xs text-blue-700">Sekarang ada berapa di outlet? Biar langsung siap pake, gak perlu restock manual nanti.</p>
+                    <p className="text-xs text-blue-700">Berapa jumlahnya di outlet sekarang? Diisi sekarang agar langsung siap dipakai, tanpa perlu restok manual.</p>
                     <div className="flex items-center gap-2">
                       <input type="number" step="any" value={form.initial_stock} onChange={e => setForm({ ...form, initial_stock: e.target.value })}
                         className="flex-1 px-3 py-2.5 border border-blue-300 rounded-lg text-base" placeholder="0" />

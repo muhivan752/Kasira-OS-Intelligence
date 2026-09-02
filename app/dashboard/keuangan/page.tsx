@@ -93,7 +93,7 @@ export default function KeuanganPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Keuangan</h1>
-          <p className="text-gray-500">Laba rugi & arus kas dihitung sendiri dari transaksi, nota belanja, dan pengeluaran.</p>
+          <p className="text-gray-500">Laba rugi dan arus kas dihitung otomatis dari transaksi, nota belanja, dan pengeluaran.</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center bg-white border border-gray-200 rounded-lg">
@@ -138,7 +138,7 @@ export default function KeuanganPage() {
           <Row label="Laba bersih" value={s?.net_profit} bold />
         </div>
         {s && s.cogs_coverage < 0.7 && (
-          <p className="mt-3 text-xs text-amber-700 flex items-start gap-1.5"><Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />Sebagian besar produk belum punya harga modal, jadi laba kotor kelihatan lebih besar dari aslinya. Isi resep (Pro) atau catat nota belanja produk supaya HPP-nya terisi.</p>
+          <p className="mt-3 text-xs text-amber-700 flex items-start gap-1.5"><Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />Sebagian besar produk belum punya harga modal, jadi laba kotor terlihat lebih besar dari yang sebenarnya. Isi resep (Pro) atau catat nota belanja produk agar harga modalnya terisi.</p>
         )}
       </div>
 
@@ -146,7 +146,7 @@ export default function KeuanganPage() {
       <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-gray-900">Uangnya ada di mana</h2>
+            <h2 className="font-bold text-gray-900">Posisi kas</h2>
             <span className={`text-sm font-semibold tabular-nums ${Number(s?.cash_net) >= 0 ? 'text-green-700' : 'text-red-700'}`}>net {rp(s?.cash_net)}</span>
           </div>
           <div className="mt-3 divide-y divide-gray-100">
@@ -195,7 +195,7 @@ export default function KeuanganPage() {
         {expenses.length === 0 ? (
           <div className="p-8 text-center text-sm text-gray-500">
             <Wallet className="w-10 h-10 mx-auto mb-2 text-blue-300" />
-            Belum ada. Catat sewa, listrik, gaji, gas cuma sekali tap. Yang bulanan tandai "ulangi tiap bulan" biar tinggal disalin.
+            Belum ada. Catat sewa, listrik, gaji, dan gas dalam sekali ketuk. Yang rutin tandai "ulangi tiap bulan" agar bulan depan tinggal disalin.
           </div>
         ) : (
           <div className="divide-y divide-gray-100">

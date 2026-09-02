@@ -30,7 +30,7 @@ function detectUnitWarning(unit: string, qty: number): string | null {
   if ((u === 'g' || u === 'gr' || u === 'gram' || u === 'ml') && qty >= 1000) {
     const inLarger = qty / 1000;
     const largerUnit = (u === 'ml') ? 'liter' : 'kg';
-    return `${qty} ${u} = ${inLarger.toFixed(1)} ${largerUnit}. Pastiin benar, biasanya per porsi lebih kecil.`;
+    return `${qty} ${u} = ${inLarger.toFixed(1)} ${largerUnit}. Pastikan angkanya benar, takaran per porsi biasanya lebih kecil.`;
   }
 
   // pcs / buah / butir — qty > 50 untuk 1 porsi biasanya salah
@@ -281,7 +281,7 @@ export default function MenuPage() {
     const lower = cleanVariants.map(v => v.name.toLowerCase());
     const dup = lower.find((n, i) => lower.indexOf(n) !== i);
     if (dup) {
-      alert(`Nama varian "${dup}" dobel. Bikin kasir nggak bisa bedain dua tombol yang sama.`);
+      alert(`Nama varian "${dup}" ganda. Kasir akan sulit membedakan dua tombol yang sama.`);
       setSavingProduct(false);
       return;
     }
@@ -733,9 +733,9 @@ export default function MenuPage() {
                   {variants.length === 0 ? (
                     <>
                       <p className="text-xs text-gray-600 mb-2.5">
-                        Kalau produk ini bisa dipesan <strong>panas atau dingin</strong> (atau ada
-                        ukuran R/L), tambahin di sini. Kasir bakal ditanya pilihannya sebelum
-                        produk masuk keranjang, jadi nggak perlu bikin dua produk terpisah.
+                        Jika produk ini bisa dipesan <strong>panas atau dingin</strong>, atau punya ukuran
+                        reguler dan large, tambahkan di sini. Kasir akan ditanya pilihannya sebelum
+                        produk masuk keranjang, jadi Anda tidak perlu membuat dua produk terpisah.
                       </p>
                       {/* Tombolnya besar & sendirian pas kosong — ini satu-satunya
                           jalan masuk, jadi nggak boleh berupa link kecil di pojok. */}

@@ -123,7 +123,7 @@ export default function PembelianPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Pembelian</h1>
-          <p className="text-gray-500">Catat nota belanja. Stok naik, HPP bahan ke-update, dan utang supplier tercatat sendiri.</p>
+          <p className="text-gray-500">Catat nota belanja. Stok bertambah, harga modal diperbarui, dan utang supplier tercatat otomatis.</p>
         </div>
         <button onClick={() => setShowNota(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
           <Plus className="w-4 h-4" /> Catat Nota
@@ -214,7 +214,7 @@ export default function PembelianPage() {
           </div>
           {suppliers.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500 text-sm">
-              Belum ada supplier. Supplier juga otomatis kebentuk waktu kamu ketik nama baru di nota.
+              Belum ada supplier. Supplier juga terbentuk otomatis saat Anda mengetik nama baru di nota.
             </div>
           ) : suppliers.map(s => (
             <div key={s.id} className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between gap-3">
@@ -285,13 +285,13 @@ function EmptyNota({ onAdd }: { onAdd: () => void }) {
         <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-blue-400" />
         <h2 className="text-lg font-bold text-gray-900">Belum ada nota belanja</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Tiap kali belanja bahan atau stok, catat notanya di sini. Kamu cuma isi apa yang dibeli dan berapa,
-          lalu stok bertambah, harga modal (HPP) dihitung ulang pakai rata-rata, dan utang ke supplier kecatat sendiri.
+          Setiap kali belanja bahan atau stok, catat notanya di sini. Anda cukup mengisi apa yang dibeli dan berapa,
+          lalu stok bertambah, harga modal dihitung ulang dengan metode rata-rata, dan utang ke supplier tercatat otomatis.
         </p>
         <div className="mt-5 grid gap-2 text-left text-sm text-gray-600 sm:grid-cols-3">
-          <div className="rounded-lg bg-gray-50 p-3"><p className="font-semibold text-gray-900">1. Foto atau ketik</p>Upload foto nota, AI baca barisnya. Atau isi manual.</div>
+          <div className="rounded-lg bg-gray-50 p-3"><p className="font-semibold text-gray-900">1. Foto atau ketik</p>Unggah foto nota, AI membaca barisnya. Bisa juga diisi manual.</div>
           <div className="rounded-lg bg-gray-50 p-3"><p className="font-semibold text-gray-900">2. Cek & simpan</p>Cocokkan ke bahan atau produk yang ada, konfirmasi harga.</div>
-          <div className="rounded-lg bg-gray-50 p-3"><p className="font-semibold text-gray-900">3. Selesai</p>Stok, HPP, dan utang ke-update. Menu engineering langsung pakai angka baru.</div>
+          <div className="rounded-lg bg-gray-50 p-3"><p className="font-semibold text-gray-900">3. Selesai</p>Stok, harga modal, dan utang diperbarui. Analisis menu langsung memakai angka baru.</div>
         </div>
         <button onClick={onAdd} className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
           <Plus className="w-4 h-4" /> Catat Nota Pertama
@@ -424,8 +424,8 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
           <input type="file" accept="image/*" capture="environment" className="hidden" disabled={scanning} onChange={e => { const f = e.target.files?.[0]; if (f) handleScan(f); e.target.value = ''; }} />
           {scanning ? <Loader2 className="w-6 h-6 text-blue-500 animate-spin shrink-0" /> : <Camera className="w-6 h-6 text-blue-500 shrink-0" />}
           <div className="text-sm">
-            <p className="font-semibold text-gray-900">{scanning ? 'Membaca nota…' : photoUrl ? 'Foto tersimpan, scan ulang?' : 'Foto nota, biar AI yang ngisi barisnya'}</p>
-            <p className="text-gray-500">JPG/PNG maks 10MB. Hasilnya tetap kamu cek dulu sebelum disimpan.</p>
+            <p className="font-semibold text-gray-900">{scanning ? 'Membaca nota…' : photoUrl ? 'Foto tersimpan, scan ulang?' : 'Foto notanya, biar AI yang mengisi barisnya'}</p>
+            <p className="text-gray-500">Format JPG atau PNG, maksimal 10MB. Hasilnya tetap Anda periksa sebelum disimpan.</p>
           </div>
         </label>
 
@@ -456,7 +456,7 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-semibold text-gray-500">Barang yang dibeli</label>
-            {!isPro && <span className="text-xs text-gray-400">Bahan baku dan resep ada di paket Pro. Di Starter, catat produk jadi.</span>}
+            {!isPro && <span className="text-xs text-gray-400">Bahan baku dan resep tersedia di paket Pro. Di Starter, catat produk jadi.</span>}
           </div>
           <div className="space-y-2">
             {lines.map(l => {
@@ -502,7 +502,7 @@ function NotaModal({ outletId, isPro, suppliers, targets, onClose, onSaved }: {
                         <input type="number" min="0" value={l.newSellPrice ?? ''} onChange={e => updateLine(l.key, { newSellPrice: e.target.value })} placeholder="Harga jual di kasir" className="border border-gray-200 rounded-lg px-2 py-2 text-sm min-w-0" />
                       )}
                       <p className="text-xs text-gray-500 self-center">
-                        {l.targetKey === '__other' ? 'Ikut total & utang, stok nggak disentuh.' : l.targetKey === '__new_ing' ? 'Dibikin otomatis waktu nota disimpan.' : 'Dibikin dengan stok awal = jumlah di nota.'}
+                        {l.targetKey === '__other' ? 'Masuk total dan utang, stok tidak berubah.' : l.targetKey === '__new_ing' ? 'Dibuat otomatis saat nota disimpan.' : 'Dibuat dengan stok awal sejumlah yang ada di nota.'}
                       </p>
                     </div>
                   )}
@@ -659,7 +659,7 @@ function SupplierModal({ initial, onClose, onSaved }: { initial: Partial<Supplie
         <div>
           <label className="text-xs font-semibold text-gray-500">Tempo bayar (hari)</label>
           <input type="number" min="0" max="365" value={form.payment_terms_days} onChange={e => setForm(f => ({ ...f, payment_terms_days: e.target.value }))} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-          <p className="text-xs text-gray-400 mt-1">0 = bayar cash. Nota yang belum lunas otomatis dapet jatuh tempo segini.</p>
+          <p className="text-xs text-gray-400 mt-1">Isi 0 jika bayar tunai. Nota yang belum lunas otomatis memakai tempo ini.</p>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2 pt-1">

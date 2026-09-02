@@ -11,9 +11,9 @@ interface Tag { id: string; name: string; color: string; count: number }
 interface Campaign { id: string; name: string; template: string; target: string; status: string; recipient_count: number; sent_count: number; failed_count: number; started_at?: string | null; finished_at?: string | null; created_at: string }
 
 const TEMPLATES = [
-  { label: 'Kangen', text: 'Halo {nama}! Udah lama nggak mampir ke {toko} 😊 Minggu ini ada diskon 10% buat kamu. Tunjukin pesan ini ke kasir ya.' },
-  { label: 'Menu baru', text: 'Halo {nama}, {toko} punya menu baru nih! Mampir yuk, cobain duluan sebelum yang lain 🙌' },
-  { label: 'Terima kasih', text: 'Makasih udah jadi pelanggan setia {toko}, {nama}! Sebagai apresiasi, kunjungan berikutnya dapet gratis 1 minuman.' },
+  { label: 'Kangen', text: 'Halo {nama}! Sudah lama tidak mampir ke {toko} 😊 Minggu ini ada diskon 10% untuk Anda. Tunjukkan pesan ini ke kasir ya.' },
+  { label: 'Menu baru', text: 'Halo {nama}, {toko} punya menu baru! Mampir dan cobain lebih dulu sebelum yang lain 🙌' },
+  { label: 'Terima kasih', text: 'Terima kasih sudah jadi pelanggan setia {toko}, {nama}! Sebagai apresiasi, kunjungan berikutnya gratis 1 minuman.' },
 ];
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -101,7 +101,7 @@ export default function PromoPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Promo WhatsApp</h1>
-        <p className="text-gray-500">Kirim pesan ke pelanggan dari nomor WA toko kamu sendiri. Hanya ke yang udah setuju dikirimi promo.</p>
+        <p className="text-gray-500">Kirim pesan ke pelanggan dari nomor WhatsApp toko Anda sendiri, hanya ke mereka yang sudah menyetujui menerima promo.</p>
       </div>
 
       {toast && (
@@ -112,7 +112,7 @@ export default function PromoPage() {
 
       {!waConnected && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-wrap items-center justify-between gap-2">
-          <span className="flex items-center gap-2"><MessageCircle className="w-4 h-4" /> WhatsApp toko belum tersambung, promo belum bisa dikirim.</span>
+          <span className="flex items-center gap-2"><MessageCircle className="w-4 h-4" /> WhatsApp toko belum tersambung, promo belum dapat dikirim.</span>
           <Link href="/dashboard/settings" className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700">Sambungkan di Pengaturan</Link>
         </div>
       )}
@@ -137,7 +137,7 @@ export default function PromoPage() {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-gray-500">Nama promo (buat catatan kamu)</label>
+            <label className="text-xs font-semibold text-gray-500">Nama promo (untuk catatan Anda)</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="mis. Promo kangen September" className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
           </div>
 
@@ -166,14 +166,14 @@ export default function PromoPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
           <h2 className="font-bold text-gray-900 flex items-center gap-2"><Sparkles className="w-4 h-4 text-blue-500" /> Contoh yang diterima pelanggan</h2>
           {!preview ? (
-            <p className="mt-3 text-sm text-gray-500">Klik "Cek penerima & contoh" dulu. Kamu lihat berapa orang yang bakal dapet dan pesannya jadi seperti apa.</p>
+            <p className="mt-3 text-sm text-gray-500">Klik "Cek penerima & contoh" lebih dulu. Anda akan melihat berapa orang yang menerima dan seperti apa pesannya.</p>
           ) : (
             <div className="mt-3 space-y-3">
               <div className="rounded-2xl rounded-tl-sm bg-[#DCF8C6] px-4 py-3 text-sm text-gray-900 whitespace-pre-wrap max-w-[340px]">{preview.rendered_example}</div>
               <div className="text-sm text-gray-600">
-                <p><b className="text-gray-900">{preview.recipient_count} pelanggan</b> di "{targetLabel}" bakal dapet pesan ini.</p>
+                <p><b className="text-gray-900">{preview.recipient_count} pelanggan</b> di "{targetLabel}" akan menerima pesan ini.</p>
                 {preview.sample.length > 0 && <p className="text-xs text-gray-400 mt-1">Contoh: {preview.sample.map(s => `${s.name} (${s.phone})`).join(', ')}</p>}
-                {preview.recipient_count === 0 && <p className="text-xs text-amber-700 mt-2">Belum ada yang setuju dikirimi promo di target ini. Centang "setuju promo" di profil pelanggan, atau minta izin waktu kirim struk WA.</p>}
+                {preview.recipient_count === 0 && <p className="text-xs text-amber-700 mt-2">Belum ada pelanggan yang menyetujui promo di target ini. Centang "setuju promo" di profil pelanggan, atau minta izinnya saat mengirim struk WhatsApp.</p>}
               </div>
             </div>
           )}

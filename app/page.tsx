@@ -19,79 +19,79 @@ const INPUTS = [
   {
     icon: Smartphone,
     title: 'Transaksi di kasir',
-    body: 'Tiap pesanan yang dibayar, entah tunai, QRIS, atau split bill, langsung jadi stok berkurang, omzet, laba per menu, dan riwayat pelanggan.',
+    body: 'Setiap pesanan yang dibayar, baik tunai, QRIS, maupun split bill, langsung menjadi stok berkurang, omzet, laba per menu, dan riwayat pelanggan.',
     outputs: ['Stok', 'Omzet & laba per menu', 'Riwayat pelanggan'],
   },
   {
     icon: Camera,
     title: 'Foto nota belanja',
-    body: 'Belanja bahan di pasar, foto notanya. Stok bahan naik, harga modal (HPP) dihitung ulang pakai rata-rata, utang ke supplier kecatat.',
+    body: 'Belanja bahan di pasar, cukup foto notanya. Stok bertambah, harga modal dihitung ulang dengan metode rata-rata, dan utang ke supplier tercatat.',
     outputs: ['Stok bahan', 'HPP otomatis', 'Utang supplier'],
     badge: 'Baru',
   },
   {
     icon: MessageCircle,
     title: 'Nomor WA di struk',
-    body: 'Kasir ketik nomor pelanggan waktu kirim struk. Profilnya kebentuk sendiri: kunjungan, favorit, poin, sampai siapa yang mulai jarang datang.',
-    outputs: ['Profil pelanggan', 'Poin loyalty', 'Siapa yang perlu disapa'],
+    body: 'Kasir memasukkan nomor pelanggan saat mengirim struk. Profilnya terbentuk sendiri: kunjungan, menu favorit, poin, sampai siapa yang mulai jarang datang.',
+    outputs: ['Profil pelanggan', 'Poin loyalitas', 'Pelanggan yang perlu dihubungi'],
   },
 ];
 
 const MODULES = [
-  { icon: Store, title: 'Kasir offline', body: 'Mati lampu atau WiFi ngadat, tetap bisa transaksi. Print struk bluetooth, sync otomatis.', status: 'ada' },
-  { icon: Receipt, title: 'Split bill ala warkop', body: 'Satu meja lima orang, tiap orang bayar punyanya sendiri. Ada yang nyusul, ada yang cabut duluan, tab tetap jalan.', status: 'ada' },
-  { icon: Package, title: 'Stok, resep & HPP', body: 'Resep per menu, stok bahan berkurang tiap pesanan, HPP segar dari nota belanja terakhir.', status: 'ada', pro: true },
-  { icon: Truck, title: 'Pembelian & utang supplier', body: 'Catat nota (atau foto), lihat belanja bulan ini, siapa yang belum dibayar, jatuh tempo kapan.', status: 'baru' },
-  { icon: Users, title: 'Pelanggan & loyalty', body: 'Poin otomatis dari transaksi, profil dari nomor WA di struk, struk digital ke WhatsApp.', status: 'ada' },
-  { icon: LineChart, title: 'Laba rugi & arus kas', body: 'Pendapatan − HPP − pengeluaran, per bulan, tanpa jurnal. Utang supplier dan kas laci ikut kebaca.', status: 'segera' },
-  { icon: Sparkles, title: 'Segmen pelanggan & promo WA', body: '"Setia", "mulai jarang", "hilang", kebentuk sendiri dari data kunjungan. Kirim promo ke segmen, ukur yang balik.', status: 'segera', pro: true },
-  { icon: Bot, title: 'AI asisten di WhatsApp', body: 'Tiap pagi: omzet kemarin, menu yang turun, bahan yang mau habis, saran harga. Nyambung ke data toko kamu.', status: 'ada', pro: true },
+  { icon: Store, title: 'Kasir offline', body: 'Listrik padam atau internet terputus, transaksi tetap jalan. Cetak struk lewat Bluetooth, data tersinkron otomatis.', status: 'ada' },
+  { icon: Receipt, title: 'Split bill ala warkop', body: 'Satu meja lima orang, masing-masing membayar pesanannya sendiri. Ada yang datang menyusul atau pulang lebih dulu, tagihan meja tetap rapi.', status: 'ada' },
+  { icon: Package, title: 'Stok, resep & HPP', body: 'Resep per menu, stok bahan berkurang setiap pesanan, dan harga modal selalu mengikuti nota belanja terakhir.', status: 'ada', pro: true },
+  { icon: Truck, title: 'Pembelian & utang supplier', body: 'Catat nota atau cukup fotonya. Belanja bulan ini, tagihan yang belum dibayar, dan jatuh temponya terlihat dalam satu halaman.', status: 'baru' },
+  { icon: Users, title: 'Pelanggan & loyalty', body: 'Poin terkumpul otomatis dari transaksi, profil pelanggan terbentuk dari nomor di struk, dan struk digital terkirim lewat WhatsApp.', status: 'ada' },
+  { icon: LineChart, title: 'Laba rugi & arus kas', body: 'Pendapatan dikurangi harga modal dan pengeluaran, dihitung per bulan tanpa jurnal. Utang supplier dan kas laci ikut terbaca.', status: 'segera' },
+  { icon: Sparkles, title: 'Segmen pelanggan & promo WA', body: 'Segmen "setia", "mulai jarang", dan "hilang" terbentuk sendiri dari data kunjungan. Kirim promo per segmen, lalu ukur siapa yang kembali.', status: 'segera', pro: true },
+  { icon: Bot, title: 'AI asisten di WhatsApp', body: 'Setiap pagi: omzet kemarin, menu yang menurun, bahan yang menipis, dan saran harga. Semuanya dari data toko Anda sendiri.', status: 'ada', pro: true },
 ];
 
 // Tangkapan layar asli dari APK kasir (bukan mockup). Rasio 640×1292 dikunci
 // lewat width/height biar layout nggak lompat pas gambarnya belum turun.
 const SHOTS = [
-  { src: '/app/beranda.webp', title: 'Beranda kasir', body: 'Omzet hari ini, shift yang lagi buka, dan satu saran dari AI yang baca data toko kamu sendiri.' },
-  { src: '/app/kasir.webp', title: 'Layar jualan', body: 'Menu bergambar, cari cepat, satu tap masuk keranjang. Tetap jalan waktu internet mati.' },
-  { src: '/app/keranjang.webp', title: 'Keranjang & bayar', body: 'Diskon, pelanggan, saran menu yang sering dibeli bareng. Bayar sekarang atau simpan ke meja.' },
+  { src: '/app/beranda.webp', title: 'Beranda kasir', body: 'Omzet hari ini, shift yang sedang berjalan, dan satu saran dari AI yang membaca data toko Anda sendiri.' },
+  { src: '/app/kasir.webp', title: 'Layar jualan', body: 'Menu bergambar, pencarian cepat, satu ketukan masuk keranjang. Tetap berjalan saat internet mati.' },
+  { src: '/app/keranjang.webp', title: 'Keranjang & bayar', body: 'Diskon, data pelanggan, dan saran menu yang sering dibeli bersamaan. Bayar sekarang atau simpan ke meja.' },
 ];
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   ada: { text: 'Sudah jalan', cls: 'bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-[var(--success)]' },
-  baru: { text: 'Baru minggu ini', cls: 'bg-[var(--brand-tint)] text-[var(--brand-primary)]' },
+  baru: { text: 'Baru dirilis', cls: 'bg-[var(--brand-tint)] text-[var(--brand-primary)]' },
   segera: { text: 'Segera', cls: 'bg-[var(--surface-sunken)] text-[var(--text-muted)]' },
 };
 
 const PLANS = [
   {
     name: 'Starter',
-    tagline: 'Warung, kios, toko kecil',
+    tagline: 'Warung, kios, dan toko kecil',
     price: '99rb',
     badge: 'Siap pakai',
     dark: false,
-    features: ['1 kasir + 1 outlet, mode offline', 'Website toko gratis', 'QRIS BYOK, nol komisi', 'Nota belanja & utang supplier', 'Pelanggan & laporan harian'],
-    cta: 'Mulai gratis 30 hari',
+    features: ['1 kasir + 1 outlet, mode offline', 'Website toko gratis', 'QRIS atas nama sendiri, tanpa komisi', 'Nota belanja dan utang supplier', 'Pelanggan dan laporan harian'],
+    cta: 'Coba gratis 30 hari',
     href: '/register',
   },
   {
     name: 'Pro',
-    tagline: 'Cafe & resto yang serius',
+    tagline: 'Kafe dan restoran',
     price: '299rb',
     badge: 'Paling lengkap',
     dark: true,
-    features: ['Semua Starter, plus:', 'Resep, stok bahan & HPP otomatis', 'Split bill warkop + reservasi meja', 'Loyalty, layar dapur', 'AI asisten via WhatsApp'],
-    cta: 'Mulai Pro 30 hari',
+    features: ['Semua Starter, plus:', 'Resep, stok bahan, dan harga modal otomatis', 'Split bill dan reservasi meja', 'Program loyalitas dan layar dapur', 'Asisten AI lewat WhatsApp'],
+    cta: 'Coba Pro 30 hari',
     href: '/register?tier=pro',
   },
 ];
 
 const FAQS = [
-  { q: 'Ini POS atau ERP?', a: `Dua-duanya, tapi kamu nggak perlu tahu bedanya. ${BRAND} mulai dari kasir, lalu ngisi sendiri bagian yang di software lain harus diisi manual: stok, HPP, utang supplier, profil pelanggan. Nggak ada jurnal, nggak ada form akuntansi.` },
-  { q: 'Beneran gratis 30 hari?', a: 'Ya, 30 hari penuh tanpa kartu kredit. Batal kapan aja, nggak ada penalti.' },
-  { q: 'QRIS-nya kena potongan?', a: `Nggak. Kamu daftar Xendit sendiri (BYOK), tempel API key di setelan, dan uang tiap transaksi QRIS langsung masuk ke rekening kamu. ${BRAND} nol komisi, selamanya.` },
-  { q: 'Saya bukan cafe, toko vape atau sparepart bisa?', a: 'Bisa. Paket Starter dipakai banyak toko non-F&B: stok produk jadi, nota belanja ke supplier, utang, pelanggan. Yang khusus F&B (resep, bahan baku, meja) ada di Pro.' },
-  { q: 'Kalau internet mati?', a: 'Kasir tetap bisa transaksi offline. Data otomatis kesinkron begitu internet nyala lagi.' },
-  { q: 'Data saya aman?', a: 'Data disimpan di server Indonesia, dipisah per bisnis di level database, dan di-backup otomatis tiap 6 jam.' },
+  { q: 'Ini POS atau ERP?', a: `Keduanya, dan Anda tidak perlu memikirkan bedanya. ${BRAND} mulai dari kasir, lalu mengisi sendiri bagian yang di software lain harus diketik manual: stok, harga modal, utang supplier, dan profil pelanggan. Tanpa jurnal, tanpa formulir akuntansi.` },
+  { q: 'Beneran gratis 30 hari?', a: 'Ya, 30 hari penuh tanpa kartu kredit. Berhenti kapan saja, tanpa penalti.' },
+  { q: 'QRIS-nya kena potongan?', a: `Tidak. Anda mendaftar Xendit atas nama sendiri, memasang API key di pengaturan, lalu uang setiap transaksi QRIS langsung masuk ke rekening Anda. ${BRAND} tidak mengambil komisi, selamanya.` },
+  { q: 'Usaha saya bukan kafe, apakah toko vape atau sparepart bisa?', a: 'Bisa. Paket Starter dipakai banyak toko di luar bidang makanan: stok produk jadi, nota belanja ke supplier, utang, dan data pelanggan. Fitur khusus makanan dan minuman seperti resep, bahan baku, dan meja ada di paket Pro.' },
+  { q: 'Kalau internet mati?', a: 'Kasir tetap bisa melayani transaksi secara offline. Data tersinkron otomatis begitu internet kembali tersambung.' },
+  { q: 'Data saya aman?', a: 'Data disimpan di server Indonesia, dipisahkan per bisnis pada level basis data, dan dicadangkan otomatis setiap 6 jam.' },
 ];
 
 const jsonLd = {
@@ -100,11 +100,11 @@ const jsonLd = {
   name: BRAND,
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'Android, Web',
-  description: 'Kasir digital yang ngisi pembukuan sendiri: stok, HPP, utang supplier, dan pelanggan terbentuk otomatis dari transaksi, nota belanja, dan nomor WA. Untuk cafe & UMKM Indonesia.',
+  description: 'Kasir digital yang mengisi pembukuan sendiri: stok, harga modal, utang supplier, dan data pelanggan terbentuk otomatis dari transaksi, nota belanja, dan nomor WhatsApp. Untuk kafe dan UMKM Indonesia.',
   url: SITE_URL,
   offers: [
-    { '@type': 'Offer', name: 'Starter', price: '99000', priceCurrency: 'IDR', description: 'POS offline + storefront + QRIS BYOK + pembelian + laporan' },
-    { '@type': 'Offer', name: 'Pro', price: '299000', priceCurrency: 'IDR', description: 'Semua Starter + resep/HPP + split bill + loyalty + AI asisten' },
+    { '@type': 'Offer', name: 'Starter', price: '99000', priceCurrency: 'IDR', description: 'Kasir offline, website toko, QRIS atas nama sendiri, pembelian, dan laporan' },
+    { '@type': 'Offer', name: 'Pro', price: '299000', priceCurrency: 'IDR', description: 'Semua fitur Starter ditambah resep dan harga modal, split bill, loyalitas, dan asisten AI' },
   ],
 };
 
@@ -114,7 +114,7 @@ const organizationLd = {
   name: BRAND,
   url: SITE_URL,
   logo: `${SITE_URL}/favicon.svg`,
-  description: 'Platform kasir + ERP ringan + CRM untuk UMKM dan bisnis F&B Indonesia.',
+  description: 'Platform kasir, ERP ringan, dan CRM untuk UMKM serta bisnis makanan dan minuman di Indonesia.',
   contactPoint: { '@type': 'ContactPoint', telephone: '+62-852-7078-2220', contactType: 'customer service', availableLanguage: 'Indonesian' },
 };
 
@@ -158,20 +158,20 @@ export default function LandingPage() {
                 Kasir · Stok · Pembelian · Pelanggan dalam satu aplikasi
               </span>
               <h1 className="ks-display mt-5 text-[42px] leading-[1.03] text-[var(--text-strong)] sm:text-[54px] lg:text-[62px]" style={{ textWrap: 'balance' }}>
-                Kasir yang ngisi pembukuan kamu <span className="ks-gradient-text">sendiri.</span>
+                Kasir yang mengisi pembukuan Anda <span className="ks-gradient-text">sendiri.</span>
               </h1>
               <p className="mt-5 max-w-[540px] text-[16.5px] leading-[1.6] text-[var(--text-body)]">
-                Tiap transaksi, tiap nota belanja, dan tiap nomor WA pelanggan otomatis jadi stok, harga modal, utang supplier,
-                dan daftar pelanggan yang perlu disapa. Kamu jualan, {BRAND} yang nyatat.
+                Setiap transaksi, nota belanja, dan nomor WhatsApp pelanggan otomatis menjadi data stok, harga modal,
+                utang supplier, dan daftar pelanggan yang perlu dihubungi. Anda fokus berjualan, {BRAND} yang mencatat.
               </p>
               <div className="mt-7 flex flex-wrap items-center gap-3">
                 <Link href="/register" className="ks-btn ks-btn-lg !w-auto">
                   Coba gratis 30 hari <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link href={`/${DEMO_SLUG}`} className="ks-btn ks-btn-lg ks-btn-outline !w-auto">Lihat demo toko</Link>
+                <Link href={`/${DEMO_SLUG}`} className="ks-btn ks-btn-lg ks-btn-outline !w-auto">Lihat toko demo</Link>
               </div>
               <ul className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-medium text-[var(--text-muted)]">
-                {['Tanpa kartu kredit', 'Batal kapan aja', 'Server di Indonesia'].map((t) => (
+                {['Tanpa kartu kredit', 'Berhenti kapan saja', 'Server di Indonesia'].map((t) => (
                   <li key={t} className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-[var(--success)]" />{t}</li>
                 ))}
               </ul>
@@ -183,7 +183,7 @@ export default function LandingPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="ks-display text-[18px] text-[var(--text-strong)]">Nota belanja</p>
-                    <p className="text-[12.5px] text-[var(--text-muted)]">Toko Berkah · Selasa 07:40 · dari foto</p>
+                    <p className="text-[12.5px] text-[var(--text-muted)]">Toko Berkah · Selasa 07:40 · dari foto nota</p>
                   </div>
                   <span className="rounded-full bg-[var(--brand-tint)] px-2.5 py-1 text-[11.5px] font-bold text-[var(--brand-primary)]">Tercatat</span>
                 </div>
@@ -209,7 +209,7 @@ export default function LandingPage() {
                   {[
                     ['Stok susu', '2,1 L → 6,1 L'],
                     ['HPP Kopi Susu', 'Rp 6.850 → Rp 7.120'],
-                    ['Margin Kopi Susu', '64% → 62% · masih aman'],
+                    ['Margin Kopi Susu', '64% → 62% · masih sehat'],
                     ['Utang Toko Berkah', 'Rp 265.000 · tempo 7 hari'],
                   ].map(([k, v]) => (
                     <div key={k} className="flex items-center justify-between gap-3 border-b border-dashed border-[var(--border-subtle)] py-1.5 last:border-b-0">
@@ -222,7 +222,7 @@ export default function LandingPage() {
 
               <div className="mt-3 flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--success)_35%,transparent)] bg-[color-mix(in_srgb,var(--success)_10%,transparent)] px-3.5 py-2.5 text-[12.5px] text-[var(--text-strong)]">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--success)]" />
-                <span><strong className="font-bold">Kamu cuma foto notanya.</strong> Empat baris di atas nggak ada yang diketik.</span>
+                <span><strong className="font-bold">Anda hanya memfoto notanya.</strong> Empat baris di atas tidak ada yang diketik manual.</span>
               </div>
             </div>
           </div>
@@ -234,11 +234,11 @@ export default function LandingPage() {
         <div className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
           <p className="ks-eyebrow text-[var(--brand-primary)]">Cara kerja</p>
           <h2 className="ks-display mt-3 max-w-[680px] text-[30px] leading-[1.12] text-[var(--text-strong)] sm:text-[38px]" style={{ textWrap: 'balance' }}>
-            Tiga hal yang kamu sentuh. Sisanya turunan.
+            Tiga hal yang Anda isi. Sisanya dihitung sendiri.
           </h2>
           <p className="mt-4 max-w-[640px] text-[16px] leading-[1.6] text-[var(--text-body)]">
-            Software ERP biasanya ngasih kamu sepuluh modul dan sepuluh form. {BRAND} kebalik: yang diisi manusia cuma yang
-            memang cuma manusia yang tahu. Angka-angka pembukuan dihitung dari situ.
+            Software ERP umumnya memberi Anda sepuluh modul dan sepuluh formulir. {BRAND} kebalikannya: yang diisi manusia
+            hanya hal yang memang cuma diketahui manusia. Sisanya, angka pembukuan, dihitung dari situ.
           </p>
 
           <div className="mt-9 grid gap-4 md:grid-cols-3">
@@ -271,10 +271,10 @@ export default function LandingPage() {
       <section id="tampilan" className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
         <p className="ks-eyebrow text-[var(--brand-primary)]">Tampilan aplikasi</p>
         <h2 className="ks-display mt-3 max-w-[620px] text-[30px] leading-[1.12] text-[var(--text-strong)] sm:text-[38px]" style={{ textWrap: 'balance' }}>
-          Begini kelihatannya di HP kasir kamu.
+          Seperti ini tampilannya di ponsel kasir Anda.
         </h2>
         <p className="mt-4 max-w-[620px] text-[16px] leading-[1.6] text-[var(--text-body)]">
-          Tangkapan layar asli dari aplikasi yang dipakai hari ini. Bukan gambar rancangan.
+          Tangkapan layar asli dari aplikasi yang dipakai hari ini, bukan gambar rancangan.
         </p>
 
         <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
@@ -308,10 +308,10 @@ export default function LandingPage() {
       <section id="modul" className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
         <p className="ks-eyebrow text-[var(--text-muted)]">Apa yang kamu dapat</p>
         <h2 className="ks-display mt-3 max-w-[640px] text-[30px] leading-[1.12] text-[var(--text-strong)] sm:text-[38px]" style={{ textWrap: 'balance' }}>
-          Dari kasir sampai laba rugi, tanpa ganti aplikasi.
+          Dari kasir sampai laba rugi, tanpa berganti aplikasi.
         </h2>
         <p className="mt-4 max-w-[600px] text-[15px] leading-[1.6] text-[var(--text-muted)]">
-          Kami tulis apa adanya mana yang sudah jalan dan mana yang lagi dibangun.
+          Kami tulis apa adanya: mana yang sudah berjalan dan mana yang masih dibangun.
         </p>
         <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {MODULES.map((m) => {
@@ -336,17 +336,18 @@ export default function LandingPage() {
         <div className="mx-auto grid max-w-[1180px] gap-8 px-5 py-16 sm:px-6 md:grid-cols-2 lg:py-20">
           <article>
             <p className="ks-eyebrow text-[var(--brand-primary)]">Split bill warkop</p>
-            <h3 className="ks-display mt-3 text-[26px] leading-[1.15] text-[var(--text-strong)]" style={{ textWrap: 'balance' }}>Satu meja, tiap orang bayar punyanya sendiri.</h3>
+            <h3 className="ks-display mt-3 text-[26px] leading-[1.15] text-[var(--text-strong)]" style={{ textWrap: 'balance' }}>Satu meja, setiap orang membayar pesanannya sendiri.</h3>
             <p className="mt-3 text-[15px] leading-[1.62] text-[var(--text-body)]">
-              Ada yang bayar duluan pakai QRIS, ada yang cash, ada yang nyusul jam sepuluh. Kasir tinggal centang item per orang,
-              bukan maksa bagi rata. Struknya per orang, sisa tagihan meja kelihatan terus.
+              Ada yang membayar lebih dulu dengan QRIS, ada yang tunai, ada yang baru datang pukul sepuluh. Kasir cukup
+              mencentang pesanan per orang, bukan memaksa dibagi rata. Struk terbit per orang dan sisa tagihan meja selalu terlihat.
             </p>
           </article>
           <article>
-            <p className="ks-eyebrow text-[var(--brand-primary)]">QRIS BYOK · 0% komisi</p>
-            <h3 className="ks-display mt-3 text-[26px] leading-[1.15] text-[var(--text-strong)]" style={{ textWrap: 'balance' }}>Uang QRIS masuk ke rekening kamu. Bukan lewat kami.</h3>
+            <p className="ks-eyebrow text-[var(--brand-primary)]">QRIS atas nama sendiri · tanpa komisi</p>
+            <h3 className="ks-display mt-3 text-[26px] leading-[1.15] text-[var(--text-strong)]" style={{ textWrap: 'balance' }}>Uang QRIS masuk ke rekening Anda, bukan lewat kami.</h3>
             <p className="mt-3 text-[15px] leading-[1.62] text-[var(--text-body)]">
-              Daftar Xendit atas nama kamu sendiri, tempel API key, selesai. Bukan &ldquo;gratis 6 bulan lalu kena potong&rdquo;. {BRAND} nggak pernah pegang uang transaksi kamu.
+              Daftarkan Xendit atas nama Anda sendiri, pasang API key, selesai. Bukan pola &ldquo;gratis enam bulan lalu
+              dipotong&rdquo;. {BRAND} tidak pernah memegang uang transaksi Anda.
             </p>
           </article>
         </div>
@@ -355,9 +356,9 @@ export default function LandingPage() {
       {/* ── HARGA ── */}
       <section id="harga" className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-20">
         <div className="text-center">
-          <h2 className="ks-display text-[30px] leading-[1.12] text-[var(--text-strong)] sm:text-[38px]">Masuk akal buat UMKM.</h2>
+          <h2 className="ks-display text-[30px] leading-[1.12] text-[var(--text-strong)] sm:text-[38px]">Harga yang masuk akal untuk UMKM.</h2>
           <p className="mx-auto mt-4 max-w-[520px] text-[16px] leading-[1.6] text-[var(--text-body)]">
-            Mulai gratis, bayar pas bisnis udah jalan. Transparan, tanpa biaya nyempil.
+            Mulai gratis, bayar setelah bisnis berjalan. Transparan, tanpa biaya tersembunyi.
           </p>
         </div>
         <div className="mx-auto mt-10 grid max-w-[840px] gap-5 md:grid-cols-2">
@@ -388,7 +389,7 @@ export default function LandingPage() {
           ))}
         </div>
         <p className="mx-auto mt-6 max-w-[560px] text-center text-[13px] leading-relaxed text-[var(--text-muted)]">
-          Demo toko pakai data contoh. Butuh lebih dari satu outlet? Tanya paket Business lewat WhatsApp.
+          Toko demo menggunakan data contoh. Butuh lebih dari satu outlet? Tanyakan paket Business lewat WhatsApp.
         </p>
       </section>
 
@@ -414,10 +415,10 @@ export default function LandingPage() {
       <section className="mx-auto max-w-[1180px] px-5 py-16 sm:px-6 lg:py-24">
         <div className="rounded-[26px] bg-[image:var(--gradient-aurora)] px-7 py-12 text-center text-[var(--text-on-brand)] sm:px-10 sm:py-16">
           <h2 className="ks-display mx-auto max-w-[600px] text-[30px] leading-[1.1] sm:text-[40px]" style={{ textWrap: 'balance' }}>
-            Berhenti nyatat ulang apa yang kasir kamu udah tahu.
+            Berhenti mencatat ulang apa yang kasir Anda sudah tahu.
           </h2>
           <p className="mx-auto mt-4 max-w-[520px] text-[16px] leading-[1.6] opacity-90">
-            Coba gratis 30 hari. Tanpa kartu kredit, tanpa syarat ribet. Kalau nggak cocok, tinggal berhenti.
+            Coba gratis 30 hari. Tanpa kartu kredit dan tanpa syarat berbelit. Jika tidak cocok, tinggal berhenti.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link href="/register" className="inline-flex items-center gap-2 rounded-full bg-[var(--surface-card)] px-6 py-3.5 text-[15px] font-bold text-[var(--text-strong)] transition hover:opacity-90">
@@ -433,7 +434,7 @@ export default function LandingPage() {
       {/* ── FOOTER ── */}
       <footer className="border-t border-[var(--border-subtle)]">
         <div className="mx-auto flex max-w-[1180px] flex-col items-center justify-between gap-4 px-5 py-8 text-[13px] text-[var(--text-muted)] sm:flex-row sm:px-6">
-          <p>© {new Date().getFullYear()} {BRAND} · buat UMKM Indonesia 🇮🇩</p>
+          <p>© {new Date().getFullYear()} {BRAND} · untuk UMKM Indonesia 🇮🇩</p>
           <nav className="flex flex-wrap items-center justify-center gap-5">
             <Link href={`/${DEMO_SLUG}`} className="transition hover:text-[var(--text-strong)]">Demo</Link>
             <Link href="/download" className="transition hover:text-[var(--text-strong)]">Download</Link>

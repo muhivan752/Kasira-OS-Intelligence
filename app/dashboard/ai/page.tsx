@@ -478,7 +478,7 @@ export default function AIChatPage() {
         lines.push('', `Bahan baru ditambah: ${d.created_ingredients.map((i: any) => i.name).join(', ')}`);
       }
       if (d.reused_ingredients?.length) {
-        lines.push(`Pakai bahan yang udah ada: ${d.reused_ingredients.map((i: any) => i.name).join(', ')}`);
+        lines.push(`Memakai bahan yang sudah ada: ${d.reused_ingredients.map((i: any) => i.name).join(', ')}`);
       }
 
       setMessages(prev => [
@@ -510,7 +510,7 @@ export default function AIChatPage() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-gray-900">AI Asisten</h1>
-            <p className="text-xs text-gray-500">Tanya laporan & insight bisnis kamu</p>
+            <p className="text-xs text-gray-500">Tanya laporan dan analisis bisnis Anda</p>
           </div>
         </div>
         {messages.length > 0 && (
@@ -533,7 +533,7 @@ export default function AIChatPage() {
             </div>
             <h2 className="text-lg font-semibold text-gray-700 mb-1">Halo! Ada yang bisa dibantu?</h2>
             <p className="text-sm text-gray-400 mb-6 max-w-sm">
-              Saya bisa bantu analisa penjualan, cek stok, dan kasih insight bisnis kamu.
+              Saya bisa membantu menganalisis penjualan, memeriksa stok, dan memberi masukan untuk bisnis Anda.
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               {SUGGESTIONS.map((s) => (
@@ -822,7 +822,7 @@ export default function AIChatPage() {
                       <Utensils className="w-4 h-4 text-purple-600 shrink-0" />
                       <p className="text-sm font-semibold text-gray-900">
                         {em.products.length} menu untuk{' '}
-                        <span className="text-purple-700">{em.business_type || 'bisnis kamu'}</span>
+                        <span className="text-purple-700">{em.business_type || 'bisnis Anda'}</span>
                       </p>
                     </div>
 

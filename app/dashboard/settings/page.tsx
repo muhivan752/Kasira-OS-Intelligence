@@ -314,7 +314,7 @@ export default function SettingsPage() {
                   placeholder="628123456789"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
-                <p className="text-xs text-gray-500 mt-1">Pelanggan yang buka storefront bisa langsung chat ke nomor ini buat tanya menu / pesan. Kosongkan kalau nggak mau tombol WA muncul.</p>
+                <p className="text-xs text-gray-500 mt-1">Pelanggan yang membuka website toko bisa langsung mengirim pesan ke nomor ini untuk bertanya atau memesan. Kosongkan jika tombol WhatsApp tidak ingin ditampilkan.</p>
               </div>
 
               <div>
@@ -537,7 +537,7 @@ export default function SettingsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Ganti "Powered by Selaris" di bawah struk dengan pesan kamu. Max 200 karakter.
+                    Ganti tulisan "Powered by Selaris" di bawah struk dengan pesan Anda sendiri. Maksimal 200 karakter.
                     {taxConfig.receipt_footer.length > 0 && (
                       <span className="ml-2 text-gray-400">({taxConfig.receipt_footer.length}/200)</span>
                     )}
@@ -727,7 +727,7 @@ export default function SettingsPage() {
 
                 {/* Code + Copy */}
                 <div className="bg-white rounded-lg border border-emerald-200 p-4">
-                  <p className="text-xs text-gray-500 mb-1">Kode referral kamu</p>
+                  <p className="text-xs text-gray-500 mb-1">Kode referral Anda</p>
                   <div className="flex items-center gap-2">
                     <span className="text-2xl font-bold text-gray-900 tracking-wider font-mono">{referralCode}</span>
                     <button
@@ -781,7 +781,7 @@ export default function SettingsPage() {
                 {/* Referral list */}
                 {referralStats?.referrals?.length > 0 && (
                   <div className="pt-2">
-                    <p className="text-xs font-medium text-gray-500 mb-2">Merchant yang kamu referral:</p>
+                    <p className="text-xs font-medium text-gray-500 mb-2">Merchant hasil referral Anda:</p>
                     <div className="space-y-2">
                       {referralStats.referrals.map((r: any) => (
                         <div key={r.id} className="flex items-center justify-between bg-white rounded-lg border border-gray-200 px-3 py-2">
@@ -858,7 +858,7 @@ function WhatsAppTokenCard({ outletId, connected, onChanged }: { outletId?: stri
       </div>
       <div className="p-6 space-y-3">
         <p className="text-sm text-gray-600">
-          Promo dan pesan ke pelanggan (menu Pelanggan) dikirim dari <b>nomor WhatsApp toko kamu sendiri</b>, bukan dari Selaris.
+          Promo dan pesan ke pelanggan (menu Pelanggan) dikirim dari <b>nomor WhatsApp toko Anda sendiri</b>, bukan dari Selaris.
           Caranya: daftar di <a href="https://fonnte.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">fonnte.com</a>,
           hubungkan nomor WA toko (scan QR), lalu salin <b>Token</b> dari dashboard Fonnte ke sini. Struk & OTP tetap lewat Selaris.
         </p>
@@ -879,7 +879,7 @@ function WhatsAppTokenCard({ outletId, connected, onChanged }: { outletId?: stri
         ) : (
           <div className="flex gap-2">
             <button onClick={() => setOpen(true)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">Ganti token</button>
-            <button onClick={() => { if (confirm('Putus WhatsApp toko? Promo nggak bisa dikirim sampai disambung lagi.')) save(''); }} disabled={busy} className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg">Putus</button>
+            <button onClick={() => { if (confirm('Putuskan WhatsApp toko? Promo tidak bisa dikirim sampai disambungkan lagi.')) save(''); }} disabled={busy} className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg">Putus</button>
           </div>
         )}
       </div>
