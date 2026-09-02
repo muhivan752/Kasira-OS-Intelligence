@@ -131,7 +131,7 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
               ),
               child: Center(
                 child: Text(
-                  tab.tableName ?? '—',
+                  tab.tableName ?? '-',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,

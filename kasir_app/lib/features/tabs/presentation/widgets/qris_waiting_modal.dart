@@ -125,8 +125,8 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
           setState(() {
             _status = newStatus;
             _error = newStatus == 'expired'
-                ? 'QRIS sudah kedaluwarsa — silakan generate ulang.'
-                : 'Pembayaran gagal/dibatalkan — silakan coba lagi.';
+                ? 'QRIS sudah kedaluwarsa, silakan generate ulang.'
+                : 'Pembayaran gagal atau dibatalkan, silakan coba lagi.';
           });
         }
       }
@@ -173,7 +173,7 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
     if (!mounted) return;
     setState(() {
       _status = 'expired';
-      _error = 'QRIS sudah kedaluwarsa — silakan generate ulang.';
+      _error = 'QRIS sudah kedaluwarsa, silakan generate ulang.';
     });
   }
 
@@ -231,7 +231,7 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
           if (qris.isManualCheck) ...[
             _buildManualCheckCard(),
           ] else if (qris.isFailed) ...[
-            _buildFailedCard('Gagal generate QR — coba lagi atau periksa konfigurasi Xendit.'),
+            _buildFailedCard('Gagal generate QR, coba lagi atau periksa konfigurasi Xendit.'),
           ] else if (_status == 'paid') ...[
             _buildPaidCard(),
           ] else if (_error != null) ...[
@@ -260,7 +260,7 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'String QR di atas — render via app Xendit/QRIS-compatible',
+                    'String QR di atas, render lewat app yang dukung QRIS',
                     style: TextStyle(
                       color: KasiraDS.textMuted,
                       fontSize: 11,
@@ -318,7 +318,7 @@ class _QrisWaitingModalState extends ConsumerState<QrisWaitingModal> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Webhook Xendit tetap update tab kalau customer akhirnya bayar — kamu bisa cek tab list nanti.',
+              'Webhook Xendit tetap update tab kalau customer akhirnya bayar, kamu bisa cek tab list nanti.',
               style: TextStyle(fontSize: 11, color: KasiraDS.textMuted),
               textAlign: TextAlign.center,
             ),

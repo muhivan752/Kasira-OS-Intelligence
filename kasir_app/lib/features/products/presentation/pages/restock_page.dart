@@ -134,8 +134,8 @@ class _RestockPageState extends ConsumerState<RestockPage> {
                 Expanded(
                   child: Text(
                     _stockMode == 'recipe'
-                        ? 'Mode Resep — restock bahan baku'
-                        : 'Mode Sederhana — restock produk langsung',
+                        ? 'Mode Resep, restock bahan baku'
+                        : 'Mode Sederhana, restock produk langsung',
                     style: const TextStyle(
                       fontSize: 12,
                       color: KasiraDS.textMuted,
@@ -438,7 +438,7 @@ class _RestockSheetState extends ConsumerState<_RestockSheet> {
       final outletId = cache.outletId;
       if (outletId == null) {
         setState(() {
-          _error = 'Outlet belum tersedia — silakan login ulang';
+          _error = 'Outlet belum tersedia, silakan login ulang';
           _submitting = false;
         });
         return;

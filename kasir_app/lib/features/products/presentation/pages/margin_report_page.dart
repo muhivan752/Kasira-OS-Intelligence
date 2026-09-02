@@ -42,7 +42,7 @@ class _MarginReportPageState extends ConsumerState<MarginReportPage> {
     final cache = SessionCache.instance;
     final outletId = cache.outletId;
     if (outletId == null || outletId.isEmpty) {
-      throw const _MarginReportError('Outlet belum tersedia — silakan login ulang.');
+      throw const _MarginReportError('Outlet belum tersedia, silakan login ulang.');
     }
 
     final dio = Dio(BaseOptions(
@@ -181,7 +181,7 @@ class _SummaryCard extends StatelessWidget {
     final s = report.summary;
     final pctText = s.avgMarginPct != null
         ? '${s.avgMarginPct!.toStringAsFixed(1)}%'
-        : '—';
+        : '-';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -445,7 +445,7 @@ class _MarginTile extends StatelessWidget {
                 ],
               ] else
                 const Text(
-                  '—',
+                  '-',
                   style: TextStyle(
                     fontSize: 14,
                     color: KasiraDS.textMuted,

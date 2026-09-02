@@ -183,7 +183,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _ProFeatureRow(icon: LucideIcons.bot, text: 'AI Kopi Asisten — setup menu 5 menit'),
+                  _ProFeatureRow(icon: LucideIcons.bot, text: 'AI Kopi Asisten, setup menu 5 menit'),
                   SizedBox(height: 6),
                   _ProFeatureRow(icon: LucideIcons.book, text: 'Recipe Builder + HPP otomatis'),
                   SizedBox(height: 6),
@@ -316,7 +316,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              '$featureName adalah fitur F&B — tapi kami lagi ngebangun versi $domainLabel yang khusus buat kamu:',
+              '$featureName adalah fitur F&B, tapi kami lagi ngebangun versi $domainLabel yang khusus buat kamu:',
               textAlign: TextAlign.center,
               style: const TextStyle(color: KasiraDS.textMuted, fontSize: 13, height: 1.4),
             ),
@@ -960,7 +960,7 @@ class _DashboardContent extends ConsumerWidget {
     return TextButton.icon(
       onPressed: () => ref.read(dashboardProvider.notifier).refresh(),
       icon: const Icon(LucideIcons.refreshCw, size: 16),
-      label: const Text('Gagal memuat statistik — tap untuk retry'),
+      label: const Text('Gagal memuat statistik, tap untuk retry'),
     );
   }
 
@@ -1129,7 +1129,7 @@ class _WaitlistJoinButtonState extends State<_WaitlistJoinButton> {
         content: Text(
           isFirstTime
               ? 'Mantap! Kamu masuk antrean prioritas. Kami kabari via WhatsApp saat fiturnya rilis.'
-              : 'Kamu sudah ada di waitlist — tunggu kabar dari kami ya.',
+              : 'Kamu sudah ada di waitlist, tunggu kabar dari kami ya.',
         ),
         backgroundColor: KasiraDS.success,
         behavior: SnackBarBehavior.floating,

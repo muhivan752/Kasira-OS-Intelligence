@@ -385,7 +385,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     ('cafe', '☕', 'Coffee shop'),
                     ('warung', '🍛', 'Warung makan'),
                     ('resto', '🍽️', 'Resto bermeja'),
-                    ('other', '🛍️', 'Toko / lainnya'),
+                    ('other', '🛍️', 'Toko lainnya'),
                   ].map((t) {
                     final selected = _businessType == t.$1;
                     return InkWell(
@@ -546,7 +546,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         text: displayName,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      const TextSpan(text: ' — pakai istilah '),
+                      const TextSpan(text: ', pakai istilah '),
                       TextSpan(
                         text: domainLabel,
                         style: const TextStyle(fontWeight: FontWeight.bold),

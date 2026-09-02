@@ -165,7 +165,7 @@ class _PaymentModalState extends State<PaymentModal> {
         setState(() {
           _isLoadingQris = false;
           _cashError = detail ??
-              'Koneksi lambat, pembayaran belum terkonfirmasi. Tekan Bayar lagi — aman, tidak dobel.';
+              'Koneksi lambat, pembayaran belum terkonfirmasi. Tekan Bayar lagi, aman dan tidak dobel.';
         });
       }
     } catch (e) {

@@ -347,7 +347,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                             Icon(LucideIcons.wifiOff, size: 14, color: Colors.white),
                             SizedBox(width: 6),
                             Text(
-                              'Mode Offline — Transaksi disimpan & sync saat online',
+                              'Mode Offline. Transaksi disimpan & sync saat online',
                               style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
@@ -462,7 +462,7 @@ class _PosPageState extends ConsumerState<PosPage> {
                     const Icon(LucideIcons.utensils, size: 16, color: KasiraDS.brandPrimary),
                     const SizedBox(width: 8),
                     Text(
-                      '${BusinessLabels.getLabel('select_table')} — Dine In',
+                      '${BusinessLabels.getLabel('select_table')} buat Dine In',
                       style: KasiraDS.sans(size: 14, weight: FontWeight.w700, color: KasiraDS.textStrong),
                     ),
                     const Spacer(),
@@ -854,9 +854,12 @@ class _PosPageState extends ConsumerState<PosPage> {
           );
         }
 
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
-          child: GridView.builder(
+        // Padding-nya HARUS di dalam GridView, bukan di luar. Di luar, sisa 80
+        // buat bar keranjang mengambil tinggi viewport-nya: ada pita kosong
+        // permanen di bawah grid dan baris terakhir kepotong walau di-scroll
+        // mentok. Di dalam, ruang itu ikut ke-scroll.
+        return GridView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
               childAspectRatio: crossAxisCount == 2 ? 0.82 : 0.72,
@@ -951,7 +954,6 @@ class _PosPageState extends ConsumerState<PosPage> {
                 },
               );
             },
-          ),
         );
       },
     );

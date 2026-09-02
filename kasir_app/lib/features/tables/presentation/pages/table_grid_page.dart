@@ -170,13 +170,16 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
       backgroundColor: KasiraDS.bgBase,
       body: Column(
         children: [
-          // Header. SafeArea WAJIB: halaman ini duduk di IndexedStack dashboard
-          // tanpa AppBar, jadi tanpa ini judul "Meja" + hitungan meja nabrak
-          // jam sama ikon sinyal di status bar (kelihatan di device 2 Sep 2026).
+          // Header. Zona status bar cuma diambil waktu halaman ini berdiri
+          // sendiri di tab Meja — di situ dia nempel di IndexedStack dashboard
+          // tanpa AppBar, jadi judul "Meja" nabrak jam dan ikon sinyal
+          // (kelihatan di device 2 Sep 2026). Waktu di-embed di POS buat pilih
+          // meja, di atasnya udah ada header POS, jadi padding-nya harus 0.
           Container(
             color: KasiraDS.surfaceCard,
             child: SafeArea(
               bottom: false,
+              top: widget.onTableSelected == null,
               child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
             child: Row(

@@ -98,7 +98,7 @@ class _ShiftPageState extends State<ShiftPage> {
               color: varianceStatus == 'balanced' ? KasiraDS.success : KasiraDS.warning,
               size: 48,
             ),
-            title: Text(varianceStatus == 'balanced' ? 'Shift Ditutup' : 'Shift Ditutup — Ada Selisih'),
+            title: Text(varianceStatus == 'balanced' ? 'Shift Ditutup' : 'Shift Ditutup, Ada Selisih'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

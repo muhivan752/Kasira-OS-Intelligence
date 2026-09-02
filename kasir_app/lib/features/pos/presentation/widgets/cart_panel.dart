@@ -315,7 +315,7 @@ class CartPanel extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '$tableName — $tabNumber',
+                '$tableName · $tabNumber',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 textAlign: TextAlign.center,
               ),
@@ -523,7 +523,7 @@ class CartPanel extends ConsumerWidget {
           Row(children: [
             const Icon(LucideIcons.tag, size: 14, color: KasiraDS.brandPrimary),
             const SizedBox(width: 6),
-            Text('Diskon / promo',
+            Text('Diskon atau promo',
                 style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.textBody)),
           ]),
           const SizedBox(height: 9),

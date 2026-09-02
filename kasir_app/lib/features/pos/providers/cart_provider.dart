@@ -769,7 +769,7 @@ class CartNotifier extends StateNotifier<CartState> {
           final name = ing?.name ?? 'bahan';
           final needStr = entry.value % 1 == 0 ? entry.value.toInt().toString() : entry.value.toStringAsFixed(1);
           final availStr = available % 1 == 0 ? available.toInt().toString() : available.toStringAsFixed(1);
-          return 'Stok $name tidak cukup — butuh $needStr $unit, sisa $availStr $unit';
+          return 'Stok $name tidak cukup. Butuh $needStr $unit, sisa $availStr $unit';
         }
       }
     } else {

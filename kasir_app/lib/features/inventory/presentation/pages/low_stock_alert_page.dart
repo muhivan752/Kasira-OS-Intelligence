@@ -130,7 +130,7 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                '$outCount produk habis — otomatis disembunyikan dari kasir',
+                                '$outCount produk habis, otomatis disembunyikan dari kasir',
                                 style: const TextStyle(color: KasiraDS.danger, fontWeight: FontWeight.w600, fontSize: 13),
                               ),
                             ),

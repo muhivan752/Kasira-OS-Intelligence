@@ -36,7 +36,7 @@ class _WelcomePageState extends State<WelcomePage> {
     (
       icon: LucideIcons.messageCircle,
       title: 'Struk ke WhatsApp,\npelanggan kebentuk sendiri',
-      body: 'Nomor pelanggan ketangkap di struk. Siapa yang setia, siapa yang mulai jarang — kelihatan.',
+      body: 'Nomor pelanggan ketangkap di struk. Siapa yang setia dan siapa yang mulai jarang jadi kelihatan.',
     ),
   ];
 

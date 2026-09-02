@@ -53,7 +53,7 @@ class ReadyPage extends StatelessWidget {
               _Step(
                 index: 2,
                 title: 'Hubungkan printer Bluetooth',
-                subtitle: 'Opsional — struk bisa via WhatsApp dulu.',
+                subtitle: 'Opsional, struk bisa lewat WhatsApp dulu.',
                 onTap: () async {
                   await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrinterSettingsPage()));
                 },

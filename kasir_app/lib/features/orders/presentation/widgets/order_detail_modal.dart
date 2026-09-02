@@ -404,7 +404,7 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
       SnackBar(
         content: Text(ok
             ? (offline ? 'Struk dicetak ulang (offline)' : 'Struk dicetak ulang')
-            : 'Gagal cetak — cek printer'),
+            : 'Gagal cetak, cek printer'),
         backgroundColor: ok ? KasiraDS.success : KasiraDS.danger,
         behavior: SnackBarBehavior.floating,
       ),

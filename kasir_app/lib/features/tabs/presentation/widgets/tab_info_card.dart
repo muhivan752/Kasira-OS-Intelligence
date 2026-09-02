@@ -44,7 +44,7 @@ class TabInfoCard extends StatelessWidget {
                 child: _Tile(
                   icon: LucideIcons.armchair,
                   label: 'Meja',
-                  value: tab.tableName ?? '—',
+                  value: tab.tableName ?? '-',
                 ),
               ),
               const SizedBox(width: KasiraDS.space2),

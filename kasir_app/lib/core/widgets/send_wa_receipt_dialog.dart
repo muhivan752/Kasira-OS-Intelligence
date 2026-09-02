@@ -128,7 +128,7 @@ class _SendWaReceiptDialogState extends State<SendWaReceiptDialog> {
           content: Text(
             sent
                 ? 'Struk terkirim ke $maskedPhone'
-                : 'Struk gagal terkirim — cek koneksi WA',
+                : 'Struk gagal terkirim, cek koneksi WA',
           ),
           backgroundColor: sent ? KasiraDS.success : KasiraDS.warning,
           behavior: SnackBarBehavior.floating,

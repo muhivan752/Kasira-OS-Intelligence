@@ -233,7 +233,7 @@ class _TabPaymentSuccessSheetState extends State<_TabPaymentSuccessSheet> {
             icon: widget.isTabPaid ? LucideIcons.checkCheck : LucideIcons.clock,
             color: widget.isTabPaid ? KasiraDS.success : KasiraDS.warning,
             text: widget.isTabPaid
-                ? 'Meja lunas — semua sudah bayar'
+                ? 'Meja lunas, semua sudah bayar'
                 : 'Sisa tagihan meja ${_rp.format(widget.remaining)}',
           ),
           const SizedBox(height: KasiraDS.space2),
@@ -335,12 +335,12 @@ class _TabPaymentSuccessSheetState extends State<_TabPaymentSuccessSheet> {
       _PrintStatus.notConnected => (
           LucideIcons.unplug,
           KasiraDS.warning,
-          'Printer belum terhubung — kirim WA atau hubungkan di Pengaturan',
+          'Printer belum terhubung, kirim WA atau hubungkan di Pengaturan',
         ),
       _PrintStatus.failed => (
           LucideIcons.alertCircle,
           KasiraDS.danger,
-          'Struk gagal dicetak — cek kertas & koneksi, lalu coba lagi',
+          'Struk gagal dicetak, cek kertas & koneksi, lalu coba lagi',
         ),
     };
     return Row(

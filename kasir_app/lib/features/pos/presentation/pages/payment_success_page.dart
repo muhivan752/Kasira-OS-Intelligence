@@ -554,7 +554,7 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
                   TextButton.icon(
                     onPressed: _newTransaction,
                     icon: const Icon(LucideIcons.arrowRight, size: 16),
-                    label: const Text('Selesai — Transaksi Baru'),
+                    label: const Text('Selesai, Transaksi Baru'),
                   ),
                 ],
               ),

@@ -420,7 +420,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                         ),
                         title: Text(src.tabNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text(
-                          '${src.tableName ?? "Tanpa meja"} — ${_currency.format(src.totalAmount)} — ${src.guestCount} tamu',
+                          '${src.tableName ?? "Tanpa meja"} · ${_currency.format(src.totalAmount)} · ${src.guestCount} tamu',
                           style: const TextStyle(fontSize: 12),
                         ),
                         trailing: FilledButton(

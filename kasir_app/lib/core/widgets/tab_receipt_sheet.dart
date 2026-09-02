@@ -82,7 +82,7 @@ class _TabReceiptSheetState extends State<_TabReceiptSheet> {
           KasiraDS.danger,
         ),
       TabPrintResult.failed => (
-          'Gagal cetak struk — cek kertas & koneksi printer.',
+          'Gagal cetak struk, cek kertas & koneksi printer.',
           KasiraDS.danger,
         ),
     };

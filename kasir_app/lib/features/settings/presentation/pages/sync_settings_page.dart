@@ -73,7 +73,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
     final (msg, color) = switch (syncService.status) {
       SyncStatus.success => ('Sinkronisasi data berhasil.', KasiraDS.success),
       SyncStatus.networkError => (
-          'Offline / jaringan bermasalah. Data akan sync otomatis saat online.',
+          'Offline atau jaringan bermasalah. Data akan sync otomatis saat online.',
           KasiraDS.danger,
         ),
       SyncStatus.serverError => (
@@ -81,7 +81,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
           KasiraDS.danger,
         ),
       _ => (
-          'Status: ${syncService.status.name}${syncService.lastError != null ? " — ${syncService.lastError}" : ""}',
+          'Status: ${syncService.status.name}${syncService.lastError != null ? ": ${syncService.lastError}" : ""}',
           KasiraDS.danger,
         ),
     };

@@ -95,7 +95,7 @@ class _ReservationTableGridPageState extends ConsumerState<ReservationTableGridP
                         child: TextButton.icon(
                           onPressed: () => ref.read(tableListProvider.notifier).fetchTables(),
                           icon: const Icon(LucideIcons.refreshCw, size: 16),
-                          label: Text('${tableState.error} — tap retry'),
+                          label: Text('${tableState.error}, tap retry'),
                         ),
                       )
                     : sections.isEmpty

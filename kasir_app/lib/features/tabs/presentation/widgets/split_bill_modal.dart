@@ -306,7 +306,7 @@ class _SplitBillModalState extends ConsumerState<SplitBillModal> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Centang menu yang dia bayar, langsung bayar. Sisa nempel di tab — '
+                      'Centang menu yang dia bayar, langsung bayar. Sisa nempel di tab, '
                       'orang berikutnya nyusul tinggal centang punya dia.',
                       style: TextStyle(color: KasiraDS.textMuted, fontSize: 12.5, height: 1.4),
                     ),
