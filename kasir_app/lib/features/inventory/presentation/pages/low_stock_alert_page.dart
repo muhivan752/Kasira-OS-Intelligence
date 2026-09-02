@@ -142,6 +142,23 @@ class _LowStockAlertPageState extends ConsumerState<LowStockAlertPage> {
           ),
           const SizedBox(width: 8),
         ],
+        // Offline-first: angka dari stok lokal, kasih tahu sumbernya.
+        bottom: _isOffline
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(34),
+                child: Container(
+                  width: double.infinity,
+                  color: KasiraDS.info.withOpacity(0.10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(children: [
+                    const Icon(LucideIcons.cloudOff, size: 14, color: KasiraDS.info),
+                    const SizedBox(width: 8),
+                    Text('Offline. Angka dari stok yang tersimpan di HP.',
+                        style: KasiraDS.sans(size: 12, weight: FontWeight.w600, color: KasiraDS.textStrong)),
+                  ]),
+                ),
+              )
+            : null,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
