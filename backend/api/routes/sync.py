@@ -34,6 +34,7 @@ _UUID_FIELDS = {
     "shifts": ("user_id", "closed_by_user_id", "locked_user_id"),
     "cash_activities": ("shift_id",),
     "products": ("category_id", "brand_id"),
+    "categories": ("brand_id", "parent_id"),
 }
 _TS_FIELDS = ("created_at", "updated_at", "paid_at", "start_time", "end_time", "deleted_at")
 
@@ -41,6 +42,7 @@ _TS_FIELDS = ("created_at", "updated_at", "paid_at", "start_time", "end_time", "
 def _normalize_push(changes, syncing_user_id: str, tz_name: str) -> None:
     from datetime import datetime as _dt, timezone as _tz
     from zoneinfo import ZoneInfo
+    import uuid as _uuid
     try:
         tz = ZoneInfo(tz_name or "Asia/Jakarta")
     except Exception:
@@ -57,16 +59,43 @@ def _normalize_push(changes, syncing_user_id: str, tz_name: str) -> None:
             d = d.replace(tzinfo=tz)
         return d.astimezone(_tz.utc).isoformat()
 
+    def as_uuid(v):
+        # String UUID → objek UUID. SQLAlchemy 2 "insertmanyvalues" nyocokin
+        # nilai PK yang dikembalikan DB (objek UUID) dengan parameter yang
+        # dikirim; kalau parameternya masih str, dia meledak "Can't match
+        # sentinel values" dan seluruh sync 500.
+        if isinstance(v, str):
+            try:
+                return _uuid.UUID(v)
+            except ValueError:
+                return v
+        return v
+
     for table, uuid_fields in _UUID_FIELDS.items():
         rows = getattr(changes, table, None) or []
         for r in rows:
             if not isinstance(r, dict):
                 continue
+            if r.get("id"):
+                r["id"] = as_uuid(r["id"])
             for f in uuid_fields:
                 if f in r and r[f] == "":
                     r[f] = None
+                elif r.get(f):
+                    r[f] = as_uuid(r[f])
             if table == "orders" and not r.get("user_id"):
-                r["user_id"] = syncing_user_id
+                r["user_id"] = _uuid.UUID(syncing_user_id)
+            if table == "payments":
+                # PaymentLocal di HP nggak nyimpen kembalian. Tanpa ini bayar
+                # Rp 50.000 buat tagihan Rp 5.400 kebaca sebagai kas masuk
+                # Rp 50.000 di laporan shift (kegigit tes offline Ivan).
+                try:
+                    due = float(r.get("amount_due") or 0)
+                    paid = float(r.get("amount_paid") or 0)
+                    if not r.get("change_amount") and paid > due > 0:
+                        r["change_amount"] = round(paid - due, 2)
+                except (TypeError, ValueError):
+                    pass
             for f in _TS_FIELDS:
                 if f in r:
                     r[f] = fix_ts(r[f])
@@ -216,7 +245,12 @@ async def sync_data(
                         if poutlet != str(outlet_id):
                             logger.warning("sync: reject cross-tenant order_item order_id=%s", oid)
                             continue
-                        if pstatus in terminal_states:
+                        # Order offline yang udah lunas di HP datang SUDAH `completed`,
+                        # dan item-nya di batch yang sama. Guard terminal ini buat
+                        # order lama yang udah final di server, bukan buat order yang
+                        # baru lahir di push ini — kalau nggak, order offline mendarat
+                        # tanpa satu pun item (kegigit tes offline Ivan, 2 Sep 2026).
+                        if pstatus in terminal_states and oid not in batch_order_ids:
                             logger.warning("sync: reject order_item on terminal order_id=%s status=%s", oid, pstatus)
                             continue
                         trusted_order_items.append(oi)

@@ -808,6 +808,9 @@ class SyncService {
     'shift_session_id': p.shiftSessionId,
     'amount_due': p.amountDue,
     'amount_paid': p.amountPaid,
+    // Kembalian nggak disimpan di PaymentLocal; dihitung di sini supaya kas
+    // masuk di laporan shift = tagihan, bukan uang yang disodorkan.
+    'change_amount': (p.amountPaid - p.amountDue) > 0 ? p.amountPaid - p.amountDue : 0,
     'payment_method': p.paymentMethod,
     'status': p.status,
     'reference_number': p.referenceNumber,
