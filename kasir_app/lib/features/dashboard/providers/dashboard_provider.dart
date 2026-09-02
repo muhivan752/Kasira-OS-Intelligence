@@ -1,7 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/offline/local_reads.dart';
 import '../../../core/services/session_cache.dart';
+import '../../../core/sync/sync_provider.dart';
 
 class DashboardStats {
   final double revenueToday;
@@ -17,6 +20,10 @@ class DashboardStats {
   final DateTime? uncountedSince;
   final List<Map<String, dynamic>> topProducts;
   final Map<String, double> paymentBreakdown;
+  /// Angka dari data lokal karena server nggak kejangkau.
+  final bool isOffline;
+  /// Transaksi yang masih ngantre di HP, belum sampai server.
+  final int pendingSync;
 
   const DashboardStats({
     required this.revenueToday,
@@ -30,7 +37,27 @@ class DashboardStats {
     this.uncountedSince,
     required this.topProducts,
     required this.paymentBreakdown,
+    this.isOffline = false,
+    this.pendingSync = 0,
   });
+
+  DashboardStats copyWith({double? revenueToday, int? orderCount, double? avgOrderValue,
+      List<Map<String, dynamic>>? topProducts, bool? isOffline, int? pendingSync}) =>
+      DashboardStats(
+        revenueToday: revenueToday ?? this.revenueToday,
+        orderCount: orderCount ?? this.orderCount,
+        avgOrderValue: avgOrderValue ?? this.avgOrderValue,
+        shiftStatus: shiftStatus,
+        shiftOpenedBy: shiftOpenedBy,
+        shiftStartedAt: shiftStartedAt,
+        shiftParticipants: shiftParticipants,
+        uncountedShifts: uncountedShifts,
+        uncountedSince: uncountedSince,
+        topProducts: topProducts ?? this.topProducts,
+        paymentBreakdown: paymentBreakdown,
+        isOffline: isOffline ?? this.isOffline,
+        pendingSync: pendingSync ?? this.pendingSync,
+      );
 
   factory DashboardStats.fromJson(Map<String, dynamic> json) {
     final breakdown = <String, double>{};
@@ -59,11 +86,26 @@ class DashboardNotifier extends AsyncNotifier<DashboardStats> {
   @override
   Future<DashboardStats> build() => _fetch();
 
+  /// Offline-first (2 Sep 2026): server nggak kejangkau → angka dihitung dari
+  /// Drift, jadi transaksi offline langsung kehitung di Beranda. Online →
+  /// angka server DITAMBAH transaksi yang masih ngantre di HP (belum ada di
+  /// server, jadi nggak dobel; begitu tersinkron dia pindah ke angka server).
   Future<DashboardStats> _fetch() async {
     final c = SessionCache.instance;
     final token = c.accessToken;
     final tenantId = c.tenantId;
     final outletId = c.outletId;
+    final local = LocalReads(ref.read(databaseProvider));
+
+    Future<DashboardStats> fromLocal() async {
+      if (outletId == null) throw StateError('outlet');
+      final json = await local.todayStats(outletId);
+      final pending = await local.pendingSyncCount(outletId);
+      return DashboardStats.fromJson(json).copyWith(isOffline: true, pendingSync: pending);
+    }
+
+    final conn = await Connectivity().checkConnectivity();
+    if (conn.isEmpty || conn.contains(ConnectivityResult.none)) return fromLocal();
 
     final dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiV1,
@@ -71,16 +113,37 @@ class DashboardNotifier extends AsyncNotifier<DashboardStats> {
       receiveTimeout: const Duration(seconds: 10),
     ));
 
-    final resp = await dio.get(
-      '/reports/daily',
-      queryParameters: {'outlet_id': outletId},
-      options: Options(headers: {
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (tenantId != null) 'X-Tenant-ID': tenantId,
-      }),
-    );
-
-    return DashboardStats.fromJson(resp.data['data'] as Map<String, dynamic>);
+    try {
+      final resp = await dio.get(
+        '/reports/daily',
+        queryParameters: {'outlet_id': outletId},
+        options: Options(headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+          if (tenantId != null) 'X-Tenant-ID': tenantId,
+        }),
+      );
+      var stats = DashboardStats.fromJson(resp.data['data'] as Map<String, dynamic>);
+      if (outletId != null) {
+        final pending = await local.pendingSyncCount(outletId);
+        if (pending > 0) {
+          final extra = await local.todayStats(outletId, onlyUnsynced: true);
+          final extraRevenue = (extra['revenue_today'] as num).toDouble();
+          final extraCount = (extra['order_count'] as num).toInt();
+          final revenue = stats.revenueToday + extraRevenue;
+          final count = stats.orderCount + extraCount;
+          stats = stats.copyWith(
+            revenueToday: revenue,
+            orderCount: count,
+            avgOrderValue: count == 0 ? 0 : revenue / count,
+            pendingSync: pending,
+          );
+        }
+      }
+      return stats;
+    } on DioException catch (e) {
+      if (e.response == null && outletId != null) return fromLocal();
+      rethrow;
+    }
   }
 
   Future<void> refresh() async {

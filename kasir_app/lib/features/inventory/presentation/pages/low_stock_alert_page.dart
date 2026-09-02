@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
+import '../../../../core/sync/sync_provider.dart';
+import '../../../../core/offline/local_reads.dart';
 import '../../../../core/theme/kasira_ds.dart';
 
 enum StockLevel { out, critical, low }
@@ -38,14 +41,14 @@ class StockAlertItem {
       );
 }
 
-class LowStockAlertPage extends StatefulWidget {
+class LowStockAlertPage extends ConsumerStatefulWidget {
   const LowStockAlertPage({super.key});
 
   @override
-  State<LowStockAlertPage> createState() => _LowStockAlertPageState();
+  ConsumerState<LowStockAlertPage> createState() => _LowStockAlertPageState();
 }
 
-class _LowStockAlertPageState extends State<LowStockAlertPage> {
+class _LowStockAlertPageState extends ConsumerState<LowStockAlertPage> {
   StockLevel? _filterLevel;
   List<StockAlertItem> _items = [];
   bool _isLoading = true;
@@ -56,6 +59,8 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
     super.initState();
     _load();
   }
+
+  bool _isOffline = false;
 
   Future<void> _load() async {
     setState(() { _isLoading = true; _error = null; });
@@ -77,10 +82,35 @@ class _LowStockAlertPageState extends State<LowStockAlertPage> {
 
       if (mounted) setState(() { _items = list; _isLoading = false; });
     } on DioException catch (e) {
+      // Offline-first: server nggak kejangkau → hitung dari stok lokal.
+      if (e.response == null && await _loadLocal()) return;
       final msg = e.response?.data?['detail'] ?? 'Gagal memuat data stok';
       if (mounted) setState(() { _error = msg.toString(); _isLoading = false; });
     } catch (_) {
+      if (await _loadLocal()) return;
       if (mounted) setState(() { _error = 'Gagal memuat data stok'; _isLoading = false; });
+    }
+  }
+
+  /// Stok kritis dari Drift. Produk lokal nggak nyimpen ambang per produk,
+  /// jadi ambangnya 10 (angka yang sama dengan default server).
+  Future<bool> _loadLocal() async {
+    try {
+      final rows = await LocalReads(ref.read(databaseProvider)).lowStockProducts(threshold: 10);
+      if (!mounted) return true;
+      setState(() {
+        _items = rows
+            .map((p) => StockAlertItem(
+                  id: p.id, name: p.name, category: 'Produk',
+                  currentStock: p.stockQty.round(), minStock: 10,
+                ))
+            .toList();
+        _isLoading = false;
+        _isOffline = true;
+      });
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 

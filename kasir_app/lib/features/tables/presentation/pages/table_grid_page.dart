@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
@@ -58,6 +60,40 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
   // active tab di table tsb. Refreshed bareng dgn _load.
   Map<String, String> _tabStatusByTable = {};
   bool _isLoading = true;
+  // Offline-first: status meja terakhir yang diketahui, dari cache. Buka
+  // meja dan tab tetap butuh server (tab hidup di server supaya dua HP nggak
+  // bentrok bagi tagihan satu meja), jadi tap-nya diblok dengan penjelasan.
+  bool _isOffline = false;
+
+  String get _cacheKey => 'c_tables_${SessionCache.instance.outletId}';
+
+  Future<void> _saveCache(List<TableModel> list) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKey, jsonEncode(list.map((t) => {
+            'id': t.id, 'name': t.name, 'capacity': t.capacity, 'status': t.status.name,
+          }).toList()));
+    } catch (_) {}
+  }
+
+  Future<bool> _loadCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cacheKey);
+      if (raw == null) return false;
+      final list = (jsonDecode(raw) as List).map((t) => TableModel(
+            id: t['id'] as String,
+            name: t['name'] as String,
+            capacity: (t['capacity'] as num?)?.toInt() ?? 2,
+            status: TableStatus.values.firstWhere((s) => s.name == t['status'], orElse: () => TableStatus.available),
+          )).toList();
+      if (!mounted) return true;
+      setState(() { _tables = list; _tabStatusByTable = {}; _isLoading = false; _isOffline = true; });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   void initState() {
@@ -131,8 +167,11 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
         _tables = list;
         _tabStatusByTable = tabStatusMap;
         _isLoading = false;
+        _isOffline = false;
       });
+      _saveCache(list);
     } catch (_) {
+      if (await _loadCache()) return;
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -220,6 +259,24 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
             ),
           ),
 
+          if (_isOffline)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: KasiraDS.info.withOpacity(0.10),
+                borderRadius: KasiraDS.brMd,
+                border: Border.all(color: KasiraDS.info.withOpacity(0.4)),
+              ),
+              child: Row(children: [
+                const Icon(LucideIcons.cloudOff, size: 15, color: KasiraDS.info),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Offline. Ini status meja terakhir yang diketahui; buka meja dan tab butuh koneksi.',
+                    style: KasiraDS.sans(size: 12, weight: FontWeight.w600, color: KasiraDS.textStrong))),
+              ]),
+            ),
+
           // (Desain Meja: langsung ke grid, tanpa filter chips atau stat badge.)
           const SizedBox(height: 6),
 
@@ -274,6 +331,14 @@ class _TableGridPageState extends ConsumerState<TableGridPage> {
     final isOccupied = table.status == TableStatus.occupied;
     return GestureDetector(
       onTap: () {
+        if (_isOffline) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Sedang offline. Status meja ini yang terakhir diketahui; buka meja dan tab butuh koneksi. Pakai Kasir untuk transaksi langsung.'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 4),
+          ));
+          return;
+        }
         if (widget.onTableSelected != null) {
           widget.onTableSelected!(table);
         } else if (table.status == TableStatus.occupied) {

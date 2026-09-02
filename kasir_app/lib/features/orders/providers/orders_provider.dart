@@ -1,7 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/database/app_database.dart';
+import '../../../core/offline/local_reads.dart';
 import '../../../core/services/session_cache.dart';
+import '../../../core/sync/sync_provider.dart';
 
 double _toDouble(dynamic v) {
   if (v is num) return v.toDouble();
@@ -54,6 +58,8 @@ class OrderModel {
   final String? tableId;
   final List<OrderItemModel> items;
   final DateTime createdAt;
+  /// false = masih di HP, belum sampai ke server. Riwayat kasih tanda.
+  final bool isSynced;
 
   const OrderModel({
     required this.id,
@@ -69,6 +75,7 @@ class OrderModel {
     this.tableId,
     required this.items,
     required this.createdAt,
+    this.isSynced = true,
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
@@ -120,12 +127,15 @@ class OrdersState {
   final bool isLoading;
   final String? error;
   final String? statusFilter; // null = semua
+  /// Daftar ini dari data lokal karena server nggak kejangkau.
+  final bool isOffline;
 
   const OrdersState({
     this.orders = const [],
     this.isLoading = false,
     this.error,
     this.statusFilter,
+    this.isOffline = false,
   });
 
   OrdersState copyWith({
@@ -135,20 +145,35 @@ class OrdersState {
     bool clearError = false,
     String? statusFilter,
     bool clearFilter = false,
+    bool? isOffline,
   }) =>
       OrdersState(
         orders: orders ?? this.orders,
         isLoading: isLoading ?? this.isLoading,
         error: clearError ? null : (error ?? this.error),
         statusFilter: clearFilter ? null : (statusFilter ?? this.statusFilter),
+        isOffline: isOffline ?? this.isOffline,
       );
 }
 
 // ── Notifier ─────────────────────────────────────────────────────────────────
 
 class OrdersNotifier extends StateNotifier<OrdersState> {
-  OrdersNotifier() : super(const OrdersState()) {
+  OrdersNotifier(this._db) : super(const OrdersState()) {
     fetch();
+  }
+  final AppDatabase _db;
+  LocalReads get _local => LocalReads(_db);
+
+  Future<bool> _online() async {
+    final r = await Connectivity().checkConnectivity();
+    return r.isNotEmpty && !r.contains(ConnectivityResult.none);
+  }
+
+  /// Offline-first: daftar dari Drift, yang belum sync ditandai.
+  Future<void> _loadLocal(String outletId, {String? status}) async {
+    final list = await _local.recentOrders(outletId, status: status);
+    state = state.copyWith(orders: list, isLoading: false, isOffline: true, clearError: true);
   }
 
   Future<void> fetch({String? status}) async {
@@ -166,6 +191,11 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
 
       if (outletId == null) {
         state = state.copyWith(isLoading: false, error: 'Outlet tidak ditemukan');
+        return;
+      }
+
+      if (!await _online()) {
+        await _loadLocal(outletId, status: status);
         return;
       }
 
@@ -190,8 +220,21 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
       final list = (resp.data['data'] as List)
           .map((e) => OrderModel.fromJson(e as Map<String, dynamic>))
           .toList();
-      state = state.copyWith(orders: list, isLoading: false);
+      // Yang masih ngantre di HP belum ada di server: taruh di atas dengan
+      // tanda, supaya kasir nggak ngira transaksinya hilang.
+      final pending = await _local.recentOrders(outletId, status: status, onlyUnsynced: true);
+      final serverIds = list.map((o) => o.id).toSet();
+      final merged = [...pending.where((o) => !serverIds.contains(o.id)), ...list];
+      state = state.copyWith(orders: merged, isLoading: false, isOffline: false);
     } on DioException catch (e) {
+      // Server nggak kejangkau (timeout / putus) → data lokal, bukan layar kosong.
+      if (e.response == null) {
+        final outletId = SessionCache.instance.outletId;
+        if (outletId != null) {
+          await _loadLocal(outletId, status: status);
+          return;
+        }
+      }
       final msg = e.response?.data?['detail'] ?? 'Gagal memuat pesanan';
       state = state.copyWith(isLoading: false, error: msg.toString());
     } catch (_) {
@@ -234,7 +277,7 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
 }
 
 final ordersProvider = StateNotifierProvider<OrdersNotifier, OrdersState>(
-  (_) => OrdersNotifier(),
+  (ref) => OrdersNotifier(ref.watch(databaseProvider)),
 );
 
 // ── Detail: FutureProvider.family ────────────────────────────────────────────
@@ -243,6 +286,11 @@ final orderDetailProvider = FutureProvider.family<OrderModel, String>((ref, orde
   final c = SessionCache.instance;
   final token = c.accessToken;
   final tenantId = c.tenantId;
+  final local = LocalReads(ref.read(databaseProvider));
+
+  // Order yang belum sync cuma ada di HP; server bakal 404. Lokal duluan.
+  final fromLocal = await local.orderById(orderId);
+  if (fromLocal != null && !fromLocal.isSynced) return fromLocal;
 
   final dio = Dio(BaseOptions(
     baseUrl: AppConfig.apiV1,
@@ -250,13 +298,17 @@ final orderDetailProvider = FutureProvider.family<OrderModel, String>((ref, orde
     receiveTimeout: const Duration(seconds: 10),
   ));
 
-  final resp = await dio.get(
-    '/orders/$orderId',
-    options: Options(headers: {
-      if (token != null) 'Authorization': 'Bearer $token',
-      if (tenantId != null) 'X-Tenant-ID': tenantId,
-    }),
-  );
-
-  return OrderModel.fromJson(resp.data['data'] as Map<String, dynamic>);
+  try {
+    final resp = await dio.get(
+      '/orders/$orderId',
+      options: Options(headers: {
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (tenantId != null) 'X-Tenant-ID': tenantId,
+      }),
+    );
+    return OrderModel.fromJson(resp.data['data'] as Map<String, dynamic>);
+  } on DioException catch (e) {
+    if (e.response == null && fromLocal != null) return fromLocal;
+    rethrow;
+  }
 });

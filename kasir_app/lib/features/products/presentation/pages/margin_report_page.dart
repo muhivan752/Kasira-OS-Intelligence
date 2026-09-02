@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -58,8 +60,19 @@ class _MarginReportPageState extends ConsumerState<MarginReportPage> {
         options: Options(headers: cache.authHeaders),
       );
       final data = resp.data['data'] as Map<String, dynamic>;
+      // Offline-first: simpan hasil terakhir supaya pas jaringan mati laporan
+      // tetap tampil dengan label "data terakhir", bukan layar kosong.
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('c_margin_$outletId', jsonEncode({'at': DateTime.now().toIso8601String(), 'data': data}));
+      } catch (_) {}
+      if (mounted) setState(() => _staleAt = null);
       return _MarginReport.fromJson(data);
     } on DioException catch (e) {
+      if (e.response == null) {
+        final cached = await _fromCache(outletId);
+        if (cached != null) return cached;
+      }
       // Backend balikin 400 STOCK_MODE_NOT_SUPPORTED untuk recipe mode.
       final status = e.response?.statusCode;
       final detail = e.response?.data?['detail'];
@@ -75,7 +88,25 @@ class _MarginReportPageState extends ConsumerState<MarginReportPage> {
             : (detail is Map ? detail['message']?.toString() ?? 'Gagal memuat laporan' : 'Gagal memuat laporan'),
       );
     } catch (_) {
+      final cached = await _fromCache(outletId);
+      if (cached != null) return cached;
       throw const _MarginReportError('Koneksi bermasalah. Coba lagi.');
+    }
+  }
+
+  DateTime? _staleAt;
+
+  Future<_MarginReport?> _fromCache(String outletId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('c_margin_$outletId');
+      if (raw == null) return null;
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      final at = DateTime.tryParse(m['at']?.toString() ?? '');
+      if (mounted) setState(() => _staleAt = at);
+      return _MarginReport.fromJson(Map<String, dynamic>.from(m['data'] as Map));
+    } catch (_) {
+      return null;
     }
   }
 
@@ -137,7 +168,30 @@ class _MarginReportPageState extends ConsumerState<MarginReportPage> {
             padding: const EdgeInsets.all(16),
             itemCount: isEmpty ? 2 : headerCount + report.products.length,
             itemBuilder: (context, idx) {
-              if (idx == 0) return _SummaryCard(report: report, currency: _currency);
+              if (idx == 0) {
+                final stale = _staleAt;
+                if (stale == null) return _SummaryCard(report: report, currency: _currency);
+                return Column(children: [
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: KasiraDS.info.withOpacity(0.10),
+                      borderRadius: KasiraDS.brMd,
+                      border: Border.all(color: KasiraDS.info.withOpacity(0.4)),
+                    ),
+                    child: Row(children: [
+                      const Icon(LucideIcons.cloudOff, size: 15, color: KasiraDS.info),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(
+                        'Offline. Data terakhir ${stale.day}/${stale.month} ${stale.hour.toString().padLeft(2, '0')}.${stale.minute.toString().padLeft(2, '0')}.',
+                        style: KasiraDS.sans(size: 12, weight: FontWeight.w600, color: KasiraDS.textStrong))),
+                    ]),
+                  ),
+                  _SummaryCard(report: report, currency: _currency),
+                ]);
+              }
               if (idx == 1) return const SizedBox(height: 16);
               if (isEmpty) return const _EmptyState();
               if (hasBanner && idx == 2) {

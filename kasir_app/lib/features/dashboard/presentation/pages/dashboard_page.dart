@@ -625,6 +625,10 @@ class _DashboardContent extends ConsumerWidget {
                 error: (_, __) => _buildStatsError(ref),
                 data: (stats) => Column(
                   children: [
+                    if (stats.isOffline || stats.pendingSync > 0) ...[
+                      _syncBanner(stats),
+                      const SizedBox(height: 10),
+                    ],
                     _shiftCard(context, stats),
                     if (stats.uncountedShifts > 0) ...[
                       const SizedBox(height: 10),
@@ -760,6 +764,31 @@ class _DashboardContent extends ConsumerWidget {
             const Icon(LucideIcons.chevronRight, size: 16, color: KasiraDS.textMuted),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Offline-first: angka Beranda tetap hidup dari data lokal. Banner ini
+  /// cuma ngasih tahu sumbernya, bukan ngeblok apa pun.
+  Widget _syncBanner(DashboardStats stats) {
+    final text = stats.isOffline
+        ? (stats.pendingSync > 0
+            ? 'Offline · ${stats.pendingSync} transaksi menunggu sinkron. Angka di bawah dari data HP.'
+            : 'Offline · angka di bawah dari data HP, tersinkron begitu jaringan kembali.')
+        : '${stats.pendingSync} transaksi belum tersinkron, sudah ikut dihitung di bawah.';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: KasiraDS.info.withOpacity(0.10),
+        borderRadius: KasiraDS.brMd,
+        border: Border.all(color: KasiraDS.info.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(stats.isOffline ? LucideIcons.cloudOff : LucideIcons.refreshCw, size: 16, color: KasiraDS.info),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: KasiraDS.sans(size: 12, weight: FontWeight.w600, color: KasiraDS.textStrong))),
+        ],
       ),
     );
   }

@@ -216,6 +216,16 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
                     '${order.orderTypeLabel} · ${order.items.length} item',
                     style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted),
                   ),
+                  // Offline-first: transaksi tetap tercatat dan kehitung; yang
+                  // beda cuma tandanya sampai dia sampai ke server.
+                  if (!order.isSynced) ...[
+                    const SizedBox(height: 4),
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(LucideIcons.cloudOff, size: 11, color: KasiraDS.warning),
+                      const SizedBox(width: 4),
+                      Text('Belum sinkron', style: KasiraDS.sans(size: 10.5, weight: FontWeight.w700, color: KasiraDS.warning)),
+                    ]),
+                  ],
                 ],
               ),
             ),
