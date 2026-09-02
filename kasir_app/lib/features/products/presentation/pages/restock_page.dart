@@ -1,5 +1,7 @@
 import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
+import '../widgets/stock_count_sheet.dart';
+import '../../providers/products_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
@@ -74,6 +76,14 @@ class _RestockPageState extends ConsumerState<RestockPage> {
           ..where((p) => p.stockEnabled.equals(true))
           ..orderBy([(p) => drift.OrderingTerm.asc(p.name)]))
         .get();
+    // Tanda "terjual lebih dari tercatat" cuma ada di server (Drift belum
+    // punya kolomnya). Ambil dari productsProvider yang online-nya baca API;
+    // offline map-nya kosong dan daftar tetap tampil.
+    var oversell = <String, int>{};
+    try {
+      final apiItems = await ref.read(productsProvider.future);
+      oversell = {for (final it in apiItems) if (it.oversellQty > 0) it.id: it.oversellQty};
+    } catch (_) {}
     return products
         .map((p) => _RestockItem(
               id: p.id,
@@ -83,6 +93,7 @@ class _RestockPageState extends ConsumerState<RestockPage> {
               isRecipe: false,
               rowVersion: p.rowVersion,
               currentBuyPrice: p.buyPrice,
+              oversellQty: oversell[p.id] ?? 0,
             ))
         .toList();
   }
@@ -222,6 +233,19 @@ class _RestockPageState extends ConsumerState<RestockPage> {
                       return _RestockTile(
                         item: item,
                         onTap: () => _openRestockSheet(item),
+                        onCount: item.oversellQty > 0
+                            ? () => showStockCountSheet(
+                                  context,
+                                  productId: item.id,
+                                  name: item.name,
+                                  stock: item.currentStock.round(),
+                                  oversellQty: item.oversellQty,
+                                  onDone: () {
+                                    ref.read(productsProvider.notifier).refresh();
+                                    _refresh();
+                                  },
+                                )
+                            : null,
                       );
                     },
                   ),
@@ -259,6 +283,8 @@ class _RestockItem {
   /// Snapshot harga beli terakhir (nullable, hanya untuk simple-mode product).
   /// Recipe-mode pakai ingredient.buy_price flow yang lain — tidak relevan disini.
   final double? currentBuyPrice;
+  /// Terjual melebihi tercatat (dari server; Drift belum kenal kolom ini).
+  final int oversellQty;
 
   _RestockItem({
     required this.id,
@@ -268,14 +294,17 @@ class _RestockItem {
     required this.isRecipe,
     this.rowVersion = 0,
     this.currentBuyPrice,
+    this.oversellQty = 0,
   });
 }
 
 class _RestockTile extends StatelessWidget {
   final _RestockItem item;
   final VoidCallback onTap;
+  /// Ada kalau produk ini terjual melebihi tercatat: tap tanda kuning → opname.
+  final VoidCallback? onCount;
 
-  const _RestockTile({required this.item, required this.onTap});
+  const _RestockTile({required this.item, required this.onTap, this.onCount});
 
   @override
   Widget build(BuildContext context) {
@@ -329,6 +358,20 @@ class _RestockTile extends StatelessWidget {
                             lowStock ? FontWeight.w600 : FontWeight.normal,
                       ),
                     ),
+                    // Terjual melebihi tercatat (dua HP offline / barang masuk
+                    // belum dinota). Tap = hitung fisik, bukan restok.
+                    if (item.oversellQty > 0) ...[
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onTap: onCount,
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(LucideIcons.alertTriangle, size: 12, color: KasiraDS.warning),
+                          const SizedBox(width: 4),
+                          Text('Terjual ${item.oversellQty} lebih dari tercatat · tap untuk hitung fisik',
+                              style: const TextStyle(fontSize: 11, color: KasiraDS.warning, fontWeight: FontWeight.w700)),
+                        ]),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -11,6 +11,7 @@ import '../../../../core/services/session_cache.dart';
 import '../../providers/products_provider.dart';
 import '../widgets/product_detail_sheet.dart';
 import 'restock_page.dart';
+import '../widgets/stock_count_sheet.dart';
 import 'margin_report_page.dart';
 
 class ProductManagementPage extends ConsumerStatefulWidget {
@@ -85,79 +86,14 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
     }
   }
 
-  /// Stok opname satu produk: ketik angka fisik → POST /stock-count.
-  Future<void> _stockCountSheet(ProductModel product) async {
-    final ctrl = TextEditingController(text: '${product.stock}');
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          decoration: const BoxDecoration(
-            color: KasiraDS.surfaceCard,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Hitung fisik ${product.name}', style: KasiraDS.display(size: 20)),
-              const SizedBox(height: 6),
-              Text(
-                'Tercatat ${product.stock}, tapi terjual ${product.oversellQty} lebih dari itu. Hitung yang ada di rak sekarang, lalu masukkan angkanya. Kalau lebih kecil dari tercatat, selisihnya masuk Keuangan sebagai selisih stok.',
-                style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: ctrl,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Jumlah fisik',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Catat hasil hitung', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (ok != true) return;
-    final counted = int.tryParse(ctrl.text.trim());
-    if (counted == null || counted < 0) return;
-    try {
-      final cache = SessionCache.instance;
-      final dio = Dio(BaseOptions(baseUrl: AppConfig.apiV1,
-          connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 15)));
-      final res = await dio.post('/products/${product.id}/stock-count',
-          options: Options(headers: cache.authHeaders),
-          data: {'outlet_id': cache.outletId, 'counted_qty': counted});
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(res.data['message']?.toString() ?? 'Hasil hitung dicatat'),
-        behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 4),
-      ));
-      ref.read(productsProvider.notifier).refresh();
-    } on DioException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text((e.response?.data?['detail'] ?? 'Gagal mencatat hasil hitung. Butuh koneksi.').toString()),
-        backgroundColor: KasiraDS.danger, behavior: SnackBarBehavior.floating,
-      ));
-    }
-  }
+  Future<void> _stockCountSheet(ProductModel product) => showStockCountSheet(
+        context,
+        productId: product.id,
+        name: product.name,
+        stock: product.stock,
+        oversellQty: product.oversellQty,
+        onDone: () => ref.read(productsProvider.notifier).refresh(),
+      );
 
   @override
   Widget build(BuildContext context) {
