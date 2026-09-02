@@ -531,7 +531,9 @@ export default function SettingsPage() {
                 Sesi kas terbuka sendiri di transaksi pertama dan ditutup sendiri pukul 04.00. Yang berbeda antar mode hanya seberapa ketat hitungan lacinya.
               </p>
               {shiftModeMsg && <p className={`text-sm ${shiftModeMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{shiftModeMsg.text}</p>}
-              <div className="grid gap-3 sm:grid-cols-2">
+              {/* Satu kolom: bagian ini duduk di kolom kanan yang sempit,
+                  dua kolom bikin kartunya kepencet jadi satu kata per baris. */}
+              <div className="grid gap-3">
                 {([
                   ['ringan', 'Ringan', 'Hitung kas opsional. Kasir melihat angka sistem. Cocok untuk usaha yang dijaga pemiliknya sendiri.'],
                   ['standar', 'Standar', 'Pengingat kalau kas belum dihitung. Kasir mengetik hitungannya tanpa melihat angka harapan; selisih hanya terlihat oleh pemilik.'],
