@@ -6,7 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../../core/services/tab_receipt_service.dart';
 import '../../../../core/theme/kasira_ds.dart';
-import '../../../../core/widgets/tab_receipt_sheet.dart';
+import '../../../../core/widgets/tab_payment_success_sheet.dart';
 import '../../providers/tab_provider.dart';
 import 'qris_waiting_modal.dart';
 
@@ -370,7 +370,6 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
       setState(() => _isLoading = false);
       if (result != null) {
         // Capture stable refs SEBELUM Navigator.pop
-        final messenger = ScaffoldMessenger.of(context);
         final rootNav = Navigator.of(context, rootNavigator: true);
         final selectedItemIds = _selected.toList();
 
@@ -384,8 +383,12 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
 
         final tabIdSnap = widget.tab.id;
         final tabNumberSnap = widget.tab.tabNumber;
+        final tableNameSnap = widget.tab.tableName;
         final isCash = _paymentMethod == 'cash';
         final paidCountSnap = selectedItemIds.length;
+        final amountDueSnap = _selectedTotal;
+        final amountReceivedSnap =
+            _amountReceived > 0 ? _amountReceived : _selectedTotal;
         final tabSnap = result;
         // Dihitung SEKARANG, bukan di dalam closure: `widget` dibaca sesudah
         // State-nya ke-dispose itu jebakan yang sama kayak `ref`.
@@ -416,44 +419,34 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
             orderId: t.orderId,
             paymentId: t.paymentId,
             tabNumber: tabNumberSnap,
+            tableName: tableNameSnap,
             isTabPaid: tabSnap.status == 'paid',
             outstandingAmount: tabSnap.remainingAmount,
             outstandingItemCount: unpaidLeftSnap,
           );
         }
 
-        Future<void> openReceiptSheet() async {
+        // Layar sukses = tempat struk dicetak/dikirim (lihat catatan di
+        // `pay_split_modal.dart`). Target WA di-resolve dulu supaya tombol
+        // Kirim WA di sheet langsung tahu order + payment mana yang dikirim.
+        Future<void> showSuccess(TabModel paidTab, {required bool autoPrint}) async {
           final t = await resolveTarget();
-          await showTabReceiptSheet(
+          await showTabPaymentSuccessSheet(
             rootNav.context,
-            title: 'Struk $paidCountSnap item',
-            subtitle: tabNumberSnap,
+            title: paidTab.isPaid ? 'Meja lunas!' : '$paidCountSnap item dibayar',
+            subtitle: [
+              if (tableNameSnap != null) 'Meja $tableNameSnap',
+              tabNumberSnap,
+            ].join(' · '),
+            amountDue: amountDueSnap,
+            amountPaid: amountReceivedSnap,
+            remaining: paidTab.remainingAmount,
+            isTabPaid: paidTab.isPaid,
             onPrint: printReceipt,
+            autoPrint: autoPrint,
             waOrderId: t?.orderId,
             waPaymentId: t?.paymentId,
           );
-        }
-
-        SnackBarAction receiptAction() => SnackBarAction(
-              label: 'STRUK',
-              textColor: Colors.white,
-              onPressed: () => unawaited(openReceiptSheet()),
-            );
-
-        // Auto-print gak nge-block flow (Rule #54) tapi juga gak diam total —
-        // kasir wajib tau kalau struknya gagal keluar.
-        void autoPrintThenReport() {
-          unawaited(printReceipt().then((r) {
-            if (r == TabPrintResult.success) return;
-            messenger.showSnackBar(SnackBar(
-              content: Text(r == TabPrintResult.notConnected
-                  ? 'Struk belum kecetak — printer belum terhubung.'
-                  : 'Struk gagal dicetak.'),
-              backgroundColor: KasiraDS.warning,
-              duration: const Duration(seconds: 6),
-              action: receiptAction(),
-            ));
-          }));
         }
 
         // QRIS branch — switch to waiting modal, autoprint via claim-print on webhook settle
@@ -470,35 +463,29 @@ class _PayItemsModalState extends ConsumerState<PayItemsModal> {
               tabId: tabIdSnap,
               pendingQris: qris,
               onPaidAndClaimedPrint: (paymentId) async {
-                autoPrintThenReport();
+                unawaited(printReceipt());
               },
             ),
           );
           // Refresh tab post-webhook (paid → tab maybe closed; cancel/expired → items unlocked)
           final refreshed = await tabNotifier.getTab(tabIdSnap);
-          if (refreshed != null) widget.onPaid(refreshed);
+          if (refreshed != null) {
+            widget.onPaid(refreshed);
+            // Bayar-sebagian yang QRIS-nya kelar: item yang dipilih jadi paid.
+            // Kalau expired/cancel, item masih unpaid → jangan rayain.
+            final settled = refreshed.isPaid ||
+                refreshed.remainingAmount < tabSnap.remainingAmount ||
+                refreshed.paidAmount > widget.tab.paidAmount;
+            if (settled) await showSuccess(refreshed, autoPrint: false);
+          }
           return;
         }
 
         Navigator.pop(context);
         widget.onPaid(result);
 
-        // Auto-print struk per items dipay (cash only — QRIS lewat claim-print)
-        if (isCash) autoPrintThenReport();
-
-        // Konfirmasi pembayaran doang — TANPA ajakan kirim WA yang nyembul
-        // sendiri. Yang nempel di sini tombol STRUK: kasir yang mencet waktu
-        // customer-nya yang minta, dan di dalam sheet baru ada pilihan cetak
-        // atau kirim WA. Lihat catatan lengkap di `pay_split_modal.dart`.
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(result.isPaid
-                ? 'Tab lunas! Semua sudah dibayar.'
-                : '$paidCountSnap item dibayar. Sisa: ${_currency.format(result.remainingAmount)}'),
-            backgroundColor: KasiraDS.success,
-            action: receiptAction(),
-          ),
-        );
+        // Cash: auto-print + status cetak hidup di sheet sukses.
+        unawaited(showSuccess(result, autoPrint: isCash));
       } else {
         setState(() => _error = ref.read(tabProvider).error ?? 'Gagal memproses pembayaran');
       }

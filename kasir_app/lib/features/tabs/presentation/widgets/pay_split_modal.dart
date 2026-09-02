@@ -6,7 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../../core/services/tab_receipt_service.dart';
 import '../../../../core/theme/kasira_ds.dart';
-import '../../../../core/widgets/tab_receipt_sheet.dart';
+import '../../../../core/widgets/tab_payment_success_sheet.dart';
 import '../../providers/tab_provider.dart';
 import 'qris_waiting_modal.dart';
 
@@ -297,7 +297,6 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
       if (result != null) {
         // Capture stable refs SEBELUM Navigator.pop — context modal ke-deactivate
         // setelah pop, navigator + messenger tetap alive (parent page masih ada).
-        final messenger = ScaffoldMessenger.of(context);
         final rootNav = Navigator.of(context, rootNavigator: true);
 
         // ⚠️ `ref` HARAM disentuh sesudah pop. flutter_riverpod throw
@@ -315,9 +314,11 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
         final orderIdsSnap = widget.tab.orderIds;
         final splitIdSnap = widget.split?.id;
         final tabNumberSnap = widget.tab.tabNumber;
-        final receiptTitle = widget.split?.label ?? 'Struk Tab';
-        final receiptSubtitle =
-            '$tabNumberSnap · ${_currency.format(_amountDue)}';
+        final tableNameSnap = widget.tab.tableName;
+        final splitLabelSnap = widget.split?.label;
+        final amountDueSnap = _amountDue;
+        final amountReceivedSnap =
+            _amountReceived > 0 ? _amountReceived : _amountDue;
         final isCash = _paymentMethod == 'cash';
 
         // payment_id dibaca dari tab HASIL bayar, bukan dari widget.split —
@@ -337,38 +338,33 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
                 tabId: tabIdSnap, splitId: splitIdSnap)
             : printTabFullReceipt(printer, orderIds: orderIdsSnap);
 
-        void openReceiptSheet() {
-          showTabReceiptSheet(
+        // Layar sukses = tempat struk dicetak/dikirim. Dulu ini snackbar
+        // hijau dengan tombol STRUK kecil yang nimpa bar aksi bawah dan
+        // hilang sendiri dalam 4 detik — kasir yang lagi ngeladenin 4 orang
+        // di satu meja butuh jeda yang jelas, bukan notifikasi lewat.
+        Future<void> showSuccess(TabModel paidTab, {required bool autoPrint}) {
+          final subtitleParts = <String>[
+            if (tableNameSnap != null) 'Meja $tableNameSnap',
+            tabNumberSnap,
+            if (splitLabelSnap != null) splitLabelSnap,
+          ];
+          return showTabPaymentSuccessSheet(
             rootNav.context,
-            title: receiptTitle,
-            subtitle: receiptSubtitle,
+            title: paidTab.isPaid
+                ? 'Meja lunas!'
+                : (splitLabelSnap != null
+                    ? '$splitLabelSnap sudah bayar'
+                    : 'Pembayaran tercatat'),
+            subtitle: subtitleParts.join(' · '),
+            amountDue: amountDueSnap,
+            amountPaid: amountReceivedSnap,
+            remaining: paidTab.remainingAmount,
+            isTabPaid: paidTab.isPaid,
             onPrint: printReceipt,
+            autoPrint: autoPrint,
             waOrderId: orderIdsSnap.isEmpty ? null : orderIdsSnap.first,
             waPaymentId: splitPaymentId,
           );
-        }
-
-        SnackBarAction receiptAction() => SnackBarAction(
-              label: 'STRUK',
-              textColor: Colors.white,
-              onPressed: openReceiptSheet,
-            );
-
-        // Auto-print tetap gak boleh nge-block flow (Rule #54), tapi juga gak
-        // boleh diam total: kalau gagal, kasir wajib tau — dia lagi berdiri di
-        // depan customer yang nungguin struk.
-        void autoPrintThenReport() {
-          unawaited(printReceipt().then((r) {
-            if (r == TabPrintResult.success) return;
-            messenger.showSnackBar(SnackBar(
-              content: Text(r == TabPrintResult.notConnected
-                  ? 'Struk belum kecetak — printer belum terhubung.'
-                  : 'Struk gagal dicetak.'),
-              backgroundColor: KasiraDS.warning,
-              duration: const Duration(seconds: 6),
-              action: receiptAction(),
-            ));
-          }));
         }
 
         // QRIS branch — backend created Payment(pending) + Xendit QR. Switch to
@@ -390,7 +386,7 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
               onPaidAndClaimedPrint: (paymentId) async {
                 // Race-safe autoprint — only fires if backend claim-print
                 // returned claimed=true (mutex via receipt_printed_at column).
-                autoPrintThenReport();
+                unawaited(printReceipt());
               },
             ),
           );
@@ -400,14 +396,10 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
           // throw karena modal-nya udah ke-dispose duluan.
           final refreshed = await tabNotifier.getTab(tabIdSnap);
           if (refreshed != null) widget.onPaid(refreshed);
-          if (wasPaid == true && refreshed?.isPaid == true) {
-            messenger.showSnackBar(
-              SnackBar(
-                content: const Text('Tab lunas! Pembayaran QRIS confirmed.'),
-                backgroundColor: KasiraDS.success,
-                action: receiptAction(),
-              ),
-            );
+          if (wasPaid == true && refreshed != null) {
+            // Struk udah kecetak lewat claim-print di atas — sheet ini cuma
+            // buat cetak ulang / kirim WA, jangan auto-print dobel.
+            await showSuccess(refreshed, autoPrint: false);
           }
           return;
         }
@@ -415,27 +407,11 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
         Navigator.pop(context);
         widget.onPaid(result);
 
-        // Auto-print struk untuk pembayaran yg udah confirmed (cash only —
-        // QRIS nyetak lewat callback claim-print di atas).
-        if (isCash) autoPrintThenReport();
-
-        // Konfirmasi pembayaran doang — TANPA ajakan kirim WA yang nyembul
-        // sendiri. Riwayat: dulu ada snackbar kedua warna putih yang nongol
-        // 700ms kemudian cuma buat nanya "mau kirim struk via WA?"; itu dibuang
-        // dan dipindah jadi tombol aksi di snackbar ini. Ternyata masih ganggu
-        // juga — nawarin WA sesudah duit masuk bikin kasir kudu balik nanya
-        // nomor ke customer yang udah beranjak. Sekarang yang nempel di sini
-        // tombol STRUK: kasir yang mencet waktu customer-nya yang minta, dan di
-        // dalam sheet-nya baru ada pilihan cetak atau kirim WA.
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(result.isPaid
-                ? 'Tab lunas! Semua pembayaran selesai.'
-                : 'Pembayaran tercatat.'),
-            backgroundColor: KasiraDS.success,
-            action: receiptAction(),
-          ),
-        );
+        // Cash: auto-print jalan di dalam sheet sukses, statusnya kelihatan.
+        // Kalau printer mati, kasir lihat "Printer belum terhubung" di layar
+        // yang sama tempat tombol Kirim WA ada — bukan snackbar kuning yang
+        // hilang sendiri.
+        unawaited(showSuccess(result, autoPrint: isCash));
       } else {
         setState(() => _error = ref.read(tabProvider).error ?? 'Gagal memproses pembayaran');
       }

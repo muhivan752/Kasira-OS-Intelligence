@@ -32,6 +32,14 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
   TabModel? _tab;
   bool _isLoading = true;
 
+  /// Item pesanan satu meja beserta status bayarnya. Dulu halaman ini cuma
+  /// nampilin kartu ringkasan + kartu split, dan area di tengah kosong
+  /// melompong — kasir gak bisa lihat meja ini pesan apa, apalagi mana yang
+  /// udah dibayar orang pertama waktu pola warkop (bayar sebagian). Daftar
+  /// ini yang ngisi ruang itu.
+  List<TabItemModel> _items = const [];
+  bool _itemsLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -40,8 +48,24 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
 
   Future<void> _loadTab() async {
     setState(() => _isLoading = true);
-    final tab = await ref.read(tabProvider.notifier).getTab(widget.tabId);
+    final notifier = ref.read(tabProvider.notifier);
+    final tab = await notifier.getTab(widget.tabId);
     if (mounted) setState(() { _tab = tab; _isLoading = false; });
+    await _loadItems();
+  }
+
+  Future<void> _loadItems() async {
+    if (!mounted) return;
+    setState(() => _itemsLoading = true);
+    final items = await ref.read(tabProvider.notifier).getTabItems(widget.tabId);
+    if (mounted) setState(() { _items = items; _itemsLoading = false; });
+  }
+
+  /// Dipanggil tiap tab berubah karena pembayaran / tambah pesanan —
+  /// `paid_at` item cuma bisa dibaca ulang dari server.
+  void _applyTab(TabModel updated) {
+    setState(() => _tab = updated);
+    _loadItems();
   }
 
   @override
@@ -80,6 +104,12 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   TabInfoCard(tab: tab),
+                  const SizedBox(height: 16),
+                  _TabItemsSection(
+                    items: _items,
+                    loading: _itemsLoading,
+                    currency: _currency,
+                  ),
                   const SizedBox(height: 16),
                   if (tab.splits.isNotEmpty) ...[
                     Row(
@@ -183,7 +213,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
       ),
       builder: (_) => SplitBillModal(
         tab: tab,
-        onSplitDone: (updatedTab) => setState(() => _tab = updatedTab),
+        onSplitDone: _applyTab,
       ),
     );
   }
@@ -198,7 +228,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
       builder: (_) => PaySplitModal(
         tab: tab,
         split: split,
-        onPaid: (updatedTab) => setState(() => _tab = updatedTab),
+        onPaid: _applyTab,
       ),
     );
   }
@@ -213,7 +243,7 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
       builder: (_) => PaySplitModal(
         tab: tab,
         split: null,
-        onPaid: (updatedTab) => setState(() => _tab = updatedTab),
+        onPaid: _applyTab,
       ),
     );
   }
@@ -446,6 +476,169 @@ class _TabDetailPageState extends ConsumerState<TabDetailPage> {
             },
             style: FilledButton.styleFrom(backgroundColor: KasiraDS.danger),
             child: const Text('Batalkan'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// Daftar pesanan meja, dikelompokkan: yang belum dibayar di atas (itu yang
+/// masih jadi urusan kasir), yang udah lunas di bawah dengan tanda centang.
+class _TabItemsSection extends StatelessWidget {
+  final List<TabItemModel> items;
+  final bool loading;
+  final NumberFormat currency;
+
+  const _TabItemsSection({
+    required this.items,
+    required this.loading,
+    required this.currency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final unpaid = items.where((i) => !i.isPaid).toList();
+    final paid = items.where((i) => i.isPaid).toList();
+    final totalQty = items.fold<int>(0, (sum, i) => sum + i.quantity);
+
+    return Container(
+      padding: const EdgeInsets.all(KasiraDS.space4),
+      decoration: BoxDecoration(
+        color: KasiraDS.surfaceCard,
+        borderRadius: KasiraDS.brLg,
+        border: Border.all(color: KasiraDS.borderSubtle),
+        boxShadow: KasiraDS.shadowXs,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(LucideIcons.utensils, size: 18, color: KasiraDS.brandPrimary),
+              const SizedBox(width: KasiraDS.space2),
+              Text('Pesanan Meja',
+                  style: KasiraDS.sans(
+                      size: 15, weight: FontWeight.w700, color: KasiraDS.textStrong)),
+              const Spacer(),
+              if (items.isNotEmpty)
+                Text('$totalQty item',
+                    style: KasiraDS.sans(size: 12.5, color: KasiraDS.textMuted)),
+            ],
+          ),
+          const SizedBox(height: KasiraDS.space3),
+          if (loading && items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: KasiraDS.space4),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: KasiraDS.space3),
+              child: Text(
+                'Belum ada pesanan. Tap "Tambah Pesanan" di bawah.',
+                style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted),
+              ),
+            )
+          else ...[
+            ...unpaid.map((i) => _ItemRow(item: i, currency: currency)),
+            if (paid.isNotEmpty) ...[
+              if (unpaid.isNotEmpty) ...[
+                const SizedBox(height: KasiraDS.space2),
+                Row(
+                  children: [
+                    const Icon(LucideIcons.checkCheck, size: 14, color: KasiraDS.success),
+                    const SizedBox(width: 6),
+                    Text('Sudah dibayar',
+                        style: KasiraDS.sans(
+                            size: 12, weight: FontWeight.w700, color: KasiraDS.success)),
+                  ],
+                ),
+                const SizedBox(height: KasiraDS.space1),
+              ],
+              ...paid.map((i) => _ItemRow(item: i, currency: currency)),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemRow extends StatelessWidget {
+  final TabItemModel item;
+  final NumberFormat currency;
+
+  const _ItemRow({required this.item, required this.currency});
+
+  @override
+  Widget build(BuildContext context) {
+    final paid = item.isPaid;
+    final textColor = paid ? KasiraDS.textMuted : KasiraDS.textStrong;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: paid
+                  ? KasiraDS.success.withOpacity(0.12)
+                  : KasiraDS.brandPrimary.withOpacity(0.08),
+              borderRadius: KasiraDS.brSm,
+            ),
+            child: paid
+                ? const Icon(LucideIcons.check, size: 15, color: KasiraDS.success)
+                : Text('${item.quantity}×',
+                    style: KasiraDS.sans(
+                        size: 12.5,
+                        weight: FontWeight.w800,
+                        color: KasiraDS.brandPrimary)),
+          ),
+          const SizedBox(width: KasiraDS.space3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.productName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: KasiraDS.sans(
+                    size: 14,
+                    weight: FontWeight.w600,
+                    color: textColor,
+                  ).copyWith(
+                    decoration: paid ? TextDecoration.lineThrough : null,
+                    decorationColor: KasiraDS.textMuted,
+                  ),
+                ),
+                if (paid || (item.notes != null && item.notes!.trim().isNotEmpty))
+                  Text(
+                    paid
+                        ? '${item.quantity} × ${currency.format(item.unitPrice)}'
+                        : item.notes!.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: KasiraDS.space2),
+          Text(
+            currency.format(item.totalPrice),
+            style: KasiraDS.sans(size: 14, weight: FontWeight.w700, color: textColor),
           ),
         ],
       ),

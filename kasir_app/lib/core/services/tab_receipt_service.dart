@@ -107,6 +107,7 @@ Future<TabPrintResult> printTabItemsReceipt(
   required String orderId,
   required String paymentId,
   required String tabNumber,
+  String? tableName,
   required bool isTabPaid,
   required double outstandingAmount,
   required int outstandingItemCount,
@@ -122,6 +123,7 @@ Future<TabPrintResult> printTabItemsReceipt(
     final bytes = buildItemsReceipt(ItemsReceiptData.fromJson(
       data,
       tabNumber: tabNumber,
+      tableName: tableName,
       isTabPaid: isTabPaid,
       outstandingAmount: outstandingAmount,
       outstandingItemCount: outstandingItemCount,

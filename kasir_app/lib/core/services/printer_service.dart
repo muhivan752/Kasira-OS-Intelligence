@@ -363,11 +363,26 @@ class SplitReceiptData {
   final String? customFooter;
   final String dateTime;
   final String tabNumber;
+  final String? tableName;
+  final int guestCount;
+
+  /// Label metode bagi dari backend: "BAGI RATA" / "NOMINAL" / "" kalau
+  /// belum diset. Dipakai di banner biar orang tau porsinya dihitung gimana.
+  final String splitMethodLabel;
+
+  /// Seluruh pesanan MEJA (bukan porsi orang ini) — struk bagi rata gak punya
+  /// "item milik saya", jadi yang bisa dicetak ya daftar yang dibagi.
+  final List<ReceiptLineItem> items;
+  final double subtotal;
+  final double tax;
+  final double serviceCharge;
+  final double discount;
   final double tabTotal;
   final String splitLabel;
   final double splitAmount;
   final int splitPosition;
   final int splitTotalCount;
+  final int paidCount;
   final String paymentMethod;
   final double amountPaid;
   final double changeAmount;
@@ -382,11 +397,20 @@ class SplitReceiptData {
     this.customFooter,
     required this.dateTime,
     required this.tabNumber,
+    this.tableName,
+    this.guestCount = 1,
+    this.splitMethodLabel = '',
+    this.items = const [],
+    this.subtotal = 0,
+    this.tax = 0,
+    this.serviceCharge = 0,
+    this.discount = 0,
     required this.tabTotal,
     required this.splitLabel,
     required this.splitAmount,
     required this.splitPosition,
     required this.splitTotalCount,
+    this.paidCount = 0,
     required this.paymentMethod,
     required this.amountPaid,
     required this.changeAmount,
@@ -396,6 +420,16 @@ class SplitReceiptData {
   });
 
   static SplitReceiptData fromJson(Map<String, dynamic> j) {
+    final itemsRaw = (j['items'] as List?) ?? const [];
+    final items = itemsRaw.map((e) {
+      final m = Map<String, dynamic>.from(e as Map);
+      return ReceiptLineItem(
+        name: (m['name'] ?? 'Item').toString(),
+        qty: (m['qty'] as num?)?.toInt() ?? 1,
+        price: (m['price'] as num?)?.toDouble() ?? 0,
+        notes: m['notes']?.toString(),
+      );
+    }).toList();
     return SplitReceiptData(
       outletName: (j['outlet_name'] ?? 'Kasira').toString(),
       outletAddress: (j['outlet_address'] ?? '').toString(),
@@ -403,11 +437,20 @@ class SplitReceiptData {
       customFooter: j['custom_footer']?.toString(),
       dateTime: (j['date_time'] ?? '').toString(),
       tabNumber: (j['tab_number'] ?? '').toString(),
+      tableName: j['table_name']?.toString(),
+      guestCount: (j['guest_count'] as num?)?.toInt() ?? 1,
+      splitMethodLabel: (j['split_method_label'] ?? '').toString(),
+      items: items,
+      subtotal: (j['subtotal'] as num?)?.toDouble() ?? 0,
+      tax: (j['tax'] as num?)?.toDouble() ?? 0,
+      serviceCharge: (j['service_charge'] as num?)?.toDouble() ?? 0,
+      discount: (j['discount'] as num?)?.toDouble() ?? 0,
       tabTotal: (j['tab_total'] as num?)?.toDouble() ?? 0,
       splitLabel: (j['split_label'] ?? 'Patungan').toString(),
       splitAmount: (j['split_amount'] as num?)?.toDouble() ?? 0,
       splitPosition: (j['split_position'] as num?)?.toInt() ?? 1,
       splitTotalCount: (j['split_total_count'] as num?)?.toInt() ?? 1,
+      paidCount: (j['paid_count'] as num?)?.toInt() ?? 0,
       paymentMethod: (j['payment_method'] ?? 'Tunai').toString(),
       amountPaid: (j['amount_paid'] as num?)?.toDouble() ?? 0,
       changeAmount: (j['change_amount'] as num?)?.toDouble() ?? 0,
@@ -649,6 +692,7 @@ class ItemsReceiptData {
   final String? customFooter;
   final String dateTime;
   final String tabNumber;
+  final String? tableName;
   final List<ReceiptLineItem> items;
   final double itemsSubtotal;
   final double tax;
@@ -668,6 +712,7 @@ class ItemsReceiptData {
     this.customFooter,
     required this.dateTime,
     required this.tabNumber,
+    this.tableName,
     required this.items,
     required this.itemsSubtotal,
     required this.tax,
@@ -681,7 +726,7 @@ class ItemsReceiptData {
     required this.outstandingItemCount,
   });
 
-  static ItemsReceiptData fromJson(Map<String, dynamic> j, {required String tabNumber, required bool isTabPaid, required double outstandingAmount, required int outstandingItemCount}) {
+  static ItemsReceiptData fromJson(Map<String, dynamic> j, {required String tabNumber, String? tableName, required bool isTabPaid, required double outstandingAmount, required int outstandingItemCount}) {
     final itemsRaw = (j['items'] as List?) ?? const [];
     final items = itemsRaw.map((e) {
       final m = Map<String, dynamic>.from(e as Map);
@@ -699,6 +744,7 @@ class ItemsReceiptData {
       customFooter: j['custom_footer']?.toString(),
       dateTime: (j['date_time'] ?? '').toString(),
       tabNumber: tabNumber,
+      tableName: tableName,
       items: items,
       itemsSubtotal: (j['subtotal'] as num?)?.toDouble() ?? 0,
       tax: (j['tax'] as num?)?.toDouble() ?? 0,
@@ -737,14 +783,18 @@ Uint8List buildItemsReceipt(ItemsReceiptData d) {
   bytes.addAll([0x0A]);
 
   bytes.addAll(EscPos.boldOn);
-  bytes.addAll(EscPos.line('*** PEMBAYARAN PESANAN ***'));
+  bytes.addAll(EscPos.line('BAYAR SEBAGIAN'));
   bytes.addAll(EscPos.boldOff);
+  bytes.addAll(EscPos.line('${d.items.length} item dari pesanan meja'));
   bytes.addAll([0x0A]);
 
   bytes.addAll(EscPos.alignLeft);
   bytes.addAll(EscPos.divider(width: w));
-  bytes.addAll(EscPos.line('Tab : ${d.tabNumber}'));
-  bytes.addAll(EscPos.line('Tgl : ${d.dateTime}'));
+  if (d.tableName != null && d.tableName!.isNotEmpty) {
+    bytes.addAll(EscPos.line('Meja : ${d.tableName}'));
+  }
+  bytes.addAll(EscPos.line('Tab  : ${d.tabNumber}'));
+  bytes.addAll(EscPos.line('Tgl  : ${d.dateTime}'));
   bytes.addAll(EscPos.divider(width: w));
 
   // Items
@@ -810,15 +860,24 @@ Uint8List buildItemsReceipt(ItemsReceiptData d) {
   return Uint8List.fromList(bytes);
 }
 
-/// Split receipt — struk per orang yg bayar patungan.
-/// Banner "BAYAR PATUNGAN" + "Tamu X dari N", footer "Bill belum lunas, Y orang lagi"
-/// atau "Bill SUDAH LUNAS" kalau split terakhir close tab.
+/// Split receipt — struk per orang yang bayar bagi rata / nominal.
+///
+/// Versi lama cuma nulis "Total Bill" + "BAGIAN ANDA" tanpa satu pun nama
+/// item — orang yang megang struk gak bisa nyocokin dia bayar buat apa, dan
+/// kasir yang ditanya juga cuma bisa nunjuk layar. Sekarang urutannya ngikutin
+/// cara orang baca struk patungan:
+///   1. banner: SPLIT BILL · cara bagi · "Tamu 1 dari 4"
+///   2. konteks meja: meja, nomor tab, tanggal
+///   3. PESANAN MEJA: semua item yang dibagi (ini yang dulu hilang)
+///   4. total meja → dibagi N → BAGIAN ANDA (angka besar) → bayar/kembali
+///   5. status meja: "Sudah bayar 1 dari 4 · Sisa Rp x" atau LUNAS
 Uint8List buildSplitReceipt(SplitReceiptData d) {
   final bytes = <int>[];
   const w = 32;
 
   bytes.addAll(EscPos.init);
 
+  // ── Header outlet ──
   bytes.addAll(EscPos.alignCenter);
   bytes.addAll(EscPos.boldOn);
   bytes.addAll(EscPos.fontBig);
@@ -826,50 +885,93 @@ Uint8List buildSplitReceipt(SplitReceiptData d) {
   bytes.addAll(EscPos.fontNormal);
   bytes.addAll(EscPos.boldOff);
   if (d.outletAddress.isNotEmpty) {
-    bytes.addAll(EscPos.line(d.outletAddress));
+    for (final l in _wrapWords(d.outletAddress, w)) {
+      bytes.addAll(EscPos.line(l));
+    }
   }
   if (d.taxNumber != null && d.taxNumber!.isNotEmpty) {
     bytes.addAll(EscPos.line('NPWP: ${d.taxNumber}'));
   }
   bytes.addAll([0x0A]);
 
+  // ── Banner split ──
   bytes.addAll(EscPos.boldOn);
-  bytes.addAll(EscPos.line('*** BAYAR PATUNGAN ***'));
+  bytes.addAll(EscPos.line(d.splitMethodLabel.isEmpty
+      ? 'SPLIT BILL'
+      : 'SPLIT BILL - ${d.splitMethodLabel}'));
   bytes.addAll(EscPos.boldOff);
-  bytes.addAll(EscPos.line('${d.splitLabel} (${d.splitPosition} dari ${d.splitTotalCount})'));
+  bytes.addAll(EscPos.line(
+      '${d.splitLabel} (${d.splitPosition} dari ${d.splitTotalCount})'));
   bytes.addAll([0x0A]);
 
+  // ── Konteks meja ──
   bytes.addAll(EscPos.alignLeft);
   bytes.addAll(EscPos.divider(width: w));
-  bytes.addAll(EscPos.line('Tab : ${d.tabNumber}'));
-  bytes.addAll(EscPos.line('Tgl : ${d.dateTime}'));
+  if (d.tableName != null && d.tableName!.isNotEmpty) {
+    bytes.addAll(EscPos.line('Meja : ${d.tableName}'));
+  }
+  bytes.addAll(EscPos.line('Tab  : ${d.tabNumber}'));
+  bytes.addAll(EscPos.line('Tgl  : ${d.dateTime}'));
   bytes.addAll(EscPos.divider(width: w));
 
-  bytes.addAll(EscPos.rowLR('Total Bill', _rp(d.tabTotal), width: w));
-  bytes.addAll(EscPos.divider(width: w));
-
-  bytes.addAll(EscPos.boldOn);
-  bytes.addAll(EscPos.rowLR('BAGIAN ANDA', _rp(d.splitAmount), width: w));
-  bytes.addAll(EscPos.boldOff);
-  bytes.addAll(EscPos.line('Metode : ${d.paymentMethod}'));
-  if (d.paymentMethod == 'Tunai') {
-    bytes.addAll(EscPos.rowLR('Dibayar', _rp(d.amountPaid), width: w));
-    if (d.changeAmount > 0) {
-      bytes.addAll(EscPos.rowLR('Kembali', _rp(d.changeAmount), width: w));
+  // ── Pesanan meja (yang dibagi) ──
+  if (d.items.isNotEmpty) {
+    bytes.addAll(EscPos.line(d.guestCount > 1
+        ? 'PESANAN MEJA (${d.guestCount} orang)'
+        : 'PESANAN MEJA'));
+    for (final item in d.items) {
+      for (final nameLine in _wrapWords(item.name, w)) {
+        bytes.addAll(EscPos.line(nameLine));
+      }
+      bytes.addAll(EscPos.rowLR(
+        '  ${item.qty}x${_rp(item.price)}',
+        _rp(item.subtotal),
+        width: w,
+      ));
     }
+    bytes.addAll(EscPos.divider(width: w));
+    if (d.tax > 0 || d.serviceCharge > 0 || d.discount > 0) {
+      bytes.addAll(EscPos.rowLR('Subtotal', _rp(d.subtotal), width: w));
+      if (d.discount > 0) {
+        bytes.addAll(EscPos.rowLR('Diskon', '-${_rp(d.discount)}', width: w));
+      }
+      if (d.serviceCharge > 0) {
+        bytes.addAll(EscPos.rowLR('Service', _rp(d.serviceCharge), width: w));
+      }
+      if (d.tax > 0) {
+        bytes.addAll(EscPos.rowLR('Pajak', _rp(d.tax), width: w));
+      }
+    }
+  }
+  bytes.addAll(EscPos.rowLR('TOTAL MEJA', _rp(d.tabTotal), width: w));
+  if (d.splitTotalCount > 1) {
+    bytes.addAll(EscPos.line('Dibagi ${d.splitTotalCount} orang'));
   }
   bytes.addAll(EscPos.divider(width: w));
 
+  // ── Bagian orang ini — angka yang paling dicari, dibikin paling besar ──
+  bytes.addAll(EscPos.boldOn);
+  bytes.addAll(EscPos.fontBig);
+  bytes.addAll(EscPos.rowLR('ANDA', _rp(d.splitAmount), width: w ~/ 2));
+  bytes.addAll(EscPos.fontNormal);
+  bytes.addAll(EscPos.boldOff);
+  bytes.addAll(EscPos.rowLR('Bayar (${d.paymentMethod})', _rp(d.amountPaid), width: w));
+  if (d.changeAmount > 0) {
+    bytes.addAll(EscPos.rowLR('Kembali', _rp(d.changeAmount), width: w));
+  }
+  bytes.addAll(EscPos.divider(width: w));
+
+  // ── Status meja ──
   bytes.addAll(EscPos.alignCenter);
   if (d.isTabPaid) {
     bytes.addAll(EscPos.boldOn);
-    bytes.addAll(EscPos.line('*** BILL SUDAH LUNAS ***'));
+    bytes.addAll(EscPos.line('MEJA SUDAH LUNAS'));
     bytes.addAll(EscPos.boldOff);
     bytes.addAll(EscPos.line('Terima kasih atas kunjungan Anda'));
   } else {
-    final orangText = d.outstandingCount == 1 ? '1 orang lagi' : '${d.outstandingCount} orang lagi';
-    bytes.addAll(EscPos.line('Bill belum lunas — $orangText'));
-    bytes.addAll(EscPos.line('Sisa: ${_rp(d.outstandingAmount)}'));
+    bytes.addAll(EscPos.line(
+        'Sudah bayar ${d.paidCount} dari ${d.splitTotalCount} orang'));
+    bytes.addAll(EscPos.line('Sisa tagihan meja: ${_rp(d.outstandingAmount)}'));
   }
   bytes.addAll([0x0A]);
 

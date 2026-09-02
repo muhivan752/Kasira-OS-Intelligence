@@ -119,6 +119,11 @@ class _PosPageState extends ConsumerState<PosPage> {
             color: KasiraDS.surfaceCard,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
+          // Sheet-nya nempel sampai pinggir bawah layar, jadi tombol "Bayar
+          // sekarang" keteken tombol navigasi sistem di HP 3-button (kelihatan
+          // di device 2026-09-02). Padding ini ngangkat isi sheet ke atas zona
+          // navigasi.
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
           child: Column(
             children: [
               const SizedBox(height: 12),
@@ -295,36 +300,62 @@ class _PosPageState extends ConsumerState<PosPage> {
 
     final addOrderCtx = ref.watch(addOrderContextProvider);
 
+    // Banner konteks ("Tambah Pesanan → TAB-xxx") dan banner offline dulunya
+    // ditaruh langsung di atas header TANPA SafeArea, padahal header-nya yang
+    // ngurus padding status bar. Hasilnya banner nimpa jam + ikon sinyal
+    // (kelihatan di device 2026-09-02). Sekarang banner yang ngambil zona
+    // status bar, dan header di bawahnya dilepas dari padding itu — kalau
+    // nggak, status bar kepadding dua kali.
+    final hasTopBanner = addOrderCtx != null || _isOffline;
+    final layout = isWide
+        ? _buildTabletLayout(productsAsync, posMode)
+        : _buildPhoneLayout(context, productsAsync, posMode);
+
     return Scaffold(
       backgroundColor: KasiraDS.bgBase,
       body: Column(
         children: [
-          if (addOrderCtx != null)
-            _AddOrderBanner(context_: addOrderCtx),
-          if (_isOffline)
+          if (hasTopBanner)
             Container(
-              width: double.infinity,
-              color: KasiraDS.warning,
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(LucideIcons.wifiOff, size: 14, color: Colors.white),
-                  SizedBox(width: 6),
-                  Text(
-                    'Mode Offline — Transaksi disimpan & sync saat online',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12),
-                  ),
-                ],
+              color: KasiraDS.surfaceCard,
+              child: SafeArea(
+                bottom: false,
+                child: Column(
+                  children: [
+                    if (addOrderCtx != null)
+                      _AddOrderBanner(context_: addOrderCtx),
+                    if (_isOffline)
+                      Container(
+                        width: double.infinity,
+                        color: KasiraDS.warning,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(LucideIcons.wifiOff, size: 14, color: Colors.white),
+                            SizedBox(width: 6),
+                            Text(
+                              'Mode Offline — Transaksi disimpan & sync saat online',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           Expanded(
-            child: isWide
-                ? _buildTabletLayout(productsAsync, posMode)
-                : _buildPhoneLayout(context, productsAsync, posMode),
+            child: hasTopBanner
+                ? MediaQuery.removePadding(
+                    context: context,
+                    removeTop: true,
+                    child: layout,
+                  )
+                : layout,
           ),
         ],
       ),

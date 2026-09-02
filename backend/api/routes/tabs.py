@@ -1584,7 +1584,10 @@ async def get_tab_items(
             "id": str(i.id),
             "order_id": str(i.order_id),
             "product_id": str(i.product_id) if i.product_id else None,
-            "product_name": i.product.name if i.product else "Item",
+            # `product_name` = property yang udah nyambungin varian
+            # ("Kopi Susu (Dingin)"). Dulu baca `i.product.name` langsung —
+            # daftar item split bill kehilangan varian (gotcha #26).
+            "product_name": i.product_name or "Item",
             "quantity": i.quantity,
             "unit_price": float(i.unit_price),
             "total_price": float(i.total_price),
@@ -1659,6 +1662,33 @@ async def get_split_receipt(
     payment_method_raw = payment.payment_method if payment else "cash"
     payment_method_label = method_label_map.get(payment_method_raw, payment_method_raw.upper())
 
+    # Daftar pesanan SATU MEJA — struk split versi lama cuma nulis
+    # "Total Bill / BAGIAN ANDA" tanpa satu pun nama item, jadi orang yang
+    # bayar Rp 28.750 gak pernah tau itu buat apa. Sekarang seluruh pesanan
+    # meja ikut dicetak (ini bagi rata / nominal — porsinya bukan per item),
+    # dan pemakai struk bisa nyocokin sendiri.
+    items_out = []
+    for o in tab.orders:
+        if o.deleted_at is not None or o.status == 'cancelled':
+            continue
+        for it in o.items:
+            if it.deleted_at is not None:
+                continue
+            items_out.append({
+                "name": it.product_name or "Item",
+                "qty": it.quantity,
+                "price": float(it.unit_price or 0),
+                "subtotal": float(it.total_price or 0),
+                "notes": it.notes,
+            })
+
+    split_method_label = {
+        "equal": "BAGI RATA",
+        "custom": "NOMINAL",
+        "per_item": "PER ITEM",
+        "full": "PENUH",
+    }.get(tab.split_method or "", "")
+
     data = {
         "outlet_name": outlet.name or "Kasira",
         "outlet_address": outlet.address or "",
@@ -1666,11 +1696,21 @@ async def get_split_receipt(
         "custom_footer": tax_cfg.receipt_footer if tax_cfg else None,
         "date_time": date_time,
         "tab_number": tab.tab_number,
+        "table_name": tab.table.name if tab.table else None,
+        "guest_count": int(tab.guest_count or 1),
+        "split_method": tab.split_method,
+        "split_method_label": split_method_label,
+        "items": items_out,
+        "subtotal": float(tab.subtotal or 0),
+        "tax": float(tab.tax_amount or 0),
+        "service_charge": float(tab.service_charge_amount or 0),
+        "discount": float(tab.discount_amount or 0),
         "tab_total": float(tab.total_amount or 0),
         "split_label": split.label,
         "split_amount": float(split.amount or 0),
         "split_position": position,
         "split_total_count": total_splits,
+        "paid_count": paid_count,
         "payment_method": payment_method_label,
         "amount_paid": float(payment.amount_paid) if payment else float(split.amount or 0),
         "change_amount": float(payment.change_amount) if payment else 0.0,
