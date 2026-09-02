@@ -107,15 +107,16 @@ async def create_order(
         if not shift:
             raise HTTPException(status_code=400, detail="Shift tidak ditemukan atau sudah ditutup. Buka shift terlebih dahulu.")
     else:
-        # Cek ada shift terbuka untuk user ini
+        # Shift terbuka di outlet ini, siapa pun yang membukanya (gotcha #34:
+        # laci kas dipakai bareng). Di-filter per user, kasir kedua yang gabung
+        # shift rekannya bakal ditolak walau lacinya jelas terbuka.
         open_shift = (await db.execute(
             select(Shift).where(
                 Shift.outlet_id == order_in.outlet_id,
-                Shift.user_id == current_user.id,
                 Shift.status == ShiftStatus.open,
                 Shift.deleted_at.is_(None),
-            )
-        )).scalar_one_or_none()
+            ).order_by(Shift.start_time.desc())
+        )).scalars().first()
         if not open_shift:
             raise HTTPException(status_code=400, detail="Belum ada shift terbuka. Silakan buka shift terlebih dahulu.")
 
