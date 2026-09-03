@@ -74,6 +74,11 @@ export default function SettingsPage() {
         });
         setStockMode(data.stock_mode || 'simple');
         setShiftMode(data.shift_mode || 'ringan');
+        setOnline({
+          online_orders_enabled: data.online_orders_enabled ?? true,
+          online_notify_owner_wa: data.online_notify_owner_wa ?? true,
+          online_auto_cancel_minutes: data.online_auto_cancel_minutes ?? 10,
+        });
 
         // Load tax config
         try {
@@ -118,6 +123,26 @@ export default function SettingsPage() {
 
   const [showStockModeConfirm, setShowStockModeConfirm] = useState<string | null>(null);
   const [stockModeSuccess, setStockModeSuccess] = useState('');
+
+  // Pesanan online (mig 101). Toggle disimpan langsung, tanpa tombol simpan.
+  const [online, setOnline] = useState({ online_orders_enabled: true, online_notify_owner_wa: true, online_auto_cancel_minutes: 10 });
+  const [onlineMsg, setOnlineMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [onlineSaving, setOnlineSaving] = useState(false);
+  const handleOnlineChange = async (patch: Partial<typeof online>) => {
+    if (!outlet) return;
+    const next = { ...online, ...patch };
+    setOnline(next);
+    setOnlineSaving(true);
+    setOnlineMsg(null);
+    const res = await updateOutlet(outlet.id, patch);
+    setOnlineSaving(false);
+    if (res.success) {
+      setOnlineMsg({ ok: true, text: patch.online_orders_enabled === false ? 'Pesanan online dihentikan sementara. Halaman toko menampilkan pemberitahuan.' : 'Tersimpan.' });
+    } else {
+      setOnline(online);
+      setOnlineMsg({ ok: false, text: res.message || 'Gagal menyimpan' });
+    }
+  };
 
   const handleShiftModeChange = async (mode: 'ringan' | 'standar' | 'ketat') => {
     if (!outlet || mode === shiftMode) return;
@@ -518,6 +543,48 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+
+          {/* Pesanan online dari halaman toko (semua tier). */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+              <Store className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-bold text-gray-900">Pesanan Online</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                Pesanan dari halaman toko masuk ke aplikasi kasir sebagai "Menunggu konfirmasi". Kasir menerima dengan perkiraan waktu atau menolak dengan alasan, dan pelanggan dikabari lewat WhatsApp di setiap tahap.
+              </p>
+              {onlineMsg && <p className={`text-sm ${onlineMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{onlineMsg.text}</p>}
+              <label className="flex items-start gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer">
+                <input type="checkbox" className="mt-1" checked={online.online_orders_enabled} disabled={onlineSaving}
+                  onChange={e => handleOnlineChange({ online_orders_enabled: e.target.checked })} />
+                <div>
+                  <p className="font-semibold text-gray-900">Terima pesanan online</p>
+                  <p className="text-sm text-gray-600 mt-0.5">Matikan saat tidak ada yang menjaga aplikasi kasir. Menu tetap bisa dilihat, tombol pesan dinonaktifkan.</p>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer">
+                <input type="checkbox" className="mt-1" checked={online.online_notify_owner_wa} disabled={onlineSaving}
+                  onChange={e => handleOnlineChange({ online_notify_owner_wa: e.target.checked })} />
+                <div>
+                  <p className="font-semibold text-gray-900">Kabar WhatsApp ke pemilik</p>
+                  <p className="text-sm text-gray-600 mt-0.5">Cadangan bila aplikasi kasir tertutup: ringkasan pesanan dikirim ke nomor WhatsApp toko, atau nomor outlet bila kosong.</p>
+                </div>
+              </label>
+              <div className="p-4 border border-gray-200 rounded-xl">
+                <p className="font-semibold text-gray-900">Batas konfirmasi</p>
+                <p className="text-sm text-gray-600 mt-0.5 mb-3">Pesanan yang belum dikonfirmasi lewat batas ini dibatalkan otomatis. Pembayaran QRIS dikembalikan ke pelanggan.</p>
+                <div className="flex flex-wrap gap-2">
+                  {[5, 10, 15, 20, 30].map(m => (
+                    <button key={m} type="button" disabled={onlineSaving} onClick={() => handleOnlineChange({ online_auto_cancel_minutes: m })}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${online.online_auto_cancel_minutes === m ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+                      {m} menit
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Mode kas (semua tier). Profil nempel di outlet, bukan tier:
               satu akun Business bisa punya kios Ringan dan flagship Ketat. */}

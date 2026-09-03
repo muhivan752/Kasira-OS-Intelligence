@@ -13,14 +13,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     if (!res.ok) return {};
     const { data } = await res.json();
     const name = data?.outlet?.name || slug;
-    const desc = `Pesan online dari ${name}. Menu lengkap, harga transparan, bayar via QRIS. Powered by ${BRAND}.`;
+    const desc = `Pesan langsung dari ${name}. Dikonfirmasi toko, status pesanan bisa dilacak, bayar QRIS atau di kasir. Didukung ${BRAND}.`;
     return {
-      title: `${name} · Menu & Pesan Online`,
+      title: `${name} · Pesan Online`,
       description: desc,
       openGraph: {
-        title: `${name} · Menu & Pesan Online`,
+        title: `${name} · Pesan Online`,
         description: desc,
         url: `${SITE_URL}/${slug}`,
+        images: data?.outlet?.cover_image_url ? [data.outlet.cover_image_url] : undefined,
       },
     };
   } catch {
@@ -39,7 +40,7 @@ export default async function StorefrontLayout({
 
   return (
     <CartProvider slug={slug}>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-body)]">
         {children}
       </div>
     </CartProvider>

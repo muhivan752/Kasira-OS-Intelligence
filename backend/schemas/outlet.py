@@ -26,6 +26,11 @@ class OutletUpdate(BaseModel):
     cover_image_url: Optional[str] = None
     # Profil kas (mig 098). 'ketat' baru punya perilaku di gelombang 3.
     shift_mode: Optional[Literal['ringan', 'standar', 'ketat']] = None
+    # Pesanan online (mig 101)
+    online_orders_enabled: Optional[bool] = None
+    online_notify_owner_wa: Optional[bool] = None
+    online_auto_cancel_minutes: Optional[int] = Field(default=None, ge=3, le=60)
+    kitchen_mode: Optional[Literal['off', 'display', 'print']] = None
 
 class OutletPaymentSetup(BaseModel):
     xendit_business_id: str
@@ -58,6 +63,10 @@ class OutletInDBBase(OutletBase):
     cover_image_url: Optional[str] = None
     stock_mode: str = "simple"
     shift_mode: str = "ringan"
+    online_orders_enabled: bool = True
+    online_notify_owner_wa: bool = True
+    online_auto_cancel_minutes: int = 10
+    kitchen_mode: str = "off"
     row_version: int
     created_at: datetime
     updated_at: datetime

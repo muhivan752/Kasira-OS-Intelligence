@@ -17,7 +17,15 @@ from backend.models.outlet import Outlet
 from backend.models.outlet_tax_config import OutletTaxConfig
 from backend.models.shift import Shift, ShiftStatus
 from backend.models.tenant import Tenant
-from backend.schemas.order import OrderCreate, OrderUpdateStatus, OrderResponse, OrderStatus, OrderType
+from backend.schemas.order import OrderCreate, OrderUpdateStatus, OrderResponse, OrderStatus, OrderType, OrderAccept, OrderReject
+import asyncio
+import json
+from fastapi.responses import StreamingResponse
+from backend.services import online_orders
+from backend.services.order_lifecycle import (
+    accept_order, cancel_order, mark_ready,
+    restore_stock_for_order, recalc_tab_after_cancel, release_table_if_idle,
+)
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.models.reservation import Table
@@ -423,6 +431,183 @@ async def read_orders(
         request_id=request.state.request_id
     )
 
+ONLINE_ACTIVE_STATUSES = ("pending", "preparing", "ready")
+
+
+async def _attach_payment_info(db, orders) -> list:
+    order_ids = [o.id for o in orders]
+    payment_map: dict = {}
+    if order_ids:
+        pay_result = await db.execute(
+            select(Payment.order_id, Payment.payment_method, Payment.status).where(
+                Payment.order_id.in_(order_ids), Payment.deleted_at.is_(None),
+            ).order_by(Payment.created_at.asc())
+        )
+        for row in pay_result.all():
+            payment_map[row.order_id] = {"payment_method": row.payment_method, "payment_status": row.status}
+    out = []
+    for o in orders:
+        resp = OrderResponse.model_validate(o)
+        info = payment_map.get(o.id)
+        if info:
+            resp.payment_method = info["payment_method"]
+            resp.payment_status = info["payment_status"]
+        out.append(resp)
+    return out
+
+
+async def _owned_outlet(db, outlet_id: UUID, current_user: User) -> Outlet:
+    outlet = (await db.execute(
+        select(Outlet).where(Outlet.id == outlet_id, Outlet.tenant_id == current_user.tenant_id, Outlet.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=403, detail="Outlet tidak ditemukan atau bukan milik tenant Anda")
+    return outlet
+
+
+@router.get("/online", response_model=StandardResponse[List[OrderResponse]])
+async def read_online_orders(
+    request: Request,
+    outlet_id: UUID,
+    include_done: bool = False,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Pesanan dari storefront untuk layar "Pesanan Online" di app kasir.
+
+    Default: yang masih hidup (pending, preparing, ready). QRIS yang belum
+    dibayar SENGAJA disaring: kasir nggak perlu lihat pesanan yang pelanggannya
+    belum tentu bayar. `include_done=true` menambahkan selesai/batal hari ini.
+    """
+    await _owned_outlet(db, outlet_id, current_user)
+    q = select(Order).options(selectinload(Order.items).selectinload(OrderItem.product)).where(
+        Order.outlet_id == outlet_id, Order.source == "storefront", Order.deleted_at.is_(None),
+    )
+    if include_done:
+        start_today = datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=24)
+        q = q.where((Order.status.in_(ONLINE_ACTIVE_STATUSES)) | (Order.created_at >= start_today))
+    else:
+        q = q.where(Order.status.in_(ONLINE_ACTIVE_STATUSES))
+    q = q.order_by(Order.created_at.desc()).limit(limit)
+    orders = (await db.execute(q)).scalars().all()
+    responses = await _attach_payment_info(db, orders)
+    # Saring QRIS belum lunas dari daftar aktif.
+    responses = [
+        r for r in responses
+        if not (r.status == OrderStatus.pending and r.payment_method == "qris" and r.payment_status != "paid")
+    ]
+    return StandardResponse(success=True, data=responses, request_id=request.state.request_id)
+
+
+@router.get("/stream")
+async def stream_orders(
+    outlet_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """SSE: kabar real-time pesanan online (order.created / accepted / ready / cancelled).
+
+    Sumbernya Redis pub/sub kanal `orders:{outlet_id}` (lihat services/online_orders).
+    Heartbeat komentar tiap 15 detik supaya koneksi lewat nginx dan Cloudflare
+    nggak dianggap idle. Klien yang putus cukup connect lagi lalu GET /orders/online.
+    """
+    await _owned_outlet(db, outlet_id, current_user)
+
+    async def gen():
+        pubsub = online_orders._redis.pubsub()
+        await pubsub.subscribe(online_orders.channel_for(outlet_id))
+        try:
+            yield "event: hello\ndata: {}\n\n"
+            while True:
+                msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=15.0)
+                if msg is None:
+                    yield ": ping\n\n"
+                    continue
+                data = msg.get("data")
+                if isinstance(data, (bytes, bytearray)):
+                    data = data.decode()
+                try:
+                    ev = json.loads(data).get("type", "message")
+                except Exception:  # noqa: BLE001
+                    ev = "message"
+                yield f"event: {ev}\ndata: {data}\n\n"
+        except asyncio.CancelledError:
+            raise
+        finally:
+            try:
+                await pubsub.unsubscribe(online_orders.channel_for(outlet_id))
+                await pubsub.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive",
+    })
+
+
+async def _load_order_full(db, order_id: UUID) -> Order:
+    order = (await db.execute(
+        select(Order).options(selectinload(Order.items).selectinload(OrderItem.product)).where(Order.id == order_id)
+    )).scalar_one_or_none()
+    if not order or order.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Order tidak ditemukan")
+    return order
+
+
+@router.post("/{order_id}/accept", response_model=StandardResponse[OrderResponse])
+async def accept_online_order(
+    request: Request,
+    order_id: UUID,
+    body: OrderAccept,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Toko menerima pesanan online + memberi perkiraan waktu. pending -> preparing."""
+    order = await _load_order_full(db, order_id)
+    outlet = await _owned_outlet(db, order.outlet_id, current_user)
+    if str(getattr(order.status, 'value', order.status)) != "pending":
+        raise HTTPException(status_code=400, detail="Pesanan ini sudah diproses")
+    await accept_order(db, order, outlet, eta_minutes=body.eta_minutes, actor_user_id=current_user.id)
+    phone = order.customer_phone
+    await db.commit()
+    await log_audit(db=db, action="ACCEPT_ONLINE_ORDER", entity="order", entity_id=order.id,
+                    after_state={"eta_minutes": body.eta_minutes}, user_id=current_user.id, tenant_id=current_user.tenant_id)
+    if order.source == "storefront":
+        asyncio.create_task(online_orders.wa_customer(outlet, phone, online_orders.msg_accepted(order, outlet)))
+    order = await _load_order_full(db, order_id)
+    return StandardResponse(success=True, data=(await _attach_payment_info(db, [order]))[0],
+                            request_id=request.state.request_id, message="Pesanan diterima")
+
+
+@router.post("/{order_id}/reject", response_model=StandardResponse[OrderResponse])
+async def reject_online_order(
+    request: Request,
+    order_id: UUID,
+    body: OrderReject,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Toko menolak pesanan online dengan alasan. Stok kembali, QRIS di-refund, pelanggan dikabari."""
+    order = await _load_order_full(db, order_id)
+    outlet = await _owned_outlet(db, order.outlet_id, current_user)
+    if str(getattr(order.status, 'value', order.status)) in ("completed", "cancelled"):
+        raise HTTPException(status_code=400, detail="Pesanan ini sudah selesai atau dibatalkan")
+    info = await cancel_order(db, order, outlet, reason=body.reason, actor_user_id=current_user.id, by="cashier")
+    phone = order.customer_phone
+    await db.commit()
+    await log_audit(db=db, action="REJECT_ONLINE_ORDER", entity="order", entity_id=order.id,
+                    after_state={"reason": body.reason, **info}, user_id=current_user.id, tenant_id=current_user.tenant_id)
+    if order.source == "storefront":
+        asyncio.create_task(online_orders.wa_customer(
+            outlet, phone, online_orders.msg_cancelled(order, outlet, refund_amount=info["refund_amount"], refund_manual=info["refund_manual"])))
+        if info["refund_manual"] and info["refund_amount"]:
+            asyncio.create_task(online_orders.wa_owner(outlet, online_orders.msg_owner_refund_manual(order, outlet, info["refund_amount"])))
+    order = await _load_order_full(db, order_id)
+    return StandardResponse(success=True, data=(await _attach_payment_info(db, [order]))[0],
+                            request_id=request.state.request_id, message="Pesanan ditolak")
+
+
 @router.get("/{order_id}", response_model=StandardResponse[OrderResponse])
 async def read_order(
     request: Request,
@@ -475,6 +660,31 @@ async def update_order_status(
         )
 
     before_state = {"status": order.status}
+    is_storefront = getattr(order, 'source', 'pos') == 'storefront'
+    cur_status = str(getattr(order.status, 'value', order.status))
+
+    # Pesanan online punya efek samping yang pesanan kasir nggak punya (WA ke
+    # pelanggan, refund QRIS, perkiraan waktu). Tombol lama di app ("Terima &
+    # Proses" = preparing, "Tolak" = cancelled) tetap jalan lewat sini.
+    if is_storefront and status_in.status == OrderStatus.cancelled:
+        outlet = await db.get(Outlet, order.outlet_id)
+        info = await cancel_order(db, order, outlet, reason="Dibatalkan oleh toko", actor_user_id=current_user.id, by="cashier")
+        phone = order.customer_phone
+        await db.commit()
+        if outlet is not None:
+            asyncio.create_task(online_orders.wa_customer(
+                outlet, phone, online_orders.msg_cancelled(order, outlet, refund_amount=info["refund_amount"], refund_manual=info["refund_manual"])))
+            if info["refund_manual"] and info["refund_amount"]:
+                asyncio.create_task(online_orders.wa_owner(outlet, online_orders.msg_owner_refund_manual(order, outlet, info["refund_amount"])))
+        return await _status_response(db, request, order_id, before_state, current_user, "Pesanan dibatalkan")
+    if is_storefront and status_in.status == OrderStatus.preparing and cur_status == "pending":
+        outlet = await db.get(Outlet, order.outlet_id)
+        await accept_order(db, order, outlet, eta_minutes=15, actor_user_id=current_user.id)
+        phone = order.customer_phone
+        await db.commit()
+        if outlet is not None:
+            asyncio.create_task(online_orders.wa_customer(outlet, phone, online_orders.msg_accepted(order, outlet)))
+        return await _status_response(db, request, order_id, before_state, current_user, "Pesanan diterima")
 
     stmt = (
         update(Order)
@@ -482,7 +692,8 @@ async def update_order_status(
         .values(
             status=status_in.status,
             row_version=Order.row_version + 1,
-            updated_at=datetime.now(timezone.utc)
+            updated_at=datetime.now(timezone.utc),
+            **({"ready_at": datetime.now(timezone.utc)} if status_in.status == OrderStatus.ready else {}),
         )
         .returning(Order)
     )
@@ -493,100 +704,15 @@ async def update_order_status(
     if not updated_order:
         raise HTTPException(status_code=409, detail="Concurrent update detected.")
 
-    # Restore stock when order cancelled
+    # Efek samping lewat order_lifecycle (satu pintu bersama tolak/janitor pesanan online).
     if status_in.status == OrderStatus.cancelled:
-        # Get tenant tier and outlet stock_mode
         outlet = await db.get(Outlet, order.outlet_id)
-        tier = "starter"
-        stock_mode = "simple"
-        if outlet:
-            sm = getattr(outlet, 'stock_mode', 'simple')
-            stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
-            if outlet.tenant_id:
-                tenant = await db.get(Tenant, outlet.tenant_id)
-                if tenant:
-                    tier = getattr(tenant, 'subscription_tier', None) or "starter"
-                    if hasattr(tier, 'value'):
-                        tier = tier.value
-        for item in order.items:
-            product = await db.get(Product, item.product_id)
-            if product and product.stock_enabled:
-                if stock_mode == 'recipe':
-                    await restore_ingredients_on_cancel(
-                        db,
-                        product_id=product.id,
-                        quantity=item.quantity,
-                        outlet_id=order.outlet_id,
-                        order_id=order.id,
-                        tier=tier,
-                    )
-                else:
-                    await restore_stock_on_cancel(
-                        db,
-                        product=product,
-                        quantity=item.quantity,
-                        outlet_id=order.outlet_id,
-                        order_id=order.id,
-                        tier=tier,
-                    )
-
-    # Recalculate tab totals when order cancelled (tab excludes cancelled orders)
-    if status_in.status == OrderStatus.cancelled and order.tab_id:
-        from backend.models.tab import Tab
-        tab_q = select(Tab).where(Tab.id == order.tab_id, Tab.deleted_at.is_(None))
-        tab_result = await db.execute(tab_q)
-        linked_tab = tab_result.scalar_one_or_none()
-        if linked_tab and linked_tab.status not in ('paid', 'cancelled'):
-            # Recalculate from remaining non-cancelled orders
-            remaining_q = select(Order).where(
-                Order.tab_id == linked_tab.id,
-                Order.deleted_at.is_(None),
-                Order.status != 'cancelled',
-            )
-            remaining_result = await db.execute(remaining_q)
-            remaining_orders = remaining_result.scalars().all()
-            linked_tab.subtotal = sum(o.subtotal for o in remaining_orders)
-            linked_tab.tax_amount = sum(o.tax_amount for o in remaining_orders)
-            linked_tab.service_charge_amount = sum(o.service_charge_amount for o in remaining_orders)
-            linked_tab.discount_amount = sum(o.discount_amount for o in remaining_orders)
-            linked_tab.total_amount = sum(o.total_amount for o in remaining_orders)
-            linked_tab.row_version += 1
-
-    # Release table when order completed/cancelled (if no other active orders on same table).
-    # GUARD: kalau order belongs to active tab (open/asking_bill/splitting), JANGAN
-    # release table — tab era "order completed" = kitchen done, BUKAN "all paid".
-    # Table harus tetap occupied sampai tab.status = paid/cancelled. Tanpa guard ini,
-    # split-bill scenario release table prematurely saat kitchen mark order done.
+        await restore_stock_for_order(db, order, outlet)
+        await recalc_tab_after_cancel(db, order)
     if status_in.status in (OrderStatus.completed, OrderStatus.cancelled) and order.table_id:
-        skip_release = False
-        if order.tab_id:
-            from backend.models.tab import Tab
-            tab_check = await db.execute(
-                select(Tab.status).where(
-                    Tab.id == order.tab_id,
-                    Tab.deleted_at.is_(None),
-                )
-            )
-            tab_status_val = tab_check.scalar_one_or_none()
-            if tab_status_val is not None:
-                tab_status_str = tab_status_val.value if hasattr(tab_status_val, 'value') else str(tab_status_val)
-                if tab_status_str not in ('paid', 'cancelled'):
-                    skip_release = True
-
-        if not skip_release:
-            active_orders = (await db.execute(
-                select(func.count(Order.id)).where(
-                    Order.table_id == order.table_id,
-                    Order.id != order.id,
-                    Order.status.notin_(["completed", "cancelled"]),
-                    Order.deleted_at.is_(None),
-                )
-            )).scalar() or 0
-            if active_orders == 0:
-                await db.execute(
-                    update(Table).where(Table.id == order.table_id)
-                    .values(status="available", row_version=Table.row_version + 1)
-                )
+        await release_table_if_idle(db, order)
+    if is_storefront and status_in.status == OrderStatus.ready:
+        await mark_ready(db, order)
 
     # Append order lifecycle event to event store
     status_val = status_in.status.value if hasattr(status_in.status, 'value') else str(status_in.status)
@@ -615,30 +741,36 @@ async def update_order_status(
 
     await db.commit()
 
+    if is_storefront and status_in.status == OrderStatus.ready:
+        outlet = await db.get(Outlet, order.outlet_id)
+        if outlet is not None:
+            asyncio.create_task(online_orders.wa_customer(outlet, order.customer_phone, online_orders.msg_ready(order, outlet)))
+
+    return await _status_response(db, request, order_id, before_state, current_user, "Order status updated successfully")
+
+
+async def _status_response(db, request, order_id, before_state, current_user, message):
     # Reload items for response (selectinload product to avoid MissingGreenlet on product_name)
     query = select(Order).options(
         selectinload(Order.items).selectinload(OrderItem.product)
     ).where(Order.id == order_id)
-    result = await db.execute(query)
-    updated_order_loaded = result.scalar_one()
+    updated_order_loaded = (await db.execute(query)).scalar_one()
 
-    # Audit log
     await log_audit(
         db=db,
         action="UPDATE_STATUS",
         entity="order",
-        entity_id=updated_order.id,
+        entity_id=updated_order_loaded.id,
         before_state=before_state,
-        after_state={"status": updated_order.status},
+        after_state={"status": updated_order_loaded.status},
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
     )
-    
     return StandardResponse(
         success=True,
-        data=OrderResponse.model_validate(updated_order_loaded),
+        data=(await _attach_payment_info(db, [updated_order_loaded]))[0],
         request_id=request.state.request_id,
-        message="Order status updated successfully"
+        message=message,
     )
 
 

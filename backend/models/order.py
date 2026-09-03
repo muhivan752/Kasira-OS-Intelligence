@@ -27,6 +27,15 @@ class Order(BaseModel):
     total_amount = Column(Numeric(12, 2), server_default='0', nullable=False)
     
     notes = Column(Text, nullable=True)
+    # Pesanan online (mig 101). source: 'pos' | 'storefront'. Alur storefront:
+    # pending (menunggu konfirmasi toko) -> accept -> preparing -> ready ->
+    # completed, atau cancelled dengan cancel_reason yang dibaca pelanggan.
+    source = Column(String(16), server_default='pos', nullable=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+    eta_minutes = Column(Integer, nullable=True)
+    ready_at = Column(DateTime(timezone=True), nullable=True)
+    cancel_reason = Column(String(200), nullable=True)
+    delivery_address = Column(Text, nullable=True)
     discount_approved_by = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     discount_reason = Column(String(200), nullable=True)
     row_version = Column(Integer, server_default='0', nullable=False)
@@ -36,6 +45,17 @@ class Order(BaseModel):
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="order")
     tab = relationship("Tab", back_populates="orders")
+    # selectin, bukan lazy default: OrderResponse dibaca belasan endpoint dan
+    # lazy load di async = MissingGreenlet (pelajaran Product.variants).
+    customer = relationship("Customer", lazy="selectin")
+
+    @property
+    def customer_name(self):
+        return self.customer.name if self.customer else None
+
+    @property
+    def customer_phone(self):
+        return self.customer.phone if self.customer else None
 
 class OrderItem(BaseModel):
     __tablename__ = "order_items"

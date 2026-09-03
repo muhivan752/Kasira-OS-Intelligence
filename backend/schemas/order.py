@@ -79,5 +79,22 @@ class OrderResponse(OrderBase):
     items: List[OrderItemResponse] = []
     payment_method: Optional[str] = None
     payment_status: Optional[str] = None
+    # Pesanan online (mig 101)
+    source: str = 'pos'
+    accepted_at: Optional[datetime] = None
+    eta_minutes: Optional[int] = None
+    ready_at: Optional[datetime] = None
+    cancel_reason: Optional[str] = None
+    delivery_address: Optional[str] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class OrderAccept(BaseModel):
+    eta_minutes: int = Field(15, ge=1, le=240)
+
+
+class OrderReject(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=200)

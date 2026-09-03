@@ -930,7 +930,16 @@ async def xendit_webhook(
                 if order and total_paid >= float(order.total_amount):
                     # If it's an online order payment (no shift), set to preparing so POS knows it needs to be made
                     new_order_status = OrderStatus.completed
-                    if payment.shift_session_id is None:
+                    storefront_paid = False
+                    if getattr(order, 'source', 'pos') == 'storefront':
+                        # Pesanan online: lunas BUKAN berarti diterima. Status
+                        # tetap seperti semula (pending = menunggu konfirmasi
+                        # toko); yang berubah cuma pembayarannya. Toko baru
+                        # dikabari sekarang, karena QRIS yang belum dibayar
+                        # nggak perlu diributkan ke kasir.
+                        new_order_status = order.status
+                        storefront_paid = True
+                    elif payment.shift_session_id is None:
                         new_order_status = OrderStatus.preparing
 
                     order.status = new_order_status
@@ -963,8 +972,28 @@ async def xendit_webhook(
                     if connect_order and connect_order.status == 'pending':
                         connect_order.status = 'accepted'  # ENUM: pending/accepted/processing/ready/completed
 
-                    # Send WA receipt
-                    if order.customer_id:
+                    if storefront_paid:
+                        from backend.services import online_orders as _oo
+                        from types import SimpleNamespace as _NS
+                        _outlet = await db.get(Outlet, payment.outlet_id)
+                        _cust_phone = order.customer_phone
+                        _cust_name = order.customer_name
+                        _items = (await db.execute(
+                            select(OrderItem).options(selectinload(OrderItem.product)).where(OrderItem.order_id == order.id)
+                        )).scalars().all()
+                        _item_objs = [_NS(quantity=i.quantity, product_name=i.product_name) for i in _items]
+                        if _outlet is not None:
+                            _limit = int(getattr(_outlet, 'online_auto_cancel_minutes', 10) or 10)
+                            asyncio.create_task(_oo.wa_customer(_outlet, _cust_phone, _oo.msg_paid(order, _outlet, auto_cancel_minutes=_limit)))
+                            asyncio.create_task(_oo.wa_owner(_outlet, _oo.msg_owner_new_order(order, _outlet, _cust_name, _item_objs, paid=True)))
+                            asyncio.create_task(_oo.publish(_outlet.id, "order.created", {
+                                "order_id": str(order.id), "display_number": order.display_number,
+                                "order_type": str(getattr(order.order_type, 'value', order.order_type)),
+                                "total_amount": float(order.total_amount), "customer_name": _cust_name, "paid": True,
+                            }))
+
+                    # Send WA receipt (pesanan online dapat pesan konfirmasi di atas, bukan struk)
+                    if order.customer_id and not storefront_paid:
                         from backend.models.customer import Customer
                         from backend.models.user import User as UserModel
                         customer = await db.get(Customer, order.customer_id)

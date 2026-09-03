@@ -21,6 +21,14 @@ class Outlet(BaseModel):
     # Profil kas: 'ringan' | 'standar' | 'ketat' (mig 098). Lihat shift_service.
     shift_mode = Column(String(12), server_default='ringan', nullable=False)
     cover_image_url = Column(String, nullable=True)
+    # Pesanan online (mig 101). Toko bisa berhenti menerima pesanan online
+    # tanpa menutup toko; WA cadangan ke pemilik saat pesanan masuk; batas
+    # menit sebelum pesanan yang tak dikonfirmasi dibatalkan sistem.
+    online_orders_enabled = Column(Boolean, server_default='true', nullable=False)
+    online_notify_owner_wa = Column(Boolean, server_default='true', nullable=False)
+    online_auto_cancel_minutes = Column(Integer, server_default='10', nullable=False)
+    # Ada di DB sejak mig 003, baru dipetakan 3 Sep 2026: 'off' | 'display' | 'print'.
+    kitchen_mode = Column(ENUM('off', 'print', 'display', name='kitchen_mode', create_type=False), server_default='off', nullable=False)
 
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id"), nullable=True, index=True)

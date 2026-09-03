@@ -238,6 +238,33 @@ class XenditService:
             op_label="create_qris",
         )
 
+    async def create_qr_refund(
+        self,
+        qr_payment_id: str,
+        amount: int,
+        reason: str = "CANCELLATION",
+        reference_id: Optional[str] = None,
+        merchant_api_key: Optional[str] = None,
+        for_user_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Refund pembayaran QR (QR Codes API 2022-07-31).
+
+        `qr_payment_id` = `data.id` (prefix qrpy_) dari callback qr.payment.
+        Xendit: refund penuh didukung semua issuer, parsial semua kecuali GoPay,
+        jendela 7 hari. Status balik SUCCEEDED / PENDING / FAILED.
+        """
+        payload: Dict[str, Any] = {"amount": int(amount), "reason": reason}
+        if reference_id:
+            payload["reference_id"] = reference_id
+        headers = self._get_headers(for_user_id=for_user_id, api_key=merchant_api_key)
+        headers["api-version"] = "2022-07-31"
+        return await self._request_with_retry(
+            "POST", f"/qr_codes/payments/{qr_payment_id}/refunds",
+            headers=headers,
+            json_body=payload,
+            op_label="create_qr_refund",
+        )
+
     async def create_invoice(
         self,
         external_id: str,

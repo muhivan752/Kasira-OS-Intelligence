@@ -80,6 +80,9 @@ class ConnectOrderInput(BaseModel):
     table_id: Optional[uuid.UUID] = None  # for dine_in — auto-link to open tab
     idempotency_key: str
     payment_method: str = 'qris'  # 'qris' atau 'cash'
+    # Catatan pelanggan ("tanpa gula", "titip di satpam"). Dulu dikirim web
+    # tapi nggak ada di skema, jadi Pydantic membuangnya diam-diam.
+    notes: Optional[str] = Field(default=None, max_length=300)
 
 from backend.services.fonnte import send_whatsapp_message
 
@@ -194,6 +197,9 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
             "whatsapp": (outlet.whatsapp_number or "").strip() or None,
             "cover_image_url": outlet.cover_image_url,
             "is_open": outlet.is_open,
+            "online_orders_enabled": bool(getattr(outlet, 'online_orders_enabled', True)),
+            "accepting_orders": bool(outlet.is_open and getattr(outlet, 'online_orders_enabled', True)),
+            "auto_cancel_minutes": int(getattr(outlet, 'online_auto_cancel_minutes', 10) or 10),
             "opening_hours": outlet.opening_hours if isinstance(outlet.opening_hours, str) else "",
             "tier": outlet_tier,
             "trust_badge": "Verified Partner",
@@ -270,7 +276,9 @@ async def create_connect_order(
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
         
     if not outlet.is_open:
-        raise HTTPException(status_code=400, detail="Maaf, outlet sedang tutup")
+        raise HTTPException(status_code=400, detail="Toko sedang tutup. Silakan pesan lagi saat toko buka.")
+    if not getattr(outlet, 'online_orders_enabled', True):
+        raise HTTPException(status_code=400, detail="Toko sedang tidak menerima pesanan online. Silakan hubungi toko lewat WhatsApp.")
 
     # Check idempotency key (scoped ke outlet via connect_outlet)
     result = await db.execute(
@@ -314,7 +322,7 @@ async def create_connect_order(
                         "order_id": str(order.id),
                         "display_number": order.display_number,
                         "status": order.status,
-                        "estimated_minutes": 15 if order.order_type == "pickup" else 30,
+                        "estimated_minutes": order.eta_minutes or (15 if str(getattr(order.order_type, "value", order.order_type)) == "takeaway" else 30),
                         "tab_number": None,
                         "payment": pay_data,
                     },
@@ -382,6 +390,7 @@ async def create_connect_order(
     subtotal = 0
     order_items = []
     stock_deductions = []  # (product, qty) — deduct setelah order dibuat (butuh order_id)
+    item_names = []  # (qty, nama lengkap) buat WA ke pemilik
     for item_input in input_data.items:
         # Use with_for_update to prevent race conditions on stock
         result = await db.execute(
@@ -428,6 +437,7 @@ async def create_connect_order(
             modifiers=item_modifiers,
             notes=item_input.notes
         ))
+        item_names.append((item_input.qty, f"{product.name} ({variant.name})" if variant is not None else product.name))
 
     # Create order
     from sqlalchemy import text
@@ -465,7 +475,9 @@ async def create_connect_order(
         table_id=resolved_table_id,
         subtotal=subtotal,
         total_amount=subtotal,
-        notes=f"Delivery Address: {input_data.delivery_address}" if input_data.order_type == "delivery" else None
+        source="storefront",
+        delivery_address=input_data.delivery_address if input_data.order_type == "delivery" else None,
+        notes=(input_data.notes or "").strip() or None,
     )
     db.add(order)
     await db.flush()
@@ -537,8 +549,9 @@ async def create_connect_order(
     dine_in_tab_mode = (db_order_type == 'dine_in' and is_pro and resolved_table_id)
 
     if dine_in_tab_mode:
-        # No payment now — kasir will open tab + collect payment later
-        order.status = "preparing"
+        # Bayar nanti lewat tab meja. Status tetap 'pending' sampai kasir
+        # mengonfirmasi (accept) — sama seperti pesanan online lainnya.
+        pass
     else:
         # Normal flow: create payment immediately
         pay_method = PaymentMethod.qris if input_data.payment_method == 'qris' else PaymentMethod.cash
@@ -598,9 +611,9 @@ async def create_connect_order(
             else:
                 payment.status = PaymentStatus.failed
                 payment.xendit_raw = {"error": "Outlet belum terhubung Xendit"}
-        else:
-            # Cash: order langsung masuk preparing
-            order.status = "preparing"
+        # Tunai: pembayaran dicatat 'paid' (diterima kasir saat serah terima),
+        # tapi ORDER tetap 'pending' sampai toko mengonfirmasi. Dulu langsung
+        # 'preparing' tanpa ada yang tahu — pesanan hantu di dapur.
 
     # Create connect order for idempotency
     connect_order = ConnectOrder(
@@ -680,14 +693,28 @@ async def create_connect_order(
         tenant_id=str(outlet.tenant_id),
     )
 
-    # Send WA confirmation
+    # Kabar ke pelanggan (WA), ke pemilik (WA cadangan), ke app kasir (SSE).
+    # QRIS yang belum dibayar: pelanggan dulu; toko dikabari waktu webhook paid.
+    from backend.services import online_orders as _oo
+    from types import SimpleNamespace
+    awaiting_payment = bool(payment is not None and payment.payment_method == 'qris' and payment.status != 'paid')
     background_tasks.add_task(
-        send_wa_confirmation_real,
-        input_data.customer_phone,
-        str(order.display_number),
-        outlet.name,
-        input_data.customer_name
+        _oo.wa_customer, outlet, input_data.customer_phone,
+        _oo.msg_received(order, outlet, awaiting_payment=awaiting_payment,
+                         auto_cancel_minutes=int(outlet.online_auto_cancel_minutes or 10)),
     )
+    if not awaiting_payment:
+        item_objs = [SimpleNamespace(quantity=q, product_name=n) for q, n in item_names]
+        background_tasks.add_task(
+            _oo.wa_owner, outlet,
+            _oo.msg_owner_new_order(order, outlet, input_data.customer_name, item_objs,
+                                    paid=bool(payment is not None and payment.status == 'paid')),
+        )
+        background_tasks.add_task(_oo.publish, outlet.id, "order.created", {
+            "order_id": str(order.id), "display_number": order.display_number,
+            "order_type": db_order_type, "total_amount": float(subtotal),
+            "customer_name": input_data.customer_name, "paid": bool(payment is not None and payment.status == 'paid'),
+        })
 
     return StandardResponse(
         success=True,
@@ -695,7 +722,7 @@ async def create_connect_order(
             "order_id": str(order.id),
             "display_number": order.display_number,
             "status": order.status,
-            "estimated_minutes": 15 if order.order_type == "pickup" else 30,
+            "estimated_minutes": order.eta_minutes or (15 if str(getattr(order.order_type, "value", order.order_type)) == "takeaway" else 30),
             "table_id": str(resolved_table_id) if resolved_table_id else None,
             "tab_number": linked_tab_number,
             "payment": {
@@ -1011,6 +1038,14 @@ async def get_booking_status(booking_id: uuid.UUID, db: AsyncSession = Depends(g
     )
 
 
+def _iso(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.isoformat()
+
+
 @router.get("/orders/{order_id}", response_model=StandardResponse)
 async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -1053,9 +1088,11 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
             select(Product).where(Product.id == item.product_id)
         )
         prod = prod_result.scalar_one_or_none()
+        vname = item.modifiers.get("variant_name") if isinstance(item.modifiers, dict) else None
+        base_name = prod.name if prod else "Produk"
         items_data.append({
             "id": str(item.id),
-            "product_name": prod.name if prod else "Produk",
+            "product_name": f"{base_name} ({vname})" if vname else base_name,
             "quantity": item.quantity,
             "price": float(item.unit_price),
             "subtotal": float(item.total_price),
@@ -1068,9 +1105,39 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
     )
     outlet = outlet_result.scalar_one_or_none()
     outlet_data = {
-        "name": outlet.name if outlet else "",
-        "phone": mask_phone(outlet.phone) if outlet else "",
+        "name": outlet.name,
+        "slug": outlet.slug,
+        "phone": mask_phone(outlet.phone),
+        # Nomor yang pemilik publikasikan — tombol "Hubungi toko" pakai ini,
+        # BUKAN `phone` yang disamarkan (dulu bikin link wa.me mati).
+        "whatsapp": (outlet.whatsapp_number or "").strip() or None,
+        "auto_cancel_minutes": int(getattr(outlet, 'online_auto_cancel_minutes', 10) or 10),
     } if outlet else {}
+
+    table_name = None
+    if order.table_id:
+        from backend.models.reservation import Table as _T
+        t = await db.get(_T, order.table_id)
+        table_name = t.name if t else None
+
+    # Batas konfirmasi yang dijanjikan ke pelanggan: dihitung dari waktu bayar
+    # (QRIS) atau waktu pesan (tunai), cuma selama masih menunggu konfirmasi.
+    confirm_deadline = None
+    if order.status == 'pending' and order.accepted_at is None and outlet is not None:
+        limit_min = int(getattr(outlet, 'online_auto_cancel_minutes', 10) or 10)
+        if payment is None or payment.payment_method != 'qris' or payment.status == 'paid':
+            base = payment.paid_at if (payment is not None and payment.payment_method == 'qris' and payment.paid_at) else order.created_at
+            confirm_deadline = (base + datetime.timedelta(minutes=limit_min)).isoformat()
+
+    refund_data = None
+    if payment is not None and order.status == 'cancelled':
+        from backend.models.payment_refund import PaymentRefund as _PR
+        rf = (await db.execute(
+            select(_PR).where(_PR.payment_id == payment.id, _PR.deleted_at.is_(None))
+            .order_by(_PR.created_at.desc()).limit(1)
+        )).scalar_one_or_none()
+        if rf is not None:
+            refund_data = {"amount": float(rf.amount), "status": rf.status}
 
     return StandardResponse(
         success=True,
@@ -1081,12 +1148,23 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
             "status": order.status,
             "order_type": order.order_type,
             "total_amount": float(order.total_amount),
-            "created_at": order.created_at.isoformat() + "Z",
-            "estimated_minutes": 15 if order.order_type == "pickup" else 30,
-            "delivery_address": order.notes if order.order_type == "delivery" else None,
+            "created_at": _iso(order.created_at),
+            "estimated_minutes": order.eta_minutes or (15 if order.order_type == "takeaway" else 30),
+            "eta_minutes": order.eta_minutes,
+            "accepted_at": _iso(order.accepted_at),
+            "ready_at": _iso(order.ready_at),
+            "updated_at": _iso(order.updated_at),
+            "cancel_reason": order.cancel_reason,
+            "confirm_deadline": confirm_deadline,
+            "source": order.source,
+            "customer_name": order.customer_name,
+            "notes": order.notes,
+            "table_name": table_name,
+            "delivery_address": order.delivery_address,
             "payment_method": payment.payment_method if payment else None,
             "items": items_data,
             "payment": payment_data,
+            "refund": refund_data,
             "outlet": outlet_data,
         },
         message="Order status retrieved"
