@@ -517,24 +517,12 @@ async def create_connect_order(
     is_pro = outlet_tier.lower() in {'pro', 'business', 'enterprise'}
 
     if resolved_table_id and is_pro:
-        from backend.models.tab import Tab
-        tab_result = await db.execute(
-            select(Tab).where(
-                Tab.table_id == resolved_table_id,
-                Tab.outlet_id == outlet.id,
-                Tab.status.in_(['open', 'asking_bill']),
-                Tab.deleted_at.is_(None),
-            ).with_for_update().order_by(Tab.created_at.desc()).limit(1)
-        )
-        open_tab = tab_result.scalar_one_or_none()
-        if open_tab:
-            order.tab_id = open_tab.id
-            # Recalculate tab totals
-            open_tab.subtotal = (open_tab.subtotal or 0) + subtotal
-            open_tab.total_amount = (open_tab.total_amount or 0) + subtotal
-            open_tab.row_version += 1
+        # Nempel ke tab meja yang terbuka, atau BUKA tab baru. Tanpa tab,
+        # pesanan meja nggak punya jalur bayar (lihat order_lifecycle).
+        from backend.services.order_lifecycle import open_tab_for_storefront_order
+        open_tab = await open_tab_for_storefront_order(db, order, outlet, customer_name=input_data.customer_name)
+        if open_tab is not None:
             linked_tab_number = open_tab.tab_number
-            await db.flush()
 
     # Create Payment — SKIP if dine-in linked to tab (tab handles payment)
     from backend.models.payment import Payment

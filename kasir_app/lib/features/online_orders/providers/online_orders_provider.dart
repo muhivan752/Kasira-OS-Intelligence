@@ -61,6 +61,7 @@ class OnlineOrder {
   final String? notes;
   final String? deliveryAddress;
   final String? tableId;
+  final String? tabId;
   final String? paymentMethod; // qris | cash | null (tagihan meja)
   final String? paymentStatus;
   final DateTime createdAt;
@@ -82,6 +83,7 @@ class OnlineOrder {
     this.notes,
     this.deliveryAddress,
     this.tableId,
+    this.tabId,
     this.paymentMethod,
     this.paymentStatus,
     required this.createdAt,
@@ -104,6 +106,7 @@ class OnlineOrder {
         notes: (j['notes'] as String?)?.trim().isEmpty ?? true ? null : (j['notes'] as String).trim(),
         deliveryAddress: j['delivery_address'] as String?,
         tableId: j['table_id'] as String?,
+        tabId: j['tab_id'] as String?,
         paymentMethod: j['payment_method'] as String?,
         paymentStatus: j['payment_status'] as String?,
         createdAt: _toDate(j['created_at']) ?? DateTime.now(),
@@ -118,6 +121,8 @@ class OnlineOrder {
   bool get isPending => status == 'pending';
   bool get isActive => status == 'pending' || status == 'preparing' || status == 'ready' || status == 'served';
   bool get isPaid => paymentStatus == 'paid' && paymentMethod == 'qris';
+  /// Pesanan meja: bayarnya lewat tagihan meja (tab), bukan dari layar ini.
+  bool get isTableTab => orderType == 'dine_in' && tabId != null;
 
   /// Label yang SAMA dengan halaman lacak pelanggan (app/[slug]/_ui.tsx).
   String get typeLabel => switch (orderType) {
@@ -129,7 +134,7 @@ class OnlineOrder {
   String get paymentLabel {
     if (paymentMethod == 'qris') return isPaid ? 'Lunas QRIS' : 'QRIS belum dibayar';
     if (paymentMethod == 'cash') return orderType == 'delivery' ? 'Bayar saat diterima' : 'Bayar di kasir';
-    return 'Tagihan meja';
+    return isTableTab ? 'Tagihan meja' : 'Belum ada pembayaran';
   }
 
   String get statusLabel => switch (status) {

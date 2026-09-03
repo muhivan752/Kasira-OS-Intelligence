@@ -198,7 +198,7 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
   Future<void> _setStatus(OnlineOrder order, String status) async {
     final err = await ref.read(onlineOrdersProvider.notifier).setStatus(order.id, status);
     final label = status == 'ready'
-        ? (order.orderType == 'delivery' ? 'ditandai sedang diantar' : 'ditandai siap diambil')
+        ? (order.orderType == 'delivery' ? 'ditandai sedang diantar' : order.isTableTab ? 'ditandai diantar ke meja' : 'ditandai siap diambil')
         : 'selesai';
     _toast(err ?? 'Pesanan #${order.displayNumber} $label.', ok: err == null);
   }
@@ -487,11 +487,23 @@ class _OrderCard extends StatelessWidget {
         return [
           const SizedBox(height: 12),
           Row(children: [
-            filled(order.orderType == 'delivery' ? 'Sedang diantar' : 'Siap diambil', () => onStatus(order, 'ready'), color: KasiraDS.info),
+            filled(
+              order.orderType == 'delivery' ? 'Sedang diantar' : order.isTableTab ? 'Diantar ke meja' : 'Siap diambil',
+              () => onStatus(order, 'ready'),
+              color: KasiraDS.info,
+            ),
           ]),
         ];
       case 'ready':
       case 'served':
+        if (order.isTableTab) {
+          // Selesai-nya lewat pembayaran tagihan meja (tab Meja), bukan dari sini.
+          return [
+            const SizedBox(height: 10),
+            Text('Pembayaran lewat tagihan meja. Tutup dari tab Meja saat pelanggan membayar.',
+                style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted)),
+          ];
+        }
         return [
           const SizedBox(height: 12),
           Row(children: [filled('Selesai', () => onStatus(order, 'completed'), color: KasiraDS.success)]),

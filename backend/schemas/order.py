@@ -89,6 +89,7 @@ class OrderResponse(OrderBase):
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
     kitchen_status: Optional[str] = None
+    tab_id: Optional[UUID] = None
 
     model_config = ConfigDict(from_attributes=True)
 

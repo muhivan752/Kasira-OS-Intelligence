@@ -73,6 +73,9 @@ async def recalc_tab_after_cancel(db, order: Order) -> None:
     )).scalar_one_or_none()
     if not tab or _val(tab.status) in ("paid", "cancelled"):
         return
+    # Status order yang baru diubah di memori harus sampai ke DB dulu, kalau
+    # nggak query di bawah masih menghitung order yang sedang dibatalkan.
+    await db.flush()
     remaining = (await db.execute(
         select(Order).where(
             Order.tab_id == tab.id, Order.deleted_at.is_(None), Order.status != "cancelled",
@@ -84,12 +87,18 @@ async def recalc_tab_after_cancel(db, order: Order) -> None:
     tab.discount_amount = sum(o.discount_amount for o in remaining)
     tab.total_amount = sum(o.total_amount for o in remaining)
     tab.row_version += 1
+    # Tab yang dibuka otomatis dari pesanan online (opened_by NULL) dan jadi
+    # kosong tanpa uang masuk: tutup, supaya meja nggak terisi tagihan hampa.
+    if not remaining and tab.opened_by is None and float(tab.paid_amount or 0) == 0:
+        tab.status = "cancelled"
+        tab.closed_at = datetime.now(timezone.utc)
 
 
 async def release_table_if_idle(db, order: Order) -> None:
     """Lepas meja kalau nggak ada order aktif lain. GUARD tab aktif (CLAUDE.md #15)."""
     if not order.table_id:
         return
+    await db.flush()  # status order/tab yang baru diubah harus terlihat query di bawah
     if order.tab_id:
         from backend.models.tab import Tab
         tab_status = (await db.execute(
@@ -220,3 +229,62 @@ async def cancel_order(
     ))
     await online_orders.publish(order.outlet_id, "order.cancelled", {"order_id": str(order.id), "by": by})
     return {"refund_amount": refund_amount, "refund_manual": refund_manual}
+
+
+async def open_tab_for_storefront_order(db, order: Order, outlet: Outlet, *, customer_name: Optional[str]) -> Optional[object]:
+    """Pesanan meja dari storefront WAJIB nempel ke tagihan meja (tab).
+
+    Kalau mejanya belum punya tab terbuka, dulu ordernya mendarat tanpa tab
+    dan tanpa Payment: nggak ada yang nagih, dan laporan (yang cuma
+    menghitung order lunas) nggak pernah melihat uangnya. Kejadian di tes
+    Ivan 3 Sep 2026 (#5439, #5441). Sekarang tab dibuka otomatis, meja
+    ditandai terisi, kasir menagih lewat Meja seperti pesanan dine-in lain.
+
+    Return tab yang dipakai (baru atau yang sudah ada), None kalau order
+    nggak punya meja.
+    """
+    if not order.table_id:
+        return None
+    from backend.models.tab import Tab
+    existing = (await db.execute(
+        select(Tab).where(
+            Tab.table_id == order.table_id, Tab.outlet_id == outlet.id,
+            Tab.status.in_(["open", "asking_bill"]), Tab.deleted_at.is_(None),
+        ).with_for_update().order_by(Tab.created_at.desc()).limit(1)
+    )).scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+    tab = existing
+    if tab is None:
+        today = now.strftime("%Y%m%d")
+        seq = ((await db.execute(
+            select(func.count(Tab.id)).where(Tab.outlet_id == outlet.id, Tab.tab_number.like(f"TAB-{today}-%"))
+        )).scalar() or 0) + 1
+        tab = Tab(
+            outlet_id=outlet.id,
+            table_id=order.table_id,
+            tab_number=f"TAB-{today}-{seq:03d}",
+            customer_name=customer_name,
+            guest_count=1,
+            opened_at=now,
+            notes="Dibuka otomatis dari pesanan online",
+        )
+        db.add(tab)
+        await db.flush()
+        table = await db.get(Table, order.table_id)
+        if table is not None and _val(table.status) == "available":
+            table.status = "occupied"
+            table.row_version += 1
+        db.add(Event(
+            outlet_id=outlet.id,
+            stream_id=f"tab:{tab.id}",
+            event_type="tab.opened",
+            event_data={"tab_id": str(tab.id), "tab_number": tab.tab_number, "table_id": str(order.table_id),
+                        "customer_name": customer_name, "source": "storefront"},
+            event_metadata={"ts": now.isoformat()},
+        ))
+    if order.tab_id != tab.id:
+        order.tab_id = tab.id
+        await db.flush()
+    from backend.services.tab_service import recalculate_tab
+    await recalculate_tab(db, tab)
+    return tab
