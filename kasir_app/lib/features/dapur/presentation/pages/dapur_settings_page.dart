@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/auth/logout_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../providers/dapur_provider.dart';
 
 class DapurSettingsPage extends ConsumerStatefulWidget {
   const DapurSettingsPage({super.key});
@@ -15,6 +16,14 @@ class DapurSettingsPage extends ConsumerStatefulWidget {
 class _DapurSettingsPageState extends ConsumerState<DapurSettingsPage> {
   bool _soundEnabled = true;
   int _pollInterval = 8; // seconds
+
+  @override
+  void initState() {
+    super.initState();
+    DapurNotifier.loadPrefs().then((v) {
+      if (mounted) setState(() { _soundEnabled = v.$1; _pollInterval = v.$2; });
+    });
+  }
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -79,7 +88,11 @@ class _DapurSettingsPageState extends ConsumerState<DapurSettingsPage> {
                 label: 'Suara pesanan baru',
                 subtitle: 'Berbunyi saat pesanan baru masuk',
                 value: _soundEnabled,
-                onChanged: (v) => setState(() => _soundEnabled = v),
+                onChanged: (v) {
+                  setState(() => _soundEnabled = v);
+                  DapurNotifier.savePrefs(sound: v);
+                  if (v) ref.read(dapurProvider.notifier).testRing();
+                },
               ),
             ],
           ),
@@ -122,8 +135,11 @@ class _DapurSettingsPageState extends ConsumerState<DapurSettingsPage> {
                       activeColor: AppColors.warning,
                       inactiveColor: Colors.white12,
                       label: '$_pollInterval detik',
-                      onChanged: (v) =>
-                          setState(() => _pollInterval = v.toInt()),
+                      onChanged: (v) => setState(() => _pollInterval = v.toInt()),
+                      onChangeEnd: (v) {
+                        DapurNotifier.savePrefs(interval: v.toInt());
+                        ref.read(dapurProvider.notifier).startPolling(intervalSeconds: v.toInt());
+                      },
                     ),
                     Text(
                       'Lebih kecil = lebih real-time, lebih boros baterai',

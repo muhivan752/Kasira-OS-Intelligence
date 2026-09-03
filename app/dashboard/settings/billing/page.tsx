@@ -116,7 +116,7 @@ export default function BillingPage() {
               <p className="text-xs text-amber-500 mt-1.5">Konfirmasi pembayaran via WhatsApp setelah transfer.</p>
             </div>
             <a
-              href="https://wa.me/6285270782220?text=Halo%20Kasira%2C%20saya%20sudah%20transfer%20untuk%20pembayaran%20invoice."
+              href="https://wa.me/6285270782220?text=Halo%20Selaris%2C%20saya%20sudah%20transfer%20untuk%20pembayaran%20invoice."
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 mt-2 px-4 py-2 bg-amber-600 text-white text-sm font-semibold rounded-lg hover:bg-amber-700 transition"

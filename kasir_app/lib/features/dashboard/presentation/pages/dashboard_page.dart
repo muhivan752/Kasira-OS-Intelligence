@@ -20,6 +20,7 @@ import 'package:go_router/go_router.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../../pos/providers/pos_mode_provider.dart';
+import '../../../online_orders/providers/online_orders_provider.dart';
 
 final _currencyFmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -33,7 +34,7 @@ class DashboardPage extends ConsumerStatefulWidget {
   ConsumerState<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends ConsumerState<DashboardPage> {
+class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   bool _isPro = false;
 
@@ -41,6 +42,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   void initState() {
     super.initState();
     _loadTier();
+    // Pesanan online: SSE + bel hidup selama dashboard hidup (= selama login).
+    // Observer pertama di app ini: putus stream saat app ke belakang,
+    // sambung + tarik ulang saat kembali.
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(onlineOrdersProvider.notifier).start();
+    });
     // If POS mode was pre-set (e.g. from "Tambah Pesanan" in tab detail),
     // auto-switch to POS tab
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -49,6 +57,22 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         setState(() => _selectedIndex = 1);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final n = ref.read(onlineOrdersProvider.notifier);
+    if (state == AppLifecycleState.resumed) {
+      n.onForeground();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      n.onBackground();
+    }
   }
 
   Future<void> _loadTier() async {
@@ -608,6 +632,7 @@ class _DashboardContent extends ConsumerWidget {
         onRefresh: () async {
           ref.read(dashboardProvider.notifier).refresh();
           ref.read(ordersProvider.notifier).fetch();
+          ref.read(onlineOrdersProvider.notifier).fetch(silent: true);
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -617,6 +642,9 @@ class _DashboardContent extends ConsumerWidget {
             children: [
               _berandaHeader(context, ref),
               const SizedBox(height: 14),
+              // Di luar statsAsync: pesanan online harus kelihatan walau
+              // statistik masih loading atau gagal.
+              _onlineOrdersBanner(context, ref),
               statsAsync.when(
                 loading: () => const Padding(
                   padding: EdgeInsets.symmetric(vertical: 40),
@@ -686,6 +714,8 @@ class _DashboardContent extends ConsumerWidget {
           ),
         ),
         const SizedBox(width: 10),
+        _bellBtn(context, ref),
+        const SizedBox(width: 8),
         _circleBtn(LucideIcons.refreshCw, () {
           ref.read(dashboardProvider.notifier).refresh();
           ref.read(ordersProvider.notifier).fetch();
@@ -699,6 +729,66 @@ class _DashboardContent extends ConsumerWidget {
               MaterialPageRoute(builder: (_) => const SettingsPage()));
         }),
       ],
+    );
+  }
+
+  /// Bel pesanan online + angka yang menunggu. Selalu ada, supaya kasir
+  /// punya satu tempat tetap buat ngecek walau nggak ada yang masuk.
+  Widget _bellBtn(BuildContext context, WidgetRef ref) {
+    final pending = ref.watch(onlineOrdersProvider.select((s) => s.pendingCount));
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        _circleBtn(pending > 0 ? LucideIcons.bellRing : LucideIcons.bell, () => context.push('/online-orders')),
+        if (pending > 0)
+          Positioned(
+            right: -4,
+            top: -4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              constraints: const BoxConstraints(minWidth: 20),
+              decoration: BoxDecoration(
+                color: KasiraDS.brandPrimary,
+                borderRadius: KasiraDS.brPill,
+                border: Border.all(color: KasiraDS.bgBase, width: 2),
+              ),
+              child: Text(pending > 99 ? '99+' : '$pending',
+                  textAlign: TextAlign.center,
+                  style: KasiraDS.sans(size: 11, weight: FontWeight.w800, color: Colors.white)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _onlineOrdersBanner(BuildContext context, WidgetRef ref) {
+    final pending = ref.watch(onlineOrdersProvider.select((s) => s.pendingCount));
+    if (pending == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: GestureDetector(
+        onTap: () => context.push('/online-orders'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: KasiraDS.gradientFrekuensi,
+            borderRadius: KasiraDS.brMd,
+            boxShadow: KasiraDS.glowBrand,
+          ),
+          child: Row(children: [
+            const Icon(LucideIcons.bellRing, size: 20, color: Colors.white),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                pending == 1 ? '1 pesanan online menunggu konfirmasi' : '$pending pesanan online menunggu konfirmasi',
+                style: KasiraDS.sans(size: 13, weight: FontWeight.w700, color: Colors.white),
+              ),
+            ),
+            Text('Buka', style: KasiraDS.sans(size: 13, weight: FontWeight.w800, color: Colors.white)),
+            const Icon(LucideIcons.chevronRight, size: 16, color: Colors.white),
+          ]),
+        ),
+      ),
     );
   }
 

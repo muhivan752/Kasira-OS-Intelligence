@@ -213,7 +213,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
                       style: KasiraDS.display(size: isWide ? 16 : 14.5, color: KasiraDS.textStrong)),
                   const SizedBox(height: 3),
                   Text(
-                    '${order.orderTypeLabel} · ${order.items.length} item',
+                    '${order.source == 'storefront' ? 'Online · ' : ''}${order.orderTypeLabel} · ${order.items.length} item',
                     style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted),
                   ),
                   // Offline-first: transaksi tetap tercatat dan kehitung; yang

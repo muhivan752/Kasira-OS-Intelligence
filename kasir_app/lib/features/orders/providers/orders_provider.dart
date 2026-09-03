@@ -60,6 +60,8 @@ class OrderModel {
   final DateTime createdAt;
   /// false = masih di HP, belum sampai ke server. Riwayat kasih tanda.
   final bool isSynced;
+  /// 'pos' | 'storefront' (mig 101). Riwayat kasih tanda "Online".
+  final String source;
 
   const OrderModel({
     required this.id,
@@ -76,6 +78,7 @@ class OrderModel {
     required this.items,
     required this.createdAt,
     this.isSynced = true,
+    this.source = 'pos',
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
@@ -95,6 +98,7 @@ class OrderModel {
           .map((e) => OrderItemModel.fromJson(e as Map<String, dynamic>))
           .toList(),
       createdAt: DateTime.parse(json['created_at'] as String),
+      source: json['source'] as String? ?? 'pos',
     );
   }
 

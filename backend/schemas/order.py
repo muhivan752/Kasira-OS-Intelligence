@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, Field, ConfigDict
 from uuid import UUID
 from datetime import datetime
@@ -88,6 +88,7 @@ class OrderResponse(OrderBase):
     delivery_address: Optional[str] = None
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
+    kitchen_status: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -98,3 +99,7 @@ class OrderAccept(BaseModel):
 
 class OrderReject(BaseModel):
     reason: str = Field(..., min_length=3, max_length=200)
+
+
+class KitchenStatusUpdate(BaseModel):
+    status: Literal['preparing', 'ready', 'done']

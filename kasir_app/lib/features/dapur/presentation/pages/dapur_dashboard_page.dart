@@ -26,8 +26,9 @@ class _DapurDashboardPageState extends ConsumerState<DapurDashboardPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(dapurProvider.notifier).startPolling(intervalSeconds: 8);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final (_, interval) = await DapurNotifier.loadPrefs();
+      if (mounted) ref.read(dapurProvider.notifier).startPolling(intervalSeconds: interval);
     });
     _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() => _now = DateTime.now());

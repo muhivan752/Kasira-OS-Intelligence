@@ -74,6 +74,7 @@ export default function SettingsPage() {
         });
         setStockMode(data.stock_mode || 'simple');
         setShiftMode(data.shift_mode || 'ringan');
+        setKitchenMode(data.kitchen_mode || 'off');
         setOnline({
           online_orders_enabled: data.online_orders_enabled ?? true,
           online_notify_owner_wa: data.online_notify_owner_wa ?? true,
@@ -141,6 +142,26 @@ export default function SettingsPage() {
     } else {
       setOnline(online);
       setOnlineMsg({ ok: false, text: res.message || 'Gagal menyimpan' });
+    }
+  };
+
+  // Layar dapur (kolom kitchen_mode ada sejak mig 003, baru dipakai 3 Sep 2026).
+  const [kitchenMode, setKitchenMode] = useState<'off' | 'display' | 'print'>('off');
+  const [kitchenMsg, setKitchenMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [kitchenSaving, setKitchenSaving] = useState(false);
+  const handleKitchenModeChange = async (mode: 'off' | 'display') => {
+    if (!outlet) return;
+    const prev = kitchenMode;
+    setKitchenMode(mode);
+    setKitchenSaving(true);
+    setKitchenMsg(null);
+    const res = await updateOutlet(outlet.id, { kitchen_mode: mode });
+    setKitchenSaving(false);
+    if (res.success) {
+      setKitchenMsg({ ok: true, text: mode === 'display' ? 'Layar dapur aktif. Login di aplikasi Dapur dengan nomor HP dan PIN.' : 'Layar dapur dinonaktifkan.' });
+    } else {
+      setKitchenMode(prev);
+      setKitchenMsg({ ok: false, text: res.message || 'Gagal menyimpan' });
     }
   };
 
@@ -585,6 +606,44 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+
+          {/* Layar dapur (Pro). Dapur nggak memblokir kasir: pesanan yang dibayar tetap selesai. */}
+          {isPro && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                <Package className="w-5 h-5 text-gray-500" />
+                <h2 className="text-lg font-bold text-gray-900">Layar Dapur</h2>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-600">
+                  Papan antrean untuk barista atau juru masak di aplikasi Dapur. Pesanan yang sudah dibayar atau dikonfirmasi muncul di sana, ditandai dimasak, siap, lalu selesai. Kasir tetap berjalan seperti biasa bila dapur tidak menandai apa pun.
+                </p>
+                {kitchenMsg && <p className={`text-sm ${kitchenMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{kitchenMsg.text}</p>}
+                <div className="grid gap-3">
+                  {([
+                    ['off', 'Nonaktif', 'Tidak ada layar dapur. Login aplikasi Dapur ditolak.'],
+                    ['display', 'Layar dapur', 'Aplikasi Dapur di tablet atau HP kedua menampilkan antrean pesanan dengan bunyi saat pesanan baru masuk.'],
+                  ] as const).map(([val, title, desc]) => (
+                    <label key={val} className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${kitchenMode === val ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                      <input type="radio" name="kitchen_mode" value={val} checked={kitchenMode === val}
+                        onChange={() => handleKitchenModeChange(val)} disabled={kitchenSaving} className="mt-1" />
+                      <div>
+                        <p className="font-semibold text-gray-900">{title}</p>
+                        <p className="text-sm text-gray-600 mt-0.5">{desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                  <div className="flex items-start gap-3 p-4 border border-dashed border-gray-200 rounded-xl opacity-60">
+                    <input type="radio" disabled className="mt-1" />
+                    <div>
+                      <p className="font-semibold text-gray-900">Cetak tiket dapur <span className="ml-2 text-xs font-medium text-gray-500">Segera</span></p>
+                      <p className="text-sm text-gray-600 mt-0.5">Tiket pesanan tercetak otomatis di printer dapur.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Mode kas (semua tier). Profil nempel di outlet, bukan tier:
               satu akun Business bisa punya kios Ringan dan flagship Ketat. */}

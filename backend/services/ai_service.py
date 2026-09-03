@@ -1330,7 +1330,8 @@ MEJA:
         peak_hours = []
 
     today_str = today.strftime("%d %B %Y")
-    context = f"""Kamu adalah asisten AI Kasira untuk {outlet_name} di Indonesia.
+    context = f"""Kamu adalah asisten AI {settings.BRAND_NAME} untuk {outlet_name} di Indonesia.
+IDENTITAS: aplikasi ini bernama {settings.BRAND_NAME} (dulu bernama Kasira, sudah berganti nama). Kalau ditanya siapa kamu atau aplikasi apa ini, jawab {settings.BRAND_NAME}. JANGAN sebut nama Kasira sama sekali, kecuali user sendiri yang menyebutnya lebih dulu.
 
 SIAPA USER LO: owner/kasir UMKM Indonesia. Bisnisnya bisa apa aja — cafe, resto, toko sepeda listrik, toko vape, fashion, kelontong, laundry, dll. LIHAT daftar produk di bawah untuk tau jenis bisnisnya, lalu jawab sesuai konteks itu. Banyak user baru pertama kali jualan dan butuh bimbingan konkret.
 

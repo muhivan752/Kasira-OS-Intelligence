@@ -1,8 +1,19 @@
 import 'dart:async';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/services/session_cache.dart';
+
+/// Papan dapur. Sumber: `GET /orders/kitchen` (backend, mig 102) yang
+/// mengembalikan {active, done} berdasarkan `orders.kitchen_status`, BUKAN
+/// status order. Dulu provider ini nembak `GET /orders/?status=pending,preparing,ready`
+/// dan `status=done` yang ditolak server 422 sejak lahir, jadi app Dapur
+/// nggak pernah nampilin satu pesanan pun.
+///
+/// Status di app: pending (= antrean, `queued` di server), preparing, ready, done.
 
 // ─── Models ──────────────────────────────────────────────────────────────────
 
@@ -19,8 +30,8 @@ class DapurOrderItem {
 
   factory DapurOrderItem.fromJson(Map<String, dynamic> json) => DapurOrderItem(
         productName: json['product_name'] as String? ?? json['name'] as String? ?? '?',
-        qty: (json['qty'] as num?)?.toInt() ?? 1,
-        notes: json['notes'] as String?,
+        qty: (json['quantity'] as num?)?.toInt() ?? (json['qty'] as num?)?.toInt() ?? 1,
+        notes: (json['notes'] as String?)?.trim().isEmpty ?? true ? null : (json['notes'] as String).trim(),
       );
 }
 
@@ -28,8 +39,11 @@ class DapurOrder {
   final String id;
   final String displayNumber;
   final String status; // pending | preparing | ready | done
-  final String orderType; // Dine In | Takeaway
+  final String orderType; // Makan di tempat | Ambil sendiri | Antar
   final String? tableNumber;
+  final String? customerName;
+  final String? notes;
+  final bool isOnline;
   final List<DapurOrderItem> items;
   final DateTime createdAt;
   final int rowVersion;
@@ -40,25 +54,38 @@ class DapurOrder {
     required this.status,
     required this.orderType,
     this.tableNumber,
+    this.customerName,
+    this.notes,
+    this.isOnline = false,
     required this.items,
     required this.createdAt,
     required this.rowVersion,
   });
 
+  static String _typeLabel(String? t) => switch (t) {
+        'dine_in' => 'Makan di tempat',
+        'delivery' => 'Antar',
+        'takeaway' => 'Ambil sendiri',
+        _ => t ?? '',
+      };
+
   factory DapurOrder.fromJson(Map<String, dynamic> json) {
     final rawItems = json['items'] as List? ?? [];
+    final ks = json['kitchen_status'] as String? ?? 'queued';
     return DapurOrder(
       id: json['id'] as String,
-      displayNumber: json['display_number'] as String? ??
+      displayNumber: json['display_number']?.toString() ??
           (json['id'] as String).substring(0, 8).toUpperCase(),
-      status: json['status'] as String? ?? 'pending',
-      orderType: json['order_type'] as String? ?? 'Dine In',
-      tableNumber: json['table_number'] as String?,
+      status: ks == 'queued' ? 'pending' : ks,
+      orderType: _typeLabel(json['order_type'] as String?),
+      tableNumber: json['table_name'] as String?,
+      customerName: json['customer_name'] as String?,
+      notes: (json['notes'] as String?)?.trim().isEmpty ?? true ? null : (json['notes'] as String).trim(),
+      isOnline: json['source'] == 'storefront',
       items: rawItems
           .map((e) => DapurOrderItem.fromJson(e as Map<String, dynamic>))
           .toList(),
-      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
-          DateTime.now(),
+      createdAt: (DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now()).toLocal(),
       rowVersion: (json['row_version'] as num?)?.toInt() ?? 0,
     );
   }
@@ -76,6 +103,9 @@ class DapurOrder {
         status: status ?? this.status,
         orderType: orderType,
         tableNumber: tableNumber,
+        customerName: customerName,
+        notes: notes,
+        isOnline: isOnline,
         items: items,
         createdAt: createdAt,
         rowVersion: rowVersion ?? this.rowVersion,
@@ -120,8 +150,44 @@ class DapurState {
 class DapurNotifier extends StateNotifier<DapurState> {
   Timer? _pollTimer;
   final _cache = SessionCache.instance;
+  final AudioPlayer _player = AudioPlayer();
+  Set<String> _knownIds = {};
+  bool _primed = false;
+
+  static const prefSound = 'dapur_sound';
+  static const prefInterval = 'dapur_poll_interval';
 
   DapurNotifier() : super(const DapurState());
+
+  /// Pengaturan tersimpan (dulu toggle di halaman Pengaturan cuma setState).
+  static Future<(bool, int)> loadPrefs() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      return (p.getBool(prefSound) ?? true, (p.getInt(prefInterval) ?? 8).clamp(5, 30));
+    } catch (_) {
+      return (true, 8);
+    }
+  }
+
+  static Future<void> savePrefs({bool? sound, int? interval}) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      if (sound != null) await p.setBool(prefSound, sound);
+      if (interval != null) await p.setInt(prefInterval, interval);
+    } catch (_) {}
+  }
+
+  Future<void> _ring() async {
+    final (sound, _) = await loadPrefs();
+    if (!sound) return;
+    try {
+      HapticFeedback.heavyImpact();
+      await _player.stop();
+      await _player.play(AssetSource('sounds/order_bell.wav'), volume: 1.0);
+    } catch (_) {}
+  }
+
+  Future<void> testRing() => _ring();
 
   Dio get _dio => Dio(BaseOptions(
         baseUrl: AppConfig.apiV1,
@@ -153,47 +219,31 @@ class DapurNotifier extends StateNotifier<DapurState> {
     if (!silent) state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final headers = _headers;
       final outletId = _cache.outletId;
-
-      // Active orders: pending + preparing + ready
-      final activeRes = await _dio.get(
-        '/orders/',
-        queryParameters: {
-          if (outletId != null) 'outlet_id': outletId,
-          'status': 'pending,preparing,ready',
-          'limit': 50,
-        },
-        options: Options(headers: headers),
+      final res = await _dio.get(
+        '/orders/kitchen',
+        queryParameters: {if (outletId != null) 'outlet_id': outletId},
+        options: Options(headers: _headers),
       );
-
-      // Completed today
-      final doneRes = await _dio.get(
-        '/orders/',
-        queryParameters: {
-          if (outletId != null) 'outlet_id': outletId,
-          'status': 'done',
-          'limit': 30,
-          'today': true,
-        },
-        options: Options(headers: headers),
-      );
-
-      final activeList = (activeRes.data['data'] as List? ?? [])
+      final data = res.data['data'] as Map<String, dynamic>;
+      final activeList = (data['active'] as List? ?? [])
           .map((e) => DapurOrder.fromJson(e as Map<String, dynamic>))
           .toList();
-
-      // Sort: pending first, then preparing, then ready; within same status by time asc
       activeList.sort((a, b) {
         const priority = {'pending': 0, 'preparing': 1, 'ready': 2};
         final p = (priority[a.status] ?? 3).compareTo(priority[b.status] ?? 3);
         if (p != 0) return p;
         return a.createdAt.compareTo(b.createdAt);
       });
-
-      final doneList = (doneRes.data['data'] as List? ?? [])
+      final doneList = (data['done'] as List? ?? [])
           .map((e) => DapurOrder.fromJson(e as Map<String, dynamic>))
           .toList();
+
+      // Bel cuma untuk pesanan yang BARU muncul sesudah tarikan pertama.
+      final fresh = activeList.where((o) => !_knownIds.contains(o.id)).toList();
+      _knownIds = {...activeList.map((o) => o.id), ...doneList.map((o) => o.id)};
+      if (_primed && fresh.isNotEmpty) _ring();
+      _primed = true;
 
       state = state.copyWith(
         activeOrders: activeList,
@@ -202,11 +252,16 @@ class DapurNotifier extends StateNotifier<DapurState> {
         lastRefreshed: DateTime.now(),
       );
     } on DioException catch (e) {
+      final detail = e.response?.data is Map ? (e.response!.data['detail']?.toString()) : null;
       state = state.copyWith(
         isLoading: false,
         error: e.response?.statusCode == 401
             ? 'Sesi habis, login ulang'
-            : 'Gagal memuat pesanan',
+            : e.response?.statusCode == 403
+                ? (detail ?? 'Layar dapur belum diaktifkan')
+                : e.response == null
+                    ? 'Tidak ada koneksi'
+                    : 'Gagal memuat pesanan',
       );
     } catch (_) {
       state = state.copyWith(isLoading: false, error: 'Gagal memuat pesanan');
@@ -216,14 +271,10 @@ class DapurNotifier extends StateNotifier<DapurState> {
   /// Update status of a single order, returns true on success
   Future<bool> updateStatus(DapurOrder order, String newStatus) async {
     try {
-      final headers = _headers;
-      await _dio.put(
-        '/orders/${order.id}/status',
-        data: {
-          'status': newStatus,
-          'row_version': order.rowVersion,
-        },
-        options: Options(headers: headers),
+      await _dio.post(
+        '/orders/${order.id}/kitchen-status',
+        data: {'status': newStatus},
+        options: Options(headers: _headers),
       );
 
       // Optimistically update local state
@@ -251,6 +302,7 @@ class DapurNotifier extends StateNotifier<DapurState> {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _player.dispose();
     super.dispose();
   }
 }

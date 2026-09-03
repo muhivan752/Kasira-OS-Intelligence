@@ -71,9 +71,12 @@ class _DapurLoginPageState extends State<DapurLoginPage> {
     } on DioException catch (e) {
       setState(() {
         _pin = '';
+        final detail = e.response?.data is Map ? e.response!.data['detail']?.toString() : null;
         _error = e.response?.statusCode == 401
             ? 'PIN salah, coba lagi'
-            : 'Gagal login, coba lagi';
+            : (e.response?.statusCode == 403 && detail != null)
+                ? detail
+                : 'Gagal login, coba lagi';
         _isLoading = false;
       });
     }

@@ -399,6 +399,18 @@ async def verify_pin_login(
             detail="Aplikasi Dapur hanya tersedia untuk paket Pro. Upgrade untuk mengakses."
         )
 
+    # Layar dapur harus dinyalakan pemilik dulu (outlets.kitchen_mode, mig 101).
+    # Tanpa ini tiap orang yang tahu PIN bisa buka papan dapur di toko yang
+    # nggak pakai dapur, dan pesanannya nggak pernah ditandai selesai.
+    km_stmt = select(Outlet).where(Outlet.tenant_id == user.tenant_id, Outlet.deleted_at == None).limit(1)
+    km_outlet = (await db.execute(km_stmt)).scalar_one_or_none()
+    km = str(getattr(getattr(km_outlet, "kitchen_mode", None), "value", getattr(km_outlet, "kitchen_mode", "off")) or "off")
+    if km != "display":
+        raise HTTPException(
+            status_code=403,
+            detail="Layar dapur belum diaktifkan. Nyalakan di Dashboard, menu Pengaturan, bagian Layar Dapur."
+        )
+
     from backend.core.security import create_access_token
     access_token = create_access_token(subject=str(user.id))
 

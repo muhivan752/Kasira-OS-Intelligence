@@ -25,6 +25,7 @@ import 'features/tabs/presentation/pages/active_tabs_list_page.dart';
 import 'features/auth/presentation/pages/register_page.dart';
 import 'features/onboarding/presentation/pages/welcome_page.dart';
 import 'features/onboarding/presentation/pages/ready_page.dart';
+import 'features/online_orders/presentation/pages/online_orders_page.dart';
 
 final _router = GoRouter(
   initialLocation: '/',
@@ -115,6 +116,10 @@ final _router = GoRouter(
           customerName: extra['customerName'] as String?,
         );
       },
+    ),
+    GoRoute(
+      path: '/online-orders',
+      builder: (context, state) => const OnlineOrdersPage(),
     ),
     GoRoute(
       path: '/stock/alerts',

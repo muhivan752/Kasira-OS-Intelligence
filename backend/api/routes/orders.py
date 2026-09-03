@@ -17,7 +17,7 @@ from backend.models.outlet import Outlet
 from backend.models.outlet_tax_config import OutletTaxConfig
 from backend.models.shift import Shift, ShiftStatus
 from backend.models.tenant import Tenant
-from backend.schemas.order import OrderCreate, OrderUpdateStatus, OrderResponse, OrderStatus, OrderType, OrderAccept, OrderReject
+from backend.schemas.order import OrderCreate, OrderUpdateStatus, OrderResponse, OrderStatus, OrderType, OrderAccept, OrderReject, KitchenStatusUpdate
 import asyncio
 import json
 from fastapi.responses import StreamingResponse
@@ -498,6 +498,112 @@ async def read_online_orders(
         if not (r.status == OrderStatus.pending and r.payment_method == "qris" and r.payment_status != "paid")
     ]
     return StandardResponse(success=True, data=responses, request_id=request.state.request_id)
+
+
+@router.get("/kitchen", response_model=StandardResponse[dict])
+async def read_kitchen_orders(
+    request: Request,
+    outlet_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Papan dapur: {active: [...], done: [...]}.
+
+    Yang masuk antrean dapur: order yang SUDAH pasti dibuat, yaitu
+    - status preparing/ready/served (meja, tab, online yang sudah diterima), atau
+    - status completed dalam 3 jam terakhir (pesanan kasir yang dibayar langsung;
+      tanpa ini dapur nggak pernah lihat pesanan bawa pulang),
+    dan belum ditandai `done` oleh dapur. Online yang masih `pending`
+    (belum dikonfirmasi kasir) SENGAJA tidak masuk: kasir yang memutuskan.
+    """
+    await _owned_outlet(db, outlet_id, current_user)
+    import datetime as _dt
+    now = datetime.now(timezone.utc)
+    base = select(Order).options(selectinload(Order.items).selectinload(OrderItem.product)).where(
+        Order.outlet_id == outlet_id, Order.deleted_at.is_(None),
+        Order.created_at >= now - _dt.timedelta(hours=14),
+    )
+    active_q = base.where(
+        (Order.kitchen_status.is_(None)) | (Order.kitchen_status != "done"),
+        (Order.status.in_(["preparing", "ready", "served"]))
+        | ((Order.status == "completed") & (Order.created_at >= now - _dt.timedelta(hours=3))),
+    ).order_by(Order.created_at.asc()).limit(80)
+    done_q = base.where(Order.kitchen_status == "done").order_by(Order.updated_at.desc()).limit(40)
+    active = (await db.execute(active_q)).scalars().all()
+    done = (await db.execute(done_q)).scalars().all()
+
+    table_ids = {o.table_id for o in active + done if o.table_id}
+    table_names = {}
+    if table_ids:
+        rows = (await db.execute(select(Table.id, Table.name).where(Table.id.in_(table_ids)))).all()
+        table_names = {r.id: r.name for r in rows}
+
+    def ser(o: Order) -> dict:
+        return {
+            "id": str(o.id),
+            "display_number": o.display_number,
+            "order_number": o.order_number,
+            "status": str(getattr(o.status, "value", o.status)),
+            "kitchen_status": o.kitchen_status or "queued",
+            "order_type": str(getattr(o.order_type, "value", o.order_type)),
+            "source": o.source,
+            "table_name": table_names.get(o.table_id),
+            "customer_name": o.customer_name,
+            "notes": o.notes,
+            "created_at": o.created_at.isoformat(),
+            "updated_at": o.updated_at.isoformat() if o.updated_at else None,
+            "row_version": o.row_version,
+            "items": [
+                {"product_name": it.product_name, "quantity": it.quantity, "notes": it.notes}
+                for it in o.items
+            ],
+        }
+
+    return StandardResponse(success=True, data={"active": [ser(o) for o in active], "done": [ser(o) for o in done]},
+                            request_id=request.state.request_id)
+
+
+@router.post("/{order_id}/kitchen-status", response_model=StandardResponse[dict])
+async def update_kitchen_status(
+    request: Request,
+    order_id: UUID,
+    body: KitchenStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Dapur: preparing -> ready -> done. Nggak menyentuh pembayaran.
+
+    `ready` pada order yang statusnya masih `preparing` ikut menaikkan status
+    order ke `ready` (pelanggan online dikabari "siap diambil"). Selain itu
+    status order dibiarkan: penyelesaian tetap urusan kasir dan pembayaran.
+    """
+    order = await _load_order_full(db, order_id)
+    outlet = await _owned_outlet(db, order.outlet_id, current_user)
+    if str(getattr(order.status, "value", order.status)) == "cancelled":
+        raise HTTPException(status_code=400, detail="Pesanan sudah dibatalkan")
+    now = datetime.now(timezone.utc)
+    order.kitchen_status = body.status
+    order.updated_at = now
+    notify_ready = False
+    if body.status == "ready" and str(getattr(order.status, "value", order.status)) == "preparing":
+        order.status = "ready"
+        order.row_version += 1
+        await mark_ready(db, order)
+        notify_ready = order.source == "storefront"
+    db.add(Event(
+        outlet_id=order.outlet_id,
+        stream_id=f"order:{order.id}",
+        event_type=f"kitchen.{body.status}",
+        event_data={"order_id": str(order.id), "outlet_id": str(order.outlet_id), "order_number": order.order_number},
+        event_metadata={"user_id": str(current_user.id), "ts": now.isoformat()},
+    ))
+    phone = order.customer_phone
+    await db.commit()
+    if notify_ready:
+        asyncio.create_task(online_orders.wa_customer(outlet, phone, online_orders.msg_ready(order, outlet)))
+    return StandardResponse(success=True, data={"id": str(order.id), "kitchen_status": body.status,
+                            "status": str(getattr(order.status, "value", order.status))},
+                            request_id=request.state.request_id, message="Status dapur diperbarui")
 
 
 @router.get("/stream")
