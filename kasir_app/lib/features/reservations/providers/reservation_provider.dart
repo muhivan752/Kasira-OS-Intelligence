@@ -5,6 +5,37 @@ import '../../../core/services/session_cache.dart';
 
 // ── Model ──
 
+class ReservationDeposit {
+  final double amount;
+  final String status;
+  final String? method;
+  final String? channel;
+  final String? proofImageUrl;
+  final String? paidAt;
+
+  const ReservationDeposit({required this.amount, required this.status, this.method, this.channel, this.proofImageUrl, this.paidAt});
+
+  factory ReservationDeposit.fromJson(Map<String, dynamic> j) => ReservationDeposit(
+        amount: double.tryParse('${j['amount'] ?? 0}') ?? 0,
+        status: j['status'] as String? ?? 'none',
+        method: j['method'] as String?,
+        channel: j['channel'] as String?,
+        proofImageUrl: j['proof_image_url'] as String?,
+        paidAt: j['paid_at'] as String?,
+      );
+
+  bool get isPaid => status == 'paid';
+  bool get hasProof => (proofImageUrl ?? '').isNotEmpty;
+  bool get isPending => status == 'pending' || status == 'pending_manual_check';
+
+  String get label {
+    if (isPaid) return 'DP lunas';
+    if (status == 'cancelled') return 'DP dibatalkan';
+    if (hasProof) return 'Bukti DP masuk';
+    return 'DP belum dibayar';
+  }
+}
+
 class ReservationModel {
   final String id;
   final String outletId;
@@ -23,6 +54,9 @@ class ReservationModel {
   final String? confirmedAt;
   final int? rowVersion;
   final DateTime createdAt;
+  /// DP (mig 104): null = toko nggak minta DP. Status: pending | paid |
+  /// cancelled | failed. proofImageUrl = bukti yang pelanggan unggah.
+  final ReservationDeposit? deposit;
 
   const ReservationModel({
     required this.id,
@@ -42,6 +76,7 @@ class ReservationModel {
     this.confirmedAt,
     this.rowVersion,
     required this.createdAt,
+    this.deposit,
   });
 
   factory ReservationModel.fromJson(Map<String, dynamic> json) => ReservationModel(
@@ -62,6 +97,7 @@ class ReservationModel {
         confirmedAt: json['confirmed_at'] as String?,
         rowVersion: (json['row_version'] as num?)?.toInt(),
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+        deposit: json['deposit'] is Map<String, dynamic> ? ReservationDeposit.fromJson(json['deposit'] as Map<String, dynamic>) : null,
       );
 
   String get statusLabel {

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -430,7 +431,57 @@ class _OrderCard extends StatelessWidget {
             const Icon(LucideIcons.mapPin, size: 14, color: KasiraDS.textMuted),
             const SizedBox(width: 6),
             Expanded(child: Text(order.deliveryAddress!, style: KasiraDS.sans(size: 12.5, color: KasiraDS.textBody))),
+            // Titik dari Google Maps (mig 104): kurir buka rute langsung.
+            if (order.deliveryLat != null && order.deliveryLng != null)
+              InkWell(
+                onTap: () => launchUrl(
+                  Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${order.deliveryLat},${order.deliveryLng}'),
+                  mode: LaunchMode.externalApplication,
+                ),
+                borderRadius: KasiraDS.brSm,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  child: Row(children: [
+                    const Icon(LucideIcons.navigation, size: 13, color: KasiraDS.brandPrimary),
+                    const SizedBox(width: 4),
+                    Text(order.deliveryDistanceKm != null ? 'Peta · ${order.deliveryDistanceKm!.toStringAsFixed(1)} km' : 'Peta',
+                        style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.brandPrimary)),
+                  ]),
+                ),
+              ),
           ]),
+        ],
+        // Bukti bayar QRIS statis toko (mig 104): kasir WAJIB lihat sebelum Terima,
+        // karena Terima = menandai pembayaran lunas.
+        if (order.paymentProofUrl != null) ...[
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => showDialog(
+              context: context,
+              builder: (_) => Dialog(
+                insetPadding: const EdgeInsets.all(16),
+                child: InteractiveViewer(child: CachedNetworkImage(imageUrl: order.paymentProofUrl!, fit: BoxFit.contain)),
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: KasiraDS.warning.withOpacity(0.10), borderRadius: KasiraDS.brSm),
+              child: Row(children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: CachedNetworkImage(imageUrl: order.paymentProofUrl!, width: 44, height: 44, fit: BoxFit.cover,
+                      errorWidget: (_, __, ___) => const Icon(LucideIcons.imageOff, color: KasiraDS.textMuted)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Bukti bayar dari pelanggan. Ketuk untuk memperbesar, cocokkan dengan notifikasi bank sebelum Terima.',
+                    style: KasiraDS.sans(size: 12, color: KasiraDS.textStrong))),
+              ]),
+            ),
+          ),
+        ] else if (order.isPending && order.paymentMethod == 'qris' && order.paymentChannel == 'manual') ...[
+          const SizedBox(height: 8),
+          Text('Pelanggan memilih QRIS toko dan belum mengirim bukti. Cek notifikasi bank sebelum Terima.',
+              style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted)),
         ],
         if (order.cancelReason != null) ...[
           const SizedBox(height: 6),

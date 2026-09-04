@@ -35,6 +35,35 @@ from backend.models.event import Event
 router = APIRouter()
 
 
+async def _handle_deposit_webhook_paid(db: AsyncSession, payment: Payment) -> None:
+    """QRIS Xendit buat DP reservasi lunas: kabari pelanggan + pemilik.
+    Reservasi TETAP pending sampai kasir konfirmasi (dia yang pegang meja)."""
+    from backend.models.reservation import Reservation
+    from backend.services import online_orders as _oo
+    reservation = (await db.execute(
+        select(Reservation).where(Reservation.deposit_payment_id == payment.id, Reservation.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    if reservation is None:
+        return
+    outlet = await db.get(Outlet, payment.outlet_id)
+    if outlet is None:
+        return
+    when = f"{reservation.reservation_date} pukul {reservation.start_time.strftime('%H:%M') if reservation.start_time else '-'}"
+    try:
+        if reservation.customer_phone:
+            asyncio.create_task(_oo.wa_customer(
+                outlet, reservation.customer_phone,
+                f"DP Rp {float(payment.amount_paid):,.0f} untuk reservasi di {outlet.name} ({when}) sudah kami terima. "
+                f"Toko akan mengonfirmasi reservasi Anda.\n\nDetail: {settings.SITE_URL}/{outlet.slug}/reservation/{reservation.id}".replace(",", "."),
+            ))
+        asyncio.create_task(_oo.wa_owner(
+            outlet,
+            f"DP reservasi {reservation.customer_name or '-'} ({when}) sudah lunas lewat QRIS. Konfirmasi di menu Reservasi.",
+        ))
+    except Exception:  # noqa: BLE001
+        logger.warning("WA DP lunas gagal reservation=%s", reservation.id, exc_info=True)
+
+
 async def _handle_tab_payment_webhook_paid(db: AsyncSession, payment: Payment) -> None:
     """Settle tab-side state when QRIS webhook arrives with status=paid.
     Mirrors cash path in tabs.py pay_full/pay_split/pay_items.
@@ -925,6 +954,9 @@ async def xendit_webhook(
             # for tab payments; tab branch completes ALL orders correctly).
             if payment.tab_id:
                 await _handle_tab_payment_webhook_paid(db, payment)
+            elif str(payment.reference_id or "").startswith("reservation:"):
+                # DP reservasi (deposit_service): nggak ada order, nggak ada tab.
+                await _handle_deposit_webhook_paid(db, payment)
             elif payment.order_id:
                 # Calculate total paid
                 paid_query = select(func.sum(Payment.amount_paid)).where(

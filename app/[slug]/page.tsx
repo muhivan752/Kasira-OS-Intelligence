@@ -169,6 +169,19 @@ export default function StorefrontPage() {
             </span>
           </div>
 
+          {outlet.latitude != null && outlet.longitude != null && outlet.maps_enabled && (
+            <a href={`https://www.google.com/maps/dir/?api=1&destination=${outlet.latitude},${outlet.longitude}`} target="_blank" rel="noreferrer"
+              className="mt-4 flex items-center gap-3 rounded-2xl bg-[var(--surface-card)] border border-[var(--border-subtle)] p-2 pr-4 hover:bg-[var(--bg-subtle)]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`${(process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')}/connect/geo/static?lat=${outlet.latitude}&lng=${outlet.longitude}&zoom=15&w=240&h=120`}
+                alt="Lokasi toko" className="w-28 h-14 rounded-xl object-cover shrink-0" />
+              <span className="min-w-0 flex-1 text-sm">
+                <span className="block font-semibold text-[var(--text-strong)]">Petunjuk arah ke toko</span>
+                <span className="block text-xs text-[var(--text-muted)] truncate">{outlet.address || 'Buka di Google Maps'}{outlet.delivery_radius_km ? ` · Antar sampai ${outlet.delivery_radius_km} km` : ''}</span>
+              </span>
+              <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+            </a>
+          )}
           {closedReason && (
             <div className="mt-4 rounded-2xl bg-[color-mix(in_srgb,var(--warning)_14%,white)] text-[var(--text-strong)] px-4 py-3 text-sm">
               {closedReason}

@@ -64,6 +64,13 @@ class OnlineOrder {
   final String? tabId;
   final String? paymentMethod; // qris | cash | null (tagihan meja)
   final String? paymentStatus;
+  /// 'xendit' (lunas otomatis) | 'manual' (QRIS statis toko, kasir yang memastikan).
+  final String? paymentChannel;
+  /// Bukti bayar yang pelanggan unggah dari halaman lacak (mig 104).
+  final String? paymentProofUrl;
+  final double? deliveryLat;
+  final double? deliveryLng;
+  final double? deliveryDistanceKm;
   final DateTime createdAt;
   final DateTime? acceptedAt;
   final int? etaMinutes;
@@ -86,6 +93,11 @@ class OnlineOrder {
     this.tabId,
     this.paymentMethod,
     this.paymentStatus,
+    this.paymentChannel,
+    this.paymentProofUrl,
+    this.deliveryLat,
+    this.deliveryLng,
+    this.deliveryDistanceKm,
     required this.createdAt,
     this.acceptedAt,
     this.etaMinutes,
@@ -109,6 +121,11 @@ class OnlineOrder {
         tabId: j['tab_id'] as String?,
         paymentMethod: j['payment_method'] as String?,
         paymentStatus: j['payment_status'] as String?,
+        paymentChannel: j['payment_channel'] as String?,
+        paymentProofUrl: j['payment_proof_url'] as String?,
+        deliveryLat: j['delivery_lat'] == null ? null : _toDouble(j['delivery_lat']),
+        deliveryLng: j['delivery_lng'] == null ? null : _toDouble(j['delivery_lng']),
+        deliveryDistanceKm: j['delivery_distance_km'] == null ? null : _toDouble(j['delivery_distance_km']),
         createdAt: _toDate(j['created_at']) ?? DateTime.now(),
         acceptedAt: _toDate(j['accepted_at']),
         etaMinutes: (j['eta_minutes'] as num?)?.toInt(),
@@ -132,7 +149,11 @@ class OnlineOrder {
       };
 
   String get paymentLabel {
-    if (paymentMethod == 'qris') return isPaid ? 'Lunas QRIS' : 'QRIS belum dibayar';
+    if (paymentMethod == 'qris') {
+      if (isPaid) return 'Lunas QRIS';
+      if (paymentChannel == 'manual') return paymentProofUrl != null ? 'QRIS toko, bukti masuk' : 'QRIS toko, cek bukti';
+      return 'QRIS belum dibayar';
+    }
     if (paymentMethod == 'cash') return orderType == 'delivery' ? 'Bayar saat diterima' : 'Bayar di kasir';
     return isTableTab ? 'Tagihan meja' : 'Belum ada pembayaran';
   }

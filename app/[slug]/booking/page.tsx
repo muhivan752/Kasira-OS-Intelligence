@@ -33,6 +33,8 @@ export default function BookingPage() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
+  // Metode bayar DP (kalau toko minta). Diisi otomatis dengan metode aktif pertama.
+  const [dpMethod, setDpMethod] = useState<string>('');
 
   // Success data
   const [bookingResult, setBookingResult] = useState<any>(null);
@@ -84,6 +86,7 @@ export default function BookingPage() {
       customer_name: name.trim(),
       customer_phone: phone.startsWith('0') ? '62' + phone.slice(1) : phone.trim(),
       notes: notes.trim() || undefined,
+      ...(outlet?.reservation_deposit_amount ? { payment_method: dpMethod || (outlet.reservation_deposit_methods || [])[0] } : {}),
     });
 
     if (!result.success) {
@@ -92,6 +95,11 @@ export default function BookingPage() {
       return;
     }
 
+    // Toko minta DP: langsung ke halaman lacak, di sana cara bayar + unggah bukti.
+    if (result.data?.deposit && result.data?.id) {
+      router.push(`/${slug}/reservation/${result.data.id}`);
+      return;
+    }
     setBookingResult(result.data);
     setStep('success');
     setSubmitting(false);
@@ -382,6 +390,24 @@ export default function BookingPage() {
                   className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
                 <p className="text-xs text-gray-400 mt-1.5">Konfirmasi akan dikirim via WhatsApp</p>
+                {outlet?.reservation_deposit_amount ? (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-gray-800">
+                    <p className="font-semibold">DP {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(outlet.reservation_deposit_amount)} untuk mengamankan meja</p>
+                    <p className="mt-1 text-gray-600">
+                      Setelah reservasi dikirim, Anda diarahkan ke halaman pembayaran DP ({(outlet.reservation_deposit_methods || []).map((m: string) => m === 'qris' ? 'QRIS' : m === 'transfer' ? 'transfer bank' : 'kartu').join(' atau ')}) dan unggah bukti. DP dipotong dari tagihan saat Anda datang.
+                    </p>
+                    {(outlet.reservation_deposit_methods || []).length > 1 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(outlet.reservation_deposit_methods as string[]).map((m) => (
+                          <button key={m} type="button" onClick={() => setDpMethod(m)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${dpMethod === m ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-300 text-gray-700 bg-white'}`}>
+                            {m === 'qris' ? 'QRIS' : m === 'transfer' ? 'Transfer bank' : 'Kartu'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
 
               <div>

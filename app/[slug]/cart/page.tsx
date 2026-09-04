@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '../CartContext';
-import { createStorefrontOrder, getStorefront, getTablesWithStatus, requestBillFromStorefront } from '@/app/actions/storefront';
+import { createStorefrontOrder, getStorefront, getTablesWithStatus, requestBillFromStorefront, geoAutocomplete, geoPlace } from '@/app/actions/storefront';
 import {
   rp, loadCustomer, saveCustomer, saveLastOrder,
   Card, SectionTitle, Stepper, TopBar, EmptyState, Spinner, btnPrimary, btnSecondary, inputCls,
 } from '../_ui';
-import { Trash2, Store, Bike, Utensils, QrCode, Banknote, Loader2, Bell, ShieldCheck, ChevronRight } from 'lucide-react';
+import { Trash2, Store, Bike, Utensils, QrCode, Banknote, Loader2, Bell, ShieldCheck, ChevronRight, MapPin, LocateFixed, X } from 'lucide-react';
 
 type OrderType = 'pickup' | 'delivery' | 'dine_in';
 type PayMethod = 'qris' | 'cash';
@@ -39,6 +39,16 @@ export default function CheckoutPage() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  // Peta (Google lewat proxy backend). Aktif kalau toko punya kunci Maps.
+  // Alur: ketik alamat -> saran -> pilih -> titik + jarak ke toko. Atau
+  // "pakai lokasi saya". Tanpa peta, textarea biasa seperti dulu.
+  const [addrQuery, setAddrQuery] = useState('');
+  const [addrSuggestions, setAddrSuggestions] = useState<{ place_id: string; main: string; secondary: string; description: string }[]>([]);
+  const [geoPoint, setGeoPoint] = useState<{ lat: number; lng: number; address: string; distance_km: number | null; within_radius: boolean | null; radius_km: number | null } | null>(null);
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoErr, setGeoErr] = useState<string | null>(null);
+  const [addrDetail, setAddrDetail] = useState('');
+  const geoSession = useRef(`${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [requestingBill, setRequestingBill] = useState(false);
@@ -58,6 +68,42 @@ export default function CheckoutPage() {
   useEffect(() => { if (tableId && isPro) setOrderType('dine_in'); }, [tableId, isPro]);
 
   const dineInTab = orderType === 'dine_in' && isPro && !!tableId;
+  const mapsEnabled: boolean = !!storeData?.outlet?.maps_enabled;
+  const apiBase = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
+
+  useEffect(() => {
+    if (!mapsEnabled || orderType !== 'delivery' || geoPoint || addrQuery.trim().length < 3) { setAddrSuggestions([]); return; }
+    const t = setTimeout(async () => {
+      const list = await geoAutocomplete(slug, addrQuery, geoSession.current);
+      setAddrSuggestions(list);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [addrQuery, mapsEnabled, orderType, geoPoint, slug]);
+
+  const pickPlace = async (opts: { place_id?: string; lat?: number; lng?: number }) => {
+    setGeoBusy(true);
+    setGeoErr(null);
+    const res = await geoPlace(slug, { ...opts, session: geoSession.current });
+    setGeoBusy(false);
+    if (!res.success || !res.data) { setGeoErr(res.message || 'Alamat tidak ditemukan'); return; }
+    setGeoPoint(res.data);
+    setAddrSuggestions([]);
+    setAddrQuery(res.data.address);
+    setDeliveryAddress(res.data.address);
+    geoSession.current = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  };
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) { setGeoErr('Perangkat tidak mendukung lokasi.'); return; }
+    setGeoBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => pickPlace({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => { setGeoBusy(false); setGeoErr('Izin lokasi ditolak. Ketik alamat saja.'); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  const clearGeo = () => { setGeoPoint(null); setAddrQuery(''); setDeliveryAddress(''); setGeoErr(null); };
   const confirmMinutes: number = storeData?.outlet?.auto_cancel_minutes ?? 10;
   const accepting: boolean = storeData?.outlet?.accepting_orders ?? true;
   // Metode yang toko aktifkan (mig 103). Storefront cuma nawarin QRIS dan
@@ -73,6 +119,7 @@ export default function CheckoutPage() {
     if (customerName.trim().length < 2) return 'Isi nama pemesan.';
     if (!phoneOk) return 'Isi nomor WhatsApp yang aktif, contoh 0812xxxxxxx.';
     if (orderType === 'delivery' && deliveryAddress.trim().length < 8) return 'Isi alamat pengantaran beserta patokan.';
+    if (orderType === 'delivery' && geoPoint && geoPoint.within_radius === false) return `Alamat ${geoPoint.distance_km} km dari toko, di luar jangkauan antar (${geoPoint.radius_km} km).`;
     if (orderType === 'dine_in' && !tableId) return 'Pilih meja Anda.';
     return null;
   }, [customerName, phoneOk, orderType, deliveryAddress, tableId]);
@@ -118,7 +165,8 @@ export default function CheckoutPage() {
       order_type: orderType,
       customer_name: customerName.trim(),
       customer_phone: phone,
-      delivery_address: orderType === 'delivery' ? deliveryAddress.trim() : null,
+      delivery_address: orderType === 'delivery' ? `${deliveryAddress.trim()}${addrDetail.trim() ? ` (${addrDetail.trim()})` : ''}` : null,
+      ...(orderType === 'delivery' && geoPoint ? { delivery_lat: geoPoint.lat, delivery_lng: geoPoint.lng } : {}),
       table_id: orderType === 'dine_in' ? tableId : null,
       notes: notes.trim() || null,
       items: items.map((item) => ({
@@ -222,11 +270,69 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {orderType === 'delivery' && (
+            {orderType === 'delivery' && !mapsEnabled && (
               <div className="mt-4">
                 <label className="block text-sm font-semibold text-[var(--text-strong)] mb-1.5">Alamat pengantaran</label>
                 <textarea rows={3} value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)}
                   placeholder="Nama jalan, nomor rumah, dan patokan terdekat" className={`${inputCls} resize-none`} />
+                <p className="mt-1.5 text-xs text-[var(--text-muted)]">Ongkos kirim, bila ada, disepakati langsung dengan toko lewat WhatsApp.</p>
+              </div>
+            )}
+            {orderType === 'delivery' && mapsEnabled && (
+              <div className="mt-4">
+                <label className="block text-sm font-semibold text-[var(--text-strong)] mb-1.5">Alamat pengantaran</label>
+                {!geoPoint ? (
+                  <div className="relative">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <MapPin className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input value={addrQuery} onChange={(e) => setAddrQuery(e.target.value)} placeholder="Ketik nama jalan atau tempat"
+                          className={`${inputCls} pl-10`} autoComplete="off" />
+                      </div>
+                      <button type="button" onClick={useMyLocation} disabled={geoBusy}
+                        className="shrink-0 inline-flex items-center gap-1.5 px-3 rounded-xl border border-[var(--border-subtle)] text-sm font-semibold text-[var(--text-strong)] hover:bg-[var(--bg-subtle)] disabled:opacity-50">
+                        {geoBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
+                        <span className="hidden sm:inline">Lokasi saya</span>
+                      </button>
+                    </div>
+                    {addrSuggestions.length > 0 && (
+                      <ul className="absolute z-20 left-0 right-0 mt-1 rounded-2xl bg-[var(--surface-card)] border border-[var(--border-subtle)] shadow-lg overflow-hidden">
+                        {addrSuggestions.map((sg) => (
+                          <li key={sg.place_id}>
+                            <button type="button" onClick={() => pickPlace({ place_id: sg.place_id })}
+                              className="w-full text-left px-4 py-2.5 hover:bg-[var(--bg-subtle)] flex gap-2.5">
+                              <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[var(--text-muted)]" />
+                              <span className="min-w-0">
+                                <span className="block text-sm font-semibold text-[var(--text-strong)] truncate">{sg.main}</span>
+                                <span className="block text-xs text-[var(--text-muted)] truncate">{sg.secondary}</span>
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {geoErr && <p className="mt-1.5 text-xs text-[var(--danger)]">{geoErr}</p>}
+                    <p className="mt-1.5 text-xs text-[var(--text-muted)]">Pilih dari saran supaya kurir dapat titik yang tepat, atau tekan Lokasi saya.</p>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-[var(--border-subtle)] overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`${apiBase}/connect/geo/static?lat=${geoPoint.lat}&lng=${geoPoint.lng}&zoom=16&w=640&h=260`} alt="Peta alamat" className="w-full h-36 object-cover" />
+                    <div className="p-3 flex items-start gap-2">
+                      <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[var(--text-muted)]" />
+                      <div className="min-w-0 flex-1 text-sm">
+                        <p className="font-semibold text-[var(--text-strong)]">{geoPoint.address || 'Titik terpilih'}</p>
+                        {geoPoint.distance_km != null && (
+                          <p className={`text-xs mt-0.5 ${geoPoint.within_radius === false ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}`}>
+                            {geoPoint.distance_km} km dari toko{geoPoint.within_radius === false ? `, di luar jangkauan antar (${geoPoint.radius_km} km)` : ''}
+                          </p>
+                        )}
+                      </div>
+                      <button type="button" onClick={clearGeo} className="p-1 rounded-full hover:bg-[var(--bg-subtle)]" aria-label="Ganti alamat"><X className="w-4 h-4 text-[var(--text-muted)]" /></button>
+                    </div>
+                  </div>
+                )}
+                <input value={addrDetail} onChange={(e) => setAddrDetail(e.target.value)} placeholder="Nomor rumah, blok, patokan, warna pagar" className={`${inputCls} mt-2`} />
                 <p className="mt-1.5 text-xs text-[var(--text-muted)]">Ongkos kirim, bila ada, disepakati langsung dengan toko lewat WhatsApp.</p>
               </div>
             )}

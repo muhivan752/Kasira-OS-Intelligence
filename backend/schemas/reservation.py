@@ -81,6 +81,9 @@ class StorefrontReservationCreate(BaseModel):
     customer_name: str = Field(..., min_length=1, max_length=100)
     customer_phone: str = Field(..., min_length=10, max_length=20)
     notes: Optional[str] = None
+    # Metode bayar DP kalau toko mensyaratkan: qris | transfer | card (yang
+    # aktif di toko, tunai nggak bisa dari jauh). Kosong = metode aktif pertama.
+    payment_method: Optional[str] = Field(default=None, pattern='^(qris|transfer|card)$')
 
 
 class ReservationResponse(BaseModel):

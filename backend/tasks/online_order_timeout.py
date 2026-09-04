@@ -43,7 +43,7 @@ LOCK_KEY = "online_order_timeout:lock"
 
 async def expire_online_orders_once() -> dict:
     now = datetime.now(timezone.utc)
-    stats = {"unpaid": 0, "unconfirmed": 0, "failed": 0}
+    stats = {"unpaid": 0, "unconfirmed": 0, "failed": 0, "deposit_expired": 0}
 
     # uvicorn jalan 2 worker dan tiap worker punya supervisor sendiri, jadi
     # tanpa kunci pass ini jalan DUA kali bersamaan. Kegigit di deploy
@@ -126,6 +126,16 @@ async def expire_online_orders_once() -> dict:
                 await db.rollback()
                 await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
 
+    # Pass kedua, kunci yang sama: DP reservasi yang nggak dibayar (deposit_service).
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
+            from backend.services.deposit_service import expire_unpaid_deposits
+            n = await expire_unpaid_deposits(db, now=now)
+            await db.commit()
+            stats["deposit_expired"] = n
+    except Exception:  # noqa: BLE001
+        logger.exception("expire_unpaid_deposits gagal")
     return stats
 
 
@@ -138,7 +148,7 @@ async def online_order_timeout_loop() -> None:
     while True:
         try:
             s = await expire_online_orders_once()
-            if s["unpaid"] or s["unconfirmed"] or s["failed"]:
+            if s["unpaid"] or s["unconfirmed"] or s["failed"] or s.get("deposit_expired"):
                 logger.info("online_order_timeout: %s", s)
         except asyncio.CancelledError:
             raise

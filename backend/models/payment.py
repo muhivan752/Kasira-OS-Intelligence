@@ -36,6 +36,10 @@ class Payment(BaseModel):
     refunded_at = Column(DateTime(timezone=True), nullable=True)
     refund_amount = Column(Numeric(12, 2), nullable=True)
     receipt_printed_at = Column(DateTime(timezone=True), nullable=True)
+    # Bukti bayar dari pelanggan (mig 104): QRIS statis toko, transfer, DP
+    # reservasi. Kasir lihat ini sebelum Terima/Konfirmasi.
+    proof_image_url = Column(String, nullable=True)
+    proof_uploaded_at = Column(DateTime(timezone=True), nullable=True)
     
     xendit_raw = Column(JSONB(astext_type=Text()), nullable=True)
     processed_by = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)

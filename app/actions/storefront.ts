@@ -83,6 +83,7 @@ export async function createReservationPublic(slug: string, payload: {
   customer_name: string;
   customer_phone: string;
   notes?: string;
+  payment_method?: string;
 }) {
   try {
     const res = await fetch(`${BACKEND_URL}/connect/${slug}/reservation`, {
@@ -159,3 +160,49 @@ export async function requestBillFromStorefront(slug: string, tableId: string) {
   }
 }
 
+
+/* ── Reservasi: halaman lacak + DP (mig 104) ─────────────────────────── */
+
+export async function getReservationPublic(reservationId: string) {
+  if (!reservationId) return null;
+  try {
+    const res = await fetch(`${BACKEND_URL}/connect/reservations/${reservationId}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.data;
+  } catch {
+    return null;
+  }
+}
+
+/* ── Peta lewat proxy backend (kunci Maps tidak pernah ke browser) ───── */
+
+export async function geoAutocomplete(slug: string, q: string, session: string) {
+  if (!slug || q.trim().length < 3) return [];
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/connect/${slug}/geo/autocomplete?q=${encodeURIComponent(q.trim())}&session=${encodeURIComponent(session)}`,
+      { cache: 'no-store' },
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.data || []) as { place_id: string; main: string; secondary: string; description: string }[];
+  } catch {
+    return [];
+  }
+}
+
+export async function geoPlace(slug: string, opts: { place_id?: string; lat?: number; lng?: number; session?: string }) {
+  try {
+    const qs = new URLSearchParams();
+    if (opts.place_id) qs.set('place_id', opts.place_id);
+    if (opts.lat != null && opts.lng != null) { qs.set('lat', String(opts.lat)); qs.set('lng', String(opts.lng)); }
+    if (opts.session) qs.set('session', opts.session);
+    const res = await fetch(`${BACKEND_URL}/connect/${slug}/geo/place?${qs.toString()}`, { cache: 'no-store' });
+    const data = await res.json();
+    if (!res.ok) return { success: false, message: data.detail || 'Alamat tidak ditemukan' };
+    return { success: true, data: data.data as { lat: number; lng: number; address: string; distance_km: number | null; within_radius: boolean | null; radius_km: number | null } };
+  } catch {
+    return { success: false, message: 'Peta tidak tersedia' };
+  }
+}

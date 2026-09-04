@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 import json
 import logging
+import asyncio
 import uuid
 from pydantic import BaseModel, Field
 
@@ -77,6 +79,9 @@ class ConnectOrderInput(BaseModel):
     customer_phone: str
     order_type: str
     delivery_address: Optional[str] = None
+    # Titik dari Google Maps (proxy /geo). Opsional: tanpa kunci Maps, pelanggan ketik alamat saja.
+    delivery_lat: Optional[float] = Field(default=None, ge=-90, le=90)
+    delivery_lng: Optional[float] = Field(default=None, ge=-180, le=180)
     table_id: Optional[uuid.UUID] = None  # for dine_in — auto-link to open tab
     idempotency_key: str
     payment_method: str = 'qris'  # 'qris' atau 'cash'
@@ -86,6 +91,7 @@ class ConnectOrderInput(BaseModel):
 
 from backend.services.fonnte import send_whatsapp_message
 from backend.services import payment_methods as _pm
+from backend.services import geo_service as _geo
 
 async def send_wa_confirmation_real(
     phone: str, display_number: str,
@@ -114,6 +120,141 @@ async def send_wa_booking_confirmation(
         f"ID Booking: {booking_id[:8].upper()}"
     )
     await send_whatsapp_message(phone, message)
+
+
+# ── Rute literal. WAJIB dideklarasikan sebelum "/{slug}..." (gotcha #43). ──
+
+@router.get("/reservations/{reservation_id}", response_model=StandardResponse)
+async def get_public_reservation(reservation_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Halaman lacak reservasi: status + DP (QR toko/rekening/bukti)."""
+    from backend.models.reservation import Reservation, Table
+    from backend.services import deposit_service as _dep
+    reservation = (await db.execute(
+        select(Reservation).where(Reservation.id == reservation_id, Reservation.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservasi tidak ditemukan")
+    outlet = await db.get(Outlet, reservation.outlet_id)
+    table = await db.get(Table, reservation.table_id) if reservation.table_id else None
+    dep_payment = await _dep.load_deposit_payment(db, reservation)
+    return StandardResponse(success=True, data={
+        "id": str(reservation.id),
+        "status": reservation.status,
+        "reservation_date": reservation.reservation_date.isoformat() if reservation.reservation_date else None,
+        "start_time": reservation.start_time.strftime("%H:%M") if reservation.start_time else None,
+        "end_time": reservation.end_time.strftime("%H:%M") if reservation.end_time else None,
+        "guest_count": reservation.guest_count,
+        "customer_name": reservation.customer_name,
+        "table_name": table.name if table else None,
+        "notes": reservation.notes,
+        "created_at": reservation.created_at.isoformat() if reservation.created_at else None,
+        "deposit": _dep.deposit_info(dep_payment, outlet, reservation.deposit_amount),
+        "deposit_timeout_minutes": _dep.DEPOSIT_TIMEOUT_MINUTES,
+        "outlet": {
+            "name": outlet.name if outlet else None,
+            "slug": outlet.slug if outlet else None,
+            "whatsapp": ((outlet.whatsapp_number or "").strip() or None) if outlet else None,
+            "address": outlet.address if outlet else None,
+        },
+    })
+
+
+@router.post("/payments/{payment_id}/proof", response_model=StandardResponse)
+async def upload_payment_proof(payment_id: uuid.UUID, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """Pelanggan unggah bukti bayar (QRIS statis toko, transfer, DP reservasi).
+
+    Publik, dikunci oleh id pembayaran (UUID acak) dan hanya untuk pembayaran
+    manual yang masih pending. Kasir melihat gambarnya di kartu pesanan /
+    reservasi sebelum menekan Terima/Konfirmasi. Sistem TIDAK menandai lunas
+    dari sini: manusia yang memutuskan.
+    """
+    import os
+    from backend.models.payment import Payment
+    from backend.api.routes.media import UPLOAD_DIR, ALLOWED_EXTENSIONS, MAX_SIZE_MB
+    payment = (await db.execute(
+        select(Payment).where(Payment.id == payment_id, Payment.deleted_at.is_(None)).with_for_update()
+    )).scalar_one_or_none()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Pembayaran tidak ditemukan")
+    status = payment.status.value if hasattr(payment.status, "value") else str(payment.status)
+    if (payment.channel or "xendit") != "manual":
+        raise HTTPException(status_code=400, detail="Pembayaran ini terkonfirmasi otomatis, tidak perlu bukti.")
+    if status not in ("pending", "pending_manual_check"):
+        raise HTTPException(status_code=400, detail=f"Pembayaran sudah {status}.")
+    ext = os.path.splitext(file.filename or "")[1].lower() or ".jpg"
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Format gambar tidak didukung. Kirim JPG, PNG, atau WEBP.")
+    content = await file.read()
+    if len(content) > MAX_SIZE_MB * 1024 * 1024:
+        raise HTTPException(status_code=400, detail=f"Ukuran file maksimal {MAX_SIZE_MB} MB")
+    if len(content) < 1024:
+        raise HTTPException(status_code=400, detail="File terlalu kecil, bukan gambar bukti.")
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    filename = f"proof-{uuid.uuid4()}{ext}"
+    with open(os.path.join(UPLOAD_DIR, filename), "wb") as f:
+        f.write(content)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    payment.proof_image_url = f"{settings.SITE_URL}/uploads/{filename}"
+    payment.proof_uploaded_at = now
+    payment.row_version = (payment.row_version or 0) + 1
+    await db.commit()
+
+    # Kabari pemilik + app kasir: ada bukti masuk, saatnya cek.
+    from backend.services import online_orders as _oo
+    outlet = await db.get(Outlet, payment.outlet_id)
+    ref = str(payment.reference_id or "")
+    label = "DP reservasi" if ref.startswith("reservation:") else "pesanan online"
+    if outlet is not None:
+        asyncio.create_task(_oo.wa_owner(outlet, f"Bukti bayar {label} Rp {float(payment.amount_due):,.0f} masuk. Cek di aplikasi kasir lalu konfirmasi.".replace(",", ".")))
+        asyncio.create_task(_oo.publish(outlet.id, "payment.proof", {"payment_id": str(payment.id), "order_id": str(payment.order_id) if payment.order_id else None}))
+    return StandardResponse(success=True, data={"proof_image_url": payment.proof_image_url, "uploaded_at": now.isoformat()},
+                            message="Bukti bayar diterima. Toko akan memeriksanya.")
+
+
+@router.get("/geo/static")
+async def geo_static_map(lat: float = Query(..., ge=-90, le=90), lng: float = Query(..., ge=-180, le=180),
+                         zoom: int = 16, w: int = 640, h: int = 320):
+    """Pratinjau peta (PNG) lewat proxy supaya kunci Maps nggak ke browser."""
+    png = await _geo.static_map_png(lat, lng, zoom=zoom, width=w, height=h)
+    if png is None:
+        raise HTTPException(status_code=404, detail="Peta tidak tersedia")
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.get("/{slug}/geo/autocomplete", response_model=StandardResponse)
+async def geo_autocomplete(slug: str, q: str = Query(..., min_length=3, max_length=120), session: Optional[str] = None,
+                           db: AsyncSession = Depends(get_db)):
+    outlet = (await db.execute(select(Outlet).where(Outlet.slug == slug, Outlet.deleted_at.is_(None)))).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+    items = await _geo.autocomplete(q, lat=outlet.latitude, lng=outlet.longitude, session=session)
+    return StandardResponse(success=True, data=items)
+
+
+@router.get("/{slug}/geo/place", response_model=StandardResponse)
+async def geo_place(slug: str, place_id: Optional[str] = None, lat: Optional[float] = None, lng: Optional[float] = None,
+                    session: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    """Detail titik: dari place_id (pilihan autocomplete) atau lat/lng (lokasi HP).
+    Sekalian hitung jarak ke toko dan apakah masih dalam radius antar."""
+    outlet = (await db.execute(select(Outlet).where(Outlet.slug == slug, Outlet.deleted_at.is_(None)))).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+    if place_id:
+        point = await _geo.place_details(place_id, session=session)
+    elif lat is not None and lng is not None:
+        point = await _geo.reverse(lat, lng) or {"lat": lat, "lng": lng, "address": ""}
+    else:
+        raise HTTPException(status_code=400, detail="Kirim place_id atau lat dan lng")
+    if point is None:
+        raise HTTPException(status_code=404, detail="Alamat tidak ditemukan")
+    distance = None
+    within = None
+    radius = float(outlet.delivery_radius_km or 0)
+    if outlet.latitude is not None and outlet.longitude is not None:
+        distance = round(_geo.haversine_km(outlet.latitude, outlet.longitude, point["lat"], point["lng"]), 2)
+        within = (distance <= radius + 0.3) if radius > 0 else True
+    return StandardResponse(success=True, data={**point, "distance_km": distance, "within_radius": within, "radius_km": radius or None})
+
 
 @router.get("/{slug}", response_model=StandardResponse)
 async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
@@ -149,6 +290,10 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
         select(ReservationSettings).where(ReservationSettings.outlet_id == outlet.id)
     )).scalar_one_or_none()
     reservation_enabled = resv_settings.is_enabled if resv_settings else False
+    from backend.services import deposit_service as _dep
+    _resv_settings = (await db.execute(select(ReservationSettings).where(ReservationSettings.outlet_id == outlet.id))).scalar_one_or_none()
+    _resv_deposit_amount = float(_resv_settings.deposit_amount) if _dep.deposit_required(_resv_settings, outlet) else None
+    _resv_deposit_methods = _dep.deposit_methods(outlet) if _resv_deposit_amount else []
 
     # Get active products — recipe mode doesn't use stock_qty
     stock_mode = getattr(outlet, 'stock_mode', 'simple')
@@ -204,10 +349,19 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
             # Metode bayar yang toko aktifkan + saluran QRIS (xendit | manual).
             # Storefront cuma nawarin yang ada di sini.
             **_pm.public_config(outlet),
+            # Peta (services/geo_service.py). maps_enabled = kunci server terpasang.
+            "latitude": outlet.latitude,
+            "longitude": outlet.longitude,
+            "delivery_radius_km": float(outlet.delivery_radius_km) if outlet.delivery_radius_km is not None else None,
+            "maps_enabled": _geo.enabled(),
             "opening_hours": outlet.opening_hours if isinstance(outlet.opening_hours, str) else "",
             "tier": outlet_tier,
             "trust_badge": "Verified Partner",
-            "reservation_enabled": reservation_enabled
+            "reservation_enabled": reservation_enabled,
+            # DP reservasi (deposit_service): amount None = toko nggak minta DP,
+            # atau minta tapi nggak punya metode non-tunai aktif.
+            "reservation_deposit_amount": _resv_deposit_amount,
+            "reservation_deposit_methods": _resv_deposit_methods
         },
         "categories": [
             {"id": str(c.id), "name": c.name} for c in categories
@@ -270,6 +424,9 @@ async def create_connect_order(
 
     if input_data.order_type == "delivery" and not input_data.delivery_address:
         raise HTTPException(status_code=400, detail="Alamat pengiriman wajib diisi")
+    delivery_lat = delivery_lng = delivery_distance_km = None
+    if input_data.order_type == "delivery" and input_data.delivery_lat is not None and input_data.delivery_lng is not None:
+        delivery_lat, delivery_lng = input_data.delivery_lat, input_data.delivery_lng
 
     # Get outlet
     result = await db.execute(
@@ -283,6 +440,14 @@ async def create_connect_order(
         raise HTTPException(status_code=400, detail="Toko sedang tutup. Silakan pesan lagi saat toko buka.")
     if not getattr(outlet, 'online_orders_enabled', True):
         raise HTTPException(status_code=400, detail="Toko sedang tidak menerima pesanan online. Silakan hubungi toko lewat WhatsApp.")
+    if delivery_lat is not None and outlet.latitude is not None and outlet.longitude is not None:
+        delivery_distance_km = round(_geo.haversine_km(outlet.latitude, outlet.longitude, delivery_lat, delivery_lng), 2)
+        radius = float(outlet.delivery_radius_km or 0)
+        if radius > 0 and delivery_distance_km > radius + 0.3:
+            raise HTTPException(status_code=400, detail=(
+                f"Alamat Anda {delivery_distance_km:.1f} km dari toko, di luar jangkauan antar ({radius:.0f} km). "
+                "Pilih ambil sendiri atau hubungi toko lewat WhatsApp."
+            ))
 
     # Check idempotency key (scoped ke outlet via connect_outlet)
     result = await db.execute(
@@ -481,6 +646,9 @@ async def create_connect_order(
         total_amount=subtotal,
         source="storefront",
         delivery_address=input_data.delivery_address if input_data.order_type == "delivery" else None,
+        delivery_lat=delivery_lat,
+        delivery_lng=delivery_lng,
+        delivery_distance_km=delivery_distance_km,
         notes=(input_data.notes or "").strip() or None,
     )
     db.add(order)
@@ -718,7 +886,8 @@ async def create_connect_order(
         background_tasks.add_task(
             _oo.wa_owner, outlet,
             _oo.msg_owner_new_order(order, outlet, input_data.customer_name, item_objs,
-                                    paid=bool(payment is not None and payment.status == 'paid')),
+                                    paid=bool(payment is not None and payment.status == 'paid'),
+                                    manual_qris=manual_qris_pending),
         )
         background_tasks.add_task(_oo.publish, outlet.id, "order.created", {
             "order_id": str(order.id), "display_number": order.display_number,
@@ -1090,9 +1259,11 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
             exp = payment.created_at + datetime.timedelta(minutes=15)
             expired_at = exp.isoformat() + "Z"
         payment_data = {
+            "payment_id": str(payment.id),
             "method": payment.payment_method,
             "status": payment.status,
             "channel": payment.channel,
+            "proof_image_url": payment.proof_image_url,
             "qris_url": q_url,
             "qris_expired_at": expired_at,
             # QR statis toko buat halaman lacak: pelanggan bayar lalu kirim bukti.
@@ -1179,6 +1350,9 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
             "notes": order.notes,
             "table_name": table_name,
             "delivery_address": order.delivery_address,
+            "delivery_lat": order.delivery_lat,
+            "delivery_lng": order.delivery_lng,
+            "delivery_distance_km": float(order.delivery_distance_km) if order.delivery_distance_km is not None else None,
             "payment_method": payment.payment_method if payment else None,
             "items": items_data,
             "payment": payment_data,
@@ -1346,8 +1520,11 @@ async def create_storefront_reservation(
     table = await _auto_assign_table(db, outlet.id, body.guest_count,
                                       body.reservation_date, body.start_time, end_time)
 
-    # Determine initial status
-    initial_status = "confirmed" if settings_row.auto_confirm else "pending"
+    # Determine initial status. DP wajib = selalu pending sampai DP diterima
+    # dan kasir konfirmasi, apa pun auto_confirm.
+    from backend.services import deposit_service as _dep
+    needs_deposit = _dep.deposit_required(settings_row, outlet)
+    initial_status = "confirmed" if (settings_row.auto_confirm and not needs_deposit) else "pending"
 
     reservation = Reservation(
         outlet_id=outlet.id,
@@ -1362,25 +1539,36 @@ async def create_storefront_reservation(
         source='storefront',
         notes=body.notes,
         status=initial_status,
-        deposit_amount=settings_row.deposit_amount if settings_row.require_deposit else None,
+        deposit_amount=settings_row.deposit_amount if needs_deposit else None,
         confirmed_at=datetime.datetime.now(datetime.timezone.utc) if initial_status == "confirmed" else None,
     )
     db.add(reservation)
+    await db.flush()
+
+    dep_payment = None
+    if needs_deposit:
+        dep_payment = await _dep.create_deposit_payment(db, outlet, reservation, method=body.payment_method, tenant_id=outlet.tenant_id)
     await db.commit()
     await db.refresh(reservation)
+    deposit = _dep.deposit_info(dep_payment, outlet, reservation.deposit_amount)
+    track_url = f"{settings.SITE_URL}/{outlet.slug}/reservation/{reservation.id}"
 
-    # WA confirmation if auto-confirmed
-    if initial_status == "confirmed" and body.customer_phone:
-        try:
-            from backend.api.routes.reservations import _send_wa_confirmation
-            import asyncio
-            asyncio.create_task(_send_wa_confirmation(
-                body.customer_phone, outlet.name, body.reservation_date, body.start_time, body.guest_count,
-            ))
-        except Exception:
-            pass
+    # Kabar: pelanggan selalu (DP = instruksi bayar), pemilik untuk yang butuh
+    # tindakan (pending). Lewat pintu yang sama dengan pesanan online.
+    from backend.services import online_orders as _oo
+    if body.customer_phone:
+        asyncio.create_task(_oo.wa_customer(
+            outlet, body.customer_phone,
+            _oo.msg_customer_reservation(reservation, outlet, deposit=deposit, track=track_url),
+        ))
+    if initial_status == "pending":
+        asyncio.create_task(_oo.wa_owner(outlet, _oo.msg_owner_new_reservation(reservation, outlet, deposit=deposit)))
+        asyncio.create_task(_oo.publish(outlet.id, "reservation.created", {"reservation_id": str(reservation.id)}))
 
-    status_msg = "Reservasi dikonfirmasi" if initial_status == "confirmed" else "Reservasi diterima, menunggu konfirmasi"
+    status_msg = (
+        "Reservasi dikonfirmasi" if initial_status == "confirmed"
+        else ("Reservasi diterima, bayar DP untuk mengamankan meja" if needs_deposit else "Reservasi diterima, menunggu konfirmasi")
+    )
 
     return StandardResponse(
         success=True,
@@ -1392,8 +1580,10 @@ async def create_storefront_reservation(
             "end_time": end_time.strftime("%H:%M"),
             "guest_count": body.guest_count,
             "table_name": table.name if table else "Akan ditentukan",
-            "deposit_required": settings_row.require_deposit,
-            "deposit_amount": float(settings_row.deposit_amount) if settings_row.require_deposit else None,
+            "deposit_required": needs_deposit,
+            "deposit_amount": float(settings_row.deposit_amount) if needs_deposit else None,
+            "deposit": deposit,
+            "track_url": track_url,
         },
         message=status_msg,
     )

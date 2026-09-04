@@ -36,6 +36,15 @@ class Settings(BaseSettings):
 
     # Fonnte WA
     FONNTE_TOKEN: str = ""
+    # Google Maps kunci SERVER (Places, Geocoding, Static Maps). Kunci yang
+    # sama dengan Sefrekuensi (GOOGLE_STATIC_KEY di sana). Kosong = fitur
+    # peta di storefront mati, alamat antar jadi textarea biasa.
+    GOOGLE_MAPS_SERVER_KEY: str = ""
+    # Pintu notifikasi merchant ke Sefrekuensi (strategi akuisisi user Ivan).
+    # Kosong = belum dicolok. Diisi URL webhook + token, semua pesan pemilik
+    # (pesanan online, reservasi) ikut dikirim ke sana selain WA.
+    SEFREKUENSI_NOTIFY_URL: str = ""
+    SEFREKUENSI_NOTIFY_TOKEN: str = ""
 
     # Xendit Master Keys
     XENDIT_API_KEY: str = ""

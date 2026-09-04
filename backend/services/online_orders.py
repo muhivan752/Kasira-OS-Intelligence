@@ -95,7 +95,11 @@ async def wa_customer(outlet, phone: Optional[str], message: str) -> bool:
 
 
 async def wa_owner(outlet, message: str) -> bool:
-    """WA cadangan ke pemilik. Nomor: WhatsApp toko, kalau kosong nomor outlet."""
+    """Kabar ke pemilik: WA (nomor WhatsApp toko, kalau kosong nomor outlet)
+    plus Sefrekuensi kalau pintunya sudah dicolok. Ini SATU-SATUNYA pintu
+    notifikasi merchant (pesanan online, reservasi, refund manual); kanal
+    baru ditambah di sini, bukan di pemanggilnya."""
+    await push_sefrekuensi(outlet, message)
     if not getattr(outlet, "online_notify_owner_wa", True):
         return False
     target = (getattr(outlet, "whatsapp_number", None) or getattr(outlet, "phone", None) or "").strip()
@@ -105,6 +109,28 @@ async def wa_owner(outlet, message: str) -> bool:
         return await send_whatsapp_message(target, message)
     except Exception:  # noqa: BLE001
         logger.warning("online_orders wa_owner gagal ke %s", target, exc_info=True)
+        return False
+
+
+async def push_sefrekuensi(outlet, message: str) -> bool:
+    """Notifikasi merchant ke Sefrekuensi (strategi akuisisi user, keputusan
+    Ivan 4 Sep 2026). Nggak aktif sampai SEFREKUENSI_NOTIFY_URL diisi.
+    Kontrak: POST JSON {phone, outlet_id, outlet_name, message, source}
+    dengan header Authorization Bearer. Gagal = catat log, jangan ganggu WA."""
+    url = (settings.SEFREKUENSI_NOTIFY_URL or "").strip()
+    if not url:
+        return False
+    target = (getattr(outlet, "whatsapp_number", None) or getattr(outlet, "phone", None) or "").strip()
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=3.0)) as client:
+            r = await client.post(url, json={
+                "phone": target, "outlet_id": str(outlet.id), "outlet_name": outlet.name,
+                "message": message, "source": "selaris",
+            }, headers={"Authorization": f"Bearer {settings.SEFREKUENSI_NOTIFY_TOKEN}"} if settings.SEFREKUENSI_NOTIFY_TOKEN else {})
+        return r.status_code < 300
+    except Exception:  # noqa: BLE001
+        logger.warning("push_sefrekuensi gagal outlet=%s", getattr(outlet, "id", None), exc_info=True)
         return False
 
 
@@ -182,17 +208,62 @@ def msg_cancelled(order, outlet, *, refund_amount=None, refund_manual: bool = Fa
     return text + f"\n\nDetail: {track_url(outlet.slug, order.id)}"
 
 
-def msg_owner_new_order(order, outlet, customer_name: Optional[str], items: Iterable, *, paid: bool) -> str:
-    pay = "Lunas (QRIS)" if paid else "Bayar di kasir"
+def msg_owner_new_order(order, outlet, customer_name: Optional[str], items: Iterable, *, paid: bool,
+                        manual_qris: bool = False) -> str:
+    if paid:
+        pay = "Lunas (QRIS)"
+    elif manual_qris:
+        pay = "QRIS toko, cek bukti bayar"
+    else:
+        pay = "Bayar di kasir"
     lines = _items_lines(items)
+    extra = ""
+    lat, lng = getattr(order, "delivery_lat", None), getattr(order, "delivery_lng", None)
+    if lat is not None and lng is not None:
+        from backend.services.geo_service import maps_link
+        km = getattr(order, "delivery_distance_km", None)
+        extra = f"\nPeta: {maps_link(lat, lng)}" + (f" ({float(km):.1f} km)" if km is not None else "")
     return (
         f"Pesanan online baru #{order.display_number}\n"
         f"{order_type_label(order.order_type)} · {pay}\n"
         f"Pemesan: {customer_name or '-'}\n"
         f"{lines}\n"
-        f"Total {_rp(order.total_amount)}\n\n"
+        f"Total {_rp(order.total_amount)}{extra}\n\n"
         f"Buka aplikasi kasir untuk mengonfirmasi. Batas {outlet.online_auto_cancel_minutes} menit."
     )
+
+
+def msg_owner_new_reservation(reservation, outlet, *, deposit: Optional[dict]) -> str:
+    when = f"{reservation.reservation_date} pukul {reservation.start_time.strftime('%H:%M') if reservation.start_time else '-'}"
+    dp = ""
+    if deposit and deposit.get("amount"):
+        dp = f"\nDP {_rp(deposit['amount'])}: " + ("lunas" if deposit.get("status") == "paid" else "menunggu bukti bayar")
+    return (
+        f"Reservasi online baru\n"
+        f"{reservation.customer_name or '-'} · {reservation.guest_count} tamu\n"
+        f"{when}{dp}\n\n"
+        "Konfirmasi lewat aplikasi kasir atau dashboard, menu Reservasi."
+    )
+
+
+def msg_customer_reservation(reservation, outlet, *, deposit: Optional[dict], track: str) -> str:
+    when = f"{reservation.reservation_date} pukul {reservation.start_time.strftime('%H:%M') if reservation.start_time else '-'}"
+    head = f"Reservasi di {outlet.name} untuk {reservation.guest_count} tamu, {when}, sudah kami terima."
+    if deposit and deposit.get("status") in ("pending", "pending_manual_check"):
+        body = (
+            f"Untuk mengamankan meja, bayar DP {_rp(deposit['amount'])} lewat halaman reservasi "
+            f"dan unggah bukti bayarnya di sana. Toko mengonfirmasi setelah DP diterima. "
+            f"Batas {60} menit."
+        )
+    elif _val(reservation.status) == "confirmed":
+        body = "Reservasi sudah dikonfirmasi. Sampai bertemu."
+    else:
+        body = "Toko akan mengonfirmasi reservasi Anda."
+    return f"{head}\n{body}\n\nDetail: {track}"
+
+
+def _val(x) -> str:
+    return x.value if hasattr(x, "value") else str(x)
 
 
 def msg_owner_refund_manual(order, outlet, amount) -> str:

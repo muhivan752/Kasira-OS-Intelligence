@@ -439,12 +439,13 @@ async def _attach_payment_info(db, orders) -> list:
     payment_map: dict = {}
     if order_ids:
         pay_result = await db.execute(
-            select(Payment.order_id, Payment.payment_method, Payment.status, Payment.channel).where(
+            select(Payment.order_id, Payment.payment_method, Payment.status, Payment.channel, Payment.proof_image_url).where(
                 Payment.order_id.in_(order_ids), Payment.deleted_at.is_(None),
             ).order_by(Payment.created_at.asc())
         )
         for row in pay_result.all():
-            payment_map[row.order_id] = {"payment_method": row.payment_method, "payment_status": row.status, "payment_channel": row.channel}
+            payment_map[row.order_id] = {"payment_method": row.payment_method, "payment_status": row.status,
+                                         "payment_channel": row.channel, "payment_proof_url": row.proof_image_url}
     out = []
     for o in orders:
         resp = OrderResponse.model_validate(o)
@@ -453,6 +454,7 @@ async def _attach_payment_info(db, orders) -> list:
             resp.payment_method = info["payment_method"]
             resp.payment_status = info["payment_status"]
             resp.payment_channel = info["payment_channel"]
+            resp.payment_proof_url = info["payment_proof_url"]
         out.append(resp)
     return out
 

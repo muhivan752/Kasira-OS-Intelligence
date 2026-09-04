@@ -66,8 +66,10 @@ async def _get_reservation(db: AsyncSession, reservation_id: UUID, lock: bool = 
     return reservation
 
 
-def _build_response(r: Reservation, table: Optional[Table] = None) -> dict:
+def _build_response(r: Reservation, table: Optional[Table] = None, deposit_payment=None, outlet=None) -> dict:
+    from backend.services.deposit_service import deposit_info
     return {
+        "deposit": deposit_info(deposit_payment, outlet, r.deposit_amount),
         "id": str(r.id),
         "outlet_id": str(r.outlet_id),
         "table_id": str(r.table_id) if r.table_id else None,
@@ -121,6 +123,36 @@ async def _auto_assign_table(db: AsyncSession, outlet_id: UUID, guest_count: int
         if conflict == 0:
             return table
     return None
+
+
+def _jsonable(obj):
+    """audit_log.after_state itu JSONB; Decimal dari Pydantic (deposit_amount)
+    bikin INSERT meledak 500 (kegigit 4 Sep 2026 saat DP pertama disimpan)."""
+    from decimal import Decimal as _D
+    import datetime as _dt
+    if isinstance(obj, dict):
+        return {k: _jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_jsonable(v) for v in obj]
+    if isinstance(obj, _D):
+        return float(obj)
+    if isinstance(obj, (_dt.datetime, _dt.date, _dt.time)):
+        return obj.isoformat()
+    if isinstance(obj, UUID):
+        return str(obj)
+    return obj
+
+
+async def _cancel_pending_deposit(db: AsyncSession, reservation: Reservation) -> None:
+    from backend.services.deposit_service import load_deposit_payment
+    pay = await load_deposit_payment(db, reservation)
+    if pay is None:
+        return
+    st = pay.status.value if hasattr(pay.status, "value") else str(pay.status)
+    if st in ("pending", "pending_manual_check", "failed"):
+        pay.status = "cancelled"
+        pay.cancelled_at = datetime.now(timezone.utc)
+        pay.row_version = (pay.row_version or 0) + 1
 
 
 async def _send_wa_confirmation(phone: str, outlet_name: str, res_date: date, start: time, guest_count: int):
@@ -219,7 +251,7 @@ async def update_reservation_settings(
     await invalidate_storefront_cache(outlet_id, db)
 
     await log_audit(db=db, action="UPDATE", entity="reservation_settings", entity_id=settings.id,
-                    after_state=update_data, user_id=current_user.id, tenant_id=current_user.tenant_id)
+                    after_state=_jsonable(update_data), user_id=current_user.id, tenant_id=current_user.tenant_id)
 
     return StandardResponse(
         success=True,
@@ -263,7 +295,10 @@ async def list_reservations(
         tbl_result = await db.execute(select(Table).where(Table.id.in_(table_ids)))
         tables_map = {t.id: t for t in tbl_result.scalars().all()}
 
-    items = [_build_response(r, tables_map.get(r.table_id)) for r in reservations]
+    from backend.services.deposit_service import load_deposit_map
+    outlet = await db.get(Outlet, outlet_id)
+    dep_map = await load_deposit_map(db, reservations)
+    items = [_build_response(r, tables_map.get(r.table_id), dep_map.get(r.deposit_payment_id), outlet) for r in reservations]
 
     return StandardResponse(
         success=True, data=items,
@@ -376,6 +411,12 @@ async def confirm_reservation(
     if table:
         reservation.table_id = table.id
 
+    # DP lewat QRIS statis/transfer: kasir konfirmasi = uang dianggap masuk
+    # (dia sudah lihat bukti/notifikasi). QRIS Xendit dibiarkan, webhook yang nentuin.
+    from backend.services.deposit_service import load_deposit_payment, mark_paid_if_manual
+    dep_payment = await load_deposit_payment(db, reservation)
+    mark_paid_if_manual(dep_payment)
+
     reservation.status = "confirmed"
     reservation.confirmed_at = datetime.now(timezone.utc)
     reservation.row_version += 1
@@ -393,7 +434,7 @@ async def confirm_reservation(
         ))
 
     return StandardResponse(
-        success=True, data=_build_response(reservation, table),
+        success=True, data=_build_response(reservation, table, dep_payment, outlet),
         request_id=request.state.request_id, message="Reservasi dikonfirmasi",
     )
 
@@ -407,7 +448,7 @@ async def seat_reservation(
 ) -> Any:
     """Tamu datang — set status seated."""
     reservation = await _get_reservation(db, reservation_id, lock=True)
-    await _validate_outlet(db, reservation.outlet_id, current_user.tenant_id)
+    outlet = await _validate_outlet(db, reservation.outlet_id, current_user.tenant_id)
 
     if reservation.status != "confirmed":
         raise HTTPException(status_code=400, detail="Hanya reservasi confirmed yang bisa di-seat")
@@ -424,14 +465,28 @@ async def seat_reservation(
             table.status = "occupied"
             table.row_version += 1
 
+    # DP lunas jadi pembayaran awal tagihan meja (tab dibuka kalau belum ada),
+    # supaya tamu nggak ditagih dua kali dan kasir nggak perlu ingat-ingat.
+    deposit_tab = None
+    from backend.services.deposit_service import load_deposit_payment, apply_deposit_to_tab
+    dep_payment = await load_deposit_payment(db, reservation)
+    if dep_payment is not None:
+        try:
+            deposit_tab = await apply_deposit_to_tab(db, reservation, dep_payment, outlet)
+        except Exception:  # noqa: BLE001
+            logger.warning("apply_deposit_to_tab gagal reservation=%s", reservation.id, exc_info=True)
+
     await db.commit()
 
     await log_audit(db=db, action="reservation_seat", entity="reservation", entity_id=reservation_id,
                     after_state={"status": "seated"}, user_id=current_user.id, tenant_id=current_user.tenant_id)
 
     return StandardResponse(
-        success=True, data={"status": "seated", "row_version": reservation.row_version},
-        request_id=request.state.request_id, message="Tamu telah duduk",
+        success=True, data={"status": "seated", "row_version": reservation.row_version,
+                            "deposit_tab_id": str(deposit_tab.id) if deposit_tab is not None else None,
+                            "deposit_tab_number": getattr(deposit_tab, "tab_number", None)},
+        request_id=request.state.request_id,
+        message="Tamu telah duduk" + (f", DP masuk ke {deposit_tab.tab_number}" if deposit_tab is not None else ""),
     )
 
 
@@ -498,6 +553,7 @@ async def cancel_reservation(
     reservation.status = "cancelled"
     reservation.cancelled_at = datetime.now(timezone.utc)
     reservation.row_version += 1
+    await _cancel_pending_deposit(db, reservation)
     await db.commit()
 
     await log_audit(db=db, action="reservation_cancel", entity="reservation", entity_id=reservation_id,
@@ -539,6 +595,9 @@ async def noshow_reservation(
 
     reservation.status = "no_show"
     reservation.row_version += 1
+    # DP yang sudah lunas SENGAJA tidak disentuh: hangus, itu gunanya DP.
+    # Yang belum dibayar dibatalkan supaya nggak nyangkut pending.
+    await _cancel_pending_deposit(db, reservation)
     await db.commit()
 
     await log_audit(db=db, action="reservation_noshow", entity="reservation", entity_id=reservation_id,

@@ -82,6 +82,11 @@ class OrderResponse(OrderBase):
     # 'xendit' | 'manual' (lihat services/payment_methods.py). QRIS manual =
     # pelanggan bayar ke QR statis toko, kasir yang memastikan.
     payment_channel: Optional[str] = None
+    # Bukti bayar yang pelanggan unggah (QRIS statis toko). Kasir lihat sebelum Terima.
+    payment_proof_url: Optional[str] = None
+    delivery_lat: Optional[float] = None
+    delivery_lng: Optional[float] = None
+    delivery_distance_km: Optional[Decimal] = None
     # Pesanan online (mig 101)
     source: str = 'pos'
     accepted_at: Optional[datetime] = None

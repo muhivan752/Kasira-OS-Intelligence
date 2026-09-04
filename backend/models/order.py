@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Numeric, Text, ForeignKey, DateTime
+from sqlalchemy import Float, Column, String, Integer, Numeric, Text, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID, ENUM
 from sqlalchemy.orm import relationship
 from backend.models.base import BaseModel
@@ -36,6 +36,10 @@ class Order(BaseModel):
     ready_at = Column(DateTime(timezone=True), nullable=True)
     cancel_reason = Column(String(200), nullable=True)
     delivery_address = Column(Text, nullable=True)
+    # Titik alamat antar dari Google Maps (mig 104). NULL = pelanggan ketik manual.
+    delivery_lat = Column(Float, nullable=True)
+    delivery_lng = Column(Float, nullable=True)
+    delivery_distance_km = Column(Numeric(6, 2), nullable=True)
     # Layar dapur (mig 102): NULL belum disentuh dapur | preparing | ready | done.
     kitchen_status = Column(String(12), nullable=True)
     discount_approved_by = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)

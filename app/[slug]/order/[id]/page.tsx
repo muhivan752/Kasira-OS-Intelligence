@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getStorefrontOrder } from '@/app/actions/storefront';
 import { rp, timeShort, waNumber, waLink, ORDER_TYPE_LABEL, Card, TopBar, EmptyState, Spinner, PoweredBy, btnPrimary, btnSecondary } from '../../_ui';
-import { MessageCircle, MapPin, Utensils, Loader2, CheckCircle2, XCircle, Clock, ChefHat, PackageCheck, Receipt, RefreshCw } from 'lucide-react';
+import { MessageCircle, MapPin, Utensils, Loader2, CheckCircle2, XCircle, Clock, ChefHat, PackageCheck, Receipt, RefreshCw, Upload } from 'lucide-react';
 
 type Phase = 'awaiting_payment' | 'payment_failed' | 'awaiting_confirm' | 'preparing' | 'ready' | 'completed' | 'cancelled';
 
@@ -23,6 +23,50 @@ export default function OrderStatusPage() {
   const orderId = params.id as string;
 
   const [loading, setLoading] = useState(true);
+
+  const [proofUploading, setProofUploading] = useState(false);
+
+  const [proofMsg, setProofMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const onPickProof = async (e: React.ChangeEvent<HTMLInputElement>) => {
+
+    const file = e.target.files?.[0];
+
+    const pid = order?.payment?.payment_id;
+
+    if (!file || !pid) return;
+
+    setProofUploading(true);
+
+    setProofMsg(null);
+
+    try {
+
+      const fd = new FormData();
+
+      fd.append('file', file);
+
+      const res = await fetch(`/api/proof/${pid}`, { method: 'POST', body: fd });
+
+      const data = await res.json();
+
+      if (res.ok) { setProofMsg({ ok: true, text: 'Bukti terkirim. Toko akan memeriksanya.' }); const fresh = await getStorefrontOrder(orderId); if (fresh) setOrder(fresh); }
+
+      else setProofMsg({ ok: false, text: data.detail || 'Unggah gagal, coba lagi.' });
+
+    } catch {
+
+      setProofMsg({ ok: false, text: 'Unggah gagal, periksa koneksi.' });
+
+    } finally {
+
+      setProofUploading(false);
+
+      e.target.value = '';
+
+    }
+
+  };
   const [order, setOrder] = useState<any>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -81,6 +125,7 @@ export default function OrderStatusPage() {
   const readyWord = typeKey === 'delivery' ? 'siap diantar' : typeKey === 'dine_in' ? 'diantar ke meja' : 'siap diambil';
 
   const manualQrisUnpaid = order.payment?.method === 'qris' && order.payment?.channel === 'manual' && order.payment?.status !== 'paid';
+  const proofSent = !!order.payment?.proof_image_url;
   const proofText = `Halo ${outlet.name || 'Kak'}, saya sudah membayar pesanan #${order.display_number} sebesar ${rp(order.total_amount)} lewat QRIS. Berikut bukti bayarnya.`;
 
   const hero: Record<Phase, { title: string; body: string; tone: string; icon: any }> = {
@@ -95,9 +140,11 @@ export default function OrderStatusPage() {
       tone: 'bg-[color-mix(in_srgb,var(--danger)_10%,white)] text-[var(--text-strong)]', icon: XCircle,
     },
     awaiting_confirm: {
-      title: manualQrisUnpaid ? 'Bayar lalu kirim bukti' : 'Menunggu konfirmasi toko',
+      title: manualQrisUnpaid ? (proofSent ? 'Bukti bayar terkirim' : 'Bayar lalu unggah bukti') : 'Menunggu konfirmasi toko',
       body: manualQrisUnpaid
-        ? 'Pindai QRIS toko di bawah, lalu kirim bukti bayar ke WhatsApp toko. Toko mengonfirmasi pesanan setelah bukti diterima.'
+        ? (proofSent
+          ? 'Toko sedang memeriksa bukti bayar Anda. Halaman ini berubah sendiri begitu pesanan dikonfirmasi.'
+          : 'Pindai QRIS toko di bawah, lalu unggah tangkapan layar bukti bayar. Toko mengonfirmasi pesanan setelah bukti diterima.')
         : order.confirm_deadline
         ? `Toko merespons paling lambat pukul ${timeShort(order.confirm_deadline)}. Bila tidak, pesanan dibatalkan otomatis${order.payment?.status === 'paid' ? ' dan pembayaran dikembalikan' : ''}.`
         : 'Toko akan segera merespons pesanan Anda.',
@@ -183,14 +230,34 @@ export default function OrderStatusPage() {
               <p className="text-sm text-[var(--text-muted)] py-4">Kode QRIS tersedia di kasir. Tunjukkan nomor pesanan #{order.display_number}.</p>
             )}
             <p className="mt-4 text-2xl font-extrabold text-[var(--text-strong)]">{rp(order.total_amount)}</p>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">Bayar sesuai nominal, lalu kirim tangkapan layar buktinya.</p>
-            {wa ? (
-              <a href={waLink(wa, proofText)} target="_blank" rel="noopener noreferrer" className={`${btnPrimary} mt-4 inline-flex items-center gap-2`}>
-                <MessageCircle className="w-4 h-4" /> Kirim bukti bayar ke WhatsApp
-              </a>
-            ) : (
-              <p className="mt-4 text-xs text-[var(--text-muted)]">Tunjukkan bukti bayar ke kasir saat mengambil pesanan.</p>
-            )}
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Bayar sesuai nominal, lalu unggah tangkapan layar buktinya.</p>
+            <div className="mt-4 space-y-3">
+              {proofSent && (
+                <div className="rounded-2xl border border-[var(--border-subtle)] p-3 flex items-center gap-3 text-left">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={order.payment.proof_image_url} alt="Bukti bayar" className="w-14 h-14 rounded-lg object-cover border border-[var(--border-subtle)]" />
+                  <div className="text-sm">
+                    <p className="font-semibold text-[var(--text-strong)]">Bukti terkirim, menunggu toko</p>
+                    <p className="text-[var(--text-muted)]">Salah unggah? Kirim ulang, yang terbaru dipakai.</p>
+                  </div>
+                </div>
+              )}
+              {order.payment?.payment_id && (
+                <label className={`${btnPrimary} inline-flex items-center gap-2 cursor-pointer ${proofUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                  {proofUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  {proofUploading ? 'Mengunggah' : proofSent ? 'Kirim ulang bukti' : 'Unggah bukti bayar'}
+                  <input type="file" accept="image/*" className="hidden" onChange={onPickProof} />
+                </label>
+              )}
+              {proofMsg && <p className={`text-sm ${proofMsg.ok ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>{proofMsg.text}</p>}
+              {wa ? (
+                <a href={waLink(wa, proofText)} target="_blank" rel="noopener noreferrer" className={`${btnSecondary} inline-flex items-center gap-2`}>
+                  <MessageCircle className="w-4 h-4" /> Atau kirim lewat WhatsApp
+                </a>
+              ) : (
+                <p className="text-xs text-[var(--text-muted)]">Tunjukkan bukti bayar ke kasir saat mengambil pesanan.</p>
+              )}
+            </div>
           </Card>
         )}
 

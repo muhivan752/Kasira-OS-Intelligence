@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -295,6 +296,10 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
                         ],
                       ],
                     ),
+                    if (reservation.deposit != null && reservation.deposit!.amount > 0) ...[
+                      const SizedBox(height: 6),
+                      _depositChip(reservation.deposit!),
+                    ],
                   ],
                 ),
               ),
@@ -315,6 +320,30 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
         ),
       ),
     );
+  }
+
+  /// DP: hijau lunas, amber ada bukti (kasir harus cek), abu belum bayar.
+  Widget _depositChip(ReservationDeposit dep) {
+    final color = dep.isPaid ? KasiraDS.success : (dep.hasProof ? KasiraDS.warning : KasiraDS.textMuted);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(dep.isPaid ? LucideIcons.badgeCheck : (dep.hasProof ? LucideIcons.image : LucideIcons.wallet), size: 12, color: color),
+        const SizedBox(width: 4),
+        Text('${dep.label} · ${_rp(dep.amount)}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+      ]),
+    );
+  }
+
+  static String _rp(double v) {
+    final s = v.toStringAsFixed(0);
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write('.');
+      b.write(s[i]);
+    }
+    return 'Rp $b';
   }
 
   Color _statusColor(String status) {
@@ -435,6 +464,8 @@ class _ReservationDetailSheet extends StatelessWidget {
             _buildDetailRow(LucideIcons.messageSquare, 'Catatan', reservation.notes!),
           if (reservation.source != null)
             _buildDetailRow(LucideIcons.globe, 'Sumber', reservation.source!),
+          if (reservation.deposit != null && reservation.deposit!.amount > 0)
+            _DepositBlock(dep: reservation.deposit!, pending: reservation.status == 'pending'),
 
           const SizedBox(height: 20),
 
@@ -498,5 +529,79 @@ class _ReservationDetailSheet extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// DP di detail reservasi: nominal, status, bukti bayar yang pelanggan
+/// unggah (ketuk = lihat penuh). Konfirmasi oleh kasir = DP manual dianggap
+/// masuk, jadi kasir harus melihat buktinya DI SINI sebelum menekan Konfirmasi.
+class _DepositBlock extends StatelessWidget {
+  final ReservationDeposit dep;
+  final bool pending;
+  const _DepositBlock({required this.dep, required this.pending});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = dep.isPaid ? KasiraDS.success : (dep.hasProof ? KasiraDS.warning : KasiraDS.textMuted);
+    final amount = _ReservationListPageStateRp.format(dep.amount);
+    final method = dep.method == 'qris' ? 'QRIS' : dep.method == 'transfer' ? 'Transfer bank' : dep.method == 'card' ? 'Kartu' : '-';
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(LucideIcons.wallet, size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(child: Text('DP $amount', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: KasiraDS.textStrong))),
+          Text(dep.label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+        ]),
+        const SizedBox(height: 4),
+        Text('$method${dep.channel == 'xendit' ? ' (Xendit, lunas otomatis)' : ' (dikonfirmasi kasir)'}',
+            style: const TextStyle(fontSize: 12, color: KasiraDS.textMuted)),
+        if (dep.hasProof) ...[
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () => showDialog(
+              context: context,
+              builder: (_) => Dialog(
+                insetPadding: const EdgeInsets.all(16),
+                child: InteractiveViewer(child: CachedNetworkImage(imageUrl: dep.proofImageUrl!, fit: BoxFit.contain)),
+              ),
+            ),
+            child: Row(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(imageUrl: dep.proofImageUrl!, width: 64, height: 64, fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => const Icon(LucideIcons.imageOff, color: KasiraDS.textMuted)),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(child: Text('Bukti bayar dari pelanggan. Ketuk untuk memperbesar.', style: TextStyle(fontSize: 12, color: KasiraDS.textMuted))),
+            ]),
+          ),
+        ],
+        if (pending && !dep.isPaid && dep.channel != 'xendit') ...[
+          const SizedBox(height: 8),
+          const Text('Tekan Konfirmasi hanya kalau DP sudah masuk. Sesudah itu DP tercatat lunas dan dipotong dari tagihan meja saat tamu duduk.',
+              style: TextStyle(fontSize: 12, color: KasiraDS.textBody)),
+        ],
+      ]),
+    );
+  }
+}
+
+class _ReservationListPageStateRp {
+  static String format(double v) {
+    final s = v.toStringAsFixed(0);
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write('.');
+      b.write(s[i]);
+    }
+    return 'Rp $b';
   }
 }

@@ -255,46 +255,56 @@ async def open_tab_for_storefront_order(db, order: Order, outlet: Outlet, *, cus
     """
     if not order.table_id:
         return None
-    from backend.models.tab import Tab
-    existing = (await db.execute(
-        select(Tab).where(
-            Tab.table_id == order.table_id, Tab.outlet_id == outlet.id,
-            Tab.status.in_(["open", "asking_bill"]), Tab.deleted_at.is_(None),
-        ).with_for_update().order_by(Tab.created_at.desc()).limit(1)
-    )).scalar_one_or_none()
-    now = datetime.now(timezone.utc)
-    tab = existing
-    if tab is None:
-        today = now.strftime("%Y%m%d")
-        seq = ((await db.execute(
-            select(func.count(Tab.id)).where(Tab.outlet_id == outlet.id, Tab.tab_number.like(f"TAB-{today}-%"))
-        )).scalar() or 0) + 1
-        tab = Tab(
-            outlet_id=outlet.id,
-            table_id=order.table_id,
-            tab_number=f"TAB-{today}-{seq:03d}",
-            customer_name=customer_name,
-            guest_count=1,
-            opened_at=now,
-            notes="Dibuka otomatis dari pesanan online",
-        )
-        db.add(tab)
-        await db.flush()
-        table = await db.get(Table, order.table_id)
-        if table is not None and _val(table.status) == "available":
-            table.status = "occupied"
-            table.row_version += 1
-        db.add(Event(
-            outlet_id=outlet.id,
-            stream_id=f"tab:{tab.id}",
-            event_type="tab.opened",
-            event_data={"tab_id": str(tab.id), "tab_number": tab.tab_number, "table_id": str(order.table_id),
-                        "customer_name": customer_name, "source": "storefront"},
-            event_metadata={"ts": now.isoformat()},
-        ))
+    tab = await open_tab_for_table(db, outlet, order.table_id, customer_name=customer_name, guest_count=1,
+                                   notes="Dibuka otomatis dari pesanan online", source="storefront")
     if order.tab_id != tab.id:
         order.tab_id = tab.id
         await db.flush()
     from backend.services.tab_service import recalculate_tab
     await recalculate_tab(db, tab)
+    return tab
+
+
+async def open_tab_for_table(db, outlet: Outlet, table_id, *, customer_name: Optional[str], guest_count: int = 1,
+                             notes: Optional[str] = None, source: str = "storefront"):
+    """Cari tab terbuka di meja ini, kalau nggak ada buka baru (TAB-YYYYMMDD-NNN)
+    dan tandai meja terisi. Dipakai pesanan meja online dan DP reservasi
+    (deposit_service.apply_deposit_to_tab). `opened_by` NULL = dibuka sistem."""
+    from backend.models.tab import Tab
+    existing = (await db.execute(
+        select(Tab).where(
+            Tab.table_id == table_id, Tab.outlet_id == outlet.id,
+            Tab.status.in_(["open", "asking_bill"]), Tab.deleted_at.is_(None),
+        ).with_for_update().order_by(Tab.created_at.desc()).limit(1)
+    )).scalar_one_or_none()
+    if existing is not None:
+        return existing
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y%m%d")
+    seq = ((await db.execute(
+        select(func.count(Tab.id)).where(Tab.outlet_id == outlet.id, Tab.tab_number.like(f"TAB-{today}-%"))
+    )).scalar() or 0) + 1
+    tab = Tab(
+        outlet_id=outlet.id,
+        table_id=table_id,
+        tab_number=f"TAB-{today}-{seq:03d}",
+        customer_name=customer_name,
+        guest_count=max(1, int(guest_count or 1)),
+        opened_at=now,
+        notes=notes,
+    )
+    db.add(tab)
+    await db.flush()
+    table = await db.get(Table, table_id)
+    if table is not None and _val(table.status) in ("available", "reserved"):
+        table.status = "occupied"
+        table.row_version += 1
+    db.add(Event(
+        outlet_id=outlet.id,
+        stream_id=f"tab:{tab.id}",
+        event_type="tab.opened",
+        event_data={"tab_id": str(tab.id), "tab_number": tab.tab_number, "table_id": str(table_id),
+                    "customer_name": customer_name, "source": source},
+        event_metadata={"ts": now.isoformat()},
+    ))
     return tab

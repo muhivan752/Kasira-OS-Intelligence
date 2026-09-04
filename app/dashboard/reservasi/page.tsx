@@ -629,6 +629,33 @@ export default function ReservasiPage() {
                     <p className="text-sm text-gray-700">{selectedReservation.notes}</p>
                   </div>
                 )}
+                {selectedReservation.deposit && selectedReservation.deposit.amount ? (
+                  <div className={`rounded-xl border p-3 ${selectedReservation.deposit.status === 'paid' ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-gray-900">
+                        DP {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(selectedReservation.deposit.amount)}
+                      </p>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${selectedReservation.deposit.status === 'paid' ? 'bg-green-100 text-green-700' : selectedReservation.deposit.status === 'cancelled' ? 'bg-gray-200 text-gray-600' : 'bg-amber-100 text-amber-700'}`}>
+                        {selectedReservation.deposit.status === 'paid' ? 'Lunas' : selectedReservation.deposit.status === 'cancelled' ? 'Dibatalkan' : selectedReservation.deposit.proof_image_url ? 'Bukti masuk, periksa' : 'Belum dibayar'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {selectedReservation.deposit.method === 'qris' ? 'QRIS' : selectedReservation.deposit.method === 'transfer' ? 'Transfer bank' : 'Kartu'}
+                      {selectedReservation.deposit.channel === 'xendit' ? ' (Xendit, lunas otomatis)' : ' (dikonfirmasi kasir)'}
+                      {selectedReservation.deposit.paid_at ? ` · lunas ${new Date(selectedReservation.deposit.paid_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
+                    </p>
+                    {selectedReservation.deposit.proof_image_url && (
+                      <a href={selectedReservation.deposit.proof_image_url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-3 group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={selectedReservation.deposit.proof_image_url} alt="Bukti bayar DP" className="w-16 h-16 rounded-lg object-cover border border-gray-200" />
+                        <span className="text-xs text-blue-600 group-hover:underline">Lihat bukti bayar ukuran penuh</span>
+                      </a>
+                    )}
+                    {selectedReservation.status === 'pending' && selectedReservation.deposit.status !== 'paid' && selectedReservation.deposit.channel !== 'xendit' && (
+                      <p className="text-xs text-gray-600 mt-2">Menekan Konfirmasi berarti Anda sudah melihat DP masuk. Sesudah itu DP tercatat lunas dan dipotong dari tagihan meja saat tamu duduk.</p>
+                    )}
+                  </div>
+                ) : null}
               </div>
 
               {/* Action buttons based on status */}
