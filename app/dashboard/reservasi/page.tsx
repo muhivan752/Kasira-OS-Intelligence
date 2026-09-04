@@ -89,7 +89,7 @@ export default function ReservasiPage() {
     customer_phone: '',
     table_id: '',
     notes: '',
-    source: 'walk_in',
+    source: 'manual',
   });
 
   useEffect(() => {
@@ -187,7 +187,7 @@ export default function ReservasiPage() {
       customer_phone: '',
       table_id: '',
       notes: '',
-      source: 'walk_in',
+      source: 'manual',
     });
     setPrefillTime(time || '');
     setCreateModalOpen(true);
