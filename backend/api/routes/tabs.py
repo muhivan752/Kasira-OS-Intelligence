@@ -452,7 +452,8 @@ async def pay_tab_full(
     if tab.row_version != body.row_version:
         raise HTTPException(status_code=409, detail="Data berubah, refresh dulu")
 
-    _enforce_tab_supported_method(body.payment_method)
+    outlet = await db.get(Outlet, tab.outlet_id)
+    inline, channel = _tab_payment_channel(outlet, body)
 
     total = Decimal(str(tab.total_amount))
     if total <= 0:
@@ -500,7 +501,7 @@ async def pay_tab_full(
                 request_id=request.state.request_id, message="Sudah dibayar (idempotent)"
             )
 
-    if body.payment_method == 'cash' and body.amount_paid < effective_total:
+    if inline and body.amount_paid < effective_total:
         raise HTTPException(status_code=400, detail="Nominal pembayaran kurang dari sisa tab")
 
     # Pick first order as payment anchor (or None)
@@ -513,13 +514,14 @@ async def pay_tab_full(
         outlet_id=tab.outlet_id,
         shift_session_id=tab.shift_session_id,
         payment_method=body.payment_method,
+        channel=channel,
         amount_due=effective_total,
         amount_paid=body.amount_paid,
         change_amount=change,
-        status='paid' if body.payment_method == 'cash' else 'pending',
+        status='paid' if inline else 'pending',
         idempotency_key=body.idempotency_key,
         is_partial=False,
-        paid_at=_utc_now() if body.payment_method == 'cash' else None,
+        paid_at=_utc_now() if inline else None,
         processed_by=current_user.id,
     )
     db.add(payment)
@@ -533,12 +535,12 @@ async def pay_tab_full(
         tab_id=tab.id, label="Bayar Penuh (Sisa)" if paid_items_total > 0 else "Bayar Penuh",
         amount=effective_total,
         payment_id=payment.id,
-        status='paid' if body.payment_method == 'cash' else 'pending',
-        paid_at=_utc_now() if body.payment_method == 'cash' else None,
+        status='paid' if inline else 'pending',
+        paid_at=_utc_now() if inline else None,
     )
     db.add(full_split)
 
-    if body.payment_method == 'cash':
+    if inline:
         # Mark remaining unpaid items as paid via this payment (settle sisa)
         now = _utc_now()
         for o in tab.orders:
@@ -579,7 +581,7 @@ async def pay_tab_full(
         # Agregat CRM. Di luar loyalty karena halaman Pelanggan jalan di
         # SEMUA tier, sedangkan poin cuma Pro+.
         await _refresh_tab_customer_stats(db, tab)
-    elif body.payment_method == 'qris':
+    else:
         # Init Xendit QRIS — async settle via webhook (payments.py:652 tab branch)
         outlet = await db.get(Outlet, tab.outlet_id)
         await _create_qris_for_tab_payment(db, outlet, payment, current_user.tenant_id)
@@ -602,7 +604,7 @@ async def pay_tab_full(
 
     tab.row_version += 1
 
-    _tab_event(db, tab, "tab.paid" if body.payment_method == 'cash' else "tab.pay_full_pending", {
+    _tab_event(db, tab, "tab.paid" if inline else "tab.pay_full_pending", {
         "method": "full", "amount": float(total),
         "payment_method": body.payment_method, "payment_id": str(payment.id),
         "order_ids": [str(o.id) for o in tab.orders],
@@ -617,12 +619,12 @@ async def pay_tab_full(
 
     tab = await _get_tab_or_404(db, tab.id)
     tab_resp = _tab_response(tab)
-    if body.payment_method == 'qris':
+    if not inline:
         tab_resp.pending_qris = _build_qris_info(payment)
     return StandardResponse(
         success=True, data=tab_resp,
         request_id=request.state.request_id,
-        message=("Tab dibayar penuh" if body.payment_method == 'cash' else "QRIS digenerate — tunggu pembayaran")
+        message=("Tab dibayar penuh" if inline else "QRIS digenerate — tunggu pembayaran")
     )
 
 
@@ -665,11 +667,12 @@ async def pay_split(
         raise HTTPException(status_code=409, detail="Data berubah, refresh dulu")
 
     # Method allowlist guard — fail-fast sebelum amount calc
-    _enforce_tab_supported_method(body.payment_method)
+    outlet = await db.get(Outlet, tab.outlet_id)
+    inline, channel = _tab_payment_channel(outlet, body)
 
     split_amount = Decimal(str(split.amount))
 
-    if body.payment_method == 'cash' and body.amount_paid < split_amount:
+    if inline and body.amount_paid < split_amount:
         raise HTTPException(status_code=400, detail="Nominal pembayaran kurang")
 
     # Idempotency
@@ -702,19 +705,20 @@ async def pay_split(
         outlet_id=tab.outlet_id,
         shift_session_id=tab.shift_session_id,
         payment_method=body.payment_method,
+        channel=channel,
         amount_due=split_amount,
         amount_paid=body.amount_paid,
         change_amount=change,
-        status='paid' if body.payment_method == 'cash' else 'pending',
+        status='paid' if inline else 'pending',
         idempotency_key=body.idempotency_key,
         is_partial=True,
-        paid_at=_utc_now() if body.payment_method == 'cash' else None,
+        paid_at=_utc_now() if inline else None,
         processed_by=current_user.id,
     )
     db.add(payment)
     await db.flush()
 
-    if body.payment_method == 'cash':
+    if inline:
         split.status = 'paid'
         split.paid_at = _utc_now()
         split.payment_id = payment.id
@@ -764,7 +768,7 @@ async def pay_split(
 
     tab.row_version += 1
 
-    _tab_event(db, tab, "tab.split_paid" if body.payment_method == 'cash' else "tab.split_pay_pending", {
+    _tab_event(db, tab, "tab.split_paid" if inline else "tab.split_pay_pending", {
         "split_id": str(split_id), "split_label": split.label,
         "amount": float(split_amount), "payment_method": body.payment_method,
         "payment_id": str(payment.id), "all_paid": tab.status == 'paid',
@@ -779,13 +783,13 @@ async def pay_split(
 
     tab = await _get_tab_or_404(db, tab.id)
     tab_resp = _tab_response(tab)
-    if body.payment_method == 'qris':
+    if not inline:
         tab_resp.pending_qris = _build_qris_info(payment)
     return StandardResponse(
         success=True, data=tab_resp,
         request_id=request.state.request_id,
         message=(
-            f"Split '{split.label}' dibayar" if body.payment_method == 'cash'
+            f"Split '{split.label}' dibayar" if inline
             else f"QRIS digenerate untuk split '{split.label}' — tunggu pembayaran"
         )
     )
@@ -814,22 +818,16 @@ async def _complete_order_if_fully_paid(db: AsyncSession, order: Order) -> None:
         order.row_version = (order.row_version or 0) + 1
 
 
-def _enforce_tab_supported_method(payment_method: str) -> None:
-    """Tab pay endpoints support cash + QRIS. Card/transfer not yet — those
-    legacy methods don't have async settle infra (no webhook, no waiting UI).
-
-    QRIS path creates Payment(pending) + Xendit QR upfront, settles async via
-    webhook (payments.py:652 tab branch). Cash path settles inline.
+def _tab_payment_channel(outlet, body) -> tuple[bool, str]:
+    """Satu pola dengan POS (services/payment_methods.py): metode harus aktif
+    di toko; `inline` = settle langsung (tunai, transfer, kartu, QRIS statis),
+    False = QRIS Xendit yang nunggu webhook (payments.py tab branch).
     """
-    if payment_method not in ('cash', 'qris'):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "TAB_PAYMENT_METHOD_UNSUPPORTED",
-                "message": "Tab payment hanya support cash & QRIS. Untuk card/transfer, pakai POS reguler.",
-                "received_method": payment_method,
-            },
-        )
+    from backend.services import payment_methods as pm
+    if not pm.is_enabled(outlet, body.payment_method):
+        raise HTTPException(status_code=400, detail=pm.disabled_error(body.payment_method))
+    channel = pm.resolve_channel(outlet, body.payment_method, getattr(body, 'channel', None))
+    return pm.settles_inline(body.payment_method, channel), channel
 
 
 async def _create_qris_for_tab_payment(
@@ -982,7 +980,8 @@ async def pay_items(
             detail="Order di tab ini sudah dibatalkan otomatis oleh sistem (stale cleanup)."
         )
 
-    _enforce_tab_supported_method(body.payment_method)
+    outlet = await db.get(Outlet, tab.outlet_id)
+    inline, channel = _tab_payment_channel(outlet, body)
 
     # Build map item_id → (order, item) dari tab.orders.items, skip cancelled/deleted
     items_in_tab = {}
@@ -1047,7 +1046,7 @@ async def pay_items(
     if total_due <= 0:
         raise HTTPException(status_code=400, detail="Total item Rp 0, tidak ada yg perlu dibayar")
 
-    if body.payment_method == 'cash' and body.amount_paid < total_due:
+    if inline and body.amount_paid < total_due:
         raise HTTPException(status_code=400, detail="Nominal pembayaran kurang")
 
     # Idempotency
@@ -1080,20 +1079,21 @@ async def pay_items(
         outlet_id=tab.outlet_id,
         shift_session_id=tab.shift_session_id,
         payment_method=body.payment_method,
+        channel=channel,
         amount_due=total_due,
         amount_paid=Decimal(str(body.amount_paid)),
         change_amount=change,
-        status='paid' if body.payment_method == 'cash' else 'pending',
+        status='paid' if inline else 'pending',
         idempotency_key=body.idempotency_key,
         is_partial=True,
-        paid_at=_utc_now() if body.payment_method == 'cash' else None,
+        paid_at=_utc_now() if inline else None,
         processed_by=current_user.id,
     )
     db.add(payment)
     await db.flush()
 
     # Mark items paid (cash) atau claim items via paid_payment_id (QRIS pending)
-    if body.payment_method == 'cash':
+    if inline:
         now = _utc_now()
         affected_orders = set()
         for order, item in target_items:
@@ -1151,7 +1151,7 @@ async def pay_items(
         # Agregat CRM. Di luar loyalty karena halaman Pelanggan jalan di
         # SEMUA tier, sedangkan poin cuma Pro+.
         await _refresh_tab_customer_stats(db, tab)
-    elif body.payment_method == 'qris':
+    else:
         # Init Xendit QRIS — claim items via paid_payment_id (no paid_at yet,
         # CHECK constraint allows that). Webhook on success sets paid_at +
         # may close tab. Webhook on failure clears paid_payment_id (B2.2).
@@ -1167,7 +1167,7 @@ async def pay_items(
 
     tab.row_version = (tab.row_version or 0) + 1
 
-    _tab_event(db, tab, "tab.items_paid" if body.payment_method == 'cash' else "tab.items_pay_pending", {
+    _tab_event(db, tab, "tab.items_paid" if inline else "tab.items_pay_pending", {
         "item_ids": [str(it.id) for _, it in target_items],
         "item_count": len(target_items),
         "amount": float(total_due),
@@ -1190,14 +1190,14 @@ async def pay_items(
 
     tab = await _get_tab_or_404(db, tab.id)
     tab_resp = _tab_response(tab)
-    if body.payment_method == 'qris':
+    if not inline:
         tab_resp.pending_qris = _build_qris_info(payment)
     return StandardResponse(
         success=True, data=tab_resp,
         request_id=request.state.request_id,
         message=(
             f"{len(target_items)} item dibayar (Rp {int(total_due):,})".replace(',', '.')
-            if body.payment_method == 'cash'
+            if inline
             else f"QRIS digenerate untuk {len(target_items)} item — tunggu pembayaran"
         )
     )

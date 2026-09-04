@@ -14,6 +14,10 @@ class Payment(BaseModel):
     shift_session_id = Column(UUID(as_uuid=True), ForeignKey('shifts.id', ondelete='SET NULL'), nullable=True)
     
     payment_method = Column(ENUM('cash', 'qris', 'card', 'transfer', name='payment_method', create_type=False), nullable=False)
+    # 'xendit' = QR dinamis, settle lewat webhook. 'manual' = kasir konfirmasi
+    # sendiri (tunai, transfer, kartu, QRIS statis toko). Lihat
+    # services/payment_methods.py. NULL di baris lama = manual.
+    channel = Column(String(16), nullable=True)
     
     amount_due = Column(Numeric(12, 2), nullable=False)
     amount_paid = Column(Numeric(12, 2), nullable=False)

@@ -5,6 +5,7 @@ import '../../../../core/auth/logout_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import 'payment_methods_settings_page.dart';
 import 'printer_settings_page.dart';
 import 'sync_settings_page.dart';
 import 'profile_page.dart';
@@ -52,6 +53,20 @@ class SettingsPage extends ConsumerWidget {
                 //   onTap: () {},
                 // ),
                 
+                const SizedBox(height: 32),
+                _buildSectionTitle('Pembayaran'),
+                _buildSettingTile(
+                  icon: LucideIcons.wallet,
+                  title: 'Metode Pembayaran',
+                  subtitle: 'Pilih yang diterima toko: QRIS, transfer, kartu',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const PaymentMethodsSettingsPage()),
+                    );
+                  },
+                ),
+
                 const SizedBox(height: 32),
                 _buildSectionTitle('Sistem & Data'),
                 _buildSettingTile(

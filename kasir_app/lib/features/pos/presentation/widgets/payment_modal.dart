@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/services/session_cache.dart';
+import '../../../../core/widgets/manual_payment_info.dart';
 
 class PaymentModal extends StatefulWidget {
   final double totalAmount;
@@ -115,6 +116,33 @@ class _PaymentModalState extends State<PaymentModal> {
   }
   SessionCache get _cache => SessionCache.instance;
 
+  /// Metode yang toko aktifkan (SessionCache, dari GET /outlets/{id}, mig 103).
+  /// Kalau pemilik mematikan QRIS, tombolnya nggak ada, bukan disabled.
+  /// Urutan ikut frekuensi pakai di lapangan: tunai, QRIS, transfer, kartu.
+  List<({String value, String label, IconData icon})> get _methods => [
+        (value: 'Cash', label: 'Tunai', icon: LucideIcons.banknote),
+        if (_cache.hasPaymentMethod('qris')) (value: 'QRIS', label: 'QRIS', icon: LucideIcons.qrCode),
+        if (_cache.hasPaymentMethod('transfer')) (value: 'Transfer', label: 'Transfer', icon: LucideIcons.landmark),
+        if (_cache.hasPaymentMethod('card')) (value: 'Kartu Debit/Kredit', label: 'Kartu', icon: LucideIcons.creditCard),
+      ];
+
+  /// QRIS statis toko: nggak ada QR dari server, nggak ada polling. Kasir
+  /// lihat notifikasi bank lalu tekan Konfirmasi (settle seperti tunai).
+  bool get _qrisManual => _cache.qrisIsManual;
+
+  /// QRIS yang butuh QR dinamis dari server (Xendit).
+  bool get _qrisDynamic => _paymentMethod == 'QRIS' && !_qrisManual;
+
+  /// Metode yang butuh tombol Konfirmasi (semua kecuali QRIS dinamis).
+  bool get _needsConfirm => !_qrisDynamic;
+
+  String get _apiMethod => switch (_paymentMethod) {
+        'QRIS' => 'qris',
+        'Transfer' => 'transfer',
+        'Kartu Debit/Kredit' => 'card',
+        _ => 'cash',
+      };
+
   Future<bool> _isOnline() async {
     final r = await Connectivity().checkConnectivity();
     return r.isNotEmpty && !r.contains(ConnectivityResult.none);
@@ -170,6 +198,8 @@ class _PaymentModalState extends State<PaymentModal> {
           'order_id': oid,
           'outlet_id': outletId,
           'payment_method': apiMethod,
+          // QRIS dari jalur ini selalu statis toko; QR dinamis lewat _generateQris.
+          if (apiMethod == 'qris') 'channel': 'manual',
           'amount_due': widget.totalAmount,
           'amount_paid': paid,
           'change_amount': change < 0 ? 0 : change,
@@ -488,11 +518,10 @@ class _PaymentModalState extends State<PaymentModal> {
                 children: [
                   Text('Pilih Metode', style: Theme.of(context).textTheme.headlineMedium),
                   const SizedBox(height: 24),
-                  _buildMethodBtn('Cash', LucideIcons.banknote),
-                  const SizedBox(height: 12),
-                  _buildMethodBtn('QRIS', LucideIcons.qrCode),
-                  const SizedBox(height: 12),
-                  _buildMethodBtn('Kartu Debit/Kredit', LucideIcons.creditCard),
+                  for (final m in _methods) ...[
+                    _buildMethodBtn(m.value, m.icon, label: m.label),
+                    const SizedBox(height: 12),
+                  ],
                 ],
               ),
             ),
@@ -529,12 +558,16 @@ class _PaymentModalState extends State<PaymentModal> {
                   ),
                   const Divider(height: 40, color: KasiraDS.borderSubtle),
                   if (isCash) ..._buildCashDetails(context, change)
-                  else if (_paymentMethod == 'QRIS')
+                  else if (_qrisDynamic)
                     Expanded(child: _buildQrisDetails(context))
                   else
-                    const Expanded(child: Center(child: Text('Metode pembayaran belum tersedia'))),
-                  if (_paymentMethod != 'QRIS') ...[
-                    const Spacer(),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: ManualPaymentInfo(method: _apiMethod, amount: widget.totalAmount),
+                      ),
+                    ),
+                  if (_needsConfirm) ...[
+                    const SizedBox(height: 16),
                     _buildPayButton(context, change),
                   ],
                 ],
@@ -550,7 +583,6 @@ class _PaymentModalState extends State<PaymentModal> {
   Widget _buildNarrowLayout(BuildContext context) {
     final change = _amountReceived - widget.totalAmount;
     final isCash = _paymentMethod == 'Cash';
-    final isKartu = _paymentMethod == 'Kartu Debit/Kredit';
     final screenHeight = MediaQuery.of(context).size.height;
 
     return SizedBox(
@@ -592,31 +624,22 @@ class _PaymentModalState extends State<PaymentModal> {
                   Text('Metode pembayaran',
                       style: KasiraDS.sans(size: 12.5, weight: FontWeight.w700, color: KasiraDS.textBody)),
                   const SizedBox(height: 10),
-                  // Method grid 2col
-                  Row(children: [
-                    Expanded(child: _methodTile('Cash', 'Tunai', LucideIcons.banknote)),
-                    const SizedBox(width: 11),
-                    Expanded(child: _methodTile('QRIS', 'QRIS', LucideIcons.qrCode)),
-                  ]),
-                  const SizedBox(height: 11),
-                  Row(children: [
-                    Expanded(child: _methodTile('Kartu Debit/Kredit', 'Kartu', LucideIcons.creditCard)),
-                    const SizedBox(width: 11),
-                    const Expanded(child: SizedBox()),
-                  ]),
+                  // Grid metode, 2 kolom. Hanya yang toko aktifkan; jumlah
+                  // ganjil = tile terakhir selebar baris, bukan kotak kosong.
+                  ..._methodRows(),
                   const SizedBox(height: 18),
                   if (isCash)
                     ..._buildCashDetails(context, change)
-                  else if (_paymentMethod == 'QRIS')
+                  else if (_qrisDynamic)
                     _buildQrisDetails(context)
-                  else if (isKartu)
-                    _buildKartuInfo(),
+                  else
+                    ManualPaymentInfo(method: _apiMethod, amount: widget.totalAmount),
                 ],
               ),
             ),
           ),
-          // Confirm button (QRIS auto-confirms via polling → hide)
-          if (_paymentMethod != 'QRIS')
+          // Confirm button (QRIS dinamis konfirmasi sendiri via polling → hide)
+          if (_needsConfirm)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
               child: _buildPayButton(context, change),
@@ -654,7 +677,7 @@ class _PaymentModalState extends State<PaymentModal> {
           _paymentMethod = value;
           _cashError = null;
         });
-        if (value == 'QRIS' && (_qrisUrl == null || _qrisError != null) && !_isLoadingQris) {
+        if (value == 'QRIS' && !_qrisManual && (_qrisUrl == null || _qrisError != null) && !_isLoadingQris) {
           _generateQris();
         }
       },
@@ -699,24 +722,22 @@ class _PaymentModalState extends State<PaymentModal> {
     );
   }
 
-  Widget _buildKartuInfo() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: KasiraDS.surfaceSunken,
-        borderRadius: KasiraDS.brLg,
-      ),
-      child: Column(
-        children: [
-          const Icon(LucideIcons.creditCard, size: 30, color: KasiraDS.textMuted),
-          const SizedBox(height: 10),
-          Text('Gesek atau tap di mesin EDC, lalu tekan Konfirmasi pembayaran.',
-              textAlign: TextAlign.center,
-              style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
+  List<Widget> _methodRows() {
+    final ms = _methods;
+    final rows = <Widget>[];
+    for (var i = 0; i < ms.length; i += 2) {
+      final a = ms[i];
+      final b = i + 1 < ms.length ? ms[i + 1] : null;
+      rows.add(Row(children: [
+        Expanded(child: _methodTile(a.value, a.label, a.icon)),
+        if (b != null) ...[
+          const SizedBox(width: 11),
+          Expanded(child: _methodTile(b.value, b.label, b.icon)),
         ],
-      ),
-    );
+      ]));
+      if (i + 2 < ms.length) rows.add(const SizedBox(height: 11));
+    }
+    return rows;
   }
 
   /// Denominasi cash: uang pas + pembulatan + pecahan umum di atas total.
@@ -909,13 +930,13 @@ class _PaymentModalState extends State<PaymentModal> {
 
   Widget _buildPayButton(BuildContext context, double change) {
     final isCash = _paymentMethod == 'Cash';
-    final isKartu = _paymentMethod == 'Kartu Debit/Kredit';
     final isDisabled = (isCash && change < 0) || _isLoadingQris;
     void submit() {
-      if (isKartu) {
-        _submitCashPayment(widget.totalAmount, apiMethod: 'card');
-      } else {
+      if (isCash) {
         _submitCashPayment(_amountReceived);
+      } else {
+        // Transfer, kartu, QRIS statis: nominal = tagihan, settle langsung.
+        _submitCashPayment(widget.totalAmount, apiMethod: _apiMethod);
       }
     }
 
@@ -952,15 +973,15 @@ class _PaymentModalState extends State<PaymentModal> {
     );
   }
 
-  Widget _buildMethodBtn(String label, IconData icon) {
-    final isSelected = _paymentMethod == label;
+  Widget _buildMethodBtn(String value, IconData icon, {String? label}) {
+    final isSelected = _paymentMethod == value;
     return InkWell(
       onTap: () {
         setState(() {
-          _paymentMethod = label;
+          _paymentMethod = value;
           _cashError = null;
         });
-        if (label == 'QRIS' && (_qrisUrl == null || _qrisError != null) && !_isLoadingQris) {
+        if (value == 'QRIS' && !_qrisManual && (_qrisUrl == null || _qrisError != null) && !_isLoadingQris) {
           _generateQris();
         }
       },
@@ -979,7 +1000,7 @@ class _PaymentModalState extends State<PaymentModal> {
             Icon(icon, color: isSelected ? KasiraDS.brandPrimary : KasiraDS.textMuted),
             const SizedBox(width: 12),
             Text(
-              label,
+              label ?? value,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,

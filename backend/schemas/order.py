@@ -79,6 +79,9 @@ class OrderResponse(OrderBase):
     items: List[OrderItemResponse] = []
     payment_method: Optional[str] = None
     payment_status: Optional[str] = None
+    # 'xendit' | 'manual' (lihat services/payment_methods.py). QRIS manual =
+    # pelanggan bayar ke QR statis toko, kasir yang memastikan.
+    payment_channel: Optional[str] = None
     # Pesanan online (mig 101)
     source: str = 'pos'
     accepted_at: Optional[datetime] = None

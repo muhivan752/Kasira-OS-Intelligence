@@ -144,6 +144,16 @@ async def accept_order(db, order: Order, outlet: Outlet, *, eta_minutes: int, ac
     order.eta_minutes = eta_minutes
     order.row_version += 1
     order.updated_at = now
+    # QRIS statis toko: pelanggan bayar ke QR milik toko dan kirim bukti;
+    # kasir menerima pesanan = memastikan uangnya masuk. Tandai lunas di sini,
+    # supaya laporan (yang cuma menghitung order lunas) melihatnya.
+    pay = await latest_payment(db, order.id)
+    if pay is not None and _val(pay.payment_method) == "qris" and (pay.channel or "xendit") == "manual" \
+            and _val(pay.status) in ("pending", "pending_manual_check"):
+        pay.status = "paid"
+        pay.paid_at = now
+        pay.amount_paid = pay.amount_due
+        pay.row_version = (pay.row_version or 0) + 1
     await _set_connect_status(db, order.id, "accepted")
     db.add(Event(
         outlet_id=order.outlet_id,

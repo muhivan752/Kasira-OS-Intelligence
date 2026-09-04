@@ -60,6 +60,13 @@ export default function CheckoutPage() {
   const dineInTab = orderType === 'dine_in' && isPro && !!tableId;
   const confirmMinutes: number = storeData?.outlet?.auto_cancel_minutes ?? 10;
   const accepting: boolean = storeData?.outlet?.accepting_orders ?? true;
+  // Metode yang toko aktifkan (mig 103). Storefront cuma nawarin QRIS dan
+  // bayar di kasir; transfer dan kartu urusan kasir. QRIS 'manual' = toko
+  // pakai QRIS statis miliknya, pelanggan kirim bukti lewat WhatsApp.
+  const storeMethods: string[] = storeData?.outlet?.payment_methods ?? ['cash', 'qris'];
+  const qrisOffered = storeMethods.includes('qris');
+  const qrisManual = (storeData?.outlet?.qris_channel ?? 'manual') === 'manual';
+  useEffect(() => { if (storeData && !qrisOffered) setPayMethod('cash'); }, [storeData, qrisOffered]);
 
   const phoneOk = /^0?8\d{8,12}$/.test(customerPhone) || /^628\d{8,12}$/.test(customerPhone);
   const validation = useMemo(() => {
@@ -141,7 +148,7 @@ export default function CheckoutPage() {
     { id: 'delivery', label: 'Antar', hint: 'Ke alamat Anda', icon: Bike, show: true },
   ];
   const cashLabel = orderType === 'delivery' ? 'Bayar saat pesanan diterima' : 'Bayar di kasir';
-  const submitLabel = dineInTab ? 'Kirim pesanan ke meja' : payMethod === 'qris' ? 'Lanjut bayar QRIS' : 'Kirim pesanan';
+  const submitLabel = dineInTab ? 'Kirim pesanan ke meja' : payMethod === 'qris' && !qrisManual ? 'Lanjut bayar QRIS' : 'Kirim pesanan';
 
   return (
     <div className="pb-36 md:pb-12">
@@ -253,9 +260,9 @@ export default function CheckoutPage() {
               <SectionTitle step={4} title="Pembayaran" />
               <div className="grid grid-cols-2 gap-2">
                 {([
-                  { id: 'qris', label: 'QRIS', hint: 'Semua e-wallet dan m-banking', icon: QrCode },
+                  { id: 'qris', label: 'QRIS', hint: qrisManual ? 'Pindai QRIS toko, kirim bukti bayar' : 'Semua e-wallet dan m-banking', icon: QrCode },
                   { id: 'cash', label: cashLabel, hint: 'Tunai atau sesuai kesepakatan', icon: Banknote },
-                ] as const).map((m) => {
+                ] as const).filter((m) => m.id !== 'qris' || qrisOffered).map((m) => {
                   const active = payMethod === m.id;
                   return (
                     <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
@@ -269,7 +276,13 @@ export default function CheckoutPage() {
                   );
                 })}
               </div>
-              {payMethod === 'qris' && <p className="mt-3 text-xs text-[var(--text-muted)]">Kode QR muncul di halaman berikutnya dan berlaku 15 menit.</p>}
+              {payMethod === 'qris' && qrisOffered && (
+                <p className="mt-3 text-xs text-[var(--text-muted)]">
+                  {qrisManual
+                    ? 'QRIS toko tampil di halaman berikutnya. Setelah membayar, kirim bukti ke WhatsApp toko lewat tombol yang tersedia.'
+                    : 'Kode QR muncul di halaman berikutnya dan berlaku 15 menit.'}
+                </p>
+              )}
             </Card>
           )}
         </div>

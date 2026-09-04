@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Any
+from typing import Literal, Optional, Any, List
 from pydantic import BaseModel, UUID4, Field
 from datetime import datetime
 
@@ -31,6 +31,13 @@ class OutletUpdate(BaseModel):
     online_notify_owner_wa: Optional[bool] = None
     online_auto_cancel_minutes: Optional[int] = Field(default=None, ge=3, le=60)
     kitchen_mode: Optional[Literal['off', 'display', 'print']] = None
+    # Metode bayar (mig 103). Daftar dibersihkan server: tunai selalu ada,
+    # yang nggak dikenal dibuang.
+    payment_methods: Optional[List[str]] = None
+    qris_static_image_url: Optional[str] = Field(default=None, max_length=500)
+    bank_name: Optional[str] = Field(default=None, max_length=60)
+    bank_account_number: Optional[str] = Field(default=None, max_length=40)
+    bank_account_name: Optional[str] = Field(default=None, max_length=80)
 
 class OutletPaymentSetup(BaseModel):
     xendit_business_id: str
@@ -67,6 +74,14 @@ class OutletInDBBase(OutletBase):
     online_notify_owner_wa: bool = True
     online_auto_cancel_minutes: int = 10
     kitchen_mode: str = "off"
+    payment_methods: List[str] = ["cash", "qris"]
+    # 'xendit' kalau toko punya kunci Xendit, kalau nggak 'manual' (kasir
+    # konfirmasi sendiri). Dihitung dari model, bukan disimpan.
+    qris_channel: str = "manual"
+    qris_static_image_url: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_account_name: Optional[str] = None
     row_version: int
     created_at: datetime
     updated_at: datetime

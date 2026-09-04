@@ -416,12 +416,20 @@ async def create_payment(
         if tier.lower() not in {"pro", "business", "enterprise"}:
             raise HTTPException(status_code=403, detail="Partial payment hanya tersedia untuk paket Pro.")
 
-    # Determine initial status based on method
+    # Satu pola semua metode (services/payment_methods.py): metode harus
+    # aktif di toko, dan saluran nentuin settle langsung atau nunggu webhook.
+    from backend.services import payment_methods as pm
+    outlet = await db.get(Outlet, payment_in.outlet_id)
+    if not pm.is_enabled(outlet, payment_in.payment_method):
+        raise HTTPException(status_code=400, detail=pm.disabled_error(payment_in.payment_method))
+    channel = pm.resolve_channel(outlet, payment_in.payment_method, payment_in.channel)
+    inline = pm.settles_inline(payment_in.payment_method, channel)
+
     initial_status = PaymentStatus.pending
     paid_at = None
     qris_url = None
-    
-    if payment_in.payment_method == PaymentMethod.cash:
+
+    if inline:
         initial_status = PaymentStatus.paid
         paid_at = datetime.now(timezone.utc)
         
@@ -457,6 +465,10 @@ async def create_payment(
             raise HTTPException(status_code=400, detail="Nominal pembayaran kurang dari total tagihan.")
         # Force calculate change to prevent frontend manipulation
         payment_in.change_amount = payment_in.amount_paid - payment_in.amount_due
+    elif inline:
+        # Transfer, kartu, QRIS statis: nggak ada kembalian, yang masuk = tagihan.
+        payment_in.amount_paid = payment_in.amount_due
+        payment_in.change_amount = 0
         
     # Double QRIS Validation
     if payment_in.payment_method == PaymentMethod.qris and payment_in.order_id:
@@ -483,6 +495,7 @@ async def create_payment(
         invoice_id=payment_in.invoice_id,
         shift_session_id=shift_session_id,
         payment_method=payment_in.payment_method,
+        channel=channel,
         amount_due=payment_in.amount_due,
         amount_paid=payment_in.amount_paid,
         change_amount=payment_in.change_amount,
@@ -501,8 +514,7 @@ async def create_payment(
     # Fail-safe (CRITICAL #12): distinguishing configuration error vs transient
     # Xendit API failure. Retry exhausted = pending_manual_check (admin verify),
     # bukan failed terminal.
-    if payment_in.payment_method == PaymentMethod.qris:
-        outlet = await db.get(Outlet, payment_in.outlet_id)
+    if payment_in.payment_method == PaymentMethod.qris and channel == pm.CHANNEL_XENDIT:
         # BYOK pattern (mirror connect.py:528) — POS path harus konsisten dgn
         # storefront: prefer outlet's own API key, fallback ke sub-account
         # business_id (xenPlatform Phase 2). Outlet kosong both = config error.

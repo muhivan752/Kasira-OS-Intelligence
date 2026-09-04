@@ -96,6 +96,11 @@ def _normalize_push(changes, syncing_user_id: str, tz_name: str) -> None:
                         r["change_amount"] = round(paid - due, 2)
                 except (TypeError, ValueError):
                     pass
+                # QRIS yang dicatat offline pasti QRIS statis toko (QR dinamis
+                # Xendit butuh server). Tanpa ini kolom channel NULL kebaca
+                # 'xendit' oleh services/payment_methods.settles_inline.
+                if str(r.get("payment_method") or "") == "qris" and not r.get("channel"):
+                    r["channel"] = "manual"
             for f in _TS_FIELDS:
                 if f in r:
                     r[f] = fix_ts(r[f])

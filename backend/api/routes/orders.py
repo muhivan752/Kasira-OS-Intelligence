@@ -439,12 +439,12 @@ async def _attach_payment_info(db, orders) -> list:
     payment_map: dict = {}
     if order_ids:
         pay_result = await db.execute(
-            select(Payment.order_id, Payment.payment_method, Payment.status).where(
+            select(Payment.order_id, Payment.payment_method, Payment.status, Payment.channel).where(
                 Payment.order_id.in_(order_ids), Payment.deleted_at.is_(None),
             ).order_by(Payment.created_at.asc())
         )
         for row in pay_result.all():
-            payment_map[row.order_id] = {"payment_method": row.payment_method, "payment_status": row.status}
+            payment_map[row.order_id] = {"payment_method": row.payment_method, "payment_status": row.status, "payment_channel": row.channel}
     out = []
     for o in orders:
         resp = OrderResponse.model_validate(o)
@@ -452,6 +452,7 @@ async def _attach_payment_info(db, orders) -> list:
         if info:
             resp.payment_method = info["payment_method"]
             resp.payment_status = info["payment_status"]
+            resp.payment_channel = info["payment_channel"]
         out.append(resp)
     return out
 
@@ -492,10 +493,12 @@ async def read_online_orders(
     q = q.order_by(Order.created_at.desc()).limit(limit)
     orders = (await db.execute(q)).scalars().all()
     responses = await _attach_payment_info(db, orders)
-    # Saring QRIS belum lunas dari daftar aktif.
+    # Saring QRIS Xendit yang belum lunas dari daftar aktif. QRIS manual
+    # (QR statis toko) TETAP tampil: kasir yang memastikan uangnya masuk.
     responses = [
         r for r in responses
-        if not (r.status == OrderStatus.pending and r.payment_method == "qris" and r.payment_status != "paid")
+        if not (r.status == OrderStatus.pending and r.payment_method == "qris"
+                and r.payment_status != "paid" and (r.payment_channel or "xendit") != "manual")
     ]
     return StandardResponse(success=True, data=responses, request_id=request.state.request_id)
 

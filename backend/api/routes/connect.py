@@ -85,6 +85,7 @@ class ConnectOrderInput(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=300)
 
 from backend.services.fonnte import send_whatsapp_message
+from backend.services import payment_methods as _pm
 
 async def send_wa_confirmation_real(
     phone: str, display_number: str,
@@ -200,6 +201,9 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
             "online_orders_enabled": bool(getattr(outlet, 'online_orders_enabled', True)),
             "accepting_orders": bool(outlet.is_open and getattr(outlet, 'online_orders_enabled', True)),
             "auto_cancel_minutes": int(getattr(outlet, 'online_auto_cancel_minutes', 10) or 10),
+            # Metode bayar yang toko aktifkan + saluran QRIS (xendit | manual).
+            # Storefront cuma nawarin yang ada di sini.
+            **_pm.public_config(outlet),
             "opening_hours": outlet.opening_hours if isinstance(outlet.opening_hours, str) else "",
             "tier": outlet_tier,
             "trust_badge": "Verified Partner",
@@ -543,12 +547,20 @@ async def create_connect_order(
     else:
         # Normal flow: create payment immediately
         pay_method = PaymentMethod.qris if input_data.payment_method == 'qris' else PaymentMethod.cash
+        if not _pm.is_enabled(outlet, pay_method):
+            raise HTTPException(status_code=400, detail=_pm.disabled_error(pay_method)["message"])
+        # QRIS statis toko (nggak ada Xendit): pelanggan bayar ke QR milik toko
+        # dan kirim bukti lewat WA; kasir menerima pesanan = memastikan uangnya
+        # masuk (order_lifecycle.accept_order). Sampai itu status 'pending'.
+        pay_channel = _pm.resolve_channel(outlet, pay_method)
+        manual_qris = pay_method == PaymentMethod.qris and pay_channel == _pm.CHANNEL_MANUAL
         initial_status = PaymentStatus.pending if pay_method == PaymentMethod.qris else PaymentStatus.paid
 
         payment = Payment(
             order_id=order.id,
             outlet_id=outlet.id,
             payment_method=pay_method,
+            channel=pay_channel,
             amount_due=subtotal,
             amount_paid=subtotal if pay_method == PaymentMethod.cash else 0,
             change_amount=0,
@@ -558,7 +570,7 @@ async def create_connect_order(
         db.add(payment)
         await db.flush()
 
-        if pay_method == PaymentMethod.qris:
+        if pay_method == PaymentMethod.qris and not manual_qris:
             if outlet.xendit_api_key or outlet.xendit_business_id:
                 # CRITICAL #12 fail-safe: distinguish permanent (4xx) vs
                 # transient (retry exhausted) error.
@@ -685,11 +697,21 @@ async def create_connect_order(
     # QRIS yang belum dibayar: pelanggan dulu; toko dikabari waktu webhook paid.
     from backend.services import online_orders as _oo
     from types import SimpleNamespace
-    awaiting_payment = bool(payment is not None and payment.payment_method == 'qris' and payment.status != 'paid')
+    manual_qris_pending = bool(
+        payment is not None and payment.payment_method == 'qris'
+        and (payment.channel or 'xendit') == 'manual' and payment.status != 'paid'
+    )
+    # QRIS manual TIDAK dianggap "menunggu bayar": nggak ada webhook yang
+    # bakal ngabarin toko, jadi toko dikabari sekarang seperti tunai.
+    awaiting_payment = bool(
+        payment is not None and payment.payment_method == 'qris'
+        and payment.status != 'paid' and not manual_qris_pending
+    )
     background_tasks.add_task(
         _oo.wa_customer, outlet, input_data.customer_phone,
         _oo.msg_received(order, outlet, awaiting_payment=awaiting_payment,
-                         auto_cancel_minutes=int(outlet.online_auto_cancel_minutes or 10)),
+                         auto_cancel_minutes=int(outlet.online_auto_cancel_minutes or 10),
+                         manual_qris=manual_qris_pending),
     )
     if not awaiting_payment:
         item_objs = [SimpleNamespace(quantity=q, product_name=n) for q, n in item_names]
@@ -716,8 +738,10 @@ async def create_connect_order(
             "payment": {
                 "method": payment.payment_method if payment else None,
                 "status": payment.status if payment else "tab",
+                "channel": payment.channel if payment else None,
                 "qris_url": qris_url,
                 "qris_expired_at": qris_expired_at,
+                "qris_static_image_url": outlet.qris_static_image_url if manual_qris_pending else None,
             } if payment else {
                 "method": "tab",
                 "status": "pending_tab",
@@ -1059,14 +1083,18 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
         q_url = payment.qris_url or raw.get("qr_string") or raw.get("qr_url")
         # Expired at = created_at + 15 menit (fallback kalau tidak tersimpan)
         expired_at = None
-        if payment.payment_method == 'qris' and payment.status == 'pending':
+        is_manual = (payment.channel or 'xendit') == 'manual'
+        if payment.payment_method == 'qris' and payment.status == 'pending' and not is_manual:
             exp = payment.created_at + datetime.timedelta(minutes=15)
             expired_at = exp.isoformat() + "Z"
         payment_data = {
             "method": payment.payment_method,
             "status": payment.status,
+            "channel": payment.channel,
             "qris_url": q_url,
             "qris_expired_at": expired_at,
+            # QR statis toko buat halaman lacak: pelanggan bayar lalu kirim bukti.
+            "qris_static_image_url": outlet.qris_static_image_url if (outlet and is_manual and payment.payment_method == 'qris') else None,
         }
 
     # Load items with product names

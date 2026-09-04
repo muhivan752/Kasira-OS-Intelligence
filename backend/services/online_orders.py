@@ -110,9 +110,15 @@ async def wa_owner(outlet, message: str) -> bool:
 
 # ── Teks pesan ────────────────────────────────────────────────────────────
 
-def msg_received(order, outlet, *, awaiting_payment: bool, auto_cancel_minutes: int) -> str:
+def msg_received(order, outlet, *, awaiting_payment: bool, auto_cancel_minutes: int, manual_qris: bool = False) -> str:
     head = f"Pesanan #{order.display_number} di {outlet.name} sudah kami terima."
-    if awaiting_payment:
+    if manual_qris:
+        body = (
+            f"Bayar {_rp(order.total_amount)} ke QRIS toko yang tampil di halaman pesanan, "
+            "lalu balas pesan ini dengan bukti bayarnya. "
+            f"Toko akan mengonfirmasi dalam {auto_cancel_minutes} menit setelah bukti diterima."
+        )
+    elif awaiting_payment:
         body = (
             "Selesaikan pembayaran QRIS lewat halaman pesanan. Setelah lunas, "
             "toko akan mengonfirmasi pesanan Anda."

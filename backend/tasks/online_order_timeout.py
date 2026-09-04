@@ -89,7 +89,10 @@ async def expire_online_orders_once() -> dict:
                 p_method = _v(payment.payment_method) if payment else None
 
                 # Kasus 1: QRIS belum dibayar.
-                if payment is not None and p_method == "qris" and p_status in ("pending", "pending_manual_check", "failed"):
+                p_manual = (getattr(payment, "channel", None) or "xendit") == "manual" if payment is not None else False
+                # QRIS statis toko: nggak ada webhook, kasir yang memastikan.
+                # Diperlakukan seperti tunai: batas konfirmasi toko, bukan batas bayar.
+                if payment is not None and p_method == "qris" and not p_manual and p_status in ("pending", "pending_manual_check", "failed"):
                     if order.created_at < now - timedelta(minutes=UNPAID_QRIS_MINUTES):
                         await cancel_order(db, order, outlet, reason=UNPAID_REASON, by="system")
                         await db.commit()

@@ -71,7 +71,12 @@ async def auto_refund_payment(db, payment, outlet, *, reason: str, actor_user_id
     error: Optional[str] = None
     qrpy = _qr_payment_id(payment)
     has_key = bool(outlet.xendit_api_key or outlet.xendit_business_id)
-    if qrpy and has_key:
+    is_manual_channel = (getattr(payment, "channel", None) or "xendit") == "manual"
+    if is_manual_channel:
+        # QRIS statis toko: uangnya masuk rekening toko, bukan Xendit. Nggak ada
+        # yang bisa ditarik otomatis, pemilik yang kembalikan.
+        error = "pembayaran lewat QRIS statis toko, kembalikan manual ke pelanggan"
+    elif qrpy and has_key:
         try:
             from backend.services.xendit import xendit_service
             res = await xendit_service.create_qr_refund(

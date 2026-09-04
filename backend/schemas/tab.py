@@ -138,6 +138,8 @@ class SplitCustomRequest(BaseModel):
 class PaySplitRequest(BaseModel):
     """Bayar 1 split (1 orang)."""
     payment_method: str = Field(..., pattern='^(cash|qris|card|transfer)$')
+    # Lihat schemas/payment.py PaymentCreate.channel.
+    channel: Optional[str] = Field(default=None, pattern='^(xendit|manual)$')
     amount_paid: Decimal = Field(..., gt=0)
     idempotency_key: Optional[str] = None
     row_version: int
@@ -152,6 +154,7 @@ class PayItemsRequest(BaseModel):
     """
     order_item_ids: List[UUID] = Field(..., min_length=1)
     payment_method: str = Field(..., pattern='^(cash|qris|card|transfer)$')
+    channel: Optional[str] = Field(default=None, pattern='^(xendit|manual)$')
     amount_paid: Decimal = Field(..., gt=0)
     idempotency_key: Optional[str] = None
 

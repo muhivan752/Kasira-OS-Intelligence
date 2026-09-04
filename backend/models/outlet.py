@@ -29,6 +29,14 @@ class Outlet(BaseModel):
     online_auto_cancel_minutes = Column(Integer, server_default='10', nullable=False)
     # Ada di DB sejak mig 003, baru dipetakan 3 Sep 2026: 'off' | 'display' | 'print'.
     kitchen_mode = Column(ENUM('off', 'print', 'display', name='kitchen_mode', create_type=False), server_default='off', nullable=False)
+    # Metode bayar yang toko aktifkan (mig 103). Baca lewat
+    # services/payment_methods.enabled_methods(), jangan langsung: tunai
+    # dipaksa selalu ada di sana.
+    payment_methods = Column(JSONB, nullable=False, server_default='["cash", "qris"]')
+    qris_static_image_url = Column(String, nullable=True)
+    bank_name = Column(String(60), nullable=True)
+    bank_account_number = Column(String(40), nullable=True)
+    bank_account_name = Column(String(80), nullable=True)
 
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id"), nullable=True, index=True)
@@ -63,3 +71,8 @@ class Outlet(BaseModel):
     def wa_connected(self) -> bool:
         """Toko udah pasang token Fonnte sendiri (buat promo WA)."""
         return bool(self.fonnte_token)
+
+    @property
+    def qris_channel(self) -> str:
+        from backend.services.payment_methods import qris_channel
+        return qris_channel(self)

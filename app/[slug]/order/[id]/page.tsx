@@ -52,6 +52,9 @@ export default function OrderStatusPage() {
     if (order.status === 'ready' || order.status === 'served') return 'ready';
     if (order.status === 'preparing') return 'preparing';
     if (pay?.method === 'qris' && pay.status !== 'paid') {
+      // QRIS statis toko: nggak ada webhook. Pelanggan bayar ke QR toko dan
+      // kirim bukti, toko yang mengonfirmasi. Secara alur = menunggu toko.
+      if (pay.channel === 'manual') return 'awaiting_confirm';
       return ['failed', 'cancelled', 'pending_manual_check'].includes(pay.status) ? 'payment_failed' : 'awaiting_payment';
     }
     return 'awaiting_confirm';
@@ -77,6 +80,9 @@ export default function OrderStatusPage() {
     ? new Date(new Date(order.accepted_at).getTime() + order.eta_minutes * 60000) : null;
   const readyWord = typeKey === 'delivery' ? 'siap diantar' : typeKey === 'dine_in' ? 'diantar ke meja' : 'siap diambil';
 
+  const manualQrisUnpaid = order.payment?.method === 'qris' && order.payment?.channel === 'manual' && order.payment?.status !== 'paid';
+  const proofText = `Halo ${outlet.name || 'Kak'}, saya sudah membayar pesanan #${order.display_number} sebesar ${rp(order.total_amount)} lewat QRIS. Berikut bukti bayarnya.`;
+
   const hero: Record<Phase, { title: string; body: string; tone: string; icon: any }> = {
     awaiting_payment: {
       title: 'Selesaikan pembayaran',
@@ -89,8 +95,10 @@ export default function OrderStatusPage() {
       tone: 'bg-[color-mix(in_srgb,var(--danger)_10%,white)] text-[var(--text-strong)]', icon: XCircle,
     },
     awaiting_confirm: {
-      title: 'Menunggu konfirmasi toko',
-      body: order.confirm_deadline
+      title: manualQrisUnpaid ? 'Bayar lalu kirim bukti' : 'Menunggu konfirmasi toko',
+      body: manualQrisUnpaid
+        ? 'Pindai QRIS toko di bawah, lalu kirim bukti bayar ke WhatsApp toko. Toko mengonfirmasi pesanan setelah bukti diterima.'
+        : order.confirm_deadline
         ? `Toko merespons paling lambat pukul ${timeShort(order.confirm_deadline)}. Bila tidak, pesanan dibatalkan otomatis${order.payment?.status === 'paid' ? ' dan pembayaran dikembalikan' : ''}.`
         : 'Toko akan segera merespons pesanan Anda.',
       tone: 'text-white', icon: Loader2,
@@ -163,6 +171,28 @@ export default function OrderStatusPage() {
             </div>
           </div>
         </section>
+
+        {/* QRIS statis toko: gambar QR milik toko + tombol kirim bukti */}
+        {phase === 'awaiting_confirm' && manualQrisUnpaid && (
+          <Card className="p-6 text-center">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)] mb-4">QRIS {outlet.name}</p>
+            {order.payment?.qris_static_image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={order.payment.qris_static_image_url} alt={`QRIS ${outlet.name}`} className="w-60 h-60 mx-auto rounded-2xl border border-[var(--border-subtle)] object-contain bg-white" />
+            ) : (
+              <p className="text-sm text-[var(--text-muted)] py-4">Kode QRIS tersedia di kasir. Tunjukkan nomor pesanan #{order.display_number}.</p>
+            )}
+            <p className="mt-4 text-2xl font-extrabold text-[var(--text-strong)]">{rp(order.total_amount)}</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Bayar sesuai nominal, lalu kirim tangkapan layar buktinya.</p>
+            {wa ? (
+              <a href={waLink(wa, proofText)} target="_blank" rel="noopener noreferrer" className={`${btnPrimary} mt-4 inline-flex items-center gap-2`}>
+                <MessageCircle className="w-4 h-4" /> Kirim bukti bayar ke WhatsApp
+              </a>
+            ) : (
+              <p className="mt-4 text-xs text-[var(--text-muted)]">Tunjukkan bukti bayar ke kasir saat mengambil pesanan.</p>
+            )}
+          </Card>
+        )}
 
         {/* QRIS */}
         {phase === 'awaiting_payment' && (

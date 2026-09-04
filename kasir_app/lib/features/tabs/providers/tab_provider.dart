@@ -378,13 +378,14 @@ class TabNotifier extends StateNotifier<TabListState> {
 
   Future<TabModel?> payFull(
       String tabId, String paymentMethod, double amountPaid, int rowVersion,
-      {String? idempotencyKey}) async {
+      {String? idempotencyKey, String? channel}) async {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/pay-full',
         options: Options(headers: _headers),
         data: {
           'payment_method': paymentMethod,
+          if (channel != null) 'channel': channel,
           'amount_paid': amountPaid,
           'row_version': rowVersion,
           if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
@@ -401,13 +402,14 @@ class TabNotifier extends StateNotifier<TabListState> {
 
   Future<TabModel?> paySplit(
       String tabId, String splitId, String paymentMethod, double amountPaid, int rowVersion,
-      {String? idempotencyKey}) async {
+      {String? idempotencyKey, String? channel}) async {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/splits/$splitId/pay',
         options: Options(headers: _headers),
         data: {
           'payment_method': paymentMethod,
+          if (channel != null) 'channel': channel,
           'amount_paid': amountPaid,
           'row_version': rowVersion,
           if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
@@ -425,7 +427,7 @@ class TabNotifier extends StateNotifier<TabListState> {
   /// kalau semua items+splits paid.
   Future<TabModel?> payItems(
       String tabId, List<String> orderItemIds, String paymentMethod, double amountPaid,
-      {String? idempotencyKey}) async {
+      {String? idempotencyKey, String? channel}) async {
     try {
       final res = await _dio.post(
         '/tabs/$tabId/pay-items',
@@ -433,6 +435,7 @@ class TabNotifier extends StateNotifier<TabListState> {
         data: {
           'order_item_ids': orderItemIds,
           'payment_method': paymentMethod,
+          if (channel != null) 'channel': channel,
           'amount_paid': amountPaid,
           if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
         },

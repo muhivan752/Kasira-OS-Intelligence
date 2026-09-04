@@ -158,6 +158,9 @@ async def update_outlet(
     }
 
     update_data = outlet_in.model_dump(exclude_unset=True)
+    if "payment_methods" in update_data:
+        from backend.services.payment_methods import normalize_methods
+        update_data["payment_methods"] = normalize_methods(update_data["payment_methods"])
     update_stmt = (
         update(Outlet)
         .where(Outlet.id == outlet_id)

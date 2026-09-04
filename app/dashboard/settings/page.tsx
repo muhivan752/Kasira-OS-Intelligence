@@ -80,6 +80,16 @@ export default function SettingsPage() {
           online_notify_owner_wa: data.online_notify_owner_wa ?? true,
           online_auto_cancel_minutes: data.online_auto_cancel_minutes ?? 10,
         });
+        setPay({
+          payment_methods: Array.isArray(data.payment_methods) && data.payment_methods.length ? data.payment_methods : ['cash', 'qris'],
+          qris_channel: data.qris_channel || 'manual',
+          qris_static_image_url: data.qris_static_image_url || '',
+        });
+        setBank({
+          bank_name: data.bank_name || '',
+          bank_account_number: data.bank_account_number || '',
+          bank_account_name: data.bank_account_name || '',
+        });
 
         // Load tax config
         try {
@@ -142,6 +152,64 @@ export default function SettingsPage() {
     } else {
       setOnline(online);
       setOnlineMsg({ ok: false, text: res.message || 'Gagal menyimpan' });
+    }
+  };
+
+  // Metode pembayaran (mig 103). Toko memilih sendiri yang aktif; aplikasi
+  // kasir dan halaman toko hanya menampilkan yang aktif. Tunai selalu ada.
+  const [pay, setPay] = useState<{ payment_methods: string[]; qris_channel: string; qris_static_image_url: string }>({
+    payment_methods: ['cash', 'qris'], qris_channel: 'manual', qris_static_image_url: '',
+  });
+  const [bank, setBank] = useState({ bank_name: '', bank_account_number: '', bank_account_name: '' });
+  const [payMsg, setPayMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [paySaving, setPaySaving] = useState(false);
+  const [qrisUploading, setQrisUploading] = useState(false);
+  const savePayPatch = async (patch: Record<string, any>, okText = 'Tersimpan. Aplikasi kasir mengikuti saat dibuka lagi.') => {
+    if (!outlet) return false;
+    setPaySaving(true);
+    setPayMsg(null);
+    const res = await updateOutlet(outlet.id, patch);
+    setPaySaving(false);
+    if (res.success) {
+      setPayMsg({ ok: true, text: okText });
+      return true;
+    }
+    setPayMsg({ ok: false, text: res.message || 'Gagal menyimpan' });
+    return false;
+  };
+  const toggleMethod = async (m: string, on: boolean) => {
+    const prev = pay.payment_methods;
+    const set = new Set(prev);
+    if (on) set.add(m); else set.delete(m);
+    set.add('cash');
+    const next = ['cash', 'qris', 'transfer', 'card'].filter(x => set.has(x));
+    setPay(p => ({ ...p, payment_methods: next }));
+    const ok = await savePayPatch({ payment_methods: next });
+    if (!ok) setPay(p => ({ ...p, payment_methods: prev }));
+  };
+  const handleQrisUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setQrisUploading(true);
+    setPayMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || '';
+        const url = `${baseUrl}${data.url}`;
+        const ok = await savePayPatch({ qris_static_image_url: url }, 'Gambar QRIS tersimpan. Kasir menampilkannya saat pelanggan memilih QRIS.');
+        if (ok) setPay(p => ({ ...p, qris_static_image_url: url }));
+      } else {
+        setPayMsg({ ok: false, text: data.detail || 'Unggah gagal' });
+      }
+    } catch {
+      setPayMsg({ ok: false, text: 'Unggah gagal' });
+    } finally {
+      setQrisUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -979,22 +1047,96 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Payment Settings */}
+          {/* Metode pembayaran (mig 103). Toko memilih sendiri, tidak ada yang dipaksa. */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">Pembayaran</h2>
+              <h2 className="text-lg font-bold text-gray-900">Metode Pembayaran</h2>
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm text-gray-600">
-                Atur metode pembayaran QRIS via Xendit untuk menerima pembayaran non-tunai.
+                Aplikasi kasir dan halaman toko hanya menampilkan metode yang Anda nyalakan. Tunai selalu aktif.
               </p>
-              <Link
-                href="/dashboard/settings/payment"
-                className="block w-full text-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Setup QRIS Xendit
-              </Link>
+              {payMsg && <p className={`text-sm ${payMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{payMsg.text}</p>}
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="flex items-start gap-3 p-4 border border-gray-200 rounded-xl bg-gray-50">
+                  <input type="checkbox" className="mt-1" checked disabled />
+                  <div>
+                    <p className="font-semibold text-gray-900">Tunai</p>
+                    <p className="text-sm text-gray-600 mt-0.5">Selalu aktif. Kembalian dihitung otomatis.</p>
+                  </div>
+                </div>
+                {([
+                  { id: 'qris', label: 'QRIS', hint: 'GoPay, OVO, DANA, ShopeePay, dan semua m-banking.' },
+                  { id: 'transfer', label: 'Transfer bank', hint: 'Untuk pesanan besar, katering, atau bayar di muka.' },
+                  { id: 'card', label: 'Kartu EDC', hint: 'Debit atau kredit lewat mesin EDC bank Anda.' },
+                ] as const).map(m => (
+                  <label key={m.id} className="flex items-start gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer">
+                    <input type="checkbox" className="mt-1" checked={pay.payment_methods.includes(m.id)} disabled={paySaving}
+                      onChange={e => toggleMethod(m.id, e.target.checked)} />
+                    <div>
+                      <p className="font-semibold text-gray-900">{m.label}</p>
+                      <p className="text-sm text-gray-600 mt-0.5">{m.hint}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              {pay.payment_methods.includes('qris') && (
+                <div className="p-4 border border-gray-200 rounded-xl">
+                  {pay.qris_channel === 'xendit' ? (
+                    <>
+                      <p className="font-semibold text-gray-900">QRIS dinamis lewat Xendit</p>
+                      <p className="text-sm text-gray-600 mt-0.5">
+                        Setiap transaksi membuat kode QR dengan nominalnya sendiri dan lunas terkonfirmasi otomatis.{' '}
+                        <Link href="/dashboard/settings/payment" className="text-blue-600 hover:underline">Kelola kunci Xendit</Link>
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-semibold text-gray-900">Gambar QRIS toko</p>
+                      <p className="text-sm text-gray-600 mt-0.5 mb-3">
+                        Unduh QRIS dari aplikasi bank, GoPay, atau DANA merchant Anda, lalu unggah di sini. Kasir menampilkannya ke pelanggan dan menekan Konfirmasi setelah melihat notifikasi uang masuk.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-4">
+                        {pay.qris_static_image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={pay.qris_static_image_url} alt="QRIS toko" className="w-36 h-36 object-contain rounded-lg border border-gray-200 bg-white" />
+                        ) : (
+                          <div className="w-36 h-36 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400 text-center px-2">Belum ada gambar</div>
+                        )}
+                        <label className={`px-4 py-2 text-sm font-medium rounded-lg border cursor-pointer ${qrisUploading ? 'opacity-60 pointer-events-none' : 'hover:bg-gray-50'} border-gray-300 text-gray-700`}>
+                          {qrisUploading ? 'Mengunggah...' : pay.qris_static_image_url ? 'Ganti gambar' : 'Unggah gambar QRIS'}
+                          <input type="file" accept="image/*" className="hidden" onChange={handleQrisUpload} />
+                        </label>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-3">
+                        Ingin lunas terkonfirmasi otomatis tanpa cek notifikasi?{' '}
+                        <Link href="/dashboard/settings/payment" className="text-blue-600 hover:underline">Hubungkan Xendit</Link>
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {pay.payment_methods.includes('transfer') && (
+                <div className="p-4 border border-gray-200 rounded-xl">
+                  <p className="font-semibold text-gray-900">Rekening tujuan transfer</p>
+                  <p className="text-sm text-gray-600 mt-0.5 mb-3">Ditampilkan kasir ke pelanggan saat memilih transfer.</p>
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    <input type="text" placeholder="Nama bank (BCA, BRI, Mandiri)" value={bank.bank_name} onChange={e => setBank({ ...bank, bank_name: e.target.value })}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                    <input type="text" inputMode="numeric" placeholder="Nomor rekening" value={bank.bank_account_number} onChange={e => setBank({ ...bank, bank_account_number: e.target.value.replace(/[^0-9-]/g, '') })}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                    <input type="text" placeholder="Atas nama" value={bank.bank_account_name} onChange={e => setBank({ ...bank, bank_account_name: e.target.value })}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                  </div>
+                  <button type="button" disabled={paySaving} onClick={() => savePayPatch(bank, 'Rekening tersimpan.')}
+                    className="mt-3 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    Simpan rekening
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

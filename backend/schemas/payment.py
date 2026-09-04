@@ -38,11 +38,15 @@ class PaymentBase(BaseModel):
     is_partial: bool = False
 
 class PaymentCreate(PaymentBase):
-    pass
+    # Saluran QRIS yang diminta klien: 'manual' = kasir konfirmasi sendiri
+    # (QR statis toko). Kosong = server pilih: Xendit kalau toko punya kunci,
+    # manual kalau nggak. Diabaikan untuk metode selain QRIS.
+    channel: Optional[str] = Field(default=None, pattern='^(xendit|manual)$')
 
 class PaymentResponse(PaymentBase):
     id: UUID
     status: PaymentStatus
+    channel: Optional[str] = None
     qris_url: Optional[str] = None
     qris_expired_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None

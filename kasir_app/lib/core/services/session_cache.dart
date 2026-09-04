@@ -32,6 +32,21 @@ class SessionCache {
   // treat as 'fnb' via BusinessLabels.getLabel fallback.
   String? businessDomain;
 
+  /// Metode bayar yang toko aktifkan (mig 103), dari GET /outlets/{id}.
+  /// Tunai selalu ada. Modal bayar dan tab meja cuma nampilin yang di sini.
+  /// Di-cache di SharedPreferences supaya offline tetap tahu.
+  List<String> paymentMethods = const ['cash', 'qris'];
+  /// 'xendit' = QR dinamis dari server, 'manual' = QRIS statis toko yang
+  /// kasir konfirmasi sendiri.
+  String qrisChannel = 'manual';
+  String? qrisStaticImageUrl;
+  String? bankName;
+  String? bankAccountNumber;
+  String? bankAccountName;
+
+  bool get qrisIsManual => qrisChannel != 'xendit';
+  bool hasPaymentMethod(String m) => paymentMethods.contains(m);
+
   bool _initialized = false;
   bool get isInitialized => _initialized;
 
@@ -74,6 +89,7 @@ class SessionCache {
     outletName = prefs.getString('c_outlet_name');
     outletAddress = prefs.getString('c_outlet_address');
     businessDomain = prefs.getString('c_business_domain');
+    _loadPaymentConfig(prefs);
 
     _initialized = true;
 
@@ -95,6 +111,7 @@ class SessionCache {
     stockMode = prefs.getString('c_stock_mode');
     subscriptionTier = prefs.getString('c_subscription_tier');
     businessDomain = prefs.getString('c_business_domain');
+    _loadPaymentConfig(prefs);
     // Token still needs SecureStorage — read in parallel
     const secure = FlutterSecureStorage();
     final results = await Future.wait([
@@ -220,6 +237,7 @@ class SessionCache {
       final address = data['address'] as String?;
       final mode = data['shift_mode'] as String?;
       if (mode != null && mode.isNotEmpty) shiftMode = mode;
+      await applyPaymentConfig(data);
       if (name != null && name.isNotEmpty) {
         outletName = name;
         final prefs = await SharedPreferences.getInstance();
@@ -233,6 +251,46 @@ class SessionCache {
     } catch (_) {
       // Silent — fallback chain (SessionCache → SharedPreferences → 'Selaris Outlet') tetap works
     }
+  }
+
+  void _loadPaymentConfig(SharedPreferences prefs) {
+    final saved = prefs.getStringList('c_payment_methods');
+    if (saved != null && saved.isNotEmpty) paymentMethods = saved;
+    qrisChannel = prefs.getString('c_qris_channel') ?? qrisChannel;
+    qrisStaticImageUrl = prefs.getString('c_qris_static_image_url');
+    bankName = prefs.getString('c_bank_name');
+    bankAccountNumber = prefs.getString('c_bank_account_number');
+    bankAccountName = prefs.getString('c_bank_account_name');
+  }
+
+  /// Terima objek outlet dari server (GET /outlets/{id} atau respons PUT) dan
+  /// simpan bagian metode bayarnya. Dipanggil juga dari halaman pengaturan
+  /// app sesudah pemilik mengubah, supaya modal bayar langsung ikut.
+  Future<void> applyPaymentConfig(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = data['payment_methods'];
+    if (raw is List && raw.isNotEmpty) {
+      paymentMethods = raw.map((e) => e.toString()).toList();
+      if (!paymentMethods.contains('cash')) paymentMethods = ['cash', ...paymentMethods];
+      prefs.setStringList('c_payment_methods', paymentMethods);
+    }
+    final ch = data['qris_channel'] as String?;
+    if (ch != null && ch.isNotEmpty) {
+      qrisChannel = ch;
+      prefs.setString('c_qris_channel', ch);
+    }
+    Future<void> setOpt(String key, String? value, void Function(String?) assign) async {
+      assign(value);
+      if (value == null || value.isEmpty) {
+        prefs.remove(key);
+      } else {
+        prefs.setString(key, value);
+      }
+    }
+    if (data.containsKey('qris_static_image_url')) await setOpt('c_qris_static_image_url', data['qris_static_image_url'] as String?, (v) => qrisStaticImageUrl = v);
+    if (data.containsKey('bank_name')) await setOpt('c_bank_name', data['bank_name'] as String?, (v) => bankName = v);
+    if (data.containsKey('bank_account_number')) await setOpt('c_bank_account_number', data['bank_account_number'] as String?, (v) => bankAccountNumber = v);
+    if (data.containsKey('bank_account_name')) await setOpt('c_bank_account_name', data['bank_account_name'] as String?, (v) => bankAccountName = v);
   }
 
   /// Pastikan userId ada. `setUserId` sudah lama didefinisikan tapi nggak

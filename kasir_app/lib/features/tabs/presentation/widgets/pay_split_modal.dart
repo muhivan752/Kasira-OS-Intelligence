@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/services/session_cache.dart';
+import '../../../../core/widgets/manual_payment_info.dart';
 import '../../../../core/services/printer_service.dart';
 import '../../../../core/services/tab_receipt_service.dart';
 import '../../../../core/theme/kasira_ds.dart';
@@ -26,6 +28,7 @@ class PaySplitModal extends ConsumerStatefulWidget {
 class _PaySplitModalState extends ConsumerState<PaySplitModal> {
   final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   String _paymentMethod = 'cash';
+  SessionCache get _cache => SessionCache.instance;
   final _amountController = TextEditingController();
   double _amountReceived = 0;
   bool _isLoading = false;
@@ -105,11 +108,22 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
             // Payment method
             Text('Metode Pembayaran', style: TextStyle(color: KasiraDS.textMuted, fontSize: 13)),
             const SizedBox(height: 8),
+            // Hanya metode yang toko aktifkan (SessionCache, mig 103).
             Row(
               children: [
-                _buildMethodChip('cash', 'Cash', LucideIcons.banknote),
-                const SizedBox(width: 8),
-                _buildMethodChip('qris', 'QRIS', LucideIcons.qrCode),
+                _buildMethodChip('cash', 'Tunai', LucideIcons.banknote),
+                if (_cache.hasPaymentMethod('qris')) ...[
+                  const SizedBox(width: 8),
+                  _buildMethodChip('qris', 'QRIS', LucideIcons.qrCode),
+                ],
+                if (_cache.hasPaymentMethod('transfer')) ...[
+                  const SizedBox(width: 8),
+                  _buildMethodChip('transfer', 'Transfer', LucideIcons.landmark),
+                ],
+                if (_cache.hasPaymentMethod('card')) ...[
+                  const SizedBox(width: 8),
+                  _buildMethodChip('card', 'Kartu', LucideIcons.creditCard),
+                ],
               ],
             ),
             const SizedBox(height: 20),
@@ -158,7 +172,7 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
                   ),
                 ],
               ),
-            ] else ...[
+            ] else if (_paymentMethod == 'qris' && !_cache.qrisIsManual) ...[
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -170,13 +184,17 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
                     Icon(LucideIcons.qrCode, size: 48, color: KasiraDS.textMuted),
                     const SizedBox(height: 12),
                     Text(
-                      'QRIS akan diproses setelah konfirmasi',
+                      'Kode QR dibuat setelah konfirmasi, lalu menunggu pembayaran.',
                       style: TextStyle(color: KasiraDS.textMuted),
                       textAlign: TextAlign.center,
                     ),
                   ],
                 ),
               ),
+            ] else ...[
+              // QRIS statis toko, transfer, kartu: kasir konfirmasi sendiri,
+              // settle langsung seperti tunai (services/payment_methods.py).
+              ManualPaymentInfo(method: _paymentMethod, amount: _amountDue, compact: true),
             ],
 
             if (_error != null) ...[
@@ -273,24 +291,31 @@ class _PaySplitModalState extends ConsumerState<PaySplitModal> {
 
     TabModel? result;
 
+    // Non-tunai: nominal = tagihan, nggak ada kembalian. QRIS statis toko
+    // dikirim dengan channel 'manual' supaya server settle langsung.
+    final paidAmount = _paymentMethod == 'cash' ? _amountReceived : _amountDue;
+    final channel = _paymentMethod == 'qris' && _cache.qrisIsManual ? 'manual' : null;
+
     if (widget.split != null) {
       // Pay single split
       result = await notifier.paySplit(
         widget.tab.id,
         widget.split!.id,
         _paymentMethod,
-        _amountReceived,
+        paidAmount,
         widget.split!.rowVersion,
         idempotencyKey: idempKey,
+        channel: channel,
       );
     } else {
       // Pay full remaining
       result = await notifier.payFull(
         widget.tab.id,
         _paymentMethod,
-        _amountReceived,
+        paidAmount,
         widget.tab.rowVersion,
         idempotencyKey: idempKey,
+        channel: channel,
       );
     }
 
