@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Bike, Clock, Loader2, Check } from 'lucide-react';
-import { updateOutlet } from '@/app/actions/api';
+import { useEffect, useRef, useState } from 'react';
+import { Bike, Clock, Loader2, Check, MapPin, Search } from 'lucide-react';
+import { updateOutlet, setOutletLocation } from '@/app/actions/api';
+import { geoAutocomplete, geoPlace } from '@/app/actions/storefront';
 
 /**
  * Pengaturan antar + jam buka (delivery gelombang 1, 4 Sep 2026).
@@ -39,20 +40,35 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
   const [dSaving, setDSaving] = useState(false);
   const [dMsg, setDMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // ── Titik lokasi toko ──
+  // Dulu cuma bisa dari GPS app kasir, dan GPS nyetel titik di mana HP-nya
+  // berada (rumah pemilik), bukan tokonya. Di sini pemilik cari alamat lewat
+  // Google Places (proxy backend, kunci nggak ke browser) lalu simpan.
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [pinQ, setPinQ] = useState('');
+  const [pinSug, setPinSug] = useState<any[]>([]);
+  const [pinPick, setPinPick] = useState<{ lat: number; lng: number; address: string } | null>(null);
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pinMsg, setPinMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const pinSession = useRef(`dash-${Date.now()}`);
+
   // ── Jam buka ──
   const [mode, setMode] = useState<'manual' | 'schedule'>('manual');
   const [hours, setHours] = useState<Record<string, { open: string; close: string; closed: boolean }>>({});
   const [hSaving, setHSaving] = useState(false);
   const [hMsg, setHMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  const initFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!outlet) return;
+    if (!outlet || initFor.current === outlet.id) return;
+    initFor.current = outlet.id;
     setEnabled(outlet.delivery_enabled !== false);
     setBase(String(Math.round(outlet.delivery_fee_base || 0)));
     setPerKm(String(Math.round(outlet.delivery_fee_per_km || 0)));
     setFreeKm(String(outlet.delivery_free_km || 0));
     setMinOrder(String(Math.round(outlet.delivery_min_order || 0)));
     setRadius(String(outlet.delivery_radius_km ?? 5));
+    setPin(outlet.latitude != null && outlet.longitude != null ? { lat: Number(outlet.latitude), lng: Number(outlet.longitude) } : null);
     setMode(outlet.hours_mode === 'schedule' ? 'schedule' : 'manual');
     const h: Hours | null = outlet.business_hours && typeof outlet.business_hours === 'object' ? outlet.business_hours : null;
     const next: typeof hours = {};
@@ -97,6 +113,46 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
     else setHMsg({ ok: false, text: res?.message || 'Gagal menyimpan' });
   };
 
+  useEffect(() => {
+    if (!outlet?.slug || pinQ.trim().length < 3 || pinPick) { setPinSug([]); return; }
+    const t = setTimeout(async () => {
+      const r = await geoAutocomplete(outlet.slug, pinQ, pinSession.current);
+      setPinSug(Array.isArray(r) ? r.slice(0, 5) : []);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [pinQ, pinPick, outlet?.slug]);
+
+  const pickPlace = async (placeId: string) => {
+    setPinBusy(true); setPinMsg(null);
+    const r = await geoPlace(outlet.slug, { place_id: placeId, session: pinSession.current });
+    setPinBusy(false);
+    pinSession.current = `dash-${Date.now()}`;
+    if (r?.success && r.data?.lat != null) { setPinPick({ lat: r.data.lat, lng: r.data.lng, address: r.data.address || pinQ }); setPinSug([]); }
+    else setPinMsg({ ok: false, text: r?.message || 'Alamat tidak ditemukan' });
+  };
+
+  const pakaiAlamatToko = async () => {
+    if (!outlet?.address) { setPinMsg({ ok: false, text: 'Isi alamat toko dulu di kartu Informasi Toko.' }); return; }
+    setPinBusy(true); setPinMsg(null);
+    const r = await geoAutocomplete(outlet.slug, outlet.address, pinSession.current);
+    if (!Array.isArray(r) || r.length === 0) { setPinBusy(false); setPinMsg({ ok: false, text: 'Alamat toko tidak ketemu di peta. Cari manual di bawah.' }); return; }
+    setPinQ(r[0].description || outlet.address);
+    await pickPlace(r[0].place_id);
+  };
+
+  const savePin = async () => {
+    if (!outlet || !pinPick) return;
+    setPinBusy(true); setPinMsg(null);
+    const res = await setOutletLocation(outlet.id, pinPick.lat, pinPick.lng);
+    setPinBusy(false);
+    if (res?.success) {
+      setPin({ lat: pinPick.lat, lng: pinPick.lng });
+      setPinPick(null); setPinQ('');
+      setPinMsg({ ok: true, text: 'Titik toko tersimpan. Jarak antar dan Google membaca titik ini.' });
+      onSaved?.({ latitude: pinPick.lat, longitude: pinPick.lng });
+    } else setPinMsg({ ok: false, text: res?.message || 'Gagal menyimpan' });
+  };
+
   const applyAll = () => {
     const first = hours[DAYS[0].key] || { open: '08:00', close: '22:00', closed: false };
     const next: typeof hours = {};
@@ -122,6 +178,46 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
         </div>
         <div className="p-6 space-y-4">
           <p className="text-sm text-gray-600">Ongkir dihitung dari jarak alamat pelanggan ke toko, ditagih terpisah dari harga menu, dan tidak masuk laporan penjualan.</p>
+
+          <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-gray-900 flex items-center gap-1.5"><MapPin className="w-4 h-4 text-gray-500" /> Titik lokasi toko</p>
+                <p className="text-xs text-gray-500 mt-0.5">Semua jarak antar dihitung dari titik ini. Pastikan pin ada di tokonya, bukan di rumah atau posisi HP saat login.</p>
+              </div>
+              <button type="button" onClick={pakaiAlamatToko} disabled={pinBusy} className="shrink-0 text-xs font-semibold text-blue-600 hover:underline disabled:opacity-50">Pakai alamat toko</button>
+            </div>
+            {(pinPick || pin) && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`/api/v1/connect/geo/static?lat=${(pinPick || pin)!.lat}&lng=${(pinPick || pin)!.lng}&zoom=16&w=640&h=200`} alt="Peta titik toko" className="w-full h-40 object-cover rounded-lg border border-gray-200 bg-gray-50" />
+            )}
+            {!pin && !pinPick && <p className="text-xs text-amber-600">Titik belum diatur. Tanpa titik, ongkir per km tidak bisa dihitung dan jangkauan tidak ditegakkan.</p>}
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                <input value={pinQ} onChange={e => { setPinQ(e.target.value); setPinPick(null); }} placeholder="Cari nama tempat atau alamat toko" className={inputCls} />
+              </div>
+              {pinSug.length > 0 && (
+                <ul className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
+                  {pinSug.map((sg: any) => (
+                    <li key={sg.place_id}>
+                      <button type="button" onClick={() => { setPinQ(sg.description); pickPlace(sg.place_id); }} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">{sg.description}</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {pinPick && (
+              <div className="flex items-center justify-between gap-3 rounded-lg bg-blue-50 px-3 py-2">
+                <p className="text-xs text-blue-800 truncate">{pinPick.address}</p>
+                <button type="button" onClick={savePin} disabled={pinBusy} className="shrink-0 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-1">
+                  {pinBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Simpan titik
+                </button>
+              </div>
+            )}
+            {pinMsg && <p className={`text-xs ${pinMsg.ok ? 'text-green-600' : 'text-red-600'}`}>{pinMsg.text}</p>}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ongkir dasar (Rp)</label>

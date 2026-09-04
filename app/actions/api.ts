@@ -86,6 +86,19 @@ export async function getOutlets() {
   } catch { return []; }
 }
 
+export async function setOutletLocation(outletId: string, latitude: number, longitude: number) {
+  try {
+    const res = await fetchWithAuth(`/outlets/${outletId}/location`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ latitude, longitude }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, message: data?.detail || 'Gagal menyimpan titik lokasi' };
+    return { success: true };
+  } catch { return { success: false, message: 'Terjadi kesalahan jaringan' }; }
+}
+
 export async function getSefrekuensiStatus(outletId: string) {
   try {
     const res = await fetchWithAuth(`/outlets/${outletId}/sefrekuensi-status`);
