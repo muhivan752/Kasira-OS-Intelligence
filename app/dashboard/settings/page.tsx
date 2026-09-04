@@ -355,15 +355,15 @@ export default function SettingsPage() {
     : '';
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-6xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Pengaturan Outlet</h1>
         <p className="text-gray-500">Kelola informasi dasar dan tampilan storefront Anda.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Main Settings Form */}
-        <div className="md:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Kolom kiri: profil toko, metode bayar, pajak, billing */}
+        <div className="space-y-6">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
               <Store className="w-5 h-5 text-gray-500" />
@@ -600,9 +600,222 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
+          {/* Tax & Service Charge */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-bold text-gray-900">Pajak, Struk & Identitas</h2>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* NPWP & Footer Struk */}
+              <div className="pb-4 border-b border-gray-100 space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
+                    NPWP (Nomor Pokok Wajib Pajak)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={30}
+                    value={taxConfig.tax_number}
+                    onChange={e => setTaxConfig(c => ({ ...c, tax_number: e.target.value }))}
+                    placeholder="Contoh: 01.234.567.8-901.000"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Tampil di header struk (kalau diisi). Kosongkan kalau bukan PKP atau belum punya NPWP.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
+                    Pesan Footer Struk
+                  </label>
+                  <textarea
+                    rows={2}
+                    maxLength={200}
+                    value={taxConfig.receipt_footer}
+                    onChange={e => setTaxConfig(c => ({ ...c, receipt_footer: e.target.value }))}
+                    placeholder="Contoh: Ikuti IG @kasiracoffee, promo kopi 10% tiap Jumat!"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Ganti tulisan "Powered by Selaris" di bawah struk dengan pesan Anda sendiri. Maksimal 200 karakter.
+                    {taxConfig.receipt_footer.length > 0 && (
+                      <span className="ml-2 text-gray-400">({taxConfig.receipt_footer.length}/200)</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* PB1 / Pajak Restoran */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Pajak (PB1)</p>
+                    <p className="text-xs text-gray-500">Pajak restoran yang dikenakan ke pelanggan</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTaxConfig(c => ({ ...c, pb1_enabled: !c.pb1_enabled }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      taxConfig.pb1_enabled ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      taxConfig.pb1_enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+                {taxConfig.pb1_enabled && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={taxConfig.tax_pct}
+                      onChange={e => setTaxConfig(c => ({ ...c, tax_pct: parseFloat(e.target.value) || 0 }))}
+                      className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                    <span className="text-sm text-gray-500">%</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Service Charge */}
+              <div className="border-t border-gray-100 pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Service Charge</p>
+                    <p className="text-xs text-gray-500">Biaya layanan tambahan</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTaxConfig(c => ({ ...c, service_charge_enabled: !c.service_charge_enabled }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      taxConfig.service_charge_enabled ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      taxConfig.service_charge_enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+                {taxConfig.service_charge_enabled && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={taxConfig.service_charge_pct}
+                      onChange={e => setTaxConfig(c => ({ ...c, service_charge_pct: parseFloat(e.target.value) || 0 }))}
+                      className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                    <span className="text-sm text-gray-500">%</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Tax Inclusive */}
+              {taxConfig.pb1_enabled && (
+                <div className="border-t border-gray-100 pt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Harga Termasuk Pajak</p>
+                      <p className="text-xs text-gray-500">Harga menu sudah include pajak</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTaxConfig(c => ({ ...c, tax_inclusive: !c.tax_inclusive }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        taxConfig.tax_inclusive ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        taxConfig.tax_inclusive ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Preview */}
+              {(taxConfig.pb1_enabled || taxConfig.service_charge_enabled) && (
+                <div className="border-t border-gray-100 pt-4">
+                  <p className="text-xs text-gray-500 mb-2">Contoh pesanan Rp100.000:</p>
+                  <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1">
+                    <div className="flex justify-between text-gray-600">
+                      <span>Subtotal</span><span>Rp100.000</span>
+                    </div>
+                    {taxConfig.pb1_enabled && !taxConfig.tax_inclusive && (
+                      <div className="flex justify-between text-gray-600">
+                        <span>Pajak ({taxConfig.tax_pct}%)</span>
+                        <span>Rp{(100000 * taxConfig.tax_pct / 100).toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                    {taxConfig.pb1_enabled && taxConfig.tax_inclusive && (
+                      <div className="flex justify-between text-gray-400 italic">
+                        <span>Pajak ({taxConfig.tax_pct}%, termasuk)</span>
+                        <span>Rp{Math.round(100000 - 100000 / (1 + taxConfig.tax_pct / 100)).toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                    {taxConfig.service_charge_enabled && (
+                      <div className="flex justify-between text-gray-600">
+                        <span>Service ({taxConfig.service_charge_pct}%)</span>
+                        <span>Rp{(100000 * taxConfig.service_charge_pct / 100).toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-1">
+                      <span>Total</span>
+                      <span>Rp{(() => {
+                        let total = 100000;
+                        if (taxConfig.service_charge_enabled) total += 100000 * taxConfig.service_charge_pct / 100;
+                        if (taxConfig.pb1_enabled && !taxConfig.tax_inclusive) total += 100000 * taxConfig.tax_pct / 100;
+                        return Math.round(total).toLocaleString('id-ID');
+                      })()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {taxError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {taxError}
+                </p>
+              )}
+              <button
+                onClick={handleTaxSave}
+                disabled={savingTax}
+                className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {savingTax ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {taxSaved ? 'Tersimpan!' : 'Simpan Pengaturan'}
+              </button>
+            </div>
+          </div>
+
+          {/* Billing */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-bold text-gray-900">Langganan & Billing</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                Kelola paket langganan, lihat invoice, dan bayar tagihan.
+              </p>
+              <Link
+                href="/dashboard/settings/billing"
+                className="block w-full text-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors"
+              >
+                Kelola Langganan
+              </Link>
+            </div>
+          </div>
+
         </div>
 
-        {/* Sidebar */}
+        {/* Kolom kanan: tautan toko, WA, stok, pesanan online, dapur, sesi kas, referral */}
         <div className="space-y-6">
           {/* Storefront Link */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -837,219 +1050,6 @@ export default function SettingsPage() {
                 ))}
               </div>
               <p className="text-xs text-gray-400">Apa pun modenya, sesi yang tertinggal tetap ditutup sistem pukul 04.00 dan ditandai belum dihitung.</p>
-            </div>
-          </div>
-
-          {/* Tax & Service Charge */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">Pajak, Struk & Identitas</h2>
-            </div>
-            <div className="p-6 space-y-5">
-              {/* NPWP & Footer Struk */}
-              <div className="pb-4 border-b border-gray-100 space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1">
-                    NPWP (Nomor Pokok Wajib Pajak)
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={30}
-                    value={taxConfig.tax_number}
-                    onChange={e => setTaxConfig(c => ({ ...c, tax_number: e.target.value }))}
-                    placeholder="Contoh: 01.234.567.8-901.000"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Tampil di header struk (kalau diisi). Kosongkan kalau bukan PKP atau belum punya NPWP.
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1">
-                    Pesan Footer Struk
-                  </label>
-                  <textarea
-                    rows={2}
-                    maxLength={200}
-                    value={taxConfig.receipt_footer}
-                    onChange={e => setTaxConfig(c => ({ ...c, receipt_footer: e.target.value }))}
-                    placeholder="Contoh: Ikuti IG @kasiracoffee, promo kopi 10% tiap Jumat!"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Ganti tulisan "Powered by Selaris" di bawah struk dengan pesan Anda sendiri. Maksimal 200 karakter.
-                    {taxConfig.receipt_footer.length > 0 && (
-                      <span className="ml-2 text-gray-400">({taxConfig.receipt_footer.length}/200)</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              {/* PB1 / Pajak Restoran */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Pajak (PB1)</p>
-                    <p className="text-xs text-gray-500">Pajak restoran yang dikenakan ke pelanggan</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setTaxConfig(c => ({ ...c, pb1_enabled: !c.pb1_enabled }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      taxConfig.pb1_enabled ? 'bg-blue-600' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      taxConfig.pb1_enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
-                </div>
-                {taxConfig.pb1_enabled && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.5}
-                      value={taxConfig.tax_pct}
-                      onChange={e => setTaxConfig(c => ({ ...c, tax_pct: parseFloat(e.target.value) || 0 }))}
-                      className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    />
-                    <span className="text-sm text-gray-500">%</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Service Charge */}
-              <div className="border-t border-gray-100 pt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Service Charge</p>
-                    <p className="text-xs text-gray-500">Biaya layanan tambahan</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setTaxConfig(c => ({ ...c, service_charge_enabled: !c.service_charge_enabled }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      taxConfig.service_charge_enabled ? 'bg-blue-600' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      taxConfig.service_charge_enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
-                </div>
-                {taxConfig.service_charge_enabled && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.5}
-                      value={taxConfig.service_charge_pct}
-                      onChange={e => setTaxConfig(c => ({ ...c, service_charge_pct: parseFloat(e.target.value) || 0 }))}
-                      className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    />
-                    <span className="text-sm text-gray-500">%</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Tax Inclusive */}
-              {taxConfig.pb1_enabled && (
-                <div className="border-t border-gray-100 pt-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Harga Termasuk Pajak</p>
-                      <p className="text-xs text-gray-500">Harga menu sudah include pajak</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setTaxConfig(c => ({ ...c, tax_inclusive: !c.tax_inclusive }))}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        taxConfig.tax_inclusive ? 'bg-blue-600' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        taxConfig.tax_inclusive ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Preview */}
-              {(taxConfig.pb1_enabled || taxConfig.service_charge_enabled) && (
-                <div className="border-t border-gray-100 pt-4">
-                  <p className="text-xs text-gray-500 mb-2">Contoh pesanan Rp100.000:</p>
-                  <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1">
-                    <div className="flex justify-between text-gray-600">
-                      <span>Subtotal</span><span>Rp100.000</span>
-                    </div>
-                    {taxConfig.pb1_enabled && !taxConfig.tax_inclusive && (
-                      <div className="flex justify-between text-gray-600">
-                        <span>Pajak ({taxConfig.tax_pct}%)</span>
-                        <span>Rp{(100000 * taxConfig.tax_pct / 100).toLocaleString('id-ID')}</span>
-                      </div>
-                    )}
-                    {taxConfig.pb1_enabled && taxConfig.tax_inclusive && (
-                      <div className="flex justify-between text-gray-400 italic">
-                        <span>Pajak ({taxConfig.tax_pct}%, termasuk)</span>
-                        <span>Rp{Math.round(100000 - 100000 / (1 + taxConfig.tax_pct / 100)).toLocaleString('id-ID')}</span>
-                      </div>
-                    )}
-                    {taxConfig.service_charge_enabled && (
-                      <div className="flex justify-between text-gray-600">
-                        <span>Service ({taxConfig.service_charge_pct}%)</span>
-                        <span>Rp{(100000 * taxConfig.service_charge_pct / 100).toLocaleString('id-ID')}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-1">
-                      <span>Total</span>
-                      <span>Rp{(() => {
-                        let total = 100000;
-                        if (taxConfig.service_charge_enabled) total += 100000 * taxConfig.service_charge_pct / 100;
-                        if (taxConfig.pb1_enabled && !taxConfig.tax_inclusive) total += 100000 * taxConfig.tax_pct / 100;
-                        return Math.round(total).toLocaleString('id-ID');
-                      })()}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {taxError && (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  {taxError}
-                </p>
-              )}
-              <button
-                onClick={handleTaxSave}
-                disabled={savingTax}
-                className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {savingTax ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                {taxSaved ? 'Tersimpan!' : 'Simpan Pengaturan'}
-              </button>
-            </div>
-          </div>
-
-          {/* Billing */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">Langganan & Billing</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-600">
-                Kelola paket langganan, lihat invoice, dan bayar tagihan.
-              </p>
-              <Link
-                href="/dashboard/settings/billing"
-                className="block w-full text-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors"
-              >
-                Kelola Langganan
-              </Link>
             </div>
           </div>
 
