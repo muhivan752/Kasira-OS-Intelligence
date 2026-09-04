@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # (pesanan online, reservasi) ikut dikirim ke sana selain WA.
     SEFREKUENSI_NOTIFY_URL: str = ""
     SEFREKUENSI_NOTIFY_TOKEN: str = ""
+    # OTP lewat Sefrekuensi (jalur tambahan, WA tetap jadi jaring). Kosong =
+    # fitur mati dan semua OTP lewat WA seperti sebelumnya.
+    SEFREKUENSI_API_URL: str = ""
+    SEFREKUENSI_PARTNER_KEY: str = ""
 
     # Xendit Master Keys
     XENDIT_API_KEY: str = ""

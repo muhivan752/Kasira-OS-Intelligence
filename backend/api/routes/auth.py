@@ -21,6 +21,7 @@ from backend.schemas.token import Token
 from backend.schemas.auth import OTPSendRequest, OTPVerifyRequest
 from backend.schemas.response import StandardResponse
 from backend.services.fonnte import send_whatsapp_message
+from backend.services import sefrekuensi as _sefre
 from backend.services.redis import get_redis_client
 from backend.services.audit import log_audit
 
@@ -78,16 +79,27 @@ async def send_otp(
     else:
         await redis.incr(rate_limit_key)
     
-    # Send via Fonnte
-    message = f"Kode OTP {settings.BRAND_NAME} kamu: *{otp}*. Berlaku 5 menit. Jangan bagikan kode ini ke siapa pun."
-    success = await send_whatsapp_message(request.phone, message)
-    
-    if not success:
-        logger.error(f"Failed to send OTP to {request.phone}")
-        if settings.FONNTE_TOKEN and settings.ENVIRONMENT == "production":
-            raise HTTPException(status_code=500, detail="Failed to send OTP via WhatsApp")
-            
-    return StandardResponse(data={"message": "OTP sent successfully"}, message="OTP sent successfully")
+    # Jalur 1: Sefrekuensi (kalau nomornya kedaftar di sana). Gratis, instan,
+    # dan nggak lewat Fonnte. Gagal atau nomor nggak kedaftar = jatuh ke WA.
+    # Ini SENGAJA nggak pakai /cek dulu: /kirim udah balik 404 sendiri kalau
+    # nomornya nggak ada, jadi cukup sekali jalan bolak balik.
+    channel = "whatsapp"
+    if await _sefre.send_otp(request.phone, otp) is not None:
+        channel = "sefrekuensi"
+    else:
+        # Jalur 2 (jaring): WhatsApp lewat Fonnte, persis seperti sebelumnya.
+        message = f"Kode OTP {settings.BRAND_NAME} kamu: *{otp}*. Berlaku 5 menit. Jangan bagikan kode ini ke siapa pun."
+        success = await send_whatsapp_message(request.phone, message)
+
+        if not success:
+            logger.error(f"Failed to send OTP to {request.phone}")
+            if settings.FONNTE_TOKEN and settings.ENVIRONMENT == "production":
+                raise HTTPException(status_code=500, detail="Failed to send OTP via WhatsApp")
+
+    return StandardResponse(
+        data={"message": "OTP sent successfully", "channel": channel},
+        message="OTP sent successfully",
+    )
 
 @router.post("/otp/verify", response_model=StandardResponse[Token])
 async def verify_otp(
