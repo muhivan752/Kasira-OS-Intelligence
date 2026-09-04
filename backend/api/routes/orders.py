@@ -816,6 +816,19 @@ async def update_order_status(
     if not updated_order:
         raise HTTPException(status_code=409, detail="Concurrent update detected.")
 
+    # COD (tunai antar, delivery gelombang 1): uangnya baru masuk waktu kurir
+    # sampai. Pesanan ditandai selesai = pembayaran tunai yang masih pending
+    # ditandai lunas, supaya laporan (yang cuma menghitung order lunas) melihatnya.
+    if is_storefront and status_in.status == OrderStatus.completed:
+        from backend.services.order_lifecycle import latest_payment as _lp, _val as _v
+        pay = await _lp(db, order.id)
+        if pay is not None and _v(pay.payment_method) == "cash" and _v(pay.status) == "pending":
+            _now = datetime.now(timezone.utc)
+            pay.status = "paid"
+            pay.paid_at = _now
+            pay.amount_paid = pay.amount_due
+            pay.row_version = (pay.row_version or 0) + 1
+
     # Efek samping lewat order_lifecycle (satu pintu bersama tolak/janitor pesanan online).
     if status_in.status == OrderStatus.cancelled:
         outlet = await db.get(Outlet, order.outlet_id)
@@ -1003,6 +1016,8 @@ async def get_order_receipt(
         "change_amount": float(payment.change_amount or 0) if payment else 0.0,
         "tax_number": tax_cfg.tax_number if tax_cfg else None,
         "custom_footer": tax_cfg.receipt_footer if tax_cfg else None,
+        # Ongkir (delivery gelombang 1): di luar total, ditagih terpisah.
+        "delivery_fee": float(getattr(order, "delivery_fee", 0) or 0),
         # Link toko di struk cetak (toko bisa ditemukan, 4 Sep 2026). Struk
         # WA udah lama bawa ini; yang kertas belum. Flutter yang nyetak.
         "storefront_url": f"{settings.SITE_URL}/{outlet.slug}" if outlet.slug else None,

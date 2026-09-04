@@ -28,6 +28,8 @@ from backend.services.stock_service import deduct_stock
 from backend.services.ingredient_stock_service import deduct_ingredients_for_product
 from backend.api.routes.products import compute_recipe_stock
 from backend.services.variant_utils import resolve_variant, variant_price
+from backend.services import delivery_service as _delivery
+from backend.services import business_hours as _bh
 from backend.models.event import Event
 import datetime
 
@@ -248,12 +250,29 @@ async def geo_place(slug: str, place_id: Optional[str] = None, lat: Optional[flo
     if point is None:
         raise HTTPException(status_code=404, detail="Alamat tidak ditemukan")
     distance = None
-    within = None
-    radius = float(outlet.delivery_radius_km or 0)
     if outlet.latitude is not None and outlet.longitude is not None:
         distance = round(_geo.haversine_km(outlet.latitude, outlet.longitude, point["lat"], point["lng"]), 2)
-        within = (distance <= radius + 0.3) if radius > 0 else True
-    return StandardResponse(success=True, data={**point, "distance_km": distance, "within_radius": within, "radius_km": radius or None})
+    # Ongkir ikut di sini (delivery gelombang 1): satu jalan bolak balik buat
+    # alamat + jarak + tarif. Angka finalnya tetap dihitung ulang saat order.
+    q = _delivery.quote(outlet, distance)
+    if distance is None:
+        q["within_radius"] = None
+    return StandardResponse(success=True, data={**point, **q})
+
+
+@router.get("/{slug}/delivery-quote", response_model=StandardResponse)
+async def delivery_quote(slug: str, lat: Optional[float] = None, lng: Optional[float] = None, db: AsyncSession = Depends(get_db)):
+    """Tarif antar buat titik ini (atau tarif dasar kalau tanpa titik, misal
+    peta mati dan pelanggan ngetik alamat). Publik, tanpa auth."""
+    outlet = (await db.execute(select(Outlet).where(Outlet.slug == slug, Outlet.deleted_at.is_(None)))).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
+    distance = None
+    if lat is not None and lng is not None and outlet.latitude is not None and outlet.longitude is not None:
+        distance = round(_geo.haversine_km(outlet.latitude, outlet.longitude, lat, lng), 2)
+    q = _delivery.quote(outlet, distance)
+    q["enabled"] = _delivery.enabled(outlet)
+    return StandardResponse(success=True, data=q)
 
 
 @router.get("/{slug}", response_model=StandardResponse)
@@ -348,9 +367,18 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
             # Sengaja TIDAK di-mask: ini nomor yang pemilik publikasikan buat pelanggan.
             "whatsapp": (outlet.whatsapp_number or "").strip() or None,
             "cover_image_url": outlet.cover_image_url,
-            "is_open": outlet.is_open,
+            # Buka EFEKTIF: saklar is_open DAN jadwal (kalau hours_mode=schedule).
+            "is_open": _bh.effective_open(outlet),
+            "is_open_switch": bool(outlet.is_open),
+            "hours_mode": getattr(outlet, "hours_mode", "manual") or "manual",
+            "business_hours": outlet.business_hours if isinstance(outlet.business_hours, dict) else None,
+            "hours_today": _bh.today_label(outlet),
+            "next_open": None if _bh.effective_open(outlet) else _bh.next_open_label(outlet),
             "online_orders_enabled": bool(getattr(outlet, 'online_orders_enabled', True)),
-            "accepting_orders": bool(outlet.is_open and getattr(outlet, 'online_orders_enabled', True)),
+            "accepting_orders": bool(_bh.effective_open(outlet) and getattr(outlet, 'online_orders_enabled', True)),
+            # Tarif antar (services/delivery_service). Keranjang nampilin ini
+            # sebelum alamat dipilih; angka final dari server saat order.
+            **_delivery.public_config(outlet),
             "auto_cancel_minutes": int(getattr(outlet, 'online_auto_cancel_minutes', 10) or 10),
             # Metode bayar yang toko aktifkan + saluran QRIS (xendit | manual).
             # Storefront cuma nawarin yang ada di sini.
@@ -446,8 +474,11 @@ async def create_connect_order(
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
         
-    if not outlet.is_open:
-        raise HTTPException(status_code=400, detail="Toko sedang tutup. Silakan pesan lagi saat toko buka.")
+    if not _bh.effective_open(outlet):
+        nxt = _bh.next_open_label(outlet)
+        raise HTTPException(status_code=400, detail=("Toko sedang tutup. " + (nxt + "." if nxt else "Silakan pesan lagi saat toko buka.")))
+    if input_data.order_type == "delivery" and not _delivery.enabled(outlet):
+        raise HTTPException(status_code=400, detail="Toko sedang tidak melayani antar. Pilih ambil sendiri.")
     if not getattr(outlet, 'online_orders_enabled', True):
         raise HTTPException(status_code=400, detail="Toko sedang tidak menerima pesanan online. Silakan hubungi toko lewat WhatsApp.")
     if delivery_lat is not None and outlet.latitude is not None and outlet.longitude is not None:
@@ -644,6 +675,17 @@ async def create_connect_order(
         if table_obj:
             resolved_table_id = table_obj.id
 
+    # Ongkir (delivery gelombang 1): dihitung SERVER dari jarak, di luar
+    # total_amount. Minimal order dicek di sini, sesudah subtotal ketahuan.
+    delivery_fee = 0
+    if input_data.order_type == "delivery":
+        min_order = _delivery.min_order(outlet)
+        if min_order > 0 and float(subtotal) < min_order:
+            raise HTTPException(status_code=400, detail=(
+                f"Minimal pesanan untuk antar Rp {min_order:,.0f}. Tambah pesanan atau pilih ambil sendiri.".replace(",", ".")))
+        delivery_fee = _delivery.compute_fee(outlet, delivery_distance_km)
+    tagihan = subtotal + delivery_fee
+
     order = Order(
         outlet_id=outlet.id,
         customer_id=customer.id,
@@ -654,6 +696,7 @@ async def create_connect_order(
         table_id=resolved_table_id,
         subtotal=subtotal,
         total_amount=subtotal,
+        delivery_fee=delivery_fee,
         source="storefront",
         delivery_address=input_data.delivery_address if input_data.order_type == "delivery" else None,
         delivery_lat=delivery_lat,
@@ -732,15 +775,20 @@ async def create_connect_order(
         # masuk (order_lifecycle.accept_order). Sampai itu status 'pending'.
         pay_channel = _pm.resolve_channel(outlet, pay_method)
         manual_qris = pay_method == PaymentMethod.qris and pay_channel == _pm.CHANNEL_MANUAL
-        initial_status = PaymentStatus.pending if pay_method == PaymentMethod.qris else PaymentStatus.paid
+        # Tunai antar (COD) = uangnya masih di tangan pelanggan sampai kurir
+        # sampai: pending, ditandai lunas waktu pesanan ditandai selesai
+        # (orders.py PUT status completed). Tunai ambil sendiri tetap seperti
+        # dulu: dicatat lunas, diterima kasir saat serah terima.
+        cod = pay_method == PaymentMethod.cash and db_order_type == "delivery"
+        initial_status = PaymentStatus.pending if (pay_method == PaymentMethod.qris or cod) else PaymentStatus.paid
 
         payment = Payment(
             order_id=order.id,
             outlet_id=outlet.id,
             payment_method=pay_method,
             channel=pay_channel,
-            amount_due=subtotal,
-            amount_paid=subtotal if pay_method == PaymentMethod.cash else 0,
+            amount_due=tagihan,
+            amount_paid=tagihan if (pay_method == PaymentMethod.cash and not cod) else 0,
             change_amount=0,
             status=initial_status,
             idempotency_key=input_data.idempotency_key
@@ -843,8 +891,9 @@ async def create_connect_order(
                 "order_id": str(order.id),
                 "outlet_id": str(outlet.id),
                 "method": input_data.payment_method,
-                "amount_due": float(subtotal),
-                "amount_paid": float(subtotal) if payment.status == "paid" else 0,
+                "amount_due": float(tagihan),
+                "amount_paid": float(tagihan) if payment.status == "paid" else 0,
+                "delivery_fee": float(delivery_fee),
                 "source": "storefront",
             },
             event_metadata={
@@ -864,6 +913,7 @@ async def create_connect_order(
         after_state={
             "display_number": order.display_number,
             "total": float(subtotal),
+            "delivery_fee": float(delivery_fee),
             "payment_method": input_data.payment_method,
             "customer_phone": input_data.customer_phone,
         },
@@ -901,7 +951,7 @@ async def create_connect_order(
         )
         background_tasks.add_task(_oo.publish, outlet.id, "order.created", {
             "order_id": str(order.id), "display_number": order.display_number,
-            "order_type": db_order_type, "total_amount": float(subtotal),
+            "order_type": db_order_type, "total_amount": float(subtotal), "delivery_fee": float(delivery_fee),
             "customer_name": input_data.customer_name, "paid": bool(payment is not None and payment.status == 'paid'),
         })
 
@@ -914,6 +964,9 @@ async def create_connect_order(
             "estimated_minutes": order.eta_minutes or (15 if str(getattr(order.order_type, "value", order.order_type)) == "takeaway" else 30),
             "table_id": str(resolved_table_id) if resolved_table_id else None,
             "tab_number": linked_tab_number,
+            "total_amount": float(subtotal),
+            "delivery_fee": float(delivery_fee),
+            "grand_total": float(tagihan),
             "payment": {
                 "method": payment.payment_method if payment else None,
                 "status": payment.status if payment else "tab",
@@ -1077,7 +1130,7 @@ async def create_booking(
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
 
-    if not outlet.is_open:
+    if not _bh.effective_open(outlet):
         raise HTTPException(status_code=400, detail="Maaf, outlet sedang tutup")
 
     # Parse reservation_time — accept ISO 8601 with/without timezone
@@ -1363,6 +1416,8 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
             "delivery_lat": order.delivery_lat,
             "delivery_lng": order.delivery_lng,
             "delivery_distance_km": float(order.delivery_distance_km) if order.delivery_distance_km is not None else None,
+            "delivery_fee": float(getattr(order, "delivery_fee", 0) or 0),
+            "grand_total": float(_delivery.grand_total(order)),
             "payment_method": payment.payment_method if payment else None,
             "items": items_data,
             "payment": payment_data,

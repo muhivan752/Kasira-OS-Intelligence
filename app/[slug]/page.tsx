@@ -106,7 +106,7 @@ export default function StorefrontPage() {
   };
 
   const closedReason = !outlet.is_open
-    ? 'Toko sedang tutup. Menu tetap bisa dilihat, pemesanan dibuka kembali pada jam operasional.'
+    ? `Toko sedang tutup. Menu tetap bisa dilihat${outlet.next_open ? `. ${outlet.next_open}` : ', pemesanan dibuka kembali pada jam operasional'}.`
     : !accepting
       ? 'Toko sedang tidak menerima pesanan online. Untuk memesan, hubungi toko lewat WhatsApp.'
       : null;
@@ -148,7 +148,7 @@ export default function StorefrontPage() {
                 <h1 className="font-display font-extrabold text-2xl sm:text-4xl tracking-tight leading-none truncate">{outlet.name}</h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs sm:text-sm text-white/85">
                   {outlet.address && <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{outlet.address}</span>}
-                  {outlet.opening_hours && <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{outlet.opening_hours}</span>}
+                  {(outlet.hours_today || outlet.opening_hours) && <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{outlet.hours_today || outlet.opening_hours}</span>}
                 </div>
               </div>
             </div>

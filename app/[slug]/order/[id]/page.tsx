@@ -126,7 +126,7 @@ export default function OrderStatusPage() {
 
   const manualQrisUnpaid = order.payment?.method === 'qris' && order.payment?.channel === 'manual' && order.payment?.status !== 'paid';
   const proofSent = !!order.payment?.proof_image_url;
-  const proofText = `Halo ${outlet.name || 'Kak'}, saya sudah membayar pesanan #${order.display_number} sebesar ${rp(order.total_amount)} lewat QRIS. Berikut bukti bayarnya.`;
+  const proofText = `Halo ${outlet.name || 'Kak'}, saya sudah membayar pesanan #${order.display_number} sebesar ${rp(order.grand_total ?? order.total_amount)} lewat QRIS. Berikut bukti bayarnya.`;
 
   const hero: Record<Phase, { title: string; body: string; tone: string; icon: any }> = {
     awaiting_payment: {
@@ -229,7 +229,7 @@ export default function OrderStatusPage() {
             ) : (
               <p className="text-sm text-[var(--text-muted)] py-4">Kode QRIS tersedia di kasir. Tunjukkan nomor pesanan #{order.display_number}.</p>
             )}
-            <p className="mt-4 text-2xl font-extrabold text-[var(--text-strong)]">{rp(order.total_amount)}</p>
+            <p className="mt-4 text-2xl font-extrabold text-[var(--text-strong)]">{rp(order.grand_total ?? order.total_amount)}</p>
             <p className="mt-1 text-sm text-[var(--text-muted)]">Bayar sesuai nominal, lalu unggah tangkapan layar buktinya.</p>
             <div className="mt-4 space-y-3">
               {proofSent && (
@@ -270,7 +270,7 @@ export default function OrderStatusPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(order.payment.qris_url)}&size=240x240&margin=6`}
                   alt="Kode QRIS" className="w-56 h-56 mx-auto rounded-2xl border border-[var(--border-subtle)]" />
-                <p className="mt-4 text-2xl font-extrabold text-[var(--text-strong)]">{rp(order.total_amount)}</p>
+                <p className="mt-4 text-2xl font-extrabold text-[var(--text-strong)]">{rp(order.grand_total ?? order.total_amount)}</p>
                 {qrisLeft > 0
                   ? <p className="mt-1 text-sm text-[var(--text-muted)]">Berlaku <b className={qrisLeft < 60 ? 'text-[var(--danger)]' : 'text-[var(--text-strong)]'}>{mmss(qrisLeft)}</b></p>
                   : <button onClick={() => window.location.reload()} className="mt-2 text-sm font-semibold text-[var(--text-strong)] inline-flex items-center gap-1"><RefreshCw className="w-4 h-4" /> Kode kedaluwarsa, muat ulang</button>}
@@ -362,9 +362,15 @@ export default function OrderStatusPage() {
               <p className="text-[var(--text-body)]">Meja {order.table_name}</p>
             </div>
           )}
+          {order.delivery_fee > 0 && (
+            <div className="pt-3 border-t border-[var(--border-subtle)] space-y-1 text-sm">
+              <div className="flex justify-between"><span className="text-[var(--text-muted)]">Pesanan</span><span className="text-[var(--text-strong)]">{rp(order.total_amount)}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--text-muted)]">Ongkir{order.delivery_distance_km != null ? ` (${order.delivery_distance_km} km)` : ''}</span><span className="text-[var(--text-strong)]">{rp(order.delivery_fee)}</span></div>
+            </div>
+          )}
           <div className="pt-3 border-t border-[var(--border-subtle)] flex justify-between items-center">
             <span className="font-bold text-[var(--text-strong)]">Total</span>
-            <span className="text-xl font-extrabold text-[var(--text-strong)]">{rp(order.total_amount)}</span>
+            <span className="text-xl font-extrabold text-[var(--text-strong)]">{rp(order.grand_total ?? order.total_amount)}</span>
           </div>
         </Card>
 

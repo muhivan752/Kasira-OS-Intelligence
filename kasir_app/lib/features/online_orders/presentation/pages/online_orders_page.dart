@@ -491,10 +491,25 @@ class _OrderCard extends StatelessWidget {
           Text('Alasan: ${order.cancelReason}', style: KasiraDS.sans(size: 12.5, color: KasiraDS.danger)),
         ],
         const SizedBox(height: 10),
+        if (order.deliveryFee > 0) ...[
+          Row(children: [
+            Text('Pesanan', style: KasiraDS.sans(size: 12.5, color: KasiraDS.textMuted)),
+            const Spacer(),
+            Text(_rp.format(order.totalAmount), style: KasiraDS.sans(size: 12.5, color: KasiraDS.textBody)),
+          ]),
+          Row(children: [
+            Text('Ongkir${order.deliveryDistanceKm != null ? ' (${order.deliveryDistanceKm!.toStringAsFixed(1)} km)' : ''}',
+                style: KasiraDS.sans(size: 12.5, color: KasiraDS.textMuted)),
+            const Spacer(),
+            Text(_rp.format(order.deliveryFee), style: KasiraDS.sans(size: 12.5, color: KasiraDS.textBody)),
+          ]),
+          const SizedBox(height: 4),
+        ],
         Row(children: [
-          Text('Total', style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
+          Text(order.deliveryFee > 0 && order.paymentMethod == 'cash' ? 'Tagih ke pelanggan' : 'Total',
+              style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
           const Spacer(),
-          Text(_rp.format(order.totalAmount), style: KasiraDS.display(size: 18)),
+          Text(_rp.format(order.grandTotal), style: KasiraDS.display(size: 18)),
         ]),
         ..._actions(),
       ]),

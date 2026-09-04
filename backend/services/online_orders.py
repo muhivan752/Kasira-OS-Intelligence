@@ -62,6 +62,17 @@ def order_type_label(order_type) -> str:
     return ORDER_TYPE_LABEL.get(key, key)
 
 
+def _tagihan(order):
+    """Yang dibayar pelanggan = total + ongkir (delivery gelombang 1)."""
+    from backend.services.delivery_service import grand_total
+    return grand_total(order)
+
+
+def _ongkir_line(order) -> str:
+    fee = float(getattr(order, "delivery_fee", 0) or 0)
+    return f"\nOngkir: {_rp(fee)}" if fee > 0 else ""
+
+
 def _rp(amount) -> str:
     try:
         return "Rp " + f"{int(round(float(amount))):,}".replace(",", ".")
@@ -146,7 +157,7 @@ def msg_received(order, outlet, *, awaiting_payment: bool, auto_cancel_minutes: 
     head = f"Pesanan #{order.display_number} di {outlet.name} sudah kami terima."
     if manual_qris:
         body = (
-            f"Bayar {_rp(order.total_amount)} ke QRIS toko yang tampil di halaman pesanan, "
+            f"Bayar {_rp(_tagihan(order))} ke QRIS toko yang tampil di halaman pesanan, "
             "lalu balas pesan ini dengan bukti bayarnya. "
             f"Toko akan mengonfirmasi dalam {auto_cancel_minutes} menit setelah bukti diterima."
         )
@@ -160,12 +171,12 @@ def msg_received(order, outlet, *, awaiting_payment: bool, auto_cancel_minutes: 
             f"Toko akan mengonfirmasi dalam {auto_cancel_minutes} menit. "
             "Kalau tidak dikonfirmasi, pesanan dibatalkan otomatis dan pembayaran dikembalikan."
         )
-    return f"{head}\n{body}\n\nLacak pesanan: {track_url(outlet.slug, order.id)}"
+    return f"{head}{_ongkir_line(order)}\n{body}\n\nLacak pesanan: {track_url(outlet.slug, order.id)}"
 
 
 def msg_paid(order, outlet, *, auto_cancel_minutes: int) -> str:
     return (
-        f"Pembayaran {_rp(order.total_amount)} untuk pesanan #{order.display_number} di {outlet.name} sudah kami terima.\n"
+        f"Pembayaran {_rp(_tagihan(order))} untuk pesanan #{order.display_number} di {outlet.name} sudah kami terima.\n"
         f"Toko akan mengonfirmasi dalam {auto_cancel_minutes} menit. Kalau tidak dikonfirmasi, "
         "pesanan dibatalkan otomatis dan pembayaran dikembalikan.\n\n"
         f"Lacak pesanan: {track_url(outlet.slug, order.id)}"
@@ -234,7 +245,7 @@ def msg_owner_new_order(order, outlet, customer_name: Optional[str], items: Iter
         f"{order_type_label(order.order_type)} · {pay}\n"
         f"Pemesan: {customer_name or '-'}\n"
         f"{lines}\n"
-        f"Total {_rp(order.total_amount)}{extra}\n\n"
+        f"Total {_rp(_tagihan(order))}{_ongkir_line(order)}{extra}\n\n"
         f"Buka aplikasi kasir untuk mengonfirmasi. Batas {outlet.online_auto_cancel_minutes} menit."
     )
 

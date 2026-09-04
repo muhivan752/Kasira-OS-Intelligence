@@ -40,6 +40,14 @@ class Order(BaseModel):
     delivery_lat = Column(Float, nullable=True)
     delivery_lng = Column(Float, nullable=True)
     delivery_distance_km = Column(Numeric(6, 2), nullable=True)
+    # Ongkir (mig 106), SENGAJA di luar total_amount: total_amount = penjualan,
+    # yang ditagih ke pelanggan = total_amount + delivery_fee (grand_total).
+    delivery_fee = Column(Numeric(12, 2), server_default='0', nullable=False)
+
+    @property
+    def grand_total(self):
+        from decimal import Decimal
+        return Decimal(str(self.total_amount or 0)) + Decimal(str(self.delivery_fee or 0))
     # Layar dapur (mig 102): NULL belum disentuh dapur | preparing | ready | done.
     kitchen_status = Column(String(12), nullable=True)
     discount_approved_by = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)

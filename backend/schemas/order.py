@@ -87,6 +87,7 @@ class OrderResponse(OrderBase):
     delivery_lat: Optional[float] = None
     delivery_lng: Optional[float] = None
     delivery_distance_km: Optional[Decimal] = None
+    delivery_fee: Optional[Decimal] = None
     # Pesanan online (mig 101)
     source: str = 'pos'
     accepted_at: Optional[datetime] = None

@@ -56,6 +56,9 @@ class OnlineOrder {
   final String status; // pending | preparing | ready | served | completed | cancelled
   final String orderType; // takeaway | delivery | dine_in
   final double totalAmount;
+  // Ongkir (delivery gelombang 1), di luar totalAmount. Tagihan = total + ongkir.
+  final double deliveryFee;
+  double get grandTotal => totalAmount + deliveryFee;
   final String? customerName;
   final String? customerPhone;
   final String? notes;
@@ -85,6 +88,7 @@ class OnlineOrder {
     required this.status,
     required this.orderType,
     required this.totalAmount,
+    this.deliveryFee = 0,
     this.customerName,
     this.customerPhone,
     this.notes,
@@ -113,6 +117,7 @@ class OnlineOrder {
         status: j['status'] as String? ?? 'pending',
         orderType: j['order_type'] as String? ?? 'takeaway',
         totalAmount: _toDouble(j['total_amount']),
+        deliveryFee: j['delivery_fee'] == null ? 0 : _toDouble(j['delivery_fee']),
         customerName: j['customer_name'] as String?,
         customerPhone: j['customer_phone'] as String?,
         notes: (j['notes'] as String?)?.trim().isEmpty ?? true ? null : (j['notes'] as String).trim(),

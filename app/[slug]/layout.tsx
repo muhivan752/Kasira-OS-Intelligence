@@ -35,6 +35,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
  * nampilin kartu toko + tombol "Pesan" kalau ada data terstruktur; tanpa ini
  * halaman toko cuma teks biasa buat mesin pencari. Jenis dari brands.type.
  */
+const DAY_SCHEMA: Record<string, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
+function hoursSpec(h: Record<string, [string, string][]>) {
+  const out: any[] = [];
+  for (const d of Object.keys(DAY_SCHEMA)) for (const [opens, closes] of (h[d] || [])) out.push({ '@type': 'OpeningHoursSpecification', dayOfWeek: DAY_SCHEMA[d], opens, closes });
+  return out;
+}
+
 function businessJsonLd(slug: string, o: any) {
   const typeMap: Record<string, string> = { cafe: 'CafeOrCoffeeShop', resto: 'Restaurant', warung: 'Restaurant', other: 'Store' };
   const url = `${SITE_URL}/${slug}`;
@@ -57,7 +64,9 @@ function businessJsonLd(slug: string, o: any) {
       },
     } : {}),
     ...(o?.latitude && o?.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: o.latitude, longitude: o.longitude } } : {}),
-    ...(o?.opening_hours ? { openingHours: o.opening_hours } : {}),
+    ...(o?.business_hours && o?.hours_mode === 'schedule'
+      ? { openingHoursSpecification: hoursSpec(o.business_hours) }
+      : o?.opening_hours ? { openingHours: o.opening_hours } : {}),
     hasMenu: url,
     acceptsReservations: o?.reservation_enabled ? 'True' : 'False',
     potentialAction: {

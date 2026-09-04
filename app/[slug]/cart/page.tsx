@@ -106,6 +106,16 @@ export default function CheckoutPage() {
   const clearGeo = () => { setGeoPoint(null); setAddrQuery(''); setDeliveryAddress(''); setGeoErr(null); };
   const confirmMinutes: number = storeData?.outlet?.auto_cancel_minutes ?? 10;
   const accepting: boolean = storeData?.outlet?.accepting_orders ?? true;
+  // Ongkir (delivery gelombang 1). Tarif dari payload toko; kalau titik alamat
+  // sudah dipilih, angka dari server (geo/place) yang dipakai. Server tetap
+  // menghitung ulang saat order, ini cuma buat pelanggan lihat sebelum kirim.
+  const deliveryCfg = storeData?.outlet?.delivery ?? { enabled: true, fee_base: 0, fee_per_km: 0, free_km: 0, min_order: 0, radius_km: null };
+  const deliveryFee: number = orderType === 'delivery'
+    ? (geoPoint && typeof (geoPoint as any).delivery_fee === 'number' ? (geoPoint as any).delivery_fee : (deliveryCfg.fee_base || 0))
+    : 0;
+  const minOrderShort: number = orderType === 'delivery' && deliveryCfg.min_order > 0 && totalPrice < deliveryCfg.min_order
+    ? deliveryCfg.min_order - totalPrice : 0;
+  const grandTotal = totalPrice + deliveryFee;
   // Metode yang toko aktifkan (mig 103). Storefront cuma nawarin QRIS dan
   // bayar di kasir; transfer dan kartu urusan kasir. QRIS 'manual' = toko
   // pakai QRIS statis miliknya, pelanggan kirim bukti lewat WhatsApp.
@@ -120,9 +130,11 @@ export default function CheckoutPage() {
     if (!phoneOk) return 'Isi nomor WhatsApp yang aktif, contoh 0812xxxxxxx.';
     if (orderType === 'delivery' && deliveryAddress.trim().length < 8) return 'Isi alamat pengantaran beserta patokan.';
     if (orderType === 'delivery' && geoPoint && geoPoint.within_radius === false) return `Alamat ${geoPoint.distance_km} km dari toko, di luar jangkauan antar (${geoPoint.radius_km} km).`;
+    if (orderType === 'delivery' && deliveryCfg.enabled === false) return 'Toko sedang tidak melayani antar. Pilih ambil sendiri.';
+    if (minOrderShort > 0) return `Minimal pesanan untuk antar ${rp(deliveryCfg.min_order)}. Kurang ${rp(minOrderShort)}.`;
     if (orderType === 'dine_in' && !tableId) return 'Pilih meja Anda.';
     return null;
-  }, [customerName, phoneOk, orderType, deliveryAddress, tableId]);
+  }, [customerName, phoneOk, orderType, deliveryAddress, tableId, minOrderShort, deliveryCfg.enabled]);
 
   if (loading) return <Spinner label="Menyiapkan pemesanan" />;
 
@@ -193,7 +205,7 @@ export default function CheckoutPage() {
   const typeOptions: { id: OrderType; label: string; hint: string; icon: any; show: boolean }[] = [
     { id: 'dine_in', label: 'Makan di tempat', hint: tableName || 'Pilih meja', icon: Utensils, show: isPro && tables.length > 0 },
     { id: 'pickup', label: 'Ambil sendiri', hint: 'Ambil di toko', icon: Store, show: true },
-    { id: 'delivery', label: 'Antar', hint: 'Ke alamat Anda', icon: Bike, show: true },
+    { id: 'delivery', label: 'Antar', hint: deliveryCfg.fee_base > 0 ? `Ongkir mulai ${rp(deliveryCfg.fee_base)}` : 'Ke alamat Anda', icon: Bike, show: deliveryCfg.enabled !== false },
   ];
   const cashLabel = orderType === 'delivery' ? 'Bayar saat pesanan diterima' : 'Bayar di kasir';
   const submitLabel = dineInTab ? 'Kirim pesanan ke meja' : payMethod === 'qris' && !qrisManual ? 'Lanjut bayar QRIS' : 'Kirim pesanan';
@@ -403,8 +415,8 @@ export default function CheckoutPage() {
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface-card)] border-t border-[var(--border-subtle)] px-4 pt-3 pb-5 shadow-[var(--shadow-lg)]">
         {error && <p className="text-sm text-[var(--danger)] mb-2">{error}</p>}
         <div className="flex items-center justify-between mb-3">
-          <span className="text-sm text-[var(--text-muted)]">Total</span>
-          <span className="text-xl font-extrabold text-[var(--text-strong)]">{rp(totalPrice)}</span>
+          <span className="text-sm text-[var(--text-muted)]">Total{deliveryFee > 0 ? ` termasuk ongkir ${rp(deliveryFee)}` : ''}</span>
+          <span className="text-xl font-extrabold text-[var(--text-strong)]">{rp(grandTotal)}</span>
         </div>
         <button onClick={submit} disabled={submitting || !accepting} className={`${btnPrimary} w-full`}>
           {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : submitLabel}
@@ -428,9 +440,19 @@ export default function CheckoutPage() {
             </li>
           ))}
         </ul>
+        {orderType === 'delivery' && (
+          <div className="pt-3 border-t border-[var(--border-subtle)] space-y-1 text-sm">
+            <div className="flex justify-between"><span className="text-[var(--text-muted)]">Pesanan</span><span className="text-[var(--text-strong)] font-semibold">{rp(totalPrice)}</span></div>
+            <div className="flex justify-between">
+              <span className="text-[var(--text-muted)]">Ongkir{geoPoint?.distance_km != null ? ` (${geoPoint.distance_km} km)` : ''}</span>
+              <span className="text-[var(--text-strong)] font-semibold">{deliveryFee > 0 ? rp(deliveryFee) : 'Gratis'}</span>
+            </div>
+            {!geoPoint && deliveryCfg.fee_per_km > 0 && <p className="text-[11px] text-[var(--text-muted)]">Ongkir pasti dihitung setelah alamat dipilih.</p>}
+          </div>
+        )}
         <div className="pt-3 border-t border-[var(--border-subtle)] flex justify-between items-center">
           <span className="text-sm text-[var(--text-muted)]">Total</span>
-          <span className="text-xl font-extrabold text-[var(--text-strong)]">{rp(totalPrice)}</span>
+          <span className="text-xl font-extrabold text-[var(--text-strong)]">{rp(grandTotal)}</span>
         </div>
         {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
         <button onClick={submit} disabled={submitting || !accepting} className={`${btnPrimary} w-full`}>

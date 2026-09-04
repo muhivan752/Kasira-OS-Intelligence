@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, ForeignKey, Integer, DateTime, Float
+from sqlalchemy import Column, String, Boolean, ForeignKey, Integer, DateTime, Float, Numeric
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM
 from sqlalchemy.orm import relationship
 from backend.models.base import BaseModel
@@ -40,6 +40,16 @@ class Outlet(BaseModel):
     # Izin tampil di direktori publik /jelajah + sitemap (mig 105). Keputusan
     # pemilik; akun uji dimatikan. Baca lewat GET /outlets/public/list.
     directory_listed = Column(Boolean, server_default='true', nullable=False)
+    # Delivery gelombang 1 (mig 106). Rumus ongkir di services/delivery_service,
+    # jadwal buka di services/business_hours. Jangan baca is_open langsung buat
+    # "toko lagi buka?", pakai business_hours.effective_open(outlet).
+    delivery_enabled = Column(Boolean, server_default='true', nullable=False)
+    delivery_fee_base = Column(Numeric(12, 2), server_default='0', nullable=False)
+    delivery_fee_per_km = Column(Numeric(12, 2), server_default='0', nullable=False)
+    delivery_free_km = Column(Numeric(5, 1), server_default='0', nullable=False)
+    delivery_min_order = Column(Numeric(12, 2), server_default='0', nullable=False)
+    business_hours = Column(JSONB, nullable=True)
+    hours_mode = Column(String(10), server_default='manual', nullable=False)
 
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id"), nullable=True, index=True)

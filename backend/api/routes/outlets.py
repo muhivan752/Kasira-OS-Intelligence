@@ -133,6 +133,7 @@ async def public_outlet_list(
     from backend.models.tenant import Tenant
     from backend.models.brand import Brand
     from backend.models.product import Product
+    from backend.services import business_hours as _bh
 
     cache_key = "outlets:public:list"
     redis = None
@@ -177,8 +178,9 @@ async def public_outlet_list(
             "address": outlet.address,
             "cover_image_url": outlet.cover_image_url,
             "business_type": bt,
-            "is_open": bool(outlet.is_open),
-            "accepting_orders": bool(outlet.is_open and getattr(outlet, "online_orders_enabled", True)),
+            "is_open": _bh.effective_open(outlet),
+            "accepting_orders": bool(_bh.effective_open(outlet) and getattr(outlet, "online_orders_enabled", True)),
+            "hours_today": _bh.today_label(outlet),
             "product_count": int(n_products),
             "updated_at": outlet.updated_at.isoformat() if outlet.updated_at else None,
         })
@@ -265,6 +267,12 @@ async def update_outlet(
     }
 
     update_data = outlet_in.model_dump(exclude_unset=True)
+    if "business_hours" in update_data:
+        from backend.services import business_hours as _bh
+        try:
+            update_data["business_hours"] = _bh.validate(update_data["business_hours"]) if update_data["business_hours"] is not None else None
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     if "payment_methods" in update_data:
         from backend.services.payment_methods import normalize_methods
         update_data["payment_methods"] = normalize_methods(update_data["payment_methods"])

@@ -5,6 +5,7 @@ import { getOutlets, updateOutlet, updateStockMode, getCurrentUser, getTaxConfig
 } from '@/app/actions/api';
 import { Loader2, Store, Clock, Link as LinkIcon, CreditCard, Upload, ImageOff, Image, Package, Receipt, Gift, Copy, Share2, Check, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
+import { DeliveryHoursSettings } from '@/components/dashboard/delivery-hours-settings';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -854,6 +855,9 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
+
+          {/* Antar + ongkir + jam buka (delivery gelombang 1) */}
+          <DeliveryHoursSettings outlet={outlet} onSaved={(patch) => setOutlet((o: any) => ({ ...o, ...patch }))} />
 
           {/* WhatsApp toko — token Fonnte buat promo dari nomor sendiri */}
           <WhatsAppTokenCard outletId={outlet?.id} connected={!!outlet?.wa_connected} onChanged={(v) => setOutlet((o: any) => ({ ...o, wa_connected: v }))} />

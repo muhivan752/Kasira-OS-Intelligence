@@ -39,6 +39,15 @@ class OutletUpdate(BaseModel):
     bank_account_number: Optional[str] = Field(default=None, max_length=40)
     bank_account_name: Optional[str] = Field(default=None, max_length=80)
     directory_listed: Optional[bool] = None
+    # Delivery gelombang 1 (mig 106)
+    delivery_enabled: Optional[bool] = None
+    delivery_fee_base: Optional[float] = Field(default=None, ge=0, le=1_000_000)
+    delivery_fee_per_km: Optional[float] = Field(default=None, ge=0, le=100_000)
+    delivery_free_km: Optional[float] = Field(default=None, ge=0, le=100)
+    delivery_min_order: Optional[float] = Field(default=None, ge=0, le=100_000_000)
+    delivery_radius_km: Optional[float] = Field(default=None, ge=0, le=200)
+    business_hours: Optional[Any] = None
+    hours_mode: Optional[Literal['manual', 'schedule']] = None
 
 class OutletPaymentSetup(BaseModel):
     xendit_business_id: str
@@ -80,6 +89,14 @@ class OutletInDBBase(OutletBase):
     # konfirmasi sendiri). Dihitung dari model, bukan disimpan.
     qris_channel: str = "manual"
     directory_listed: bool = True
+    delivery_enabled: bool = True
+    delivery_fee_base: float = 0
+    delivery_fee_per_km: float = 0
+    delivery_free_km: float = 0
+    delivery_min_order: float = 0
+    delivery_radius_km: Optional[float] = None
+    business_hours: Optional[Any] = None
+    hours_mode: str = "manual"
     qris_static_image_url: Optional[str] = None
     bank_name: Optional[str] = None
     bank_account_number: Optional[str] = None

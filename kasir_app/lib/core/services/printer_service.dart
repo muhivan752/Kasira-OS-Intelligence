@@ -327,6 +327,8 @@ class ReceiptData {
   // Link toko buat baris "Pesan online" di kaki struk (dari GET /orders/{id}/receipt
   // atau dibangun lokal dari slug outlet).
   final String? storefrontUrl;
+  // Ongkir pesanan antar (delivery gelombang 1), di luar total.
+  final double deliveryFee;
 
   const ReceiptData({
     required this.outletName,
@@ -344,6 +346,7 @@ class ReceiptData {
     this.taxNumber,
     this.customFooter,
     this.storefrontUrl,
+    this.deliveryFee = 0,
   });
 
   static ReceiptData fromJson(Map<String, dynamic> j) {
@@ -373,6 +376,7 @@ class ReceiptData {
       taxNumber: j['tax_number']?.toString(),
       customFooter: j['custom_footer']?.toString(),
       storefrontUrl: j['storefront_url']?.toString(),
+      deliveryFee: (j['delivery_fee'] is num) ? (j['delivery_fee'] as num).toDouble() : (double.tryParse('${j['delivery_fee'] ?? ''}') ?? 0),
     );
   }
 }
@@ -614,10 +618,13 @@ Uint8List buildReceipt(ReceiptData d) {
   if (d.tax != null && d.tax! > 0) {
     bytes.addAll(EscPos.rowLR('Pajak', _rp(d.tax!), width: w));
   }
+  if (d.deliveryFee > 0) {
+    bytes.addAll(EscPos.rowLR('Ongkir', _rp(d.deliveryFee), width: w));
+  }
   bytes.addAll(EscPos.divider(width: w));
 
   bytes.addAll(EscPos.boldOn);
-  bytes.addAll(EscPos.rowLR('TOTAL', _rp(d.total), width: w));
+  bytes.addAll(EscPos.rowLR('TOTAL', _rp(d.total + d.deliveryFee), width: w));
   bytes.addAll(EscPos.boldOff);
   bytes.addAll(EscPos.rowLR('Bayar (${d.paymentMethod})', _rp(d.amountPaid), width: w));
   bytes.addAll(EscPos.rowLR('Kembali', _rp(d.changeAmount > 0 ? d.changeAmount : 0), width: w));
