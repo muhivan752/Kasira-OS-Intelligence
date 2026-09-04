@@ -113,25 +113,19 @@ async def wa_owner(outlet, message: str) -> bool:
 
 
 async def push_sefrekuensi(outlet, message: str) -> bool:
-    """Notifikasi merchant ke Sefrekuensi (strategi akuisisi user, keputusan
-    Ivan 4 Sep 2026). Nggak aktif sampai SEFREKUENSI_NOTIFY_URL diisi.
-    Kontrak: POST JSON {phone, outlet_id, outlet_name, message, source}
-    dengan header Authorization Bearer. Gagal = catat log, jangan ganggu WA."""
-    url = (settings.SEFREKUENSI_NOTIFY_URL or "").strip()
-    if not url:
+    """Notifikasi merchant ke Sefrekuensi (langkah 2 jembatan, 4 Sep 2026):
+    DM Yasmin + push, walau app kasir ditutup. Lewat kurir yang sama dengan
+    OTP (`services/sefrekuensi.py`, kunci partner yang sama), nggak butuh env
+    tambahan. Nomor yang belum punya Sefrekuensi = 404, wajar, WA tetap jalan.
+    Balik True hanya kalau beneran sampai."""
+    from backend.services import sefrekuensi as _sefre
+    if not _sefre.enabled():
         return False
     target = (getattr(outlet, "whatsapp_number", None) or getattr(outlet, "phone", None) or "").strip()
-    try:
-        import httpx
-        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=3.0)) as client:
-            r = await client.post(url, json={
-                "phone": target, "outlet_id": str(outlet.id), "outlet_name": outlet.name,
-                "message": message, "source": "selaris",
-            }, headers={"Authorization": f"Bearer {settings.SEFREKUENSI_NOTIFY_TOKEN}"} if settings.SEFREKUENSI_NOTIFY_TOKEN else {})
-        return r.status_code < 300
-    except Exception:  # noqa: BLE001
-        logger.warning("push_sefrekuensi gagal outlet=%s", getattr(outlet, "id", None), exc_info=True)
+    if not target:
         return False
+    hasil = await _sefre.send_notify(target, message, outlet_name=getattr(outlet, "name", "") or "")
+    return hasil.sampai
 
 
 # ── Teks pesan ────────────────────────────────────────────────────────────

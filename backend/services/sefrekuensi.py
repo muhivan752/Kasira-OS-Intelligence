@@ -22,11 +22,16 @@ di sana, jawabannya "belum terdaftar" + ajakan pasang, BUKAN diam diam
 jatuh ke WA. WA tetap tombol utama supaya orang baru nggak kepaksa pasang
 app kedua di tengah daftar.
 
-Kontrak di sisi Sefrekuensi (`backend/handlers/partner_otp.go`):
+Kontrak di sisi Sefrekuensi (`backend/handlers/partner_otp.go`, `partner_notify.go`):
   POST {API}/partner/otp/cek    {phone}                        -> {tersedia, push}
   POST {API}/partner/otp/kirim  {phone, kode, aplikasi, keterangan}
                                 -> 200 {terkirim, via: app|push}
                                 -> 404 nomor gak kedaftar (sinyal buat jatuh ke WA)
+  POST {API}/partner/notify     {phone, message, aplikasi, outlet_name, source}
+                                -> 200 {terkirim, via} | 404 sama seperti di atas
+Langkah 2 (notifikasi merchant, 4 Sep sore): kabar pesanan online, reservasi,
+bukti bayar mendarat di DM Yasmin + push walau app kasir ditutup. Ini titik
+akuisisi yang beneran kuat; OTP cuma pintu branding.
 Header wajib `X-Partner-Key`. Sefrekuensi cuma KURIR: kode dibikin dan
 diverifikasi di sini, dia nggak nyimpen apa pun soal keabsahan kode.
 
@@ -126,4 +131,39 @@ async def send_otp(phone: str, code: str, *, note: str = "") -> HasilKirim:
         return HasilKirim(None, "gangguan")
     except Exception:  # noqa: BLE001
         logger.warning("sefrekuensi kirim gagal", exc_info=True)
+        return HasilKirim(None, "gangguan")
+
+
+async def send_notify(phone: str, message: str, *, outlet_name: str = "", source: str = "selaris") -> HasilKirim:
+    """Kabar ke merchant lewat Sefrekuensi (DM Yasmin + push). Nggak pernah
+    melempar. `tidak_terdaftar` = merchant belum punya Sefrekuensi, wajar.
+    Isi pesan nggak di-log: ada nama + nomor pelanggan di dalamnya."""
+    if not enabled():
+        return HasilKirim(None, "mati")
+    phone = (phone or "").strip()
+    if not phone or not (message or "").strip():
+        return HasilKirim(None, "gangguan")
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            r = await client.post(
+                _url("partner/notify"),
+                json={
+                    "phone": phone,
+                    "message": message,
+                    "aplikasi": settings.BRAND_NAME,
+                    "outlet_name": outlet_name or "",
+                    "source": source,
+                },
+                headers=_headers(),
+            )
+        if r.status_code == 200:
+            via = str((r.json() or {}).get("via") or "app")
+            logger.info("Notif merchant lewat Sefrekuensi via=%s", via)
+            return HasilKirim(via, "sampai")
+        if r.status_code == 404:
+            return HasilKirim(None, "tidak_terdaftar")
+        logger.warning("sefrekuensi notify http %s", r.status_code)
+        return HasilKirim(None, "gangguan")
+    except Exception:  # noqa: BLE001
+        logger.warning("sefrekuensi notify gagal", exc_info=True)
         return HasilKirim(None, "gangguan")

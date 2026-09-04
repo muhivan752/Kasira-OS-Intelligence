@@ -282,6 +282,31 @@ class EscPos {
         : '$label $value';
     return line(row);
   }
+
+  /// QR code lewat perintah ESC/POS bawaan printer (GS ( k, model 2).
+  /// Dipakai buat link toko di kaki struk (toko bisa ditemukan, 4 Sep 2026):
+  /// pelanggan scan, langsung mendarat di halaman pesan online.
+  ///
+  /// [size] = lebar modul dalam dot (3 sampai 8). 5 = sekitar 2,5 cm di 58 mm,
+  /// masih kebaca kamera HP dari jarak baca struk. Printer yang nggak punya
+  /// perintah QR (jarang, biasanya yang sangat murah) bakal ngelewatin
+  /// perintahnya; baris teks URL di atasnya tetap ada sebagai cadangan.
+  static List<int> qr(String data, {int size = 5}) {
+    final bytes = data.codeUnits;
+    final storeLen = bytes.length + 3;
+    return [
+      // Model 2
+      0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00,
+      // Ukuran modul
+      0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, size.clamp(3, 8),
+      // Koreksi error M (15%): cukup buat kertas thermal yang agak pudar
+      0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31,
+      // Simpan data
+      0x1D, 0x28, 0x6B, storeLen & 0xFF, (storeLen >> 8) & 0xFF, 0x31, 0x50, 0x30, ...bytes,
+      // Cetak
+      0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30,
+    ];
+  }
 }
 
 class ReceiptData {
@@ -609,8 +634,10 @@ Uint8List buildReceipt(ReceiptData d) {
   }
   if (d.storefrontUrl != null && d.storefrontUrl!.trim().isNotEmpty) {
     // Toko bisa ditemukan: pelanggan pesan lagi dari HP tanpa antre.
-    bytes.addAll(EscPos.line('Pesan online:'));
+    // Teks dulu (cadangan buat printer tanpa QR), lalu QR-nya.
+    bytes.addAll(EscPos.line('Scan untuk pesan online:'));
     bytes.addAll(EscPos.line(d.storefrontUrl!.replaceFirst(RegExp(r'^https?://'), '')));
+    bytes.addAll(EscPos.qr(d.storefrontUrl!.trim()));
   }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);
@@ -699,8 +726,10 @@ Uint8List buildRefundReceipt(RefundReceiptData d) {
   }
   if (d.storefrontUrl != null && d.storefrontUrl!.trim().isNotEmpty) {
     // Toko bisa ditemukan: pelanggan pesan lagi dari HP tanpa antre.
-    bytes.addAll(EscPos.line('Pesan online:'));
+    // Teks dulu (cadangan buat printer tanpa QR), lalu QR-nya.
+    bytes.addAll(EscPos.line('Scan untuk pesan online:'));
     bytes.addAll(EscPos.line(d.storefrontUrl!.replaceFirst(RegExp(r'^https?://'), '')));
+    bytes.addAll(EscPos.qr(d.storefrontUrl!.trim()));
   }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);
@@ -885,8 +914,10 @@ Uint8List buildItemsReceipt(ItemsReceiptData d) {
   }
   if (d.storefrontUrl != null && d.storefrontUrl!.trim().isNotEmpty) {
     // Toko bisa ditemukan: pelanggan pesan lagi dari HP tanpa antre.
-    bytes.addAll(EscPos.line('Pesan online:'));
+    // Teks dulu (cadangan buat printer tanpa QR), lalu QR-nya.
+    bytes.addAll(EscPos.line('Scan untuk pesan online:'));
     bytes.addAll(EscPos.line(d.storefrontUrl!.replaceFirst(RegExp(r'^https?://'), '')));
+    bytes.addAll(EscPos.qr(d.storefrontUrl!.trim()));
   }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);
@@ -1018,8 +1049,10 @@ Uint8List buildSplitReceipt(SplitReceiptData d) {
   }
   if (d.storefrontUrl != null && d.storefrontUrl!.trim().isNotEmpty) {
     // Toko bisa ditemukan: pelanggan pesan lagi dari HP tanpa antre.
-    bytes.addAll(EscPos.line('Pesan online:'));
+    // Teks dulu (cadangan buat printer tanpa QR), lalu QR-nya.
+    bytes.addAll(EscPos.line('Scan untuk pesan online:'));
     bytes.addAll(EscPos.line(d.storefrontUrl!.replaceFirst(RegExp(r'^https?://'), '')));
+    bytes.addAll(EscPos.qr(d.storefrontUrl!.trim()));
   }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);
