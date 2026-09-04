@@ -9,6 +9,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/widgets/selaris_mark.dart';
+import '../../../../core/widgets/sefrekuensi_otp_card.dart';
 
 enum RegStep { inputInfo, inputOtp, setPin }
 
@@ -25,6 +26,11 @@ class _RegisterPageState extends State<RegisterPage> {
   String? _error;
   Timer? _timer;
   int _countdown = 0;
+  // Kanal kode masuk yang dipilih user: 'whatsapp' | 'sefrekuensi'. Kirim
+  // ulang pakai kanal yang sama, kode nggak loncat.
+  String _channel = 'whatsapp';
+  bool _sefreNotFound = false;
+  bool _sefreLoading = false;
 
   final _phoneCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
@@ -162,7 +168,7 @@ class _RegisterPageState extends State<RegisterPage> {
     return d.isEmpty ? '' : '62$d';
   }
 
-  Future<void> _sendOtp() async {
+  Future<void> _sendOtp({String? channel}) async {
     final phone = _phoneNormalized;
     final name = _nameCtrl.text.trim();
     final business = _businessCtrl.text.trim();
@@ -180,23 +186,49 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-    setState(() { _isLoading = true; _error = null; });
+    final via = channel ?? _channel;
+    final lewatSefre = via == 'sefrekuensi';
+    setState(() {
+      _isLoading = !lewatSefre;
+      _sefreLoading = lewatSefre;
+      _sefreNotFound = false;
+      _error = null;
+    });
 
     try {
-      await _dio.post('/api/v1/auth/otp/send', data: {
+      final response = await _dio.post('/api/v1/auth/otp/send', data: {
         'phone': phone,
         'purpose': 'register',
+        'channel': via,
       });
+      String got = 'whatsapp';
+      try {
+        final data = response.data is String
+            ? json.decode(response.data as String) as Map<String, dynamic>
+            : response.data as Map<String, dynamic>;
+        got = (data['data'] as Map?)?['channel']?.toString() ?? 'whatsapp';
+      } catch (_) {}
+      if (!mounted) return;
       setState(() {
         _step = RegStep.inputOtp;
         _isLoading = false;
+        _sefreLoading = false;
+        _channel = got;
         _countdown = 300;
       });
       _startTimer();
     } on DioException catch (e) {
+      dynamic detail;
+      try { detail = e.response?.data?['detail']; } catch (_) {}
+      if (!mounted) return;
+      if (otpErrorCode(detail) == kSefrekuensiNotFoundCode) {
+        setState(() { _isLoading = false; _sefreLoading = false; _sefreNotFound = true; });
+        return;
+      }
       setState(() {
         _isLoading = false;
-        _error = e.response?.data?['detail']?.toString() ?? 'Gagal mengirim OTP';
+        _sefreLoading = false;
+        _error = otpErrorMessage(detail, 'Gagal mengirim OTP');
       });
     }
   }
@@ -324,14 +356,17 @@ class _RegisterPageState extends State<RegisterPage> {
               const SizedBox(height: 6),
               Text(
                 _step == RegStep.inputInfo ? 'Ceritain usahamu'
-                    : _step == RegStep.inputOtp ? 'Periksa WhatsApp Anda'
+                    : _step == RegStep.inputOtp ? (_channel == 'sefrekuensi' ? 'Periksa $kSefrekuensiName Anda' : 'Periksa WhatsApp Anda')
                     : 'Buat PIN kasir',
                 style: KasiraDS.display(size: 26, color: KasiraDS.textStrong),
               ),
               const SizedBox(height: 6),
               Text(
                 _step == RegStep.inputInfo ? 'Nama & jenis usaha nentuin menu awal dan mode stok. Bisa diubah nanti.'
-                    : _step == RegStep.inputOtp ? 'Kode 6 angka dikirim ke +$_phoneNormalized'
+                    : _step == RegStep.inputOtp
+                        ? (_channel == 'sefrekuensi'
+                            ? 'Kode 6 angka dikirim sebagai pesan dari Yasmin ke +$_phoneNormalized'
+                            : 'Kode 6 angka dikirim ke WhatsApp +$_phoneNormalized')
                     : '6 angka. Dipakai buat masuk cepat tiap hari tanpa nunggu OTP.',
                 style: KasiraDS.sans(size: 13.5, color: KasiraDS.textMuted, height: 1.45),
               ),
@@ -350,7 +385,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
 
               if (_step == RegStep.inputInfo) ...[
-                _label('Nomor WhatsApp'),
+                _label('Nomor HP'),
                 TextField(
                   controller: _phoneCtrl,
                   keyboardType: TextInputType.phone,
@@ -418,7 +453,14 @@ class _RegisterPageState extends State<RegisterPage> {
                   decoration: _deco(hint: 'Dari teman yang sudah memakai Selaris'),
                 ),
                 const SizedBox(height: 24),
-                _primary(_isLoading ? null : _sendOtp, 'Lanjut → kirim kode WhatsApp'),
+                _primary((_isLoading || _sefreLoading) ? null : () => _sendOtp(channel: 'whatsapp'), 'Lanjut → kirim kode WhatsApp'),
+                const SizedBox(height: 12),
+                SefrekuensiOtpCard(
+                  loading: _isLoading || _sefreLoading,
+                  notFound: _sefreNotFound,
+                  onPick: () => _sendOtp(channel: 'sefrekuensi'),
+                  onFallbackWhatsapp: () => _sendOtp(channel: 'whatsapp'),
+                ),
                 const SizedBox(height: 10),
                 Center(child: Text('Dengan melanjutkan, Anda menyetujui Ketentuan & Privasi Selaris.',
                     textAlign: TextAlign.center, style: KasiraDS.sans(size: 11, color: KasiraDS.textMuted))),
@@ -437,12 +479,21 @@ class _RegisterPageState extends State<RegisterPage> {
                   onChanged: (v) { if (v.length == 6) _register(v); },
                 ),
                 const SizedBox(height: 12),
-                Center(child: Text('Kode otomatis terbaca kalau WA di HP ini',
-                    style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted))),
+                if (_channel != 'sefrekuensi')
+                  Center(child: Text('Kode otomatis terbaca kalau WA di HP ini',
+                      style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted))),
                 const SizedBox(height: 16),
-                if (_countdown > 0)
-                  Center(child: Text('Belum dapat? Kirim ulang · ${_countdown ~/ 60}:${(_countdown % 60).toString().padLeft(2, '0')}',
-                      style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted))),
+                Center(
+                  child: TextButton(
+                    onPressed: (_countdown <= 240 && !_isLoading && !_sefreLoading) ? () => _sendOtp() : null,
+                    child: Text(
+                      _countdown > 240
+                          ? 'Belum dapat? Kirim ulang · ${_countdown ~/ 60}:${(_countdown % 60).toString().padLeft(2, '0')}'
+                          : (_channel == 'sefrekuensi' ? 'Belum dapat? Kirim ulang ke $kSefrekuensiName' : 'Belum dapat? Kirim ulang'),
+                      style: KasiraDS.sans(size: 13, color: _countdown > 240 ? KasiraDS.textMuted : KasiraDS.brandPrimary),
+                    ),
+                  ),
+                ),
                 if (_isLoading)
                   const Padding(
                     padding: EdgeInsets.only(top: 16),

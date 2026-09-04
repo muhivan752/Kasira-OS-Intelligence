@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { sendOtp, verifyOtp } from '@/app/actions/auth';
+import { SefrekuensiOtpCard } from '@/components/auth/sefrekuensi-otp-card';
+import { SEFREKUENSI_NAME, type OtpChannel } from '@/lib/brand';
 import { Loader2, ArrowLeft, ArrowRight, Phone } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
 
@@ -13,6 +15,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(0);
+  // Kanal dipilih user. Kirim ulang pakai kanal yang sama, kode nggak loncat.
+  const [channel, setChannel] = useState<OtpChannel>('whatsapp');
+  const [sefreNotFound, setSefreNotFound] = useState(false);
+  const [sefreLoading, setSefreLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -23,25 +29,35 @@ export default function LoginPage() {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const kirimKode = async (via: OtpChannel) => {
     if (!phone.startsWith('628')) {
       setError('Nomor HP harus diawali dengan 628');
       return;
     }
-
-    setLoading(true);
+    if (via === 'sefrekuensi') setSefreLoading(true); else setLoading(true);
     setError('');
+    setSefreNotFound(false);
 
-    const res = await sendOtp(phone);
+    const res = await sendOtp(phone, 'login', via);
     if (res.success) {
+      setChannel(res.channel);
       setStep('otp');
       setCountdown(60);
+    } else if (res.code === 'SEFREKUENSI_NOT_FOUND') {
+      setSefreNotFound(true);
     } else {
       setError(res.message);
     }
     setLoading(false);
+    setSefreLoading(false);
   };
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await kirimKode('whatsapp');
+  };
+
+  const handleResend = () => kirimKode(channel);
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +82,7 @@ export default function LoginPage() {
     setStep('phone');
     setOtp('');
     setError('');
+    setSefreNotFound(false);
   };
 
   return (
@@ -95,16 +112,22 @@ export default function LoginPage() {
         <div className="ks-card p-7 sm:p-8">
           <div className="mb-6">
             <h1 className="ks-display text-[30px] font-extrabold text-[var(--text-strong)] leading-tight">
-              {step === 'phone' ? 'Masuk' : 'Verifikasi'}
+              {step === 'phone' ? 'Masuk' : channel === 'sefrekuensi' ? `Periksa ${SEFREKUENSI_NAME}` : 'Periksa WhatsApp'}
             </h1>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
               {step === 'phone'
-                ? 'Masuk ke dashboard owner lewat WhatsApp.'
-                : (
-                  <>Kode 6 digit dikirim ke{' '}
-                    <span className="ks-mono text-[var(--text-body)]">{phone}</span>
-                  </>
-                )}
+                ? 'Masuk ke dashboard owner. Kode masuk dikirim ke WhatsApp atau Sefrekuensi, tanpa password.'
+                : channel === 'sefrekuensi'
+                  ? (
+                    <>Kode 6 digit dikirim sebagai pesan di {SEFREKUENSI_NAME} ke{' '}
+                      <span className="ks-mono text-[var(--text-body)]">{phone}</span>. Buka aplikasinya, cek pesan dari Yasmin.
+                    </>
+                  )
+                  : (
+                    <>Kode 6 digit dikirim ke WhatsApp{' '}
+                      <span className="ks-mono text-[var(--text-body)]">{phone}</span>
+                    </>
+                  )}
             </p>
           </div>
 
@@ -124,7 +147,7 @@ export default function LoginPage() {
           {step === 'phone' ? (
             <form className="space-y-4" onSubmit={handleSendOtp}>
               <div>
-                <label htmlFor="phone" className="ks-field-label">Nomor WhatsApp</label>
+                <label htmlFor="phone" className="ks-field-label">Nomor HP</label>
                 <div className="ks-field">
                   <span className="ks-field-icon"><Phone className="h-[18px] w-[18px]" /></span>
                   <input
@@ -146,9 +169,16 @@ export default function LoginPage() {
                 {loading ? (
                   <Loader2 className="animate-spin h-5 w-5" />
                 ) : (
-                  <>Kirim OTP <ArrowRight className="h-[18px] w-[18px]" /></>
+                  <>Kirim kode ke WhatsApp <ArrowRight className="h-[18px] w-[18px]" /></>
                 )}
               </button>
+
+              <SefrekuensiOtpCard
+                loading={sefreLoading || loading}
+                notFound={sefreNotFound}
+                onPick={() => kirimKode('sefrekuensi')}
+                onFallbackWhatsapp={() => kirimKode('whatsapp')}
+              />
             </form>
           ) : (
             <form className="space-y-4" onSubmit={handleVerifyOtp}>
@@ -185,8 +215,8 @@ export default function LoginPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleSendOtp}
-                  disabled={countdown > 0 || loading}
+                  onClick={handleResend}
+                  disabled={countdown > 0 || loading || sefreLoading}
                   className="text-sm font-semibold text-[var(--brand-secondary)] hover:text-[var(--brand-secondary-hover)] disabled:text-[var(--text-muted)] disabled:cursor-not-allowed transition-colors"
                 >
                   {countdown > 0 ? `Kirim ulang ${countdown}s` : 'Kirim ulang'}

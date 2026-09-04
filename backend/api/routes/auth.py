@@ -38,7 +38,9 @@ async def send_otp(
     db: AsyncSession = Depends(deps.get_db)
 ) -> Any:
     """
-    Send OTP via WhatsApp to the given phone number
+    Kirim kode masuk lewat kanal yang DIPILIH user: WhatsApp (default) atau
+    Sefrekuensi. Respons bawa `channel` supaya layar app tahu nyuruh periksa
+    apa. Kode tetap dibikin & diverifikasi di sini apa pun kurirnya.
     """
     # Check if user exists (skip for register purpose)
     stmt = select(User).where(User.phone == request.phone, User.deleted_at == None)
@@ -56,9 +58,9 @@ async def send_otp(
         
     # Generate 6-digit OTP
     otp = str(random.randint(100000, 999999))
-    
+
     redis = await get_redis_client()
-    
+
     # Rate limit: max 3 OTP send per 30 menit (SMS bomb guard).
     # Sebelumnya threshold 10 per 15 menit = attacker bisa kirim 40 OTP/jam ke nomor
     # korban (SMS flood + cost Kasira via Fonnte). Lowering to 3 per 30 min.
@@ -70,34 +72,56 @@ async def send_otp(
             detail="Terlalu banyak permintaan OTP. Coba lagi dalam 30 menit.",
         )
 
-    # Save to Redis with 5 minutes TTL
-    await redis.setex(f"otp:{request.phone}", 300, otp)
+    async def _simpan_dan_hitung() -> None:
+        # Kode disimpan + jatah dipotong HANYA kalau kurirnya beneran jalan.
+        # Minta Sefrekuensi tapi nomornya nggak ada di sana = nggak makan jatah,
+        # supaya user bisa langsung ulang lewat WA tanpa kena 429.
+        await redis.setex(f"otp:{request.phone}", 300, otp)
+        if not current_count:
+            await redis.setex(rate_limit_key, 1800, 1)
+        else:
+            await redis.incr(rate_limit_key)
 
-    # Increment rate limit counter (30-minute window)
-    if not current_count:
-        await redis.setex(rate_limit_key, 1800, 1)
-    else:
-        await redis.incr(rate_limit_key)
-    
-    # Jalur 1: Sefrekuensi (kalau nomornya kedaftar di sana). Gratis, instan,
-    # dan nggak lewat Fonnte. Gagal atau nomor nggak kedaftar = jatuh ke WA.
-    # Ini SENGAJA nggak pakai /cek dulu: /kirim udah balik 404 sendiri kalau
-    # nomornya nggak ada, jadi cukup sekali jalan bolak balik.
-    channel = "whatsapp"
-    if await _sefre.send_otp(request.phone, otp) is not None:
-        channel = "sefrekuensi"
-    else:
-        # Jalur 2 (jaring): WhatsApp lewat Fonnte, persis seperti sebelumnya.
-        message = f"Kode OTP {settings.BRAND_NAME} kamu: *{otp}*. Berlaku 5 menit. Jangan bagikan kode ini ke siapa pun."
-        success = await send_whatsapp_message(request.phone, message)
+    # Kanal dipilih user di layar masuk/daftar (keputusan Ivan 4 Sep sore):
+    # WhatsApp ya WhatsApp, Sefrekuensi ya Sefrekuensi. Kode nggak loncat
+    # kanal. Layar masuk = iklan halus Sefrekuensi; nomor yang belum ada di
+    # sana dapat 404 + ajakan pasang, dan app nawarin "kirim WA aja".
+    if request.channel == "sefrekuensi":
+        hasil = await _sefre.send_otp(request.phone, otp)
+        if not hasil.sampai:
+            if hasil.alasan == "tidak_terdaftar":
+                raise HTTPException(
+                    status_code=404,
+                    detail={
+                        "code": "SEFREKUENSI_NOT_FOUND",
+                        "message": "Nomor ini belum terdaftar di Sefrekuensi. Pasang Sefrekuensi dengan nomor yang sama, atau kirim kode lewat WhatsApp.",
+                    },
+                )
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "SEFREKUENSI_UNAVAILABLE",
+                    "message": "Sefrekuensi lagi tidak bisa dihubungi. Kirim kode lewat WhatsApp dulu.",
+                },
+            )
+        await _simpan_dan_hitung()
+        return StandardResponse(
+            data={"message": "OTP sent successfully", "channel": "sefrekuensi"},
+            message="OTP sent successfully",
+        )
 
-        if not success:
-            logger.error(f"Failed to send OTP to {request.phone}")
-            if settings.FONNTE_TOKEN and settings.ENVIRONMENT == "production":
-                raise HTTPException(status_code=500, detail="Failed to send OTP via WhatsApp")
+    # WhatsApp lewat Fonnte, persis seperti sebelumnya.
+    await _simpan_dan_hitung()
+    message = f"Kode OTP {settings.BRAND_NAME} kamu: *{otp}*. Berlaku 5 menit. Jangan bagikan kode ini ke siapa pun."
+    success = await send_whatsapp_message(request.phone, message)
+
+    if not success:
+        logger.error(f"Failed to send OTP to {request.phone}")
+        if settings.FONNTE_TOKEN and settings.ENVIRONMENT == "production":
+            raise HTTPException(status_code=500, detail="Failed to send OTP via WhatsApp")
 
     return StandardResponse(
-        data={"message": "OTP sent successfully", "channel": channel},
+        data={"message": "OTP sent successfully", "channel": "whatsapp"},
         message="OTP sent successfully",
     )
 

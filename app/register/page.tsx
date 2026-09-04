@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { sendOtp, registerTenant } from '@/app/actions/auth';
+import { SefrekuensiOtpCard } from '@/components/auth/sefrekuensi-otp-card';
+import { SEFREKUENSI_NAME, type OtpChannel } from '@/lib/brand';
 import { Logo } from '@/components/ui/logo';
 import { Loader2, ArrowLeft, Coffee, Utensils, Store, ShoppingBag, Gift, Phone, User, Lock, Ticket } from 'lucide-react';
 
@@ -26,6 +28,10 @@ function RegisterContent() {
 
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
+  // Kanal dipilih user di langkah 1. Kode nggak loncat kanal.
+  const [channel, setChannel] = useState<OtpChannel>('whatsapp');
+  const [sefreNotFound, setSefreNotFound] = useState(false);
+  const [sefreLoading, setSefreLoading] = useState(false);
   const [businessName, setBusinessName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [pin, setPin] = useState('');
@@ -51,16 +57,27 @@ function RegisterContent() {
     }
   }, [searchParams]);
 
-  async function handleSendOtp(e: React.FormEvent) {
-    e.preventDefault();
+  async function kirimKode(via: OtpChannel) {
     setError('');
+    setSefreNotFound(false);
     const normalized = phone.startsWith('0') ? '62' + phone.slice(1) : phone;
-    setLoading(true);
-    const res = await sendOtp(normalized, 'register');
+    if (via === 'sefrekuensi') setSefreLoading(true); else setLoading(true);
+    const res = await sendOtp(normalized, 'register', via);
     setLoading(false);
-    if (!res.success) { setError(res.message || 'Gagal kirim OTP'); return; }
+    setSefreLoading(false);
+    if (!res.success) {
+      if (res.code === 'SEFREKUENSI_NOT_FOUND') { setSefreNotFound(true); return; }
+      setError(res.message || 'Gagal kirim OTP');
+      return;
+    }
+    setChannel(res.channel);
     setPhone(normalized);
     setStep('otp');
+  }
+
+  async function handleSendOtp(e: React.FormEvent) {
+    e.preventDefault();
+    await kirimKode('whatsapp');
   }
 
   async function handleVerifyOtp(e: React.FormEvent) {
@@ -114,10 +131,10 @@ function RegisterContent() {
           {step === 'phone' && (
             <>
               <h1 className="ks-display text-[28px] font-extrabold text-[var(--text-strong)] leading-tight mb-1">Daftar Selaris</h1>
-              <p className="text-sm text-[var(--text-muted)] mb-6">Masukkan nomor WhatsApp aktif kamu.</p>
+              <p className="text-sm text-[var(--text-muted)] mb-6">Masukkan nomor HP aktif kamu. Kode masuk dikirim ke WhatsApp atau {SEFREKUENSI_NAME}.</p>
               <form onSubmit={handleSendOtp} className="space-y-4">
                 <div>
-                  <label className="ks-field-label">Nomor WhatsApp</label>
+                  <label className="ks-field-label">Nomor HP</label>
                   <div className="ks-field">
                     <span className="ks-field-icon"><Phone className="h-[18px] w-[18px]" /></span>
                     <input
@@ -150,8 +167,14 @@ function RegisterContent() {
                 {error && <p className="text-[var(--danger)] text-sm">{error}</p>}
                 <button type="submit" disabled={loading || !phone} className="ks-btn ks-btn-lg">
                   {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Kirim OTP via WhatsApp
+                  Kirim kode ke WhatsApp
                 </button>
+                <SefrekuensiOtpCard
+                  loading={sefreLoading || loading}
+                  notFound={sefreNotFound}
+                  onPick={() => kirimKode('sefrekuensi')}
+                  onFallbackWhatsapp={() => kirimKode('whatsapp')}
+                />
               </form>
               <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
                 Sudah punya akun?{' '}
@@ -163,11 +186,17 @@ function RegisterContent() {
           {/* STEP 2: OTP */}
           {step === 'otp' && (
             <>
-              <button onClick={() => setStep('phone')} className="inline-flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-body)] mb-4 transition-colors">
+              <button onClick={() => { setStep('phone'); setSefreNotFound(false); setError(''); }} className="inline-flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-body)] mb-4 transition-colors">
                 <ArrowLeft className="w-4 h-4" /> Ganti nomor
               </button>
-              <h1 className="ks-display text-[28px] font-extrabold text-[var(--text-strong)] leading-tight mb-1">Masukkan OTP</h1>
-              <p className="text-sm text-[var(--text-muted)] mb-6">Kode dikirim ke <span className="ks-mono text-[var(--text-body)]">{phone}</span></p>
+              <h1 className="ks-display text-[28px] font-extrabold text-[var(--text-strong)] leading-tight mb-1">
+                {channel === 'sefrekuensi' ? `Periksa ${SEFREKUENSI_NAME}` : 'Periksa WhatsApp'}
+              </h1>
+              <p className="text-sm text-[var(--text-muted)] mb-6">
+                {channel === 'sefrekuensi'
+                  ? <>Kode dikirim sebagai pesan di {SEFREKUENSI_NAME} ke <span className="ks-mono text-[var(--text-body)]">{phone}</span>. Cek pesan dari Yasmin.</>
+                  : <>Kode dikirim ke WhatsApp <span className="ks-mono text-[var(--text-body)]">{phone}</span></>}
+              </p>
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 <div className="ks-field">
                   <input

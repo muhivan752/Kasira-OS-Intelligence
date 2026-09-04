@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/widgets/selaris_mark.dart';
+import '../../../../core/widgets/sefrekuensi_otp_card.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/session_cache.dart';
 
@@ -28,6 +29,14 @@ class AuthState {
   final int countdown;
   final bool canResendOtp;
   final bool isSuccess;
+  // Kanal kode masuk yang DIPILIH user: 'whatsapp' | 'sefrekuensi'. Kirim
+  // ulang pakai kanal yang sama, kode nggak loncat. Layar OTP baca ini buat
+  // nyuruh periksa apa.
+  final String channel;
+  // Server bilang nomornya belum ada di Sefrekuensi: kartu ganti wujud
+  // jadi ajakan pasang + tombol "kirim WA saja", bukan pesan error merah.
+  final bool sefreNotFound;
+  final bool sefreLoading;
 
   AuthState({
     this.step = AuthStep.pinLogin,
@@ -41,6 +50,9 @@ class AuthState {
     this.countdown = 300,
     this.canResendOtp = false,
     this.isSuccess = false,
+    this.channel = 'whatsapp',
+    this.sefreNotFound = false,
+    this.sefreLoading = false,
   });
 
   AuthState copyWith({
@@ -56,6 +68,9 @@ class AuthState {
     int? countdown,
     bool? canResendOtp,
     bool? isSuccess,
+    String? channel,
+    bool? sefreNotFound,
+    bool? sefreLoading,
   }) {
     return AuthState(
       step: step ?? this.step,
@@ -69,6 +84,9 @@ class AuthState {
       countdown: countdown ?? this.countdown,
       canResendOtp: canResendOtp ?? this.canResendOtp,
       isSuccess: isSuccess ?? this.isSuccess,
+      channel: channel ?? this.channel,
+      sefreNotFound: sefreNotFound ?? this.sefreNotFound,
+      sefreLoading: sefreLoading ?? this.sefreLoading,
     );
   }
 }
@@ -108,32 +126,55 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(phone: phone, clearError: true);
   }
 
-  Future<void> sendOtp() async {
+  /// [channel] null = pakai kanal yang lagi dipilih di state (buat kirim
+  /// ulang). Sefrekuensi loading-nya dipisah supaya tombol WhatsApp nggak
+  /// ikut muter waktu yang ditekan kartu Sefrekuensi.
+  Future<void> sendOtp({String? channel}) async {
     if (state.phone.isEmpty || state.phone.length < 10 || !state.phone.startsWith('628')) {
       state = state.copyWith(error: 'Format nomor HP tidak valid (harus 628xxx dan min 10 digit)');
       return;
     }
-    
-    state = state.copyWith(isLoading: true, clearError: true);
-    
+    final via = channel ?? state.channel;
+    final lewatSefre = via == 'sefrekuensi';
+
+    state = state.copyWith(
+      isLoading: !lewatSefre,
+      sefreLoading: lewatSefre,
+      sefreNotFound: false,
+      clearError: true,
+    );
+
     try {
-      await _dio.post('/api/v1/auth/otp/send', data: {'phone': state.phone});
-      
+      final response = await _dio.post('/api/v1/auth/otp/send', data: {'phone': state.phone, 'channel': via});
+      String got = 'whatsapp';
+      try {
+        final respData = response.data is String
+            ? json.decode(response.data as String) as Map<String, dynamic>
+            : response.data as Map<String, dynamic>;
+        got = (respData['data'] as Map?)?['channel']?.toString() ?? 'whatsapp';
+      } catch (_) {}
+
       state = state.copyWith(
-        step: AuthStep.inputOtp, 
+        step: AuthStep.inputOtp,
         isLoading: false,
+        sefreLoading: false,
+        channel: got,
         countdown: 300,
         canResendOtp: false,
       );
       _startTimer();
     } on DioException catch (e) {
-      String? detail;
-      try { detail = e.response?.data['detail']?.toString(); } catch (_) {}
-      final errMsg = detail ?? '[${e.type.name}] ${e.message ?? e.error?.toString() ?? 'no message'}';
-      state = state.copyWith(isLoading: false, error: errMsg);
+      dynamic detail;
+      try { detail = e.response?.data['detail']; } catch (_) {}
+      if (otpErrorCode(detail) == kSefrekuensiNotFoundCode) {
+        state = state.copyWith(isLoading: false, sefreLoading: false, sefreNotFound: true);
+        return;
+      }
+      final errMsg = otpErrorMessage(detail, '[${e.type.name}] ${e.message ?? e.error?.toString() ?? 'no message'}');
+      state = state.copyWith(isLoading: false, sefreLoading: false, error: errMsg);
     } catch (e) {
       final msg = e.toString();
-      state = state.copyWith(isLoading: false, error: 'Exception: ${msg.length > 80 ? msg.substring(0, 80) : msg}');
+      state = state.copyWith(isLoading: false, sefreLoading: false, error: 'Exception: ${msg.length > 80 ? msg.substring(0, 80) : msg}');
     }
   }
 
@@ -514,9 +555,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Nomor WhatsApp Anda', style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
+        Text('Nomor HP Anda', style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
         const SizedBox(height: 6),
-        Text('Kode masuk dikirim ke WhatsApp. Nggak ada password.',
+        Text('Kode masuk dikirim ke WhatsApp atau $kSefrekuensiName. Nggak ada password.',
             style: KasiraDS.sans(size: 13.5, color: KasiraDS.textMuted)),
         const SizedBox(height: 20),
         Text('NOMOR HP', style: KasiraDS.eyebrow()),
@@ -560,7 +601,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           width: double.infinity,
           height: 54,
           child: FilledButton(
-            onPressed: state.isLoading ? null : () => ref.read(authProvider.notifier).sendOtp(),
+            onPressed: (state.isLoading || state.sefreLoading) ? null : () => ref.read(authProvider.notifier).sendOtp(channel: 'whatsapp'),
             style: FilledButton.styleFrom(
               backgroundColor: KasiraDS.brandPrimary,
               shape: RoundedRectangleBorder(borderRadius: KasiraDS.brPill),
@@ -570,21 +611,32 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 : Text('Kirim kode ke WhatsApp →', style: KasiraDS.sans(size: 15.5, weight: FontWeight.w700, color: KasiraDS.textOnBrand)),
           ),
         ),
+        const SizedBox(height: 12),
+        SefrekuensiOtpCard(
+          loading: state.isLoading || state.sefreLoading,
+          notFound: state.sefreNotFound,
+          onPick: () => ref.read(authProvider.notifier).sendOtp(channel: 'sefrekuensi'),
+          onFallbackWhatsapp: () => ref.read(authProvider.notifier).sendOtp(channel: 'whatsapp'),
+        ),
       ],
     );
   }
 
   Widget _buildInputOtp(AuthState state) {
+    final lewatSefre = state.channel == 'sefrekuensi';
     final minutes = (state.countdown / 60).floor();
     final seconds = state.countdown % 60;
     final timeString = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
 
     return Column(
       children: [
-        Text('Periksa WhatsApp Anda', style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
+        Text(lewatSefre ? 'Periksa $kSefrekuensiName Anda' : 'Periksa WhatsApp Anda',
+            style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
         const SizedBox(height: 6),
         Text(
-          'Kode 6 angka dikirim ke +${state.phone}',
+          lewatSefre
+              ? 'Kode 6 angka dikirim sebagai pesan dari Yasmin ke +${state.phone}'
+              : 'Kode 6 angka dikirim ke WhatsApp +${state.phone}',
           style: KasiraDS.sans(size: 13.5, color: KasiraDS.textMuted),
           textAlign: TextAlign.center,
         ),
@@ -636,7 +688,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ref.read(authProvider.notifier).sendOtp();
                 } : null,
                 child: Text(
-                  'Belum dapat? Kirim ulang',
+                  lewatSefre ? 'Belum dapat? Kirim ulang ke $kSefrekuensiName' : 'Belum dapat? Kirim ulang',
                   style: TextStyle(color: state.canResendOtp ? KasiraDS.brandPrimary : Colors.grey),
                 ),
               ),

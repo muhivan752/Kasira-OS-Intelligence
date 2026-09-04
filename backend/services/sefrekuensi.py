@@ -13,6 +13,15 @@ Bentuknya JALUR TAMBAHAN, bukan pengganti:
   sekaligus nurunin ongkos Fonnte. Ajakan pasang app ditaruh di titik lain
   (notifikasi pesanan masuk), bukan di sini.
 
+Sejak 4 Sep sore keputusannya diubah lagi: USER YANG MILIH kanalnya di layar
+masuk/daftar ("WhatsApp ya WhatsApp, Sefrekuensi ya Sefrekuensi"), bukan
+server yang nyoba Sefrekuensi diam diam. Alasannya: versi otomatis nggak
+pernah nampilin mereknya, dan layar app bohong soal kode dikirim ke mana.
+Layar masuk sekarang jadi iklan halus Sefrekuensi. Kalau nomornya nggak ada
+di sana, jawabannya "belum terdaftar" + ajakan pasang, BUKAN diam diam
+jatuh ke WA. WA tetap tombol utama supaya orang baru nggak kepaksa pasang
+app kedua di tengah daftar.
+
 Kontrak di sisi Sefrekuensi (`backend/handlers/partner_otp.go`):
   POST {API}/partner/otp/cek    {phone}                        -> {tersedia, push}
   POST {API}/partner/otp/kirim  {phone, kode, aplikasi, keterangan}
@@ -26,6 +35,7 @@ Kodenya jangan pernah masuk log, di sini maupun di sana.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Optional
 
 import httpx
@@ -72,15 +82,28 @@ async def check(phone: str) -> dict:
         return {"tersedia": False, "push": False}
 
 
-async def send_otp(phone: str, code: str, *, note: str = "") -> Optional[str]:
-    """Anter kode ke Sefrekuensi. Balik "app"/"push" kalau sampai, None kalau
-    harus jatuh ke WA.
+@dataclass(frozen=True)
+class HasilKirim:
+    """Jawaban kurir. `via` terisi = sampai. `alasan` buat pesan ke user:
+    'sampai' | 'tidak_terdaftar' | 'gangguan' | 'mati' (fitur belum diset)."""
 
-    None itu jawaban yang WAJAR, bukan kegagalan sistem: 404 artinya orangnya
+    via: Optional[str]
+    alasan: str
+
+    @property
+    def sampai(self) -> bool:
+        return self.via is not None
+
+
+async def send_otp(phone: str, code: str, *, note: str = "") -> HasilKirim:
+    """Anter kode ke Sefrekuensi. Nggak pernah melempar.
+
+    `tidak_terdaftar` itu jawaban WAJAR, bukan kegagalan sistem: orangnya
     memang belum punya Sefrekuensi, dan itu mayoritas merchant hari ini.
+    Pemanggil yang mutusin mau nawarin pasang atau nyuruh lewat WA.
     """
     if not enabled():
-        return None
+        return HasilKirim(None, "mati")
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             r = await client.post(
@@ -96,11 +119,11 @@ async def send_otp(phone: str, code: str, *, note: str = "") -> Optional[str]:
         if r.status_code == 200:
             via = str((r.json() or {}).get("via") or "app")
             logger.info("OTP lewat Sefrekuensi via=%s", via)  # nomor & kode sengaja nggak dicatat
-            return via
+            return HasilKirim(via, "sampai")
         if r.status_code == 404:
-            return None  # belum punya Sefrekuensi, wajar
+            return HasilKirim(None, "tidak_terdaftar")
         logger.warning("sefrekuensi kirim http %s", r.status_code)
-        return None
+        return HasilKirim(None, "gangguan")
     except Exception:  # noqa: BLE001
         logger.warning("sefrekuensi kirim gagal", exc_info=True)
-        return None
+        return HasilKirim(None, "gangguan")

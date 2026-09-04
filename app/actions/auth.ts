@@ -2,24 +2,43 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import type { OtpChannel } from '@/lib/brand';
 
 const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
 const SECURE_COOKIES = process.env.NEXT_PUBLIC_SECURE_COOKIES === 'true';
 
-export async function sendOtp(phone: string, purpose: 'login' | 'register' = 'login') {
+export type SendOtpResult =
+  | { success: true; channel: OtpChannel }
+  | { success: false; message: string; code?: string };
+
+/**
+ * Kanal dipilih user di layar: WhatsApp (default) atau Sefrekuensi. Kode nggak
+ * loncat kanal. Minta Sefrekuensi tapi nomornya belum ada di sana = server
+ * balik 404 `SEFREKUENSI_NOT_FOUND`; halaman yang nawarin pasang atau WA.
+ */
+export async function sendOtp(
+  phone: string,
+  purpose: 'login' | 'register' = 'login',
+  channel: OtpChannel = 'whatsapp',
+): Promise<SendOtpResult> {
   try {
     const res = await fetch(`${API_URL}/auth/otp/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, purpose }),
+      body: JSON.stringify({ phone, purpose, channel }),
     });
-    
+
     const data = await res.json();
     if (!res.ok) {
-      return { success: false, message: data.detail || 'Gagal mengirim OTP' };
+      const detail = data?.detail;
+      if (detail && typeof detail === 'object') {
+        return { success: false, message: String(detail.message || 'Gagal mengirim OTP'), code: detail.code };
+      }
+      return { success: false, message: typeof detail === 'string' ? detail : 'Gagal mengirim OTP' };
     }
-    
-    return { success: true, message: 'OTP berhasil dikirim' };
+
+    const got = data?.data?.channel;
+    return { success: true, channel: got === 'sefrekuensi' ? 'sefrekuensi' : 'whatsapp' };
   } catch (error) {
     return { success: false, message: 'Terjadi kesalahan jaringan' };
   }
