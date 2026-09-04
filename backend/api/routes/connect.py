@@ -284,6 +284,12 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
     raw_tier = getattr(tenant, "subscription_tier", "starter") if tenant else "starter"
     outlet_tier = raw_tier.value if hasattr(raw_tier, 'value') else str(raw_tier or "starter")
 
+    # Jenis usaha buat JSON-LD di halaman toko (CafeOrCoffeeShop / Restaurant / Store).
+    from backend.models.brand import Brand
+    _brand = (await db.execute(select(Brand).where(Brand.id == outlet.brand_id))).scalar_one_or_none() if outlet.brand_id else None
+    _bt = getattr(_brand, "type", None)
+    business_type = _bt.value if hasattr(_bt, "value") else (str(_bt) if _bt else "other")
+
     # Check if reservation is enabled
     from backend.models.reservation import ReservationSettings
     resv_settings = (await db.execute(
@@ -355,6 +361,10 @@ async def get_connect_storefront(slug: str, db: AsyncSession = Depends(get_db)):
             "delivery_radius_km": float(outlet.delivery_radius_km) if outlet.delivery_radius_km is not None else None,
             "maps_enabled": _geo.enabled(),
             "opening_hours": outlet.opening_hours if isinstance(outlet.opening_hours, str) else "",
+            # Buat JSON-LD + halaman /jelajah. Alamat lengkap udah ada di `address`.
+            "business_type": business_type,
+            "city": outlet.city,
+            "province": outlet.province,
             "tier": outlet_tier,
             "trust_badge": "Verified Partner",
             "reservation_enabled": reservation_enabled,

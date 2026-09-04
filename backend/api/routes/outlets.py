@@ -113,6 +113,83 @@ async def create_outlet(
     await db.refresh(db_outlet)
     return StandardResponse(data=db_outlet, message="Outlet created successfully")
 
+@router.get("/public/list", response_model=StandardResponse[List[dict]])
+async def public_outlet_list(
+    db: AsyncSession = Depends(deps.get_db),
+) -> Any:
+    """Direktori toko PUBLIK: dipakai `app/sitemap.ts` dan halaman /jelajah.
+
+    Tanpa auth. Session default nyetel app.current_tenant_id = '' (RLS
+    bypass, lihat database.py). Yang dipajang: outlet aktif, pemilik
+    mengizinkan (directory_listed, mig 105), tenant nggak dihapus dan nggak
+    di-suspend, punya minimal 1 produk aktif (toko kosong bikin pengunjung
+    dan Google sama sama kecewa). Cache Redis 5 menit.
+
+    WAJIB dideklarasikan SEBELUM /{outlet_id}: "public" gagal di-parse
+    jadi UUID = 422, bukan jatuh ke sini (gotcha #43).
+    """
+    from sqlalchemy import func, and_
+    from backend.services.redis import get_redis_client
+    from backend.models.tenant import Tenant
+    from backend.models.brand import Brand
+    from backend.models.product import Product
+
+    cache_key = "outlets:public:list"
+    redis = None
+    try:
+        redis = await get_redis_client()
+        cached = await redis.get(cache_key)
+        if cached:
+            return StandardResponse(data=json.loads(cached), message="cached")
+    except Exception:
+        redis = None
+
+    product_count = (
+        select(func.count(Product.id))
+        .where(Product.brand_id == Outlet.brand_id, Product.deleted_at.is_(None), Product.is_active.is_(True))
+        .correlate(Outlet)
+        .scalar_subquery()
+    )
+    stmt = (
+        select(Outlet, Brand.type, product_count.label("product_count"))
+        .join(Tenant, Tenant.id == Outlet.tenant_id)
+        .outerjoin(Brand, Brand.id == Outlet.brand_id)
+        .where(
+            Outlet.deleted_at.is_(None),
+            Outlet.is_active.is_(True),
+            Outlet.directory_listed.is_(True),
+            Tenant.deleted_at.is_(None),
+            Tenant.subscription_status.in_(["active", "trial"]),
+        )
+        .order_by(Outlet.created_at)
+    )
+    rows = (await db.execute(stmt)).all()
+    items = []
+    for outlet, brand_type, n_products in rows:
+        if not n_products:
+            continue
+        bt = brand_type.value if hasattr(brand_type, "value") else (str(brand_type) if brand_type else "other")
+        items.append({
+            "slug": outlet.slug,
+            "name": outlet.name,
+            "city": outlet.city,
+            "province": outlet.province,
+            "address": outlet.address,
+            "cover_image_url": outlet.cover_image_url,
+            "business_type": bt,
+            "is_open": bool(outlet.is_open),
+            "accepting_orders": bool(outlet.is_open and getattr(outlet, "online_orders_enabled", True)),
+            "product_count": int(n_products),
+            "updated_at": outlet.updated_at.isoformat() if outlet.updated_at else None,
+        })
+    if redis is not None:
+        try:
+            await redis.setex(cache_key, 300, json.dumps(items))
+        except Exception:
+            pass
+    return StandardResponse(data=items)
+
+
 @router.get("/{outlet_id}", response_model=StandardResponse[OutletSchema])
 async def read_outlet(
     outlet_id: uuid.UUID,

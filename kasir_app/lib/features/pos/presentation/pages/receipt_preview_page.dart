@@ -415,6 +415,7 @@ class ReceiptPreviewPage extends ConsumerWidget {
       changeAmount: changeAmount,
       taxNumber: taxConfig?.taxNumber,
       customFooter: taxConfig?.receiptFooter,
+      storefrontUrl: SessionCache.instance.storefrontUrl,
     );
 
     final bytes = buildReceipt(data);

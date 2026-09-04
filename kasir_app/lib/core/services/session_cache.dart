@@ -19,6 +19,12 @@ class SessionCache {
   String? outletId;
   String? outletName;
   String? outletAddress;
+  // Slug toko buat link storefront di kaki struk (toko bisa ditemukan, 4 Sep).
+  // Di-cache ke prefs supaya struk offline juga bisa nyetak link-nya.
+  String? outletSlug;
+
+  String? get storefrontUrl =>
+      (outletSlug == null || outletSlug!.isEmpty) ? null : '${AppConfig.baseUrl}/$outletSlug';
   String? stockMode;
   String? subscriptionTier;
   String? shiftSessionId;
@@ -88,6 +94,7 @@ class SessionCache {
     // order_detail_modal saat user buka receipt, atau via fetchOutletInfo).
     outletName = prefs.getString('c_outlet_name');
     outletAddress = prefs.getString('c_outlet_address');
+    outletSlug = prefs.getString('c_outlet_slug');
     businessDomain = prefs.getString('c_business_domain');
     _loadPaymentConfig(prefs);
 
@@ -108,6 +115,7 @@ class SessionCache {
     outletId = prefs.getString('c_outlet_id');
     outletName = prefs.getString('c_outlet_name');
     outletAddress = prefs.getString('c_outlet_address');
+    outletSlug = prefs.getString('c_outlet_slug');
     stockMode = prefs.getString('c_stock_mode');
     subscriptionTier = prefs.getString('c_subscription_tier');
     businessDomain = prefs.getString('c_business_domain');
@@ -235,7 +243,13 @@ class SessionCache {
       if (data == null) return;
       final name = data['name'] as String?;
       final address = data['address'] as String?;
+      final slug = data['slug'] as String?;
       final mode = data['shift_mode'] as String?;
+      if (slug != null && slug.isNotEmpty) {
+        outletSlug = slug;
+        final prefs = await SharedPreferences.getInstance();
+        prefs.setString('c_outlet_slug', slug);
+      }
       if (mode != null && mode.isNotEmpty) shiftMode = mode;
       await applyPaymentConfig(data);
       if (name != null && name.isNotEmpty) {
@@ -325,6 +339,7 @@ class SessionCache {
     outletId = null;
     outletName = null;
     outletAddress = null;
+    outletSlug = null;
     stockMode = null;
     subscriptionTier = null;
     shiftSessionId = null;

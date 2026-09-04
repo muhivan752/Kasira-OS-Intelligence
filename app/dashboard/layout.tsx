@@ -19,6 +19,7 @@ import {
   Lock,
   Package,
   Smartphone,
+  Globe,
   ChefHat,
   ShoppingCart,
   Wallet,
@@ -75,6 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const mainNav = [
     { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Menu', href: '/dashboard/menu', icon: MenuIcon },
+    { name: 'Toko Online', href: '/dashboard/toko', icon: Globe },
     { name: 'Kasir', href: '/dashboard/kasir', icon: Store },
     { name: 'Pelanggan', href: '/dashboard/pelanggan', icon: Users },
     { name: 'Pembelian', href: '/dashboard/pembelian', icon: ShoppingCart },

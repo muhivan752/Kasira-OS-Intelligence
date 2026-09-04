@@ -37,6 +37,9 @@ class Outlet(BaseModel):
     bank_name = Column(String(60), nullable=True)
     bank_account_number = Column(String(40), nullable=True)
     bank_account_name = Column(String(80), nullable=True)
+    # Izin tampil di direktori publik /jelajah + sitemap (mig 105). Keputusan
+    # pemilik; akun uji dimatikan. Baca lewat GET /outlets/public/list.
+    directory_listed = Column(Boolean, server_default='true', nullable=False)
 
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id"), nullable=True, index=True)

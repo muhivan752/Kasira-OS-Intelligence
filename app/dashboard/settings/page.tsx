@@ -845,6 +845,9 @@ export default function SettingsPage() {
                   >
                     Buka Storefront
                   </a>
+                  <Link href="/dashboard/toko" className="block text-center text-sm font-semibold text-[var(--brand-secondary)] hover:underline">
+                    QR, stiker, dan cara supaya toko ditemukan di Google
+                  </Link>
                 </>
               ) : (
                 <p className="text-sm text-gray-400 italic">Slug outlet belum tersedia</p>

@@ -299,6 +299,9 @@ class ReceiptData {
   final double changeAmount;
   final String? taxNumber;
   final String? customFooter;
+  // Link toko buat baris "Pesan online" di kaki struk (dari GET /orders/{id}/receipt
+  // atau dibangun lokal dari slug outlet).
+  final String? storefrontUrl;
 
   const ReceiptData({
     required this.outletName,
@@ -315,6 +318,7 @@ class ReceiptData {
     required this.changeAmount,
     this.taxNumber,
     this.customFooter,
+    this.storefrontUrl,
   });
 
   static ReceiptData fromJson(Map<String, dynamic> j) {
@@ -343,6 +347,7 @@ class ReceiptData {
       changeAmount: (j['change_amount'] as num?)?.toDouble() ?? 0,
       taxNumber: j['tax_number']?.toString(),
       customFooter: j['custom_footer']?.toString(),
+      storefrontUrl: j['storefront_url']?.toString(),
     );
   }
 }
@@ -361,6 +366,9 @@ class SplitReceiptData {
   final String outletAddress;
   final String? taxNumber;
   final String? customFooter;
+  // Link toko buat baris "Pesan online" di kaki struk (dari GET /orders/{id}/receipt
+  // atau dibangun lokal dari slug outlet).
+  final String? storefrontUrl;
   final String dateTime;
   final String tabNumber;
   final String? tableName;
@@ -395,6 +403,7 @@ class SplitReceiptData {
     required this.outletAddress,
     this.taxNumber,
     this.customFooter,
+    this.storefrontUrl,
     required this.dateTime,
     required this.tabNumber,
     this.tableName,
@@ -435,6 +444,7 @@ class SplitReceiptData {
       outletAddress: (j['outlet_address'] ?? '').toString(),
       taxNumber: j['tax_number']?.toString(),
       customFooter: j['custom_footer']?.toString(),
+      storefrontUrl: j['storefront_url']?.toString(),
       dateTime: (j['date_time'] ?? '').toString(),
       tabNumber: (j['tab_number'] ?? '').toString(),
       tableName: j['table_name']?.toString(),
@@ -471,6 +481,9 @@ class RefundReceiptData {
   final String? cashierName;
   final String? taxNumber;
   final String? customFooter;
+  // Link toko buat baris "Pesan online" di kaki struk (dari GET /orders/{id}/receipt
+  // atau dibangun lokal dari slug outlet).
+  final String? storefrontUrl;
 
   const RefundReceiptData({
     required this.outletName,
@@ -482,6 +495,7 @@ class RefundReceiptData {
     this.cashierName,
     this.taxNumber,
     this.customFooter,
+    this.storefrontUrl,
   });
 }
 
@@ -593,6 +607,11 @@ Uint8List buildReceipt(ReceiptData d) {
   } else {
     bytes.addAll(EscPos.line('Powered by Selaris'));
   }
+  if (d.storefrontUrl != null && d.storefrontUrl!.trim().isNotEmpty) {
+    // Toko bisa ditemukan: pelanggan pesan lagi dari HP tanpa antre.
+    bytes.addAll(EscPos.line('Pesan online:'));
+    bytes.addAll(EscPos.line(d.storefrontUrl!.replaceFirst(RegExp(r'^https?://'), '')));
+  }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);
 
@@ -678,6 +697,11 @@ Uint8List buildRefundReceipt(RefundReceiptData d) {
   } else {
     bytes.addAll(EscPos.line('Powered by Selaris'));
   }
+  if (d.storefrontUrl != null && d.storefrontUrl!.trim().isNotEmpty) {
+    // Toko bisa ditemukan: pelanggan pesan lagi dari HP tanpa antre.
+    bytes.addAll(EscPos.line('Pesan online:'));
+    bytes.addAll(EscPos.line(d.storefrontUrl!.replaceFirst(RegExp(r'^https?://'), '')));
+  }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);
 
@@ -690,6 +714,9 @@ class ItemsReceiptData {
   final String outletAddress;
   final String? taxNumber;
   final String? customFooter;
+  // Link toko buat baris "Pesan online" di kaki struk (dari GET /orders/{id}/receipt
+  // atau dibangun lokal dari slug outlet).
+  final String? storefrontUrl;
   final String dateTime;
   final String tabNumber;
   final String? tableName;
@@ -710,6 +737,7 @@ class ItemsReceiptData {
     required this.outletAddress,
     this.taxNumber,
     this.customFooter,
+    this.storefrontUrl,
     required this.dateTime,
     required this.tabNumber,
     this.tableName,
@@ -742,6 +770,7 @@ class ItemsReceiptData {
       outletAddress: (j['outlet_address'] ?? '').toString(),
       taxNumber: j['tax_number']?.toString(),
       customFooter: j['custom_footer']?.toString(),
+      storefrontUrl: j['storefront_url']?.toString(),
       dateTime: (j['date_time'] ?? '').toString(),
       tabNumber: tabNumber,
       tableName: tableName,
@@ -853,6 +882,11 @@ Uint8List buildItemsReceipt(ItemsReceiptData d) {
     }
   } else {
     bytes.addAll(EscPos.line('Powered by Selaris'));
+  }
+  if (d.storefrontUrl != null && d.storefrontUrl!.trim().isNotEmpty) {
+    // Toko bisa ditemukan: pelanggan pesan lagi dari HP tanpa antre.
+    bytes.addAll(EscPos.line('Pesan online:'));
+    bytes.addAll(EscPos.line(d.storefrontUrl!.replaceFirst(RegExp(r'^https?://'), '')));
   }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);
@@ -981,6 +1015,11 @@ Uint8List buildSplitReceipt(SplitReceiptData d) {
     }
   } else {
     bytes.addAll(EscPos.line('Powered by Selaris'));
+  }
+  if (d.storefrontUrl != null && d.storefrontUrl!.trim().isNotEmpty) {
+    // Toko bisa ditemukan: pelanggan pesan lagi dari HP tanpa antre.
+    bytes.addAll(EscPos.line('Pesan online:'));
+    bytes.addAll(EscPos.line(d.storefrontUrl!.replaceFirst(RegExp(r'^https?://'), '')));
   }
   bytes.addAll(EscPos.feedLines3);
   bytes.addAll(EscPos.cut);

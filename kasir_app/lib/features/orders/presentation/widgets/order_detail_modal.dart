@@ -495,6 +495,8 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
       changeAmount: changeAmount,
       taxNumber: (taxNumber != null && taxNumber.isNotEmpty) ? taxNumber : null,
       customFooter: (customFooter != null && customFooter.isNotEmpty) ? customFooter : null,
+      storefrontUrl: SessionCache.instance.storefrontUrl ??
+          ((prefs.getString('c_outlet_slug') ?? '').isEmpty ? null : '${AppConfig.baseUrl}/${prefs.getString('c_outlet_slug')}'),
     );
   }
 

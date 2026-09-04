@@ -38,6 +38,7 @@ class OutletUpdate(BaseModel):
     bank_name: Optional[str] = Field(default=None, max_length=60)
     bank_account_number: Optional[str] = Field(default=None, max_length=40)
     bank_account_name: Optional[str] = Field(default=None, max_length=80)
+    directory_listed: Optional[bool] = None
 
 class OutletPaymentSetup(BaseModel):
     xendit_business_id: str
@@ -78,6 +79,7 @@ class OutletInDBBase(OutletBase):
     # 'xendit' kalau toko punya kunci Xendit, kalau nggak 'manual' (kasir
     # konfirmasi sendiri). Dihitung dari model, bukan disimpan.
     qris_channel: str = "manual"
+    directory_listed: bool = True
     qris_static_image_url: Optional[str] = None
     bank_name: Optional[str] = None
     bank_account_number: Optional[str] = None

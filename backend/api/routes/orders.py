@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, text, func
 
 from backend.core.database import get_db
+from backend.core.config import settings
 from backend.api.deps import get_current_user
 from backend.models.user import User
 from backend.models.order import Order, OrderItem
@@ -1002,6 +1003,9 @@ async def get_order_receipt(
         "change_amount": float(payment.change_amount or 0) if payment else 0.0,
         "tax_number": tax_cfg.tax_number if tax_cfg else None,
         "custom_footer": tax_cfg.receipt_footer if tax_cfg else None,
+        # Link toko di struk cetak (toko bisa ditemukan, 4 Sep 2026). Struk
+        # WA udah lama bawa ini; yang kertas belum. Flutter yang nyetak.
+        "storefront_url": f"{settings.SITE_URL}/{outlet.slug}" if outlet.slug else None,
         "is_subset": is_subset,
     }
 

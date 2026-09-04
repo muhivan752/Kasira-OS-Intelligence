@@ -182,6 +182,7 @@ class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage>
       changeAmount: widget.amountPaid - widget.totalAmount,
       taxNumber: taxConfig?.taxNumber ?? prefs.getString('c_outlet_tax_number'),
       customFooter: taxConfig?.receiptFooter ?? prefs.getString('c_outlet_custom_footer'),
+      storefrontUrl: SessionCache.instance.storefrontUrl,
     );
 
     final bytes = buildReceipt(data);

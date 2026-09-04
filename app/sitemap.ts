@@ -5,6 +5,8 @@ const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_
 
 async function getStorefrontSlugs(): Promise<string[]> {
   try {
+    // Direktori publik (outlets.py:public_outlet_list, mig 105). Dulu 404 sejak
+    // lahir, jadi nol toko yang pernah masuk sitemap.
     const res = await fetch(`${API_URL}/outlets/public/list`, { next: { revalidate: 3600 } });
     if (!res.ok) return [];
     const data = await res.json();
@@ -23,6 +25,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/pulsa-agen`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/login`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.5 },
     { url: `${baseUrl}/download`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.7 },
+    { url: `${baseUrl}/jelajah`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.8 },
   ];
 
   // Dynamic storefront pages
