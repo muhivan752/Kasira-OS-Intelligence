@@ -1076,6 +1076,8 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
         ).order_by(Payment.created_at.desc()).limit(1)
     )
     payment = pay_result.scalar_one_or_none()
+    # Dipakai di payment_data (QRIS statis toko) dan outlet_data di bawah.
+    outlet = await db.get(Outlet, order.outlet_id)
 
     payment_data = None
     if payment:
