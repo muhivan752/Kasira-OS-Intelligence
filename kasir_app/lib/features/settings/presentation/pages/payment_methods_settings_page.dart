@@ -159,7 +159,7 @@ class _PaymentMethodsSettingsPageState extends State<PaymentMethodsSettingsPage>
         title: Text('Metode pembayaran', style: KasiraDS.display(size: 18, color: KasiraDS.textStrong)),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(KasiraDS.space4),
+        padding: const EdgeInsets.fromLTRB(KasiraDS.space4, KasiraDS.space3, KasiraDS.space4, KasiraDS.space5),
         children: [
           Text(
             'Kasir hanya melihat metode yang dinyalakan di sini. Tunai selalu aktif.',
@@ -239,7 +239,12 @@ class _PaymentMethodsSettingsPageState extends State<PaymentMethodsSettingsPage>
               ],
             ),
           ),
-          Switch(value: value, onChanged: onChanged, activeColor: KasiraDS.brandPrimary),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: KasiraDS.brandPrimary,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
         ],
       ),
     );
@@ -247,7 +252,9 @@ class _PaymentMethodsSettingsPageState extends State<PaymentMethodsSettingsPage>
 
   Widget _subCard({required List<Widget> children}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: KasiraDS.space3, left: KasiraDS.space3),
+      // Rata kiri dengan kartu metode di atasnya. Versi pertama diindent ke
+      // kanan dan kelihatan miring di HP (laporan Ivan 4 Sep).
+      margin: const EdgeInsets.only(bottom: KasiraDS.space3),
       padding: const EdgeInsets.all(KasiraDS.space3),
       decoration: BoxDecoration(
         color: KasiraDS.surfaceSunken,
