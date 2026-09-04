@@ -14,9 +14,11 @@ import { BRAND, SITE_URL } from '@/lib/brand';
  * satu halaman yang nautin ke semua toko, bukan cuma link yang disebar
  * pemilik lewat WA.
  */
-export const revalidate = 300;
+// force-dynamic, bukan ISR: waktu `next build` backend nggak kejangkau, dan hasil
+// kosong bakal nyangkut sampai revalidate. Cache-nya udah di Redis (5 menit).
+export const dynamic = 'force-dynamic';
 
-const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://backend:8000/api/v1';
 
 type Listed = {
   slug: string;
@@ -40,7 +42,7 @@ export const metadata: Metadata = {
 
 async function getListed(): Promise<Listed[]> {
   try {
-    const res = await fetch(`${API_URL}/outlets/public/list`, { next: { revalidate: 300 } });
+    const res = await fetch(`${API_URL}/outlets/public/list`, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
     return (data.data || []) as Listed[];

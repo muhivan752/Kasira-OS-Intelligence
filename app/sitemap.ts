@@ -1,13 +1,17 @@
 import { SITE_URL } from '@/lib/brand';
 import { MetadataRoute } from 'next';
 
-const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://backend:8000/api/v1';
+
+// Sitemap dibaca Google, bukan orang: no-store supaya nggak nyangkut hasil kosong
+// dari waktu build. Backend udah nge-cache daftarnya 5 menit di Redis.
+export const dynamic = 'force-dynamic';
 
 async function getStorefrontSlugs(): Promise<string[]> {
   try {
     // Direktori publik (outlets.py:public_outlet_list, mig 105). Dulu 404 sejak
     // lahir, jadi nol toko yang pernah masuk sitemap.
-    const res = await fetch(`${API_URL}/outlets/public/list`, { next: { revalidate: 3600 } });
+    const res = await fetch(`${API_URL}/outlets/public/list`, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
     return (data.data || []).map((o: any) => o.slug).filter(Boolean);
