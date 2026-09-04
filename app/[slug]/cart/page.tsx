@@ -12,7 +12,7 @@ import {
 import { Trash2, Store, Bike, Utensils, QrCode, Banknote, Loader2, Bell, ShieldCheck, ChevronRight, MapPin, LocateFixed, X } from 'lucide-react';
 
 type OrderType = 'pickup' | 'delivery' | 'dine_in';
-type PayMethod = 'qris' | 'cash';
+type PayMethod = 'qris' | 'cash' | 'transfer';
 
 /**
  * Halaman pemesanan (checkout). Urutan yang dibaca pelanggan:
@@ -121,8 +121,15 @@ export default function CheckoutPage() {
   // pakai QRIS statis miliknya, pelanggan kirim bukti lewat WhatsApp.
   const storeMethods: string[] = storeData?.outlet?.payment_methods ?? ['cash', 'qris'];
   const qrisOffered = storeMethods.includes('qris');
+  // Transfer = bayar sekarang ke rekening toko, kirim bukti (manual, seperti QRIS statis).
+  const transferOffered = storeMethods.includes('transfer') && !!storeData?.outlet?.bank_account_number;
+  const codAllowed: boolean = storeData?.outlet?.delivery?.cod_enabled !== false;
   const qrisManual = (storeData?.outlet?.qris_channel ?? 'manual') === 'manual';
-  useEffect(() => { if (storeData && !qrisOffered) setPayMethod('cash'); }, [storeData, qrisOffered]);
+  useEffect(() => { if (storeData && !qrisOffered) setPayMethod(transferOffered ? 'transfer' : 'cash'); }, [storeData, qrisOffered, transferOffered]);
+  // Antar tanpa COD: tunai nggak boleh kepilih. Balik ke antar dengan COD: biarkan pilihan pelanggan.
+  useEffect(() => {
+    if (orderType === 'delivery' && !codAllowed && payMethod === 'cash') setPayMethod(qrisOffered ? 'qris' : 'transfer');
+  }, [orderType, codAllowed, payMethod, qrisOffered]);
 
   const phoneOk = /^0?8\d{8,12}$/.test(customerPhone) || /^628\d{8,12}$/.test(customerPhone);
   const validation = useMemo(() => {
@@ -207,8 +214,28 @@ export default function CheckoutPage() {
     { id: 'pickup', label: 'Ambil sendiri', hint: 'Ambil di toko', icon: Store, show: true },
     { id: 'delivery', label: 'Antar', hint: deliveryCfg.fee_base > 0 ? `Ongkir mulai ${rp(deliveryCfg.fee_base)}` : 'Ke alamat Anda', icon: Bike, show: deliveryCfg.enabled !== false },
   ];
-  const cashLabel = orderType === 'delivery' ? 'Bayar saat pesanan diterima' : 'Bayar di kasir';
+  const cashLabel = orderType === 'delivery' ? 'Bayar di tempat (COD)' : 'Bayar di kasir';
   const submitLabel = dineInTab ? 'Kirim pesanan ke meja' : payMethod === 'qris' && !qrisManual ? 'Lanjut bayar QRIS' : 'Kirim pesanan';
+  // Pilihan bayar. Buat antar dipisah dua kelompok supaya keputusannya jelas:
+  // bayar sekarang (QRIS, transfer) atau bayar di tempat (COD, kalau toko izinkan).
+  const payOptions: { id: PayMethod; label: string; hint: string; icon: any; group: 'now' | 'later' }[] = [
+    ...(qrisOffered ? [{ id: 'qris' as PayMethod, label: 'QRIS', hint: qrisManual ? 'Pindai QRIS toko, kirim bukti bayar' : 'Semua e-wallet dan m-banking', icon: QrCode, group: 'now' as const }] : []),
+    ...(transferOffered ? [{ id: 'transfer' as PayMethod, label: 'Transfer bank', hint: `Ke rekening ${storeData?.outlet?.bank_name || 'toko'}, kirim bukti bayar`, icon: Banknote, group: 'now' as const }] : []),
+    ...((orderType === 'delivery' && !codAllowed) ? [] : [{ id: 'cash' as PayMethod, label: cashLabel, hint: orderType === 'delivery' ? 'Bayar tunai ke kurir saat pesanan sampai' : 'Tunai atau sesuai kesepakatan', icon: Banknote, group: 'later' as const }]),
+  ];
+  const renderPayOption = (m: typeof payOptions[number]) => {
+    const active = payMethod === m.id;
+    return (
+      <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
+        className={`flex flex-col items-start gap-2 p-3.5 rounded-2xl border-2 text-left transition ${active ? 'border-[var(--text-strong)]' : 'border-[var(--border-subtle)] hover:border-[var(--border-default)]'}`}>
+        <m.icon className={`w-5 h-5 ${active ? 'text-[var(--text-strong)]' : 'text-[var(--text-muted)]'}`} />
+        <span>
+          <span className="block text-sm font-bold text-[var(--text-strong)]">{m.label}</span>
+          <span className="block text-xs text-[var(--text-muted)]">{m.hint}</span>
+        </span>
+      </button>
+    );
+  };
 
   return (
     <div className="pb-36 md:pb-12">
@@ -375,25 +402,30 @@ export default function CheckoutPage() {
           {/* 4. Pembayaran */}
           {!dineInTab && (
             <Card className="p-5">
-              <SectionTitle step={4} title="Pembayaran" />
-              <div className="grid grid-cols-2 gap-2">
-                {([
-                  { id: 'qris', label: 'QRIS', hint: qrisManual ? 'Pindai QRIS toko, kirim bukti bayar' : 'Semua e-wallet dan m-banking', icon: QrCode },
-                  { id: 'cash', label: cashLabel, hint: 'Tunai atau sesuai kesepakatan', icon: Banknote },
-                ] as const).filter((m) => m.id !== 'qris' || qrisOffered).map((m) => {
-                  const active = payMethod === m.id;
-                  return (
-                    <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
-                      className={`flex flex-col items-start gap-2 p-3.5 rounded-2xl border-2 text-left transition ${active ? 'border-[var(--text-strong)]' : 'border-[var(--border-subtle)] hover:border-[var(--border-default)]'}`}>
-                      <m.icon className={`w-5 h-5 ${active ? 'text-[var(--text-strong)]' : 'text-[var(--text-muted)]'}`} />
-                      <span>
-                        <span className="block text-sm font-bold text-[var(--text-strong)]">{m.label}</span>
-                        <span className="block text-xs text-[var(--text-muted)]">{m.hint}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              <SectionTitle step={4} title="Pembayaran" hint={orderType === 'delivery' ? 'Bayar sekarang, atau bayar tunai saat kurir sampai.' : undefined} />
+              {orderType === 'delivery' ? (
+                <div className="space-y-4">
+                  {payOptions.some((m) => m.group === 'now') && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">Bayar sekarang</p>
+                      <div className="grid grid-cols-2 gap-2">{payOptions.filter((m) => m.group === 'now').map(renderPayOption)}</div>
+                    </div>
+                  )}
+                  {payOptions.some((m) => m.group === 'later') ? (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">Bayar di tempat</p>
+                      <div className="grid grid-cols-2 gap-2">{payOptions.filter((m) => m.group === 'later').map(renderPayOption)}</div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[var(--text-muted)]">Toko ini meminta pesanan antar dibayar lebih dulu.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">{payOptions.map(renderPayOption)}</div>
+              )}
+              {payMethod === 'transfer' && transferOffered && (
+                <p className="mt-3 text-xs text-[var(--text-muted)]">Nomor rekening toko tampil di halaman berikutnya. Setelah transfer, unggah bukti bayarnya di sana.</p>
+              )}
               {payMethod === 'qris' && qrisOffered && (
                 <p className="mt-3 text-xs text-[var(--text-muted)]">
                   {qrisManual

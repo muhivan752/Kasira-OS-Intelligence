@@ -148,7 +148,7 @@ async def accept_order(db, order: Order, outlet: Outlet, *, eta_minutes: int, ac
     # kasir menerima pesanan = memastikan uangnya masuk. Tandai lunas di sini,
     # supaya laporan (yang cuma menghitung order lunas) melihatnya.
     pay = await latest_payment(db, order.id)
-    if pay is not None and _val(pay.payment_method) == "qris" and (pay.channel or "xendit") == "manual" \
+    if pay is not None and _val(pay.payment_method) in ("qris", "transfer") and (pay.channel or "xendit") == "manual" \
             and _val(pay.status) in ("pending", "pending_manual_check"):
         pay.status = "paid"
         pay.paid_at = now

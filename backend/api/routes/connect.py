@@ -86,7 +86,7 @@ class ConnectOrderInput(BaseModel):
     delivery_lng: Optional[float] = Field(default=None, ge=-180, le=180)
     table_id: Optional[uuid.UUID] = None  # for dine_in — auto-link to open tab
     idempotency_key: str
-    payment_method: str = 'qris'  # 'qris' atau 'cash'
+    payment_method: str = 'qris'  # 'qris' | 'cash' | 'transfer' (transfer = manual, kirim bukti)
     # Catatan pelanggan ("tanpa gula", "titip di satpam"). Dulu dikirim web
     # tapi nggak ada di skema, jadi Pydantic membuangnya diam-diam.
     notes: Optional[str] = Field(default=None, max_length=300)
@@ -479,6 +479,8 @@ async def create_connect_order(
         raise HTTPException(status_code=400, detail=("Toko sedang tutup. " + (nxt + "." if nxt else "Silakan pesan lagi saat toko buka.")))
     if input_data.order_type == "delivery" and not _delivery.enabled(outlet):
         raise HTTPException(status_code=400, detail="Toko sedang tidak melayani antar. Pilih ambil sendiri.")
+    if input_data.order_type == "delivery" and input_data.payment_method == "cash" and not _delivery.cod_enabled(outlet):
+        raise HTTPException(status_code=400, detail="Toko ini tidak menerima bayar di tempat untuk antar. Pilih bayar sekarang (QRIS atau transfer).")
     if not getattr(outlet, 'online_orders_enabled', True):
         raise HTTPException(status_code=400, detail="Toko sedang tidak menerima pesanan online. Silakan hubungi toko lewat WhatsApp.")
     if delivery_lat is not None and outlet.latitude is not None and outlet.longitude is not None:
@@ -767,20 +769,24 @@ async def create_connect_order(
         pass
     else:
         # Normal flow: create payment immediately
-        pay_method = PaymentMethod.qris if input_data.payment_method == 'qris' else PaymentMethod.cash
+        pay_method = {"qris": PaymentMethod.qris, "transfer": PaymentMethod.transfer}.get(input_data.payment_method, PaymentMethod.cash)
         if not _pm.is_enabled(outlet, pay_method):
             raise HTTPException(status_code=400, detail=_pm.disabled_error(pay_method)["message"])
+        if pay_method == PaymentMethod.transfer and not (outlet.bank_account_number or "").strip():
+            raise HTTPException(status_code=400, detail="Toko belum mengisi rekening untuk transfer. Pilih metode lain.")
         # QRIS statis toko (nggak ada Xendit): pelanggan bayar ke QR milik toko
         # dan kirim bukti lewat WA; kasir menerima pesanan = memastikan uangnya
         # masuk (order_lifecycle.accept_order). Sampai itu status 'pending'.
         pay_channel = _pm.resolve_channel(outlet, pay_method)
         manual_qris = pay_method == PaymentMethod.qris and pay_channel == _pm.CHANNEL_MANUAL
+        # Transfer selalu manual: pelanggan kirim bukti, kasir memastikan.
+        manual_transfer = pay_method == PaymentMethod.transfer
         # Tunai antar (COD) = uangnya masih di tangan pelanggan sampai kurir
         # sampai: pending, ditandai lunas waktu pesanan ditandai selesai
         # (orders.py PUT status completed). Tunai ambil sendiri tetap seperti
         # dulu: dicatat lunas, diterima kasir saat serah terima.
         cod = pay_method == PaymentMethod.cash and db_order_type == "delivery"
-        initial_status = PaymentStatus.pending if (pay_method == PaymentMethod.qris or cod) else PaymentStatus.paid
+        initial_status = PaymentStatus.pending if (pay_method == PaymentMethod.qris or manual_transfer or cod) else PaymentStatus.paid
 
         payment = Payment(
             order_id=order.id,
@@ -926,9 +932,10 @@ async def create_connect_order(
     from backend.services import online_orders as _oo
     from types import SimpleNamespace
     manual_qris_pending = bool(
-        payment is not None and payment.payment_method == 'qris'
+        payment is not None and payment.payment_method in ('qris', 'transfer')
         and (payment.channel or 'xendit') == 'manual' and payment.status != 'paid'
     )
+    manual_method = payment.payment_method if manual_qris_pending else 'qris'
     # QRIS manual TIDAK dianggap "menunggu bayar": nggak ada webhook yang
     # bakal ngabarin toko, jadi toko dikabari sekarang seperti tunai.
     awaiting_payment = bool(
@@ -939,7 +946,7 @@ async def create_connect_order(
         _oo.wa_customer, outlet, input_data.customer_phone,
         _oo.msg_received(order, outlet, awaiting_payment=awaiting_payment,
                          auto_cancel_minutes=int(outlet.online_auto_cancel_minutes or 10),
-                         manual_qris=manual_qris_pending),
+                         manual_qris=manual_qris_pending, manual_method=manual_method),
     )
     if not awaiting_payment:
         item_objs = [SimpleNamespace(quantity=q, product_name=n) for q, n in item_names]
@@ -947,7 +954,7 @@ async def create_connect_order(
             _oo.wa_owner, outlet,
             _oo.msg_owner_new_order(order, outlet, input_data.customer_name, item_objs,
                                     paid=bool(payment is not None and payment.status == 'paid'),
-                                    manual_qris=manual_qris_pending),
+                                    manual_qris=manual_qris_pending, manual_method=manual_method),
         )
         background_tasks.add_task(_oo.publish, outlet.id, "order.created", {
             "order_id": str(order.id), "display_number": order.display_number,
@@ -973,7 +980,10 @@ async def create_connect_order(
                 "channel": payment.channel if payment else None,
                 "qris_url": qris_url,
                 "qris_expired_at": qris_expired_at,
-                "qris_static_image_url": outlet.qris_static_image_url if manual_qris_pending else None,
+                "qris_static_image_url": outlet.qris_static_image_url if (manual_qris_pending and payment.payment_method == 'qris') else None,
+                "bank_name": outlet.bank_name if payment.payment_method == 'transfer' else None,
+                "bank_account_number": outlet.bank_account_number if payment.payment_method == 'transfer' else None,
+                "bank_account_name": outlet.bank_account_name if payment.payment_method == 'transfer' else None,
             } if payment else {
                 "method": "tab",
                 "status": "pending_tab",
@@ -1327,6 +1337,9 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
             "status": payment.status,
             "channel": payment.channel,
             "proof_image_url": payment.proof_image_url,
+            "bank_name": outlet.bank_name if payment.payment_method == 'transfer' else None,
+            "bank_account_number": outlet.bank_account_number if payment.payment_method == 'transfer' else None,
+            "bank_account_name": outlet.bank_account_name if payment.payment_method == 'transfer' else None,
             "qris_url": q_url,
             "qris_expired_at": expired_at,
             # QR statis toko buat halaman lacak: pelanggan bayar lalu kirim bukti.

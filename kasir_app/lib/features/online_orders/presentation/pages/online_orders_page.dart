@@ -481,9 +481,11 @@ class _OrderCard extends StatelessWidget {
               ]),
             ),
           ),
-        ] else if (order.isPending && order.paymentMethod == 'qris' && order.paymentChannel == 'manual') ...[
+        ] else if (order.isPending && (order.paymentMethod == 'qris' || order.paymentMethod == 'transfer') && order.paymentChannel == 'manual') ...[
           const SizedBox(height: 8),
-          Text('Pelanggan memilih QRIS toko dan belum mengirim bukti. Cek notifikasi bank sebelum Terima.',
+          Text(order.paymentMethod == 'transfer'
+                  ? 'Pelanggan memilih transfer dan belum mengirim bukti. Cek mutasi rekening sebelum Terima.'
+                  : 'Pelanggan memilih QRIS toko dan belum mengirim bukti. Cek notifikasi bank sebelum Terima.',
               style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted)),
         ],
         if (order.cancelReason != null) ...[

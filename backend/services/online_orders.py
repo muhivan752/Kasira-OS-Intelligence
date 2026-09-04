@@ -153,11 +153,13 @@ async def push_sefrekuensi(outlet, message: str) -> bool:
 
 # ── Teks pesan ────────────────────────────────────────────────────────────
 
-def msg_received(order, outlet, *, awaiting_payment: bool, auto_cancel_minutes: int, manual_qris: bool = False) -> str:
+def msg_received(order, outlet, *, awaiting_payment: bool, auto_cancel_minutes: int, manual_qris: bool = False,
+                 manual_method: str = "qris") -> str:
     head = f"Pesanan #{order.display_number} di {outlet.name} sudah kami terima."
     if manual_qris:
+        tujuan = "rekening toko" if manual_method == "transfer" else "QRIS toko"
         body = (
-            f"Bayar {_rp(_tagihan(order))} ke QRIS toko yang tampil di halaman pesanan, "
+            f"Bayar {_rp(_tagihan(order))} ke {tujuan} yang tampil di halaman pesanan, "
             "lalu balas pesan ini dengan bukti bayarnya. "
             f"Toko akan mengonfirmasi dalam {auto_cancel_minutes} menit setelah bukti diterima."
         )
@@ -226,13 +228,13 @@ def msg_cancelled(order, outlet, *, refund_amount=None, refund_manual: bool = Fa
 
 
 def msg_owner_new_order(order, outlet, customer_name: Optional[str], items: Iterable, *, paid: bool,
-                        manual_qris: bool = False) -> str:
+                        manual_qris: bool = False, manual_method: str = "qris") -> str:
     if paid:
         pay = "Lunas (QRIS)"
     elif manual_qris:
-        pay = "QRIS toko, cek bukti bayar"
+        pay = "Transfer, cek bukti bayar" if manual_method == "transfer" else "QRIS toko, cek bukti bayar"
     else:
-        pay = "Bayar di kasir"
+        pay = "Bayar di tempat (COD)" if _type_key(order) == "delivery" else "Bayar di kasir"
     lines = _items_lines(items)
     extra = ""
     lat, lng = getattr(order, "delivery_lat", None), getattr(order, "delivery_lng", None)

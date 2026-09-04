@@ -33,6 +33,11 @@ def enabled(outlet) -> bool:
     return bool(getattr(outlet, "delivery_enabled", True))
 
 
+def cod_enabled(outlet) -> bool:
+    """Toko terima bayar di tempat buat antar? False = wajib bayar dulu."""
+    return bool(getattr(outlet, "delivery_cod_enabled", True))
+
+
 def compute_fee(outlet, distance_km: Optional[float]) -> int:
     base = _num(getattr(outlet, "delivery_fee_base", 0))
     per_km = _num(getattr(outlet, "delivery_fee_per_km", 0))
@@ -56,6 +61,7 @@ def public_config(outlet) -> dict:
     return {
         "delivery": {
             "enabled": enabled(outlet),
+            "cod_enabled": cod_enabled(outlet),
             "fee_base": compute_fee(outlet, None),
             "fee_per_km": int(_num(getattr(outlet, "delivery_fee_per_km", 0))),
             "free_km": _num(getattr(outlet, "delivery_free_km", 0)),

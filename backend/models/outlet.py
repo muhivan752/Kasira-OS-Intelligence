@@ -48,6 +48,8 @@ class Outlet(BaseModel):
     delivery_fee_per_km = Column(Numeric(12, 2), server_default='0', nullable=False)
     delivery_free_km = Column(Numeric(5, 1), server_default='0', nullable=False)
     delivery_min_order = Column(Numeric(12, 2), server_default='0', nullable=False)
+    # mig 107: false = antar wajib bayar dulu (QRIS/transfer), tunai ditolak.
+    delivery_cod_enabled = Column(Boolean, server_default='true', nullable=False)
     business_hours = Column(JSONB, nullable=True)
     hours_mode = Column(String(10), server_default='manual', nullable=False)
 

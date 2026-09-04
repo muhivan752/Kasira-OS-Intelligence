@@ -95,7 +95,7 @@ export default function OrderStatusPage() {
     if (order.status === 'completed') return 'completed';
     if (order.status === 'ready' || order.status === 'served') return 'ready';
     if (order.status === 'preparing') return 'preparing';
-    if (pay?.method === 'qris' && pay.status !== 'paid') {
+    if ((pay?.method === 'qris' || pay?.method === 'transfer') && pay.status !== 'paid') {
       // QRIS statis toko: nggak ada webhook. Pelanggan bayar ke QR toko dan
       // kirim bukti, toko yang mengonfirmasi. Secara alur = menunggu toko.
       if (pay.channel === 'manual') return 'awaiting_confirm';
@@ -124,9 +124,11 @@ export default function OrderStatusPage() {
     ? new Date(new Date(order.accepted_at).getTime() + order.eta_minutes * 60000) : null;
   const readyWord = typeKey === 'delivery' ? 'siap diantar' : typeKey === 'dine_in' ? 'diantar ke meja' : 'siap diambil';
 
-  const manualQrisUnpaid = order.payment?.method === 'qris' && order.payment?.channel === 'manual' && order.payment?.status !== 'paid';
+  // QRIS statis ATAU transfer: dua duanya manual, pelanggan kirim bukti, toko memastikan.
+  const manualQrisUnpaid = (order.payment?.method === 'qris' || order.payment?.method === 'transfer') && order.payment?.channel === 'manual' && order.payment?.status !== 'paid';
+  const isTransfer = order.payment?.method === 'transfer';
   const proofSent = !!order.payment?.proof_image_url;
-  const proofText = `Halo ${outlet.name || 'Kak'}, saya sudah membayar pesanan #${order.display_number} sebesar ${rp(order.grand_total ?? order.total_amount)} lewat QRIS. Berikut bukti bayarnya.`;
+  const proofText = `Halo ${outlet.name || 'Kak'}, saya sudah membayar pesanan #${order.display_number} sebesar ${rp(order.grand_total ?? order.total_amount)} lewat ${isTransfer ? 'transfer' : 'QRIS'}. Berikut bukti bayarnya.`;
 
   const hero: Record<Phase, { title: string; body: string; tone: string; icon: any }> = {
     awaiting_payment: {
@@ -140,11 +142,13 @@ export default function OrderStatusPage() {
       tone: 'bg-[color-mix(in_srgb,var(--danger)_10%,white)] text-[var(--text-strong)]', icon: XCircle,
     },
     awaiting_confirm: {
-      title: manualQrisUnpaid ? (proofSent ? 'Bukti bayar terkirim' : 'Bayar lalu unggah bukti') : 'Menunggu konfirmasi toko',
+      title: manualQrisUnpaid ? (proofSent ? 'Bukti bayar terkirim' : (isTransfer ? 'Transfer lalu unggah bukti' : 'Bayar lalu unggah bukti')) : 'Menunggu konfirmasi toko',
       body: manualQrisUnpaid
         ? (proofSent
           ? 'Toko sedang memeriksa bukti bayar Anda. Halaman ini berubah sendiri begitu pesanan dikonfirmasi.'
-          : 'Pindai QRIS toko di bawah, lalu unggah tangkapan layar bukti bayar. Toko mengonfirmasi pesanan setelah bukti diterima.')
+          : (isTransfer
+            ? 'Transfer ke rekening toko di bawah, lalu unggah tangkapan layar bukti transfer. Toko mengonfirmasi pesanan setelah bukti diterima.'
+            : 'Pindai QRIS toko di bawah, lalu unggah tangkapan layar bukti bayar. Toko mengonfirmasi pesanan setelah bukti diterima.'))
         : order.confirm_deadline
         ? `Toko merespons paling lambat pukul ${timeShort(order.confirm_deadline)}. Bila tidak, pesanan dibatalkan otomatis${order.payment?.status === 'paid' ? ' dan pembayaran dikembalikan' : ''}.`
         : 'Toko akan segera merespons pesanan Anda.',
@@ -222,8 +226,14 @@ export default function OrderStatusPage() {
         {/* QRIS statis toko: gambar QR milik toko + tombol kirim bukti */}
         {phase === 'awaiting_confirm' && manualQrisUnpaid && (
           <Card className="p-6 text-center">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)] mb-4">QRIS {outlet.name}</p>
-            {order.payment?.qris_static_image_url ? (
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)] mb-4">{isTransfer ? 'Rekening' : 'QRIS'} {outlet.name}</p>
+            {isTransfer ? (
+              <div className="rounded-2xl border border-[var(--border-subtle)] p-4 text-left space-y-1">
+                <p className="text-xs text-[var(--text-muted)]">{order.payment?.bank_name || 'Bank'}</p>
+                <p className="font-mono text-2xl font-extrabold tracking-wider text-[var(--text-strong)] select-all">{order.payment?.bank_account_number || '-'}</p>
+                <p className="text-sm text-[var(--text-body)]">a.n. {order.payment?.bank_account_name || outlet.name}</p>
+              </div>
+            ) : order.payment?.qris_static_image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={order.payment.qris_static_image_url} alt={`QRIS ${outlet.name}`} className="w-60 h-60 mx-auto rounded-2xl border border-[var(--border-subtle)] object-contain bg-white" />
             ) : (

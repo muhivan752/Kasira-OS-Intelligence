@@ -46,6 +46,7 @@ class OutletUpdate(BaseModel):
     delivery_free_km: Optional[float] = Field(default=None, ge=0, le=100)
     delivery_min_order: Optional[float] = Field(default=None, ge=0, le=100_000_000)
     delivery_radius_km: Optional[float] = Field(default=None, ge=0, le=200)
+    delivery_cod_enabled: Optional[bool] = None
     business_hours: Optional[Any] = None
     hours_mode: Optional[Literal['manual', 'schedule']] = None
 
@@ -95,6 +96,7 @@ class OutletInDBBase(OutletBase):
     delivery_free_km: float = 0
     delivery_min_order: float = 0
     delivery_radius_km: Optional[float] = None
+    delivery_cod_enabled: bool = True
     business_hours: Optional[Any] = None
     hours_mode: str = "manual"
     qris_static_image_url: Optional[str] = None

@@ -32,6 +32,7 @@ function contohOngkir(base: number, perKm: number, freeKm: number, km: number) {
 export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSaved?: (patch: any) => void }) {
   // ── Antar ──
   const [enabled, setEnabled] = useState(true);
+  const [cod, setCod] = useState(true);
   const [base, setBase] = useState('0');
   const [perKm, setPerKm] = useState('0');
   const [freeKm, setFreeKm] = useState('0');
@@ -63,6 +64,7 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
     if (!outlet || initFor.current === outlet.id) return;
     initFor.current = outlet.id;
     setEnabled(outlet.delivery_enabled !== false);
+    setCod(outlet.delivery_cod_enabled !== false);
     setBase(String(Math.round(outlet.delivery_fee_base || 0)));
     setPerKm(String(Math.round(outlet.delivery_fee_per_km || 0)));
     setFreeKm(String(outlet.delivery_free_km || 0));
@@ -86,6 +88,7 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
     setDSaving(true); setDMsg(null);
     const patch = {
       delivery_enabled: enabled,
+      delivery_cod_enabled: cod,
       delivery_fee_base: num(base),
       delivery_fee_per_km: num(perKm),
       delivery_free_km: num(freeKm),
@@ -242,6 +245,16 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
               <label className="block text-sm font-medium text-gray-700 mb-1">Minimal pesanan untuk antar (Rp)</label>
               <input inputMode="numeric" value={minOrder} onChange={e => setMinOrder(e.target.value)} className={inputCls} placeholder="20000" />
             </div>
+          </div>
+          <div className="flex items-start justify-between gap-4 rounded-lg border border-gray-200 p-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Terima bayar di tempat (COD)</p>
+              <p className="text-xs text-gray-500 mt-0.5">Pelanggan boleh bayar tunai ke kurir saat pesanan sampai. Matikan kalau mau semua pesanan antar dibayar dulu lewat QRIS atau transfer.</p>
+            </div>
+            <button type="button" onClick={() => setCod(v => !v)} role="switch" aria-checked={cod}
+              className={`relative mt-0.5 inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${cod ? 'bg-blue-600' : 'bg-gray-200'}`}>
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${cod ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
           </div>
           <div className="rounded-lg bg-gray-50 px-4 py-3 text-xs text-gray-600">
             Contoh dengan angka di atas: 1 km {rp(contohOngkir(b, p, f, 1))}, 3 km {rp(contohOngkir(b, p, f, 3))}, 5 km {rp(contohOngkir(b, p, f, 5))}.
