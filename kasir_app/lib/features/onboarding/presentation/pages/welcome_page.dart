@@ -22,18 +22,25 @@ class _WelcomePageState extends State<WelcomePage> {
   final _controller = PageController();
   int _index = 0;
 
+  // Foto dari Unsplash (lisensi bebas komersial, tanpa atribusi wajib):
+  // slide_nota = Pasar Gading Surakarta (Prabu Panji), slide_meja = tiga
+  // minuman satu meja (Nathan Dumlao), slide_pelanggan = dua pelanggan di
+  // kafe, satu pegang HP (tommao wang). Sudah di-crop 4:3, WebP ~1080px.
   static const _slides = [
     (
+      image: 'assets/onboarding/slide_nota.webp',
       icon: LucideIcons.camera,
       title: 'Foto nota belanja,\nharga modal terisi sendiri',
       body: 'Stok bahan bertambah, harga modal dihitung ulang, dan utang supplier tercatat. Anda cukup memfoto notanya.',
     ),
     (
+      image: 'assets/onboarding/slide_meja.webp',
       icon: LucideIcons.receipt,
       title: 'Satu meja,\ntiap orang bayar sendiri',
       body: 'Ada yang membayar dengan QRIS, ada yang tunai, ada yang menyusul. Struknya terbit per orang.',
     ),
     (
+      image: 'assets/onboarding/slide_pelanggan.webp',
       icon: LucideIcons.messageCircle,
       title: 'Struk ke WhatsApp,\ndata pelanggan terbentuk sendiri',
       body: 'Nomor pelanggan tercatat dari struk. Siapa yang setia dan siapa yang mulai jarang datang jadi terlihat.',
@@ -90,22 +97,47 @@ class _WelcomePageState extends State<WelcomePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              gradient: KasiraDS.gradientFrekuensiSoft,
-                              borderRadius: KasiraDS.brLg,
-                            ),
-                            child: Center(
-                              child: Container(
-                                width: 96,
-                                height: 96,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(28),
+                          child: ClipRRect(
+                            borderRadius: KasiraDS.brLg,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                // Gradien tetap jadi latar: kalau aset gagal
+                                // dimuat, kartunya nggak pernah kosong.
+                                const DecoratedBox(
+                                  decoration: BoxDecoration(gradient: KasiraDS.gradientFrekuensiSoft),
                                 ),
-                                child: Icon(s.icon, size: 46, color: Colors.white),
-                              ),
+                                Image.asset(
+                                  s.image,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                                ),
+                                // Vignette bawah supaya lencana ikon kebaca di
+                                // atas foto terang.
+                                const DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      stops: [0.55, 1.0],
+                                      colors: [Colors.transparent, Color(0x99000000)],
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: KasiraDS.space3,
+                                  bottom: KasiraDS.space3,
+                                  child: Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.92),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Icon(s.icon, size: 22, color: KasiraDS.brandPrimary),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
