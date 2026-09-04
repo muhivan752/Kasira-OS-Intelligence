@@ -223,6 +223,47 @@ async def close_shift(
     return {"expected": expected, "variance": variance, "variance_status": variance_status}
 
 
+async def count_closed_shift(
+    db: AsyncSession,
+    shift: Shift,
+    *,
+    ending_cash: float,
+    user_id: Optional[UUID] = None,
+    tenant_id: Optional[UUID] = None,
+    notes: Optional[str] = None,
+) -> dict:
+    """Hitung kas sesi yang SUDAH ditutup tanpa dihitung (auto_cutoff 04.00,
+    atau ditutup manual tanpa angka). Bug 4 Sep: tombol Hitung di app nembak
+    /close, dan /close nolak semua yang statusnya closed, jadi sesi yang
+    ditutup janitor nggak pernah bisa dihitung. Status, end_time, dan
+    closed_reason TIDAK disentuh: yang ditambah cuma angka fisik + counted_at.
+    """
+    expected = shift.expected_ending_cash
+    if expected is None:
+        expected = await compute_expected_cash(db, shift)
+        shift.expected_ending_cash = expected
+    expected = float(expected)
+    now = datetime.now(timezone.utc)
+    shift.ending_cash = ending_cash
+    shift.counted_at = now
+    if notes:
+        shift.notes = notes if not shift.notes else f"{shift.notes} | {notes}"
+    shift.row_version = (shift.row_version or 0) + 1
+    variance = float(ending_cash) - expected
+    variance_status = "balanced" if abs(variance) < 1 else ("surplus" if variance > 0 else "deficit")
+    await log_audit(
+        db=db, action="COUNT_SHIFT", entity="shift", entity_id=shift.id,
+        after_state={
+            "ending_cash": ending_cash,
+            "expected_ending_cash": round(expected, 2),
+            "variance": round(variance, 2),
+            "closed_reason": shift.closed_reason,
+        },
+        user_id=user_id, tenant_id=tenant_id,
+    )
+    return {"expected": expected, "variance": variance, "variance_status": variance_status}
+
+
 async def pause_shift(
     db: AsyncSession,
     shift: Shift,

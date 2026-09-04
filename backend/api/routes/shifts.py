@@ -261,14 +261,16 @@ async def close_shift(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Any:
-    """Hitung kas dan tutup sesi. Berlaku untuk sesi terbuka maupun yang
-    dijeda ("hitung nanti")."""
+    """Hitung kas dan tutup sesi. Berlaku untuk sesi terbuka, yang dijeda
+    ("hitung nanti"), DAN yang sudah ditutup tanpa dihitung (auto_cutoff
+    04.00): buat yang terakhir, cuma angka fisiknya yang dicatat."""
     query = select(Shift).where(Shift.id == shift_id, Shift.deleted_at.is_(None))
     shift = (await db.execute(query)).scalar_one_or_none()
     if not shift:
         raise HTTPException(status_code=404, detail="Shift tidak ditemukan")
-    if shift.status == ShiftStatus.closed:
-        raise HTTPException(status_code=400, detail="Shift sudah ditutup")
+    if shift.status == ShiftStatus.closed and shift.counted_at is not None:
+        raise HTTPException(status_code=400, detail="Kas sesi ini sudah dihitung")
+    count_only = shift.status == ShiftStatus.closed
 
     # Laci bersama: siapa pun kasir di tenant ini boleh nutup (yang buka bisa
     # aja udah pulang). Siapa yang nutup kecatat di closed_by_user_id.
@@ -276,11 +278,17 @@ async def close_shift(
     if not outlet or outlet.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Tidak berwenang menutup shift ini")
 
-    result = await shift_service.close_shift(
-        db, shift, reason="manual",
-        user_id=current_user.id, tenant_id=current_user.tenant_id,
-        ending_cash=shift_in.ending_cash, notes=shift_in.notes,
-    )
+    if count_only:
+        result = await shift_service.count_closed_shift(
+            db, shift, ending_cash=shift_in.ending_cash, notes=shift_in.notes,
+            user_id=current_user.id, tenant_id=current_user.tenant_id,
+        )
+    else:
+        result = await shift_service.close_shift(
+            db, shift, reason="manual",
+            user_id=current_user.id, tenant_id=current_user.tenant_id,
+            ending_cash=shift_in.ending_cash, notes=shift_in.notes,
+        )
     await db.commit()
     await db.refresh(shift)
 
@@ -299,7 +307,7 @@ async def close_shift(
         success=True,
         data=data,
         request_id=request.state.request_id,
-        message=f"Shift ditutup. {'Kas seimbang' if variance_status == 'balanced' else f'Selisih Rp {abs(variance):,.0f} ({variance_status})'}",
+        message=f"{'Hitungan kas tercatat' if count_only else 'Shift ditutup'}. {'Kas seimbang' if variance_status == 'balanced' else f'Selisih Rp {abs(variance):,.0f} ({variance_status})'}",
     )
 
 
