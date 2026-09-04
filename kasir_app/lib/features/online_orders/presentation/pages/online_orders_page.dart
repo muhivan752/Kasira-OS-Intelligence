@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/sefrekuensi_nudge_banner.dart';
 import '../../providers/online_orders_provider.dart';
 
 final _rp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -46,6 +47,8 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
           children: [
             _header(state),
             _segments(state),
+            // Langkah 3 jembatan Sefrekuensi: ajakan pasang di titik sakit.
+            const SefrekuensiNudgeBanner(),
             if (state.error != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),

@@ -209,6 +209,36 @@ async def read_outlet(
         raise HTTPException(status_code=404, detail="Outlet not found")
     return StandardResponse(data=outlet)
 
+@router.get("/{outlet_id}/sefrekuensi-status", response_model=StandardResponse[dict])
+async def sefrekuensi_status(
+    outlet_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: Any = Depends(deps.get_current_user),
+) -> Any:
+    """Nomor toko ada di Sefrekuensi atau belum (langkah 3 jembatan, 4 Sep).
+    Dipakai kartu Beranda web + banner Pesanan Online app buat MEMUTUSKAN
+    TAMPILAN: udah punya = badge terhubung, belum = ajakan pasang. Cache
+    Redis 1 jam per nomor. `enabled` False = fitur mati di server, jangan
+    tampilkan apa apa."""
+    from backend.services import sefrekuensi as _sefre
+    from backend.utils.phone import mask_phone
+    outlet = (await db.execute(select(Outlet).where(
+        Outlet.id == outlet_id, Outlet.deleted_at == None, Outlet.tenant_id == current_user.tenant_id,
+    ))).scalar_one_or_none()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet not found")
+    phone = (outlet.whatsapp_number or outlet.phone or "").strip()
+    st = await _sefre.status_for_phone(phone)
+    from backend.core.config import settings as _settings
+    return StandardResponse(data={
+        "enabled": bool(st.get("enabled")),
+        "connected": bool(st.get("tersedia")),
+        "push": bool(st.get("push")),
+        "phone_masked": mask_phone(phone) if phone else None,
+        "play_url": _settings.SEFREKUENSI_PLAY_URL,
+    })
+
+
 @router.put("/{outlet_id}", response_model=StandardResponse[OutletSchema])
 async def update_outlet(
     request: Request,

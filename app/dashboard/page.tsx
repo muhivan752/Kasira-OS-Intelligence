@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getOutlets, getDailyReport, getWeeklyRevenue, getBestSellers } from '@/app/actions/api';
+import { SefrekuensiCard } from '@/components/dashboard/sefrekuensi-card';
 import { 
   BarChart, 
   Bar, 
@@ -24,6 +25,7 @@ export default function DashboardPage() {
   const [report, setReport] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
   const [bestSellers, setBestSellers] = useState<any[]>([]);
+  const [outletId, setOutletId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     // Sama kayak halaman Laporan: fetch sekali doang bikin ringkasan nyangkut
@@ -33,6 +35,7 @@ export default function DashboardPage() {
         const outlets = await getOutlets();
         if (outlets && outlets.length > 0) {
           const outletId = outlets[0].id;
+          setOutletId(outletId);
           const today = new Date().toISOString().split('T')[0];
           
           const [daily, weekly, bestSellersData] = await Promise.all([
@@ -80,6 +83,9 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-gray-900">Ringkasan Hari Ini</h1>
         <p className="text-gray-500">Ringkasan performa outlet Anda hari ini.</p>
       </div>
+
+      {/* Langkah 3 jembatan Sefrekuensi: ajakan pasang / badge terhubung */}
+      <SefrekuensiCard outletId={outletId} />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

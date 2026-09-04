@@ -99,12 +99,22 @@ async def wa_owner(outlet, message: str) -> bool:
     plus Sefrekuensi kalau pintunya sudah dicolok. Ini SATU-SATUNYA pintu
     notifikasi merchant (pesanan online, reservasi, refund manual); kanal
     baru ditambah di sini, bukan di pemanggilnya."""
-    await push_sefrekuensi(outlet, message)
+    sampai_sefre = await push_sefrekuensi(outlet, message)
     if not getattr(outlet, "online_notify_owner_wa", True):
         return False
     target = (getattr(outlet, "whatsapp_number", None) or getattr(outlet, "phone", None) or "").strip()
     if not target:
         return False
+    # Langkah 3: ajakan pasang di titik sakit. Cuma buat toko yang nomornya
+    # BELUM ada di Sefrekuensi, maksimal sekali sehari per toko.
+    if not sampai_sefre:
+        from backend.services import sefrekuensi as _sefre
+        try:
+            st = await _sefre.status_for_phone(target)
+            if st.get("enabled") and not st.get("tersedia") and await _sefre.nudge_allowed(outlet.id):
+                message = f"{message}\n\n{_sefre.nudge_line()}"
+        except Exception:  # noqa: BLE001
+            pass
     try:
         return await send_whatsapp_message(target, message)
     except Exception:  # noqa: BLE001
@@ -125,6 +135,8 @@ async def push_sefrekuensi(outlet, message: str) -> bool:
     if not target:
         return False
     hasil = await _sefre.send_notify(target, message, outlet_name=getattr(outlet, "name", "") or "")
+    if hasil.sampai:
+        await _sefre.forget_status(target)
     return hasil.sampai
 
 

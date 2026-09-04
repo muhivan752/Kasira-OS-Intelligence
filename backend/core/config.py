@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     # fitur mati dan semua OTP lewat WA seperti sebelumnya.
     SEFREKUENSI_API_URL: str = ""
     SEFREKUENSI_PARTNER_KEY: str = ""
+    # Ajakan pasang (langkah 3). Satu sumber buat WA, web, dan app.
+    SEFREKUENSI_PLAY_URL: str = "https://play.google.com/store/apps/details?id=com.sefrekuensi.app"
 
     # Xendit Master Keys
     XENDIT_API_KEY: str = ""

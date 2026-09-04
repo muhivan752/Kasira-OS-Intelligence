@@ -167,3 +167,74 @@ async def send_notify(phone: str, message: str, *, outlet_name: str = "", source
     except Exception:  # noqa: BLE001
         logger.warning("sefrekuensi notify gagal", exc_info=True)
         return HasilKirim(None, "gangguan")
+
+
+# ── Langkah 3: ajakan pasang di titik sakit ──────────────────────────────────
+#
+# Titik sakitnya: kabar pesanan cuma lewat WA, dan WA nggak bunyi kalau nomor
+# Fonnte lagi kena blokir / HP-nya ganti. Ajakan ditaruh PERSIS di situ (kaki
+# pesan WA pesanan masuk, banner halaman Pesanan Online di app, kartu Beranda
+# web), bukan di layar acak. Semua baca status yang sama: nomor toko ada di
+# Sefrekuensi atau nggak (Ivan setuju dicek server-to-server tanpa nanya).
+
+_STATUS_TTL = 3600  # status per nomor di-cache 1 jam: ini buat tampilan, bukan kirim
+
+
+async def status_for_phone(phone: str) -> dict:
+    """{enabled, tersedia, push} dengan cache Redis 1 jam per nomor.
+    `enabled` False = fitur belum diset di server, klien jangan nampilin apa apa."""
+    phone = (phone or "").strip()
+    if not enabled() or not phone:
+        return {"enabled": enabled(), "tersedia": False, "push": False}
+    key = f"sefre:status:{phone}"
+    redis = None
+    try:
+        from backend.services.redis import get_redis_client
+        import json as _json
+        redis = await get_redis_client()
+        cached = await redis.get(key)
+        if cached:
+            d = _json.loads(cached)
+            d["enabled"] = True
+            return d
+    except Exception:  # noqa: BLE001
+        redis = None
+    d = await check(phone)
+    d["enabled"] = True
+    if redis is not None:
+        try:
+            await redis.setex(key, _STATUS_TTL, _json.dumps({"tersedia": d["tersedia"], "push": d["push"]}))
+        except Exception:  # noqa: BLE001
+            pass
+    return d
+
+
+async def forget_status(phone: str) -> None:
+    """Dipanggil sesudah kirim beneran (OTP / notif) supaya status nggak basi
+    begitu orangnya baru pasang."""
+    try:
+        from backend.services.redis import get_redis_client
+        redis = await get_redis_client()
+        await redis.delete(f"sefre:status:{(phone or '').strip()}")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def nudge_line() -> str:
+    """Kaki pesan WA buat merchant yang belum punya Sefrekuensi. Pendek,
+    satu link, tanpa em dash."""
+    return (
+        f"Mau kabar pesanan langsung di HP walau app kasir ditutup? "
+        f"Pasang Sefrekuensi dengan nomor ini: {settings.SEFREKUENSI_PLAY_URL}"
+    )
+
+
+async def nudge_allowed(outlet_id) -> bool:
+    """Ajakan di WA maksimal sekali sehari per toko. Pesanan masuk 20 kali
+    sehari nggak boleh jadi 20 iklan."""
+    try:
+        from backend.services.redis import get_redis_client
+        redis = await get_redis_client()
+        return bool(await redis.set(f"sefre:nudge:{outlet_id}", "1", ex=86400, nx=True))
+    except Exception:  # noqa: BLE001
+        return False

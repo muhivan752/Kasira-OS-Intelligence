@@ -86,6 +86,14 @@ export async function getOutlets() {
   } catch { return []; }
 }
 
+export async function getSefrekuensiStatus(outletId: string) {
+  try {
+    const res = await fetchWithAuth(`/outlets/${outletId}/sefrekuensi-status`);
+    const data = await res.json();
+    return data.data as { enabled: boolean; connected: boolean; push: boolean; phone_masked: string | null; play_url: string } | null;
+  } catch { return null; }
+}
+
 export async function getProducts(brandId: string) {
   try {
     const res = await fetchWithAuth(`/products?brand_id=${brandId}`);
