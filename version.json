@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.6.21",
+    "version": "1.6.22",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.21/selaris-pos-v1.6.21.apk",
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.22/selaris-pos-v1.6.22.apk",
     "release_notes": "Bug fixes and improvements"
   },
   "dapur": {
-    "version": "1.6.21",
+    "version": "1.6.22",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.21/selaris-dapur-v1.6.21.apk",
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.22/selaris-dapur-v1.6.22.apk",
     "release_notes": "Bug fixes and improvements"
   }
 }
