@@ -79,6 +79,14 @@ class OnlineOrder {
   final int? etaMinutes;
   final DateTime? readyAt;
   final String? cancelReason;
+  // Antar (delivery gelombang 2). deliveryStatus TERPISAH dari status:
+  // `ready` = makanannya jadi, bukan lagi di jalan.
+  final String? deliveryStatus; // null | on_the_way | delivered | failed
+  final String? courierName;
+  final DateTime? dispatchedAt;
+  final DateTime? deliveredAt;
+  final String? deliveryReceivedBy;
+  final String? deliveryFailedReason;
   final int rowVersion;
   final List<OnlineOrderItem> items;
 
@@ -107,6 +115,12 @@ class OnlineOrder {
     this.etaMinutes,
     this.readyAt,
     this.cancelReason,
+    this.deliveryStatus,
+    this.courierName,
+    this.dispatchedAt,
+    this.deliveredAt,
+    this.deliveryReceivedBy,
+    this.deliveryFailedReason,
     required this.rowVersion,
     required this.items,
   });
@@ -136,6 +150,12 @@ class OnlineOrder {
         etaMinutes: (j['eta_minutes'] as num?)?.toInt(),
         readyAt: _toDate(j['ready_at']),
         cancelReason: j['cancel_reason'] as String?,
+        deliveryStatus: j['delivery_status'] as String?,
+        courierName: j['courier_name'] as String?,
+        dispatchedAt: _toDate(j['dispatched_at']),
+        deliveredAt: _toDate(j['delivered_at']),
+        deliveryReceivedBy: j['delivery_received_by'] as String?,
+        deliveryFailedReason: j['delivery_failed_reason'] as String?,
         rowVersion: (j['row_version'] as num?)?.toInt() ?? 0,
         items: (j['items'] as List? ?? []).map((e) => OnlineOrderItem.fromJson(e as Map<String, dynamic>)).toList(),
       );
@@ -145,6 +165,14 @@ class OnlineOrder {
   bool get isPaid => paymentStatus == 'paid' && paymentMethod == 'qris';
   /// Pesanan meja: bayarnya lewat tagihan meja (tab), bukan dari layar ini.
   bool get isTableTab => orderType == 'dine_in' && tabId != null;
+
+  bool get isDelivery => orderType == 'delivery';
+  bool get isOnTheWay => deliveryStatus == 'on_the_way';
+  bool get isDelivered => deliveryStatus == 'delivered';
+  bool get isDeliveryFailed => deliveryStatus == 'failed';
+
+  /// Masih ada uang tunai yang harus ditagih kurir waktu barangnya sampai.
+  bool get isCod => isDelivery && paymentMethod == 'cash' && paymentStatus != 'paid';
 
   /// Label yang SAMA dengan halaman lacak pelanggan (app/[slug]/_ui.tsx).
   String get typeLabel => switch (orderType) {
@@ -163,10 +191,21 @@ class OnlineOrder {
     return isTableTab ? 'Tagihan meja' : 'Belum ada pembayaran';
   }
 
-  String get statusLabel => switch (status) {
+  String get statusLabel {
+    // Antar punya sumbu sendiri: begitu diserahkan ke kurir, itu yang paling
+    // ingin dilihat kasir, bukan status dapur.
+    if (isDelivery) {
+      if (isDelivered) return 'Sudah sampai';
+      if (isDeliveryFailed) return 'Gagal antar';
+      if (isOnTheWay) return courierName == null ? 'Sedang diantar' : 'Diantar $courierName';
+    }
+    return _baseStatusLabel;
+  }
+
+  String get _baseStatusLabel => switch (status) {
         'pending' => 'Menunggu konfirmasi',
         'preparing' => 'Disiapkan',
-        'ready' => orderType == 'delivery' ? 'Sedang diantar' : 'Siap diambil',
+        'ready' => orderType == 'delivery' ? 'Siap diantar' : 'Siap diambil',
         'served' => 'Sudah diantar',
         'completed' => 'Selesai',
         'cancelled' => 'Dibatalkan',
@@ -182,6 +221,46 @@ class OnlineOrder {
     return d.startsWith('0') ? '62${d.substring(1)}' : d;
   }
 }
+
+/// Kurir toko (delivery gelombang 2). Dibaca dari server, BUKAN Drift:
+/// menyerahkan pesanan ke kurir memang butuh server (pesanan antar itu
+/// pesanan storefront), jadi daftar kurir offline nggak punya guna.
+class Courier {
+  final String id;
+  final String name;
+  final String? phone;
+  final String vehicle;
+  const Courier({required this.id, required this.name, this.phone, required this.vehicle});
+
+  factory Courier.fromJson(Map<String, dynamic> j) => Courier(
+        id: j['id'] as String,
+        name: j['name'] as String? ?? '',
+        phone: j['phone'] as String?,
+        vehicle: j['vehicle'] as String? ?? 'motor',
+      );
+
+  String get vehicleLabel => switch (vehicle) {
+        'mobil' => 'Mobil',
+        'sepeda' => 'Sepeda',
+        'jalan_kaki' => 'Jalan kaki',
+        _ => 'Motor',
+      };
+}
+
+final couriersProvider = FutureProvider.autoDispose<List<Courier>>((ref) async {
+  final outletId = SessionCache.instance.outletId;
+  if (outletId == null || outletId.isEmpty) return const [];
+  final dio = Dio(BaseOptions(
+    baseUrl: AppConfig.apiV1,
+    headers: SessionCache.instance.authHeaders,
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 15),
+  ));
+  final res = await dio.get('/couriers/', queryParameters: {'outlet_id': outletId});
+  final data = res.data?['data'];
+  if (data is! List) return const [];
+  return data.map((e) => Courier.fromJson(e as Map<String, dynamic>)).toList();
+});
 
 class OnlineOrdersState {
   final List<OnlineOrder> orders;
@@ -361,6 +440,61 @@ class OnlineOrdersNotifier extends StateNotifier<OnlineOrdersState> {
       return null;
     } on DioException catch (e) {
       return _msg(e, 'Gagal memperbarui status');
+    }
+  }
+
+  // ── Antar (delivery gelombang 2) ──────────────────────────────────────
+
+  /// Serahkan ke kurir. Salah satu: kurir terdaftar (id) atau nama ketikan.
+  Future<String?> dispatch(String orderId, {String? courierId, String? courierName}) async {
+    try {
+      await _dio.post('/orders/$orderId/dispatch', data: {
+        if (courierId != null) 'courier_id': courierId,
+        if (courierName != null && courierName.trim().isNotEmpty) 'courier_name': courierName.trim(),
+      });
+      await fetch(silent: true);
+      return null;
+    } on DioException catch (e) {
+      return _msg(e, 'Gagal menyerahkan ke kurir');
+    }
+  }
+
+  /// Kurir sampai. Bukti foto dan nama penerima dua-duanya opsional.
+  Future<String?> delivered(String orderId, {String? proofImageUrl, String? receivedBy}) async {
+    try {
+      await _dio.post('/orders/$orderId/delivered', data: {
+        if (proofImageUrl != null) 'proof_image_url': proofImageUrl,
+        if (receivedBy != null && receivedBy.trim().isNotEmpty) 'received_by': receivedBy.trim(),
+      });
+      await fetch(silent: true);
+      return null;
+    } on DioException catch (e) {
+      return _msg(e, 'Gagal menandai sampai');
+    }
+  }
+
+  /// Unggah foto bukti serah terima. Balik URL absolut, null kalau gagal.
+  /// Gagal unggah TIDAK boleh ngeblokir "Sampai": kurir kehujanan tetap
+  /// harus bisa nutup pesanan tanpa foto.
+  Future<String?> uploadProof(String filePath, String fileName) async {
+    try {
+      final form = FormData.fromMap({'file': await MultipartFile.fromFile(filePath, filename: fileName)});
+      final res = await _dio.post('/media/upload', data: form);
+      final rel = res.data?['url']?.toString();
+      if (rel == null || rel.isEmpty) return null;
+      return rel.startsWith('http') ? rel : '${AppConfig.baseUrl}$rel';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> deliveryFailed(String orderId, String reason) async {
+    try {
+      await _dio.post('/orders/$orderId/delivery-failed', data: {'reason': reason});
+      await fetch(silent: true);
+      return null;
+    } on DioException catch (e) {
+      return _msg(e, 'Gagal menandai gagal antar');
     }
   }
 

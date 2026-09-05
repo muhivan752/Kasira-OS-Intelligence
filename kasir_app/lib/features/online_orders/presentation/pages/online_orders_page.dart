@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -68,7 +69,10 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
                         itemCount: list.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (_, i) => _OrderCard(order: list[i], onAccept: _accept, onReject: _reject, onStatus: _setStatus),
+                        itemBuilder: (_, i) => _OrderCard(
+                          order: list[i], onAccept: _accept, onReject: _reject, onStatus: _setStatus,
+                          onDispatch: _dispatch, onDelivered: _delivered, onDeliveryFailed: _deliveryFailed,
+                        ),
                       ),
               ),
             ),
@@ -207,6 +211,280 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
     _toast(err ?? 'Pesanan #${order.displayNumber} $label.', ok: err == null);
   }
 
+  // ── Antar (delivery gelombang 2) ──────────────────────────────────────
+  // Kurirnya orang toko: kasir pilih dari daftar yang didaftarin pemilik di
+  // Pengaturan web, atau ketik nama buat yang sekali jalan. Pelanggan dapat
+  // WA "sedang diantar oleh <nama>" plus nomor kurirnya.
+
+  Future<void> _dispatch(OnlineOrder order) async {
+    final pick = await _pickCourier(order);
+    if (pick == null || !mounted) return;
+    final err = await ref.read(onlineOrdersProvider.notifier).dispatch(
+          order.id, courierId: pick.courierId, courierName: pick.courierName);
+    _toast(err ?? 'Pesanan #${order.displayNumber} diserahkan ke ${pick.label}. Pelanggan dikabari.', ok: err == null);
+  }
+
+  Future<void> _delivered(OnlineOrder order) async {
+    final res = await _confirmDelivered(order);
+    if (res == null || !mounted) return;
+    final err = await ref.read(onlineOrdersProvider.notifier).delivered(
+          order.id, proofImageUrl: res.proofUrl, receivedBy: res.receivedBy);
+    _toast(
+      err ?? (order.isCod
+          ? 'Pesanan #${order.displayNumber} sampai. Tunai ${_rp.format(order.grandTotal)} dicatat lunas.'
+          : 'Pesanan #${order.displayNumber} sampai.'),
+      ok: err == null,
+    );
+  }
+
+  Future<void> _deliveryFailed(OnlineOrder order) async {
+    final reason = await _pickFailReason(order);
+    if (reason == null || !mounted) return;
+    final err = await ref.read(onlineOrdersProvider.notifier).deliveryFailed(order.id, reason);
+    _toast(err ?? 'Pesanan #${order.displayNumber} ditandai gagal antar. Kirim ulang atau tolak dari kartu ini.', ok: err == null);
+  }
+
+  Future<_CourierPick?> _pickCourier(OnlineOrder order) {
+    final ctrl = TextEditingController();
+    return showModalBottomSheet<_CourierPick>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: KasiraDS.surfaceCard,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (ctx) => Consumer(
+        builder: (ctx, ref, _) {
+          final couriers = ref.watch(couriersProvider);
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + MediaQuery.viewInsetsOf(ctx).bottom),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Siapa yang mengantar #${order.displayNumber}?', style: KasiraDS.display(size: 19)),
+              const SizedBox(height: 4),
+              Text(
+                order.isCod
+                    ? 'Nama kurir dikirim ke pelanggan. Ingatkan kurir menagih ${_rp.format(order.grandTotal)} tunai.'
+                    : 'Nama kurir dikirim ke pelanggan lewat WhatsApp.',
+                style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted),
+              ),
+              const SizedBox(height: 14),
+              couriers.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+                ),
+                error: (_, __) => Text('Daftar kurir tidak bisa dimuat. Ketik nama di bawah.',
+                    style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
+                data: (list) => list.isEmpty
+                    ? Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: KasiraDS.bgSubtle, borderRadius: KasiraDS.brMd),
+                        child: Text('Belum ada kurir terdaftar. Daftarkan di Pengaturan web agar tinggal pilih, atau ketik nama di bawah.',
+                            style: KasiraDS.sans(size: 12.5, color: KasiraDS.textBody)),
+                      )
+                    : Column(
+                        children: list
+                            .map((c) => InkWell(
+                                  onTap: () => Navigator.pop(ctx, _CourierPick(courierId: c.id, label: c.name)),
+                                  borderRadius: KasiraDS.brMd,
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: KasiraDS.bgSubtle,
+                                      borderRadius: KasiraDS.brMd,
+                                      border: Border.all(color: KasiraDS.borderSubtle),
+                                    ),
+                                    child: Row(children: [
+                                      const Icon(LucideIcons.bike, size: 18, color: KasiraDS.textMuted),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                          Text(c.name, style: KasiraDS.sans(size: 14.5, weight: FontWeight.w700, color: KasiraDS.textStrong)),
+                                          Text('${c.vehicleLabel}${c.phone != null ? ' · ${c.phone}' : ''}',
+                                              style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted)),
+                                        ]),
+                                      ),
+                                      const Icon(LucideIcons.chevronRight, size: 18, color: KasiraDS.textMuted),
+                                    ]),
+                                  ),
+                                ))
+                            .toList(),
+                      ),
+              ),
+              const SizedBox(height: 8),
+              StatefulBuilder(
+                builder: (ctx2, setS) => Column(children: [
+                  TextField(
+                    controller: ctrl,
+                    onChanged: (_) => setS(() {}),
+                    maxLength: 80,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: InputDecoration(
+                      hintText: 'Atau ketik nama pengantar sekali jalan',
+                      counterText: '',
+                      filled: true,
+                      fillColor: KasiraDS.bgSubtle,
+                      border: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _primaryBtn(
+                    'Serahkan ke ${ctrl.text.trim().isEmpty ? 'kurir' : ctrl.text.trim()}',
+                    ctrl.text.trim().length < 2
+                        ? null
+                        : () => Navigator.pop(ctx, _CourierPick(courierName: ctrl.text.trim(), label: ctrl.text.trim())),
+                  ),
+                ]),
+              ),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<_DeliveredResult?> _confirmDelivered(OnlineOrder order) {
+    final ctrl = TextEditingController();
+    String? photoPath;
+    String? photoName;
+    var uploading = false;
+    return showModalBottomSheet<_DeliveredResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: KasiraDS.surfaceCard,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          Future<void> pickPhoto() async {
+            final f = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1200, imageQuality: 80);
+            if (f == null) return;
+            setS(() { photoPath = f.path; photoName = f.name; });
+          }
+
+          Future<void> submit() async {
+            // Notifier dipegang SEBELUM await + pop (CLAUDE.md #22).
+            final notifier = ref.read(onlineOrdersProvider.notifier);
+            String? url;
+            if (photoPath != null) {
+              setS(() => uploading = true);
+              url = await notifier.uploadProof(photoPath!, photoName ?? 'bukti.jpg');
+              setS(() => uploading = false);
+              if (url == null && ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                  content: Text('Foto gagal diunggah. Pesanan tetap ditandai sampai tanpa foto.'),
+                  behavior: SnackBarBehavior.floating,
+                ));
+              }
+            }
+            if (ctx.mounted) Navigator.pop(ctx, _DeliveredResult(proofUrl: url, receivedBy: ctrl.text.trim()));
+          }
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + MediaQuery.viewInsetsOf(ctx).bottom),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Pesanan #${order.displayNumber} sampai?', style: KasiraDS.display(size: 19)),
+              const SizedBox(height: 4),
+              Text(
+                order.isCod
+                    ? 'Tunai ${_rp.format(order.grandTotal)} dicatat lunas dan pesanan ditutup.'
+                    : 'Pesanan ditutup dan pelanggan dikabari.',
+                style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                maxLength: 80,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  hintText: 'Diterima oleh (opsional)',
+                  counterText: '',
+                  filled: true,
+                  fillColor: KasiraDS.bgSubtle,
+                  border: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Foto opsional by design: kurir kehujanan nggak boleh kejebak
+              // wajib foto. Yang mau bukti buat pelanggan rewel, tinggal ketuk.
+              OutlinedButton.icon(
+                onPressed: uploading ? null : pickPhoto,
+                icon: Icon(photoPath == null ? LucideIcons.camera : LucideIcons.check, size: 18),
+                label: Text(photoPath == null ? 'Foto bukti serah terima (opsional)' : 'Foto siap, ketuk untuk ganti'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: KasiraDS.textStrong,
+                  side: BorderSide(color: KasiraDS.borderSubtle),
+                  minimumSize: const Size(double.infinity, 46),
+                  shape: RoundedRectangleBorder(borderRadius: KasiraDS.brMd),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _primaryBtn(uploading ? 'Mengunggah foto' : 'Sudah sampai', uploading ? null : submit),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<String?> _pickFailReason(OnlineOrder order) {
+    const presets = ['Alamat tidak ditemukan', 'Pelanggan tidak bisa dihubungi', 'Pelanggan menolak pesanan', 'Kurir berhalangan'];
+    String? chosen;
+    final ctrl = TextEditingController();
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: KasiraDS.surfaceCard,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final reason = (ctrl.text.trim().isNotEmpty ? ctrl.text.trim() : chosen);
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + MediaQuery.viewInsetsOf(ctx).bottom),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Gagal antar #${order.displayNumber}', style: KasiraDS.display(size: 19)),
+              const SizedBox(height: 4),
+              Text('Pesanan TIDAK dibatalkan dan stok tidak kembali. Sesudah ini bisa kirim ulang, atau tolak kalau memang batal.',
+                  style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: presets.map((p) {
+                  final active = chosen == p && ctrl.text.trim().isEmpty;
+                  return ChoiceChip(
+                    label: Text(p),
+                    selected: active,
+                    onSelected: (_) => setS(() { chosen = p; ctrl.clear(); }),
+                    selectedColor: KasiraDS.surfaceInverse,
+                    backgroundColor: KasiraDS.bgSubtle,
+                    labelStyle: KasiraDS.sans(size: 13, weight: FontWeight.w700, color: active ? KasiraDS.textInverse : KasiraDS.textStrong),
+                    side: BorderSide.none,
+                    shape: RoundedRectangleBorder(borderRadius: KasiraDS.brPill),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                onChanged: (_) => setS(() {}),
+                maxLength: 120,
+                decoration: InputDecoration(
+                  hintText: 'Atau tulis alasan lain',
+                  counterText: '',
+                  filled: true,
+                  fillColor: KasiraDS.bgSubtle,
+                  border: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _primaryBtn('Tandai gagal antar', reason == null || reason.length < 3 ? null : () => Navigator.pop(ctx, reason), danger: true),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+
   void _toast(String msg, {required bool ok}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -340,7 +618,13 @@ class _OrderCard extends StatelessWidget {
   final Future<void> Function(OnlineOrder) onAccept;
   final Future<void> Function(OnlineOrder) onReject;
   final Future<void> Function(OnlineOrder, String) onStatus;
-  const _OrderCard({required this.order, required this.onAccept, required this.onReject, required this.onStatus});
+  final Future<void> Function(OnlineOrder) onDispatch;
+  final Future<void> Function(OnlineOrder) onDelivered;
+  final Future<void> Function(OnlineOrder) onDeliveryFailed;
+  const _OrderCard({
+    required this.order, required this.onAccept, required this.onReject, required this.onStatus,
+    required this.onDispatch, required this.onDelivered, required this.onDeliveryFailed,
+  });
 
   String _ago(DateTime t) {
     final d = DateTime.now().difference(t);
@@ -454,6 +738,33 @@ class _OrderCard extends StatelessWidget {
               ),
           ]),
         ],
+        // Antar (gelombang 2): siapa yang bawa, sudah sampai belum, kenapa gagal.
+        if (order.isDelivery && (order.isOnTheWay || order.isDelivered || order.isDeliveryFailed)) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: order.isDeliveryFailed ? KasiraDS.danger.withOpacity(0.10) : order.isDelivered ? KasiraDS.success.withOpacity(0.12) : KasiraDS.info.withOpacity(0.12),
+              borderRadius: KasiraDS.brSm,
+            ),
+            child: Row(children: [
+              Icon(order.isDeliveryFailed ? LucideIcons.alertTriangle : order.isDelivered ? LucideIcons.packageCheck : LucideIcons.bike,
+                  size: 15, color: order.isDeliveryFailed ? KasiraDS.danger : KasiraDS.textStrong),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  order.isDeliveryFailed
+                      ? 'Gagal antar${order.courierName != null ? ' (${order.courierName})' : ''}: ${order.deliveryFailedReason ?? 'tanpa alasan'}'
+                      : order.isDelivered
+                          ? 'Sampai${order.courierName != null ? ', diantar ${order.courierName}' : ''}${order.deliveryReceivedBy != null ? ', diterima ${order.deliveryReceivedBy}' : ''}'
+                          : 'Dibawa ${order.courierName ?? 'kurir'}${order.dispatchedAt != null ? ' · berangkat ${_ago(order.dispatchedAt!)}' : ''}',
+                  style: KasiraDS.sans(size: 12.5, weight: FontWeight.w600, color: order.isDeliveryFailed ? KasiraDS.danger : KasiraDS.textStrong),
+                ),
+              ),
+            ]),
+          ),
+        ],
         // Bukti bayar QRIS statis toko (mig 104): kasir WAJIB lihat sebelum Terima,
         // karena Terima = menandai pembayaran lunas.
         if (order.paymentProofUrl != null) ...[
@@ -548,6 +859,30 @@ class _OrderCard extends StatelessWidget {
           ),
         );
 
+    // Pesanan antar punya alurnya sendiri begitu diterima toko: serahkan ke
+    // kurir -> sampai (atau gagal, lalu kirim ulang). Tombol "Sedang diantar"
+    // yang lama cuma ngubah status tanpa tahu siapa yang bawa.
+    if (order.isDelivery && order.status != 'pending' && order.status != 'cancelled' && !order.isDelivered) {
+      if (order.status == 'completed') return const [];
+      if (order.isOnTheWay) {
+        return [
+          const SizedBox(height: 12),
+          Row(children: [
+            outlined('Gagal antar', () => onDeliveryFailed(order)),
+            const SizedBox(width: 10),
+            filled(order.isCod ? 'Sampai, tunai diterima' : 'Sampai', () => onDelivered(order), color: KasiraDS.success, flex: 2),
+          ]),
+        ];
+      }
+      return [
+        const SizedBox(height: 12),
+        Row(children: [
+          if (order.isDeliveryFailed) ...[outlined('Tolak', () => onReject(order)), const SizedBox(width: 10)],
+          filled(order.isDeliveryFailed ? 'Kirim ulang' : 'Serahkan ke kurir', () => onDispatch(order), color: KasiraDS.info, flex: 2),
+        ]),
+      ];
+    }
+
     switch (order.status) {
       case 'pending':
         return [
@@ -559,7 +894,7 @@ class _OrderCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(children: [
             filled(
-              order.orderType == 'delivery' ? 'Sedang diantar' : order.isTableTab ? 'Diantar ke meja' : 'Siap diambil',
+              order.isTableTab ? 'Diantar ke meja' : 'Siap diambil',
               () => onStatus(order, 'ready'),
               color: KasiraDS.info,
             ),
@@ -589,4 +924,17 @@ class _OrderCard extends StatelessWidget {
         decoration: BoxDecoration(color: bg, borderRadius: KasiraDS.brPill),
         child: Text(text, style: KasiraDS.sans(size: 11.5, weight: FontWeight.w700, color: fg)),
       );
+}
+
+class _CourierPick {
+  final String? courierId;
+  final String? courierName;
+  final String label;
+  const _CourierPick({this.courierId, this.courierName, required this.label});
+}
+
+class _DeliveredResult {
+  final String? proofUrl;
+  final String receivedBy;
+  const _DeliveredResult({this.proofUrl, required this.receivedBy});
 }
