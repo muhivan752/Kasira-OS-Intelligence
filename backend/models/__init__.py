@@ -28,3 +28,4 @@ from .purchasing import Supplier, IngredientSupplier, PurchaseOrder, PurchaseOrd
 from .finance import Expense, CashAccount
 from .crm import CustomerTag, CustomerTagLink, CustomerTimeline, Voucher, VoucherRedemption
 from .campaign import Campaign, CampaignMessage
+from .courier import Courier

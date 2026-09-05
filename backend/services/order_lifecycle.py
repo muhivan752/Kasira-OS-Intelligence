@@ -136,6 +136,28 @@ async def latest_payment(db, order_id) -> Optional[Payment]:
     )).scalar_one_or_none()
 
 
+async def settle_cod_payment(db, order: Order) -> bool:
+    """COD (tunai antar): tandai lunas waktu barangnya sampai.
+
+    Dipanggil dua jalur yang sama-sama berarti "sudah diterima pelanggan":
+    tombol Selesai di `PUT /orders/{id}/status` dan tombol Sampai di
+    `POST /orders/{id}/delivered` (delivery gelombang 2). Laporan cuma
+    menghitung order lunas, jadi kalau salah satu jalur lupa manggil ini,
+    uang COD nggak pernah kelihatan di Beranda.
+
+    Idempoten: pembayaran yang sudah `paid` dilewati.
+    """
+    pay = await latest_payment(db, order.id)
+    if pay is None or _val(pay.payment_method) != "cash" or _val(pay.status) != "pending":
+        return False
+    now = datetime.now(timezone.utc)
+    pay.status = "paid"
+    pay.paid_at = now
+    pay.amount_paid = pay.amount_due
+    pay.row_version = (pay.row_version or 0) + 1
+    return True
+
+
 async def accept_order(db, order: Order, outlet: Outlet, *, eta_minutes: int, actor_user_id=None) -> None:
     """pending -> preparing dengan perkiraan waktu. Kabar ke pelanggan + app kasir."""
     now = datetime.now(timezone.utc)

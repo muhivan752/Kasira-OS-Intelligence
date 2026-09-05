@@ -24,9 +24,12 @@ import json
 from fastapi.responses import StreamingResponse
 from backend.services import online_orders
 from backend.services.order_lifecycle import (
-    accept_order, cancel_order, mark_ready,
+    accept_order, cancel_order, mark_ready, latest_payment,
     restore_stock_for_order, recalc_tab_after_cancel, release_table_if_idle,
 )
+from backend.services import delivery_dispatch
+from backend.models.courier import Courier
+from backend.schemas.courier import OrderDispatch, OrderDelivered, OrderDeliveryFailed
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.models.reservation import Table
@@ -720,6 +723,138 @@ async def reject_online_order(
                             request_id=request.state.request_id, message="Pesanan ditolak")
 
 
+@router.post("/{order_id}/dispatch", response_model=StandardResponse[OrderResponse])
+async def dispatch_delivery_order(
+    request: Request,
+    order_id: UUID,
+    body: OrderDispatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Pesanan diserahkan ke kurir (delivery gelombang 2).
+
+    Kurirnya orang toko: boleh pilih dari daftar kurir yang didaftarin
+    pemilik, boleh ketik nama buat yang sekali jalan. Pelanggan dikabari
+    siapa yang nganter plus nomornya, biar bisa dihubungi langsung waktu
+    alamatnya susah ketemu.
+    """
+    order = await _load_order_full(db, order_id)
+    outlet = await _owned_outlet(db, order.outlet_id, current_user)
+    if not delivery_dispatch.is_delivery(order):
+        raise HTTPException(status_code=400, detail="Pesanan ini bukan pesanan antar")
+    if str(getattr(order.status, 'value', order.status)) in ("pending", "completed", "cancelled"):
+        raise HTTPException(status_code=400, detail="Pesanan ini belum diterima atau sudah selesai")
+    if order.delivery_status == delivery_dispatch.DELIVERED:
+        raise HTTPException(status_code=400, detail="Pesanan ini sudah diantar")
+
+    courier = None
+    if body.courier_id:
+        courier = (await db.execute(
+            select(Courier).where(
+                Courier.id == body.courier_id, Courier.tenant_id == current_user.tenant_id,
+                Courier.deleted_at.is_(None),
+            )
+        )).scalar_one_or_none()
+        if courier is None:
+            raise HTTPException(status_code=404, detail="Kurir tidak ditemukan")
+    elif not (body.courier_name or "").strip():
+        raise HTTPException(status_code=400, detail="Pilih kurir atau isi nama pengantar")
+
+    await delivery_dispatch.dispatch(db, order, outlet, courier=courier,
+                                     courier_name=body.courier_name, actor_user_id=current_user.id)
+    # Pembayaran dibaca SEBELUM commit supaya pesan WA tahu masih ada tagihan
+    # tunai atau nggak (COD).
+    pay = await latest_payment(db, order.id)
+    cod_pending = pay is not None and str(getattr(pay.payment_method, 'value', pay.payment_method)) == "cash" \
+        and str(getattr(pay.status, 'value', pay.status)) == "pending"
+    phone = order.customer_phone
+    courier_phone = getattr(courier, "phone", None)
+    courier_name = order.courier_name
+    await db.commit()
+    await log_audit(db=db, action="DISPATCH_DELIVERY", entity="order", entity_id=order.id,
+                    after_state={"courier_name": courier_name}, user_id=current_user.id,
+                    tenant_id=current_user.tenant_id)
+    if order.source == "storefront":
+        asyncio.create_task(online_orders.wa_customer(outlet, phone, online_orders.msg_on_the_way(
+            order, outlet, courier_name=courier_name, courier_phone=courier_phone, cod_pending=cod_pending)))
+    order = await _load_order_full(db, order_id)
+    return StandardResponse(success=True, data=(await _attach_payment_info(db, [order]))[0],
+                            request_id=request.state.request_id, message="Pesanan sedang diantar")
+
+
+@router.post("/{order_id}/delivered", response_model=StandardResponse[OrderResponse])
+async def mark_order_delivered(
+    request: Request,
+    order_id: UUID,
+    body: OrderDelivered,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Kurir sampai. Pesanan ditutup dan COD ditandai lunas.
+
+    Bukti foto dan nama penerima dua-duanya opsional: kurir kehujanan nggak
+    boleh kejebak wajib foto.
+    """
+    order = await _load_order_full(db, order_id)
+    outlet = await _owned_outlet(db, order.outlet_id, current_user)
+    if not delivery_dispatch.is_delivery(order):
+        raise HTTPException(status_code=400, detail="Pesanan ini bukan pesanan antar")
+    if str(getattr(order.status, 'value', order.status)) == "cancelled":
+        raise HTTPException(status_code=400, detail="Pesanan ini sudah dibatalkan")
+
+    completed = await delivery_dispatch.mark_delivered(
+        db, order, outlet, proof_image_url=body.proof_image_url,
+        received_by=body.received_by, actor_user_id=current_user.id,
+    )
+    phone = order.customer_phone
+    await db.commit()
+    await log_audit(db=db, action="DELIVERED", entity="order", entity_id=order.id,
+                    after_state={"received_by": body.received_by, "has_proof": bool(body.proof_image_url),
+                                 "order_completed": completed},
+                    user_id=current_user.id, tenant_id=current_user.tenant_id)
+    if order.source == "storefront":
+        asyncio.create_task(online_orders.wa_customer(outlet, phone, online_orders.msg_delivered(order, outlet)))
+    order = await _load_order_full(db, order_id)
+    return StandardResponse(success=True, data=(await _attach_payment_info(db, [order]))[0],
+                            request_id=request.state.request_id, message="Pesanan sudah sampai")
+
+
+@router.post("/{order_id}/delivery-failed", response_model=StandardResponse[OrderResponse])
+async def mark_order_delivery_failed(
+    request: Request,
+    order_id: UUID,
+    body: OrderDeliveryFailed,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Gagal antar: alamat nggak ketemu, orangnya nggak ada, ditolak.
+
+    SENGAJA nggak membatalkan pesanan: barangnya sudah jadi dan mungkin sudah
+    dibayar. Kasir yang memutuskan mau kirim ulang atau batalkan lewat jalur
+    batal yang sudah ada (yang tahu cara refund dan balikin stok).
+    """
+    order = await _load_order_full(db, order_id)
+    outlet = await _owned_outlet(db, order.outlet_id, current_user)
+    if not delivery_dispatch.is_delivery(order):
+        raise HTTPException(status_code=400, detail="Pesanan ini bukan pesanan antar")
+    if order.delivery_status == delivery_dispatch.DELIVERED:
+        raise HTTPException(status_code=400, detail="Pesanan ini sudah ditandai sampai")
+
+    await delivery_dispatch.mark_failed(db, order, outlet, reason=body.reason, actor_user_id=current_user.id)
+    phone = order.customer_phone
+    await db.commit()
+    await log_audit(db=db, action="DELIVERY_FAILED", entity="order", entity_id=order.id,
+                    after_state={"reason": body.reason}, user_id=current_user.id, tenant_id=current_user.tenant_id)
+    if order.source == "storefront":
+        asyncio.create_task(online_orders.wa_customer(
+            outlet, phone, online_orders.msg_delivery_failed(order, outlet, reason=body.reason)))
+    asyncio.create_task(online_orders.wa_owner(
+        outlet, online_orders.msg_owner_delivery_failed(order, outlet, reason=body.reason)))
+    order = await _load_order_full(db, order_id)
+    return StandardResponse(success=True, data=(await _attach_payment_info(db, [order]))[0],
+                            request_id=request.state.request_id, message="Ditandai gagal antar")
+
+
 @router.get("/{order_id}", response_model=StandardResponse[OrderResponse])
 async def read_order(
     request: Request,
@@ -820,14 +955,8 @@ async def update_order_status(
     # sampai. Pesanan ditandai selesai = pembayaran tunai yang masih pending
     # ditandai lunas, supaya laporan (yang cuma menghitung order lunas) melihatnya.
     if is_storefront and status_in.status == OrderStatus.completed:
-        from backend.services.order_lifecycle import latest_payment as _lp, _val as _v
-        pay = await _lp(db, order.id)
-        if pay is not None and _v(pay.payment_method) == "cash" and _v(pay.status) == "pending":
-            _now = datetime.now(timezone.utc)
-            pay.status = "paid"
-            pay.paid_at = _now
-            pay.amount_paid = pay.amount_due
-            pay.row_version = (pay.row_version or 0) + 1
+        from backend.services.order_lifecycle import settle_cod_payment
+        await settle_cod_payment(db, order)
 
     # Efek samping lewat order_lifecycle (satu pintu bersama tolak/janitor pesanan online).
     if status_in.status == OrderStatus.cancelled:

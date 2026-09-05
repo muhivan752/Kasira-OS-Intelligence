@@ -99,6 +99,16 @@ class OrderResponse(OrderBase):
     customer_phone: Optional[str] = None
     kitchen_status: Optional[str] = None
     tab_id: Optional[UUID] = None
+    # Antar (delivery gelombang 2, mig 108). delivery_status terpisah dari
+    # `status`: `ready` = makanannya jadi, bukan lagi di jalan.
+    courier_id: Optional[UUID] = None
+    courier_name: Optional[str] = None
+    delivery_status: Optional[str] = None
+    dispatched_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+    delivery_proof_url: Optional[str] = None
+    delivery_received_by: Optional[str] = None
+    delivery_failed_reason: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

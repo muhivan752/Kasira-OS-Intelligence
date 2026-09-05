@@ -210,6 +210,55 @@ def msg_ready(order, outlet) -> str:
     return f"Pesanan #{order.display_number} siap.\n{line}\n\nLacak pesanan: {track_url(outlet.slug, order.id)}"
 
 
+def msg_on_the_way(order, outlet, *, courier_name: Optional[str], courier_phone: Optional[str],
+                   cod_pending: bool = False) -> str:
+    """Kurir berangkat (delivery gelombang 2). Nama kurir sengaja disebut:
+    kurirnya orang toko, dan pelanggan berhak tahu siapa yang bakal datang ke
+    rumahnya. Nomornya ikut kalau ada, supaya bisa dihubungi langsung waktu
+    alamatnya susah."""
+    siapa = f" oleh {courier_name}" if courier_name else ""
+    kontak = f"\nHubungi kurir: wa.me/{_wa_digits(courier_phone)}" if courier_phone else ""
+    bayar = ""
+    if cod_pending:
+        bayar = f"\nSiapkan {_rp(_tagihan(order))} tunai untuk dibayar saat pesanan diterima."
+    return (
+        f"Pesanan #{order.display_number} sedang diantar{siapa}.{kontak}{bayar}\n\n"
+        f"Lacak pesanan: {track_url(outlet.slug, order.id)}"
+    )
+
+
+def msg_delivered(order, outlet) -> str:
+    return (
+        f"Pesanan #{order.display_number} sudah sampai. Terima kasih sudah pesan di {outlet.name}.\n"
+        "Semoga cocok, sampai pesan lagi."
+    )
+
+
+def msg_delivery_failed(order, outlet, *, reason: str) -> str:
+    return (
+        f"Kurir belum berhasil mengantar pesanan #{order.display_number}.\n"
+        f"Alasan: {reason}.\n"
+        f"Toko akan menghubungi Anda. Kalau perlu, hubungi {outlet.name} lewat tombol WhatsApp di halaman pesanan.\n\n"
+        f"Lacak pesanan: {track_url(outlet.slug, order.id)}"
+    )
+
+
+def msg_owner_delivery_failed(order, outlet, *, reason: str) -> str:
+    kurir = order.courier_name or "kurir"
+    return (
+        f"Antar gagal: pesanan #{order.display_number} ({kurir}).\n"
+        f"Alasan: {reason}.\n"
+        "Buka aplikasi kasir untuk kirim ulang atau batalkan."
+    )
+
+
+def _wa_digits(phone: Optional[str]) -> str:
+    d = "".join(ch for ch in (phone or "") if ch.isdigit())
+    if d.startswith("0"):
+        d = "62" + d[1:]
+    return d
+
+
 def msg_cancelled(order, outlet, *, refund_amount=None, refund_manual: bool = False) -> str:
     reason = order.cancel_reason or "dibatalkan oleh toko"
     text = f"Pesanan #{order.display_number} di {outlet.name} dibatalkan.\nAlasan: {reason}."

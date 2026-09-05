@@ -43,6 +43,20 @@ class Order(BaseModel):
     # Ongkir (mig 106), SENGAJA di luar total_amount: total_amount = penjualan,
     # yang ditagih ke pelanggan = total_amount + delivery_fee (grand_total).
     delivery_fee = Column(Numeric(12, 2), server_default='0', nullable=False)
+    # Antar (mig 108). delivery_status SENGAJA terpisah dari `status`, alasan
+    # yang sama dengan kitchen_status: `ready` itu "makanannya jadi", bukan
+    # "lagi di jalan". NULL | assigned | on_the_way | delivered | failed.
+    courier_id = Column(UUID(as_uuid=True), ForeignKey('couriers.id', ondelete='SET NULL'), nullable=True)
+    # Nama kurir di-SNAPSHOT waktu ditugaskan. Kurir bisa berhenti kerja dan
+    # dihapus pemilik; struk dan riwayat bulan lalu tetap harus nulis siapa
+    # yang nganter (pelajaran nama varian).
+    courier_name = Column(String(80), nullable=True)
+    delivery_status = Column(String(16), nullable=True)
+    dispatched_at = Column(DateTime(timezone=True), nullable=True)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+    delivery_proof_url = Column(Text, nullable=True)
+    delivery_received_by = Column(String(80), nullable=True)
+    delivery_failed_reason = Column(String(200), nullable=True)
 
     @property
     def grand_total(self):
