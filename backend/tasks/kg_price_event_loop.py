@@ -243,7 +243,9 @@ async def process_price_events_once() -> dict:
     from backend.tasks.lock import single_flight
     async with single_flight("kg_price_event", ttl=280) as boleh:
         if not boleh:
-            return {"skipped_lock": True}
+            return {"events_seen": 0, "skipped_delta": 0, "skipped_tenant_state": 0,
+                    "skipped_dedup": 0, "skipped_no_flagged": 0, "skipped_no_owner": 0,
+                    "alerts_sent": 0, "alerts_wa_failed": 0, "skipped_lock": True}
 
         cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
         stats = {

@@ -42,7 +42,7 @@ async def close_expired_shifts_once() -> dict:
     from backend.tasks.lock import single_flight
     async with single_flight("shift_cutoff", ttl=570) as boleh:
         if not boleh:
-            return {"closed": 0, "skipped_lock": True}
+            return {"closed": 0, "failed": 0, "skipped_lock": True}
 
         now = datetime.now(timezone.utc)
         closed = 0
