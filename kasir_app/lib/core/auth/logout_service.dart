@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../services/push_service.dart';
 import '../services/session_cache.dart';
 import '../sync/sync_provider.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
@@ -39,15 +40,24 @@ Future<void> performLogout(WidgetRef ref) async {
     debugPrint('performLogout: sync cleanup skip — $e');
   }
 
-  // 3. Clear credential di RAM + SecureStorage + SharedPreferences mirror
+  // 3. Cabut token push SEBELUM kredensial dibuang — endpointnya butuh
+  //    Authorization. Kalau dilewat, HP yang sudah logout tetap bunyi tiap
+  //    ada pesanan di toko lamanya.
+  try {
+    await PushService.instance.lupakan();
+  } catch (e) {
+    debugPrint('performLogout: cabut token push skip — $e');
+  }
+
+  // 4. Clear credential di RAM + SecureStorage + SharedPreferences mirror
   await SessionCache.instance.clear();
 
-  // 4. Invalidate providers yang hold stale refs
+  // 5. Invalidate providers yang hold stale refs
   //    syncServiceProvider akan re-create next read → nodeId re-eval dengan
   //    userId baru (atau null kalau pre-login).
   ref.invalidate(syncServiceProvider);
 
-  // 5. Invalidate authProvider — WAJIB, jangan dihapus.
+  // 6. Invalidate authProvider — WAJIB, jangan dihapus.
   //    AuthState.isSuccess nempel `true` setelah login sukses dan gak pernah
   //    di-reset. Tanpa baris ini, logout → go('/login') → LoginPage lihat
   //    isSuccess masih true → yang dirender layar "Login berhasil!" + spinner,

@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/config/app_config.dart';
 import 'core/sync/sync_provider.dart';
+import 'core/services/push_service.dart';
 import 'core/services/session_cache.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/pages/login_page.dart';
@@ -167,6 +168,11 @@ void main() async {
 
     // Pre-warm session cache from SharedPreferences (fast) + SecureStorage (token only)
     await SessionCache.instance.initFromPrefsCache();
+
+    // Notifikasi push. SENGAJA nggak di-await: Firebase butuh ratusan mili
+    // dan nggak ada satu layar pun yang nunggu hasilnya. Ketukan notifikasi
+    // yang datang sebelum ini kelar disimpan dan dibuka Dashboard.
+    unawaited(PushService.instance.init());
 
     runApp(
       ProviderScope(

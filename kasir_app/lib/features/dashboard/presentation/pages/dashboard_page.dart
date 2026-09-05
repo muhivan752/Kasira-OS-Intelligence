@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/services/push_service.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/services/waitlist_service.dart';
 import '../../../../core/localization/business_labels.dart';
@@ -48,6 +50,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(onlineOrdersProvider.notifier).start();
+      // Notifikasi push: daftarkan HP ini (aman diulang tiap app dibuka),
+      // lalu buka layar tujuan kalau app tadi dibangunkan dari notifikasi
+      // saat mati total. Ditunda sampai di sini karena baru sekarang ada
+      // layar yang bisa ditumpuki.
+      unawaited(PushService.instance.daftar());
+      PushService.instance.bukaTertunda();
     });
     // If POS mode was pre-set (e.g. from "Tambah Pesanan" in tab detail),
     // auto-switch to POS tab

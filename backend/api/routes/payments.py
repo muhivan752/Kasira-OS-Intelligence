@@ -59,6 +59,8 @@ async def _handle_deposit_webhook_paid(db: AsyncSession, payment: Payment) -> No
         asyncio.create_task(_oo.wa_owner(
             outlet,
             f"DP reservasi {reservation.customer_name or '-'} ({when}) sudah lunas lewat QRIS. Konfirmasi di menu Reservasi.",
+            title="DP reservasi lunas",
+            data={"type": "reservasi", "route": "/reservations", "reservation_id": str(reservation.id)},
         ))
     except Exception:  # noqa: BLE001
         logger.warning("WA DP lunas gagal reservation=%s", reservation.id, exc_info=True)
@@ -1029,7 +1031,11 @@ async def xendit_webhook(
                         if _outlet is not None:
                             _limit = int(getattr(_outlet, 'online_auto_cancel_minutes', 10) or 10)
                             asyncio.create_task(_oo.wa_customer(_outlet, _cust_phone, _oo.msg_paid(order, _outlet, auto_cancel_minutes=_limit)))
-                            asyncio.create_task(_oo.wa_owner(_outlet, _oo.msg_owner_new_order(order, _outlet, _cust_name, _item_objs, paid=True)))
+                            asyncio.create_task(_oo.wa_owner(
+                                _outlet, _oo.msg_owner_new_order(order, _outlet, _cust_name, _item_objs, paid=True),
+                                title="Pesanan online baru (lunas)",
+                                data={"type": "pesanan_online", "route": "/online-orders", "order_id": str(order.id)},
+                            ))
                             asyncio.create_task(_oo.publish(_outlet.id, "order.created", {
                                 "order_id": str(order.id), "display_number": order.display_number,
                                 "order_type": str(getattr(order.order_type, 'value', order.order_type)),

@@ -52,6 +52,15 @@ class Settings(BaseSettings):
     # Ajakan pasang (langkah 3). Satu sumber buat WA, web, dan app.
     SEFREKUENSI_PLAY_URL: str = "https://play.google.com/store/apps/details?id=com.sefrekuensi.app"
 
+    # Firebase Cloud Messaging — notifikasi ke app kasir walau app ditutup.
+    # Dari service account Firebase (Setelan proyek > Akun layanan > Buat
+    # kunci pribadi baru). Kunci ditulis SATU BARIS dengan \n harfiah;
+    # baris beneran bakal mecah parser .env. Kosong = push mati total dan
+    # semua pemanggil balik diam-diam (WA tetap jalan seperti sebelumnya).
+    FCM_PROJECT_ID: str = ""
+    FCM_CLIENT_EMAIL: str = ""
+    FCM_PRIVATE_KEY: str = ""
+
     # Xendit Master Keys
     XENDIT_API_KEY: str = ""
     XENDIT_WEBHOOK_TOKEN: str = ""

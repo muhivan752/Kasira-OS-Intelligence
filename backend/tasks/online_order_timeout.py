@@ -118,7 +118,10 @@ async def expire_online_orders_once() -> dict:
                                                 refund_manual=info["refund_manual"]),
                 )
                 if info["refund_manual"] and info["refund_amount"]:
-                    await online_orders.wa_owner(outlet, online_orders.msg_owner_refund_manual(order, outlet, info["refund_amount"]))
+                    await online_orders.wa_owner(
+                        outlet, online_orders.msg_owner_refund_manual(order, outlet, info["refund_amount"]),
+                        title="Refund manual perlu dikerjakan",
+                        data={"type": "refund_manual", "route": "/online-orders", "order_id": str(order.id)})
                 logger.info("online_order_timeout: cancelled %s (%s)", order.order_number, UNCONFIRMED_REASON)
             except Exception:  # noqa: BLE001
                 stats["failed"] += 1

@@ -18,6 +18,7 @@ order tetap tersimpan dan app masih bisa polling.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -105,11 +106,24 @@ async def wa_customer(outlet, phone: Optional[str], message: str) -> bool:
         return False
 
 
-async def wa_owner(outlet, message: str) -> bool:
-    """Kabar ke pemilik: WA (nomor WhatsApp toko, kalau kosong nomor outlet)
-    plus Sefrekuensi kalau pintunya sudah dicolok. Ini SATU-SATUNYA pintu
-    notifikasi merchant (pesanan online, reservasi, refund manual); kanal
-    baru ditambah di sini, bukan di pemanggilnya."""
+async def wa_owner(outlet, message: str, *, title: str = "", data: Optional[dict] = None) -> bool:
+    """Kabar ke pemilik: notifikasi push ke app kasir, WA (nomor WhatsApp
+    toko, kalau kosong nomor outlet), plus Sefrekuensi kalau pintunya sudah
+    dicolok. Ini SATU-SATUNYA pintu notifikasi merchant (pesanan online,
+    reservasi, refund manual); kanal baru ditambah di sini, bukan di
+    pemanggilnya.
+
+    `title`/`data` cuma dipakai jalur push: `data` yang bikin ketukan
+    notifikasi mendarat di layar yang bener. Pemanggil yang nggak ngisi tetap
+    dapat push dengan judul merek dan tanpa tujuan khusus.
+
+    Balikannya tetap status WA saja, seperti sebelumnya — pemanggil sekarang
+    cuma butuh tahu itu.
+    """
+    # Ditunggu, bukan `create_task`: task tanpa pemegang referensi bisa
+    # kena garbage collector sebelum jalan. Pemanggil wa_owner sendiri
+    # sudah fire-and-forget, jadi nunggu di sini nggak nahan siapa pun.
+    await push_app(outlet, message, title=title, data=data)
     sampai_sefre = await push_sefrekuensi(outlet, message)
     if not getattr(outlet, "online_notify_owner_wa", True):
         return False
@@ -149,6 +163,46 @@ async def push_sefrekuensi(outlet, message: str) -> bool:
     if hasil.sampai:
         await _sefre.forget_status(target)
     return hasil.sampai
+
+
+async def push_app(outlet, message: str, *, title: str = "", data: Optional[dict] = None) -> int:
+    """Notifikasi ke app kasir lewat FCM. Balikin jumlah HP yang kena.
+
+    Ini yang nutup lubang paling nyata: SSE `orders:{outlet_id}` cuma hidup
+    selama app dibuka, jadi HP yang terkunci di saku nggak pernah tahu ada
+    pesanan masuk. WA tetap dikirim sebagai jaring, karena tidak semua HP
+    punya Google Play Services dan notifikasi bisa dimatikan pengguna.
+
+    Badan notifikasinya diringkas: pesan WA punya banyak baris (rincian item,
+    tautan, ajakan pasang Sefrekuensi) yang nggak muat di bilah notifikasi.
+    """
+    try:
+        from backend.services import fcm
+        if not fcm.enabled():
+            return 0
+        return await fcm.notify_outlet(
+            getattr(outlet, "id", None),
+            title=title or (getattr(outlet, "name", "") or settings.BRAND_NAME),
+            body=ringkas_notifikasi(message),
+            data=data or {},
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("push_app gagal untuk outlet %s", getattr(outlet, "id", None), exc_info=True)
+        return 0
+
+
+def ringkas_notifikasi(message: str, batas: int = 160) -> str:
+    """Ambil kalimat pertama yang berarti dari pesan WA, potong kalau panjang.
+
+    Baris kosong dan tautan dibuang: yang harus kebaca dalam sekali lirik itu
+    "pesanan baru Rp sekian", bukan URL lacak.
+    """
+    baris = [b.strip() for b in (message or "").splitlines() if b.strip()]
+    baris = [b for b in baris if not b.lower().startswith(("http://", "https://"))]
+    isi = " ".join(baris[:2]) if baris else ""
+    if len(isi) > batas:
+        isi = isi[: batas - 1].rstrip() + "..."
+    return isi or "Ada kabar baru dari toko Anda."
 
 
 # ── Teks pesan ────────────────────────────────────────────────────────────

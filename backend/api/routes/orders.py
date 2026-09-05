@@ -770,7 +770,10 @@ async def reject_online_order(
         asyncio.create_task(online_orders.wa_customer(
             outlet, phone, online_orders.msg_cancelled(order, outlet, refund_amount=info["refund_amount"], refund_manual=info["refund_manual"])))
         if info["refund_manual"] and info["refund_amount"]:
-            asyncio.create_task(online_orders.wa_owner(outlet, online_orders.msg_owner_refund_manual(order, outlet, info["refund_amount"])))
+            asyncio.create_task(online_orders.wa_owner(
+                    outlet, online_orders.msg_owner_refund_manual(order, outlet, info["refund_amount"]),
+                    title="Refund manual perlu dikerjakan",
+                    data={"type": "refund_manual", "route": "/online-orders", "order_id": str(order.id)}))
     order = await _load_order_full(db, order_id)
     return StandardResponse(success=True, data=(await _attach_payment_info(db, [order]))[0],
                             request_id=request.state.request_id, message="Pesanan ditolak")
@@ -914,7 +917,8 @@ async def mark_order_delivery_failed(
         asyncio.create_task(online_orders.wa_customer(
             outlet, phone, online_orders.msg_delivery_failed(order, outlet, reason=body.reason)))
     asyncio.create_task(online_orders.wa_owner(
-        outlet, online_orders.msg_owner_delivery_failed(order, outlet, reason=body.reason)))
+        outlet, online_orders.msg_owner_delivery_failed(order, outlet, reason=body.reason),
+        title="Gagal antar", data={"type": "antar_gagal", "route": "/online-orders", "order_id": str(order.id)}))
     order = await _load_order_full(db, order_id)
     return StandardResponse(success=True, data=(await _attach_payment_info(db, [order]))[0],
                             request_id=request.state.request_id, message="Ditandai gagal antar")
@@ -987,7 +991,10 @@ async def update_order_status(
             asyncio.create_task(online_orders.wa_customer(
                 outlet, phone, online_orders.msg_cancelled(order, outlet, refund_amount=info["refund_amount"], refund_manual=info["refund_manual"])))
             if info["refund_manual"] and info["refund_amount"]:
-                asyncio.create_task(online_orders.wa_owner(outlet, online_orders.msg_owner_refund_manual(order, outlet, info["refund_amount"])))
+                asyncio.create_task(online_orders.wa_owner(
+                    outlet, online_orders.msg_owner_refund_manual(order, outlet, info["refund_amount"]),
+                    title="Refund manual perlu dikerjakan",
+                    data={"type": "refund_manual", "route": "/online-orders", "order_id": str(order.id)}))
         return await _status_response(db, request, order_id, before_state, current_user, "Pesanan dibatalkan")
     if is_storefront and status_in.status == OrderStatus.preparing and cur_status == "pending":
         outlet = await db.get(Outlet, order.outlet_id)

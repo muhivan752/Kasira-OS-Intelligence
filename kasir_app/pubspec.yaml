@@ -35,6 +35,14 @@ dependencies:
   crypto: ^3.0.3
   lucide_icons_flutter: ^3.1.14+2
   audioplayers: ^6.1.0
+  # Notifikasi push (5 Sep 2026). Bikin HP kasir bunyi walau app
+  # ditutup — SSE `orders:{outlet_id}` cuma hidup selama app dibuka.
+  firebase_core: ^4.14.0
+  firebase_messaging: ^16.6.0
+  # Bikin channel notifikasi ber-importance TINGGI (biar nongol di
+  # layar, bukan cuma masuk laci) dan nampilin pesan yang datang saat
+  # app lagi dibuka — FCM sendiri nggak nampilin apa-apa di foreground.
+  flutter_local_notifications: ^22.3.0
 
 dev_dependencies:
   flutter_test:

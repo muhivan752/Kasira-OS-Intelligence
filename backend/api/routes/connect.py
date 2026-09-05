@@ -207,7 +207,13 @@ async def upload_payment_proof(payment_id: uuid.UUID, file: UploadFile = File(..
     ref = str(payment.reference_id or "")
     label = "DP reservasi" if ref.startswith("reservation:") else "pesanan online"
     if outlet is not None:
-        asyncio.create_task(_oo.wa_owner(outlet, f"Bukti bayar {label} Rp {float(payment.amount_due):,.0f} masuk. Cek di aplikasi kasir lalu konfirmasi.".replace(",", ".")))
+        asyncio.create_task(_oo.wa_owner(
+            outlet,
+            f"Bukti bayar {label} Rp {float(payment.amount_due):,.0f} masuk. Cek di aplikasi kasir lalu konfirmasi.".replace(",", "."),
+            title="Bukti bayar masuk",
+            data={"type": "bukti_bayar", "route": "/online-orders",
+                  "order_id": str(payment.order_id) if payment.order_id else ""},
+        ))
         asyncio.create_task(_oo.publish(outlet.id, "payment.proof", {"payment_id": str(payment.id), "order_id": str(payment.order_id) if payment.order_id else None}))
     return StandardResponse(success=True, data={"proof_image_url": payment.proof_image_url, "uploaded_at": now.isoformat()},
                             message="Bukti bayar diterima. Toko akan memeriksanya.")
@@ -955,6 +961,8 @@ async def create_connect_order(
             _oo.msg_owner_new_order(order, outlet, input_data.customer_name, item_objs,
                                     paid=bool(payment is not None and payment.status == 'paid'),
                                     manual_qris=manual_qris_pending, manual_method=manual_method),
+            title="Pesanan online baru",
+            data={"type": "pesanan_online", "route": "/online-orders", "order_id": str(order.id)},
         )
         background_tasks.add_task(_oo.publish, outlet.id, "order.created", {
             "order_id": str(order.id), "display_number": order.display_number,
@@ -1657,7 +1665,11 @@ async def create_storefront_reservation(
             _oo.msg_customer_reservation(reservation, outlet, deposit=deposit, track=track_url),
         ))
     if initial_status == "pending":
-        asyncio.create_task(_oo.wa_owner(outlet, _oo.msg_owner_new_reservation(reservation, outlet, deposit=deposit)))
+        asyncio.create_task(_oo.wa_owner(
+            outlet, _oo.msg_owner_new_reservation(reservation, outlet, deposit=deposit),
+            title="Reservasi baru",
+            data={"type": "reservasi", "route": "/reservations", "reservation_id": str(reservation.id)},
+        ))
         asyncio.create_task(_oo.publish(outlet.id, "reservation.created", {"reservation_id": str(reservation.id)}))
 
     status_msg = (
@@ -1817,6 +1829,9 @@ async def courier_failed(slug: str, order_id: uuid.UUID, body: CourierFailedInpu
     await db.commit()
     if order.source == "storefront":
         asyncio.create_task(_oo.wa_customer(outlet, phone, _oo.msg_delivery_failed(order, outlet, reason=body.reason)))
-    asyncio.create_task(_oo.wa_owner(outlet, _oo.msg_owner_delivery_failed(order, outlet, reason=body.reason)))
+    asyncio.create_task(_oo.wa_owner(
+        outlet, _oo.msg_owner_delivery_failed(order, outlet, reason=body.reason),
+        title="Gagal antar", data={"type": "antar_gagal", "route": "/online-orders", "order_id": str(order.id)},
+    ))
     payment = await latest_payment(db, order.id)
     return StandardResponse(success=True, data=_courier_payload(outlet, order, payment), message="Ditandai gagal antar")

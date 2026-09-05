@@ -78,6 +78,9 @@ jobs:
               <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
               <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+              <!-- Android 13+ minta izin notifikasi saat berjalan. Tanpa baris
+                   ini, dialog izinnya nggak pernah muncul dan push diam. -->
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
               <application
                   android:label="Selaris"
                   android:name="${applicationName}"
@@ -103,11 +106,91 @@ jobs:
                   <meta-data
                       android:name="flutterEmbedding"
                       android:value="2"/>
+                  <!-- Channel yang dipakai notifikasi dari FCM. Nilainya HARUS sama
+                       dengan `_channelId` di push_service.dart dan `CHANNEL_ID` di
+                       backend/services/fcm.py. Beda = Android jatuh ke channel
+                       cadangan yang nggak nongol di layar. -->
+                  <meta-data
+                      android:name="com.google.firebase.messaging.default_notification_channel_id"
+                      android:value="pesanan_online"/>
               </application>
           </manifest>
           MANIFEST_EOF
           echo "=== Manifest setelah patch ==="
           cat $MANIFEST
+        working-directory: kasir_app
+
+      # ── Firebase Cloud Messaging ─────────────────────────────────────────
+      # Folder android/ TIDAK ada di repo: `flutter create` di atas bikin
+      # ulang dari nol tiap build. Jadi SEMUA berkas Firebase harus dipasang
+      # di sini, sesudah langkah itu — sama alasannya dengan patch manifest
+      # dan ikon aplikasi.
+      #
+      # Rahasianya opsional. Kalau GOOGLE_SERVICES_JSON belum diisi, langkah
+      # ini dilewati dan APK tetap kebentuk; push-nya saja yang mati
+      # (`Firebase.initializeApp()` dilempar dan ditangkap PushService).
+      # Ini yang bikin main tetap hijau sebelum proyek Firebase-nya jadi.
+      - name: Pasang google-services.json
+        id: firebase
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "ada=false" >> $GITHUB_OUTPUT
+            echo "::warning::GOOGLE_SERVICES_JSON kosong — APK dibangun TANPA notifikasi push."
+            exit 0
+          fi
+          # Terima dua bentuk: JSON mentah, atau base64 (buat rahasia yang
+          # ke-mangle newline-nya).
+          if echo "$GOOGLE_SERVICES_JSON" | head -c 1 | grep -q '{'; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+          else
+            printf '%s' "$GOOGLE_SERVICES_JSON" | base64 -d > android/app/google-services.json
+          fi
+          python3 -c "import json,sys; d=json.load(open('android/app/google-services.json')); print('project:', d['project_info']['project_id']); print('paket:', [c['client_info']['android_client_info']['package_name'] for c in d['client']])"
+          echo "ada=true" >> $GITHUB_OUTPUT
+        working-directory: kasir_app
+
+      - name: Patch Gradle — plugin google-services + desugaring
+        if: steps.firebase.outputs.ada == 'true'
+        run: |
+          set -e
+          SETTINGS="android/settings.gradle.kts"
+          APP="android/app/build.gradle.kts"
+
+          # 1. Daftarkan plugin di settings (blok `plugins`, apply false).
+          python3 - "$SETTINGS" <<'PY'
+          import sys
+          p = sys.argv[1]
+          s = open(p).read()
+          baris = '    id("com.google.gms.google-services") version "4.4.3" apply false\n'
+          if "google-services" not in s:
+              anchor = '    id("com.android.application")'
+              i = s.index(anchor)
+              j = s.index("\n", i) + 1
+              s = s[:j] + baris + s[j:]
+              open(p, "w").write(s)
+          print(open(p).read())
+          PY
+
+          # 2. Terapkan plugin di modul app + nyalakan desugaring
+          #    (syarat flutter_local_notifications 22.x).
+          python3 - "$APP" <<'PY'
+          import sys
+          p = sys.argv[1]
+          s = open(p).read()
+          if "google-services" not in s:
+              anchor = '    id("dev.flutter.flutter-gradle-plugin")'
+              s = s.replace(anchor, anchor + '\n    id("com.google.gms.google-services")', 1)
+          if "isCoreLibraryDesugaringEnabled" not in s:
+              s = s.replace(
+                  "    compileOptions {",
+                  "    compileOptions {\n        isCoreLibraryDesugaringEnabled = true", 1)
+          if "coreLibraryDesugaring(" not in s:
+              s = s.rstrip() + '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          open(p, "w").write(s)
+          print(open(p).read())
+          PY
         working-directory: kasir_app
 
       - name: Update version in pubspec.yaml
