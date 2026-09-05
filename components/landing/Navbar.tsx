@@ -11,6 +11,7 @@ export default function Navbar() {
   const navLinks = [
     { name: 'Fitur', href: '#features' },
     { name: 'Harga', href: '#pricing' },
+    { name: 'Jelajah toko', href: '/jelajah' },
     { name: 'Download', href: '/download' },
     { name: 'Demo', href: '/kasira-coffee' },
   ];

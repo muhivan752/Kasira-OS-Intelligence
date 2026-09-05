@@ -7,11 +7,16 @@ import LandingChat from '@/components/landing/LandingChat';
 import { Logo } from '@/components/ui/logo';
 import { BRAND, SITE_URL, WA_LINK, DEMO_SLUG } from '@/lib/brand';
 
+// Sisanya anchor ke bagian di halaman ini, "Jelajah toko" satu-satunya yang
+// pindah halaman. Sengaja ditaruh di nav DAN footer: sebelum ini /jelajah dan
+// 7 halaman toko di bawahnya nggak punya satu pun tautan dari halaman publik,
+// jadi buat Google mereka yatim dan cuma ketahuan dari peta situs.
 const NAV = [
   { label: 'Cara kerja', href: '#cara-kerja' },
   { label: 'Tampilan', href: '#tampilan' },
   { label: 'Modul', href: '#modul' },
   { label: 'Harga', href: '#harga' },
+  { label: 'Jelajah toko', href: '/jelajah' },
 ];
 
 // Tesis produk: pemilik cuma nyentuh tiga hal, sisanya turunan.
@@ -492,6 +497,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-[1180px] flex-col items-center justify-between gap-4 px-5 py-8 text-[13px] text-[var(--text-muted)] sm:flex-row sm:px-6">
           <p>© {new Date().getFullYear()} {BRAND} · untuk UMKM Indonesia 🇮🇩</p>
           <nav className="flex flex-wrap items-center justify-center gap-5">
+            <Link href="/jelajah" className="transition hover:text-[var(--text-strong)]">Jelajah toko</Link>
             <Link href={`/${DEMO_SLUG}`} className="transition hover:text-[var(--text-strong)]">Demo</Link>
             <Link href="/download" className="transition hover:text-[var(--text-strong)]">Download</Link>
             <Link href="/privacy" className="transition hover:text-[var(--text-strong)]">Privasi</Link>
