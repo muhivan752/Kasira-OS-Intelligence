@@ -242,9 +242,20 @@ async def reconcile_payments():
             now = datetime.now(timezone.utc)
             cutoff = now - PENDING_TIMEOUT
 
-            # Query: pending_manual_check (selalu poll) + pending stale
+            # Query: pending_manual_check (selalu poll) + pending stale.
+            #
+            # Channel `manual` DIKECUALIKAN (fix 5 Sep 2026). Tunai antar (COD)
+            # sengaja pending sampai kurir sampai, QRIS statis dan transfer
+            # sengaja pending sampai kasir memastikan bukti. Aturan lama
+            # "non-QRIS pending > 10 menit = expired" lahir waktu tunai selalu
+            # lunas seketika di kasir; sejak ada COD dia meng-expire pembayaran
+            # yang masih hidup: order #5467 Ivan (56.000) diantar 1 jam, sampai
+            # dengan selamat, tapi uangnya hilang dari Beranda karena
+            # settle_cod_payment cuma mau mengubah yang masih `pending`.
+            # Yang manusia selesaikan, jangan diselesaikan mesin.
             stmt = select(Payment).where(
                 Payment.deleted_at.is_(None),
+                or_(Payment.channel.is_(None), Payment.channel != "manual"),
                 or_(
                     Payment.status == "pending_manual_check",
                     and_(

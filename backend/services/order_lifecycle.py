@@ -146,9 +146,13 @@ async def settle_cod_payment(db, order: Order) -> bool:
     uang COD nggak pernah kelihatan di Beranda.
 
     Idempoten: pembayaran yang sudah `paid` dilewati.
+
+    `expired` ikut dipulihkan: janitor payment_reconciliation sempat
+    meng-expire COD yang masih di jalan (fix 5 Sep 2026). Barangnya sampai
+    dan uangnya diterima kurir, jadi kenyataannya lunas, apa pun kata janitor.
     """
     pay = await latest_payment(db, order.id)
-    if pay is None or _val(pay.payment_method) != "cash" or _val(pay.status) != "pending":
+    if pay is None or _val(pay.payment_method) != "cash" or _val(pay.status) not in ("pending", "expired"):
         return False
     now = datetime.now(timezone.utc)
     pay.status = "paid"
