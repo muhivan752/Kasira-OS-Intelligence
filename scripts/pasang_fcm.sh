@@ -49,7 +49,7 @@ echo "  project : $PROJECT"
 echo "  akun    : $EMAIL"
 echo "  kunci   : ${#KEY} karakter"
 echo
-echo "Env baru butuh BUILD ULANG, `docker restart` nggak muat ulang env:"
+echo 'Env baru butuh BUILD ULANG, `docker restart` nggak muat ulang env:'
 echo "  sudo docker compose build backend && sudo docker compose up -d --no-deps backend"
 echo "Sesudah itu container di-recreate, jadi berkas hasil \`docker cp\` hilang."
 echo "Pasang ulang version.json dan berkas cp lain (gotcha #9)."
