@@ -79,6 +79,9 @@ class OnlineOrder {
   final int? etaMinutes;
   final DateTime? readyAt;
   final String? cancelReason;
+  /// Kasir yang menekan Terima (mig 110). Tiga kasir bisa pegang app yang
+  /// sama; ini yang bikin dua HP lain tahu pesanannya sudah ada yang pegang.
+  final String? acceptedByName;
   // Antar (delivery gelombang 2). deliveryStatus TERPISAH dari status:
   // `ready` = makanannya jadi, bukan lagi di jalan.
   final String? deliveryStatus; // null | on_the_way | delivered | failed
@@ -119,6 +122,7 @@ class OnlineOrder {
     this.etaMinutes,
     this.readyAt,
     this.cancelReason,
+    this.acceptedByName,
     this.deliveryStatus,
     this.courierName,
     this.dispatchedAt,
@@ -155,6 +159,7 @@ class OnlineOrder {
         etaMinutes: (j['eta_minutes'] as num?)?.toInt(),
         readyAt: _toDate(j['ready_at']),
         cancelReason: j['cancel_reason'] as String?,
+        acceptedByName: j['accepted_by_name'] as String?,
         deliveryStatus: j['delivery_status'] as String?,
         courierName: j['courier_name'] as String?,
         dispatchedAt: _toDate(j['dispatched_at']),
@@ -226,6 +231,22 @@ class OnlineOrder {
     if (d.isEmpty) return null;
     return d.startsWith('0') ? '62${d.substring(1)}' : d;
   }
+}
+
+/// Hasil satu aksi kasir.
+///
+/// `conflict` = server balas 409: bukan gagal, cuma kalah cepat dari kasir
+/// lain yang pegang app yang sama. Layar menampilkannya sebagai kabar biasa
+/// (bukan merah) lalu memuat ulang daftarnya, karena keadaan di server sudah
+/// benar dan yang salah cuma tampilan di HP ini.
+class ActionResult {
+  final String? error;
+  final bool conflict;
+  const ActionResult._(this.error, this.conflict);
+  const ActionResult.ok() : this._(null, false);
+  const ActionResult.failed(String message) : this._(message, false);
+  const ActionResult.conflicted(String message) : this._(message, true);
+  bool get isOk => error == null;
 }
 
 /// Kurir toko (delivery gelombang 2). Dibaca dari server, BUKAN Drift:
@@ -419,63 +440,63 @@ class OnlineOrdersNotifier extends StateNotifier<OnlineOrdersState> {
     }
   }
 
-  Future<String?> accept(String orderId, int etaMinutes) async {
+  Future<ActionResult> accept(String orderId, int etaMinutes) async {
     try {
       await _dio.post('/orders/$orderId/accept', data: {'eta_minutes': etaMinutes});
       await fetch(silent: true);
-      return null;
+      return const ActionResult.ok();
     } on DioException catch (e) {
-      return _msg(e, 'Gagal menerima pesanan');
+      return _result(e, 'Gagal menerima pesanan');
     }
   }
 
-  Future<String?> reject(String orderId, String reason) async {
+  Future<ActionResult> reject(String orderId, String reason) async {
     try {
       await _dio.post('/orders/$orderId/reject', data: {'reason': reason});
       await fetch(silent: true);
-      return null;
+      return const ActionResult.ok();
     } on DioException catch (e) {
-      return _msg(e, 'Gagal menolak pesanan');
+      return _result(e, 'Gagal menolak pesanan');
     }
   }
 
-  Future<String?> setStatus(String orderId, String status) async {
+  Future<ActionResult> setStatus(String orderId, String status) async {
     try {
       await _dio.put('/orders/$orderId/status', data: {'status': status, 'row_version': 0});
       await fetch(silent: true);
-      return null;
+      return const ActionResult.ok();
     } on DioException catch (e) {
-      return _msg(e, 'Gagal memperbarui status');
+      return _result(e, 'Gagal memperbarui status');
     }
   }
 
   // ── Antar (delivery gelombang 2) ──────────────────────────────────────
 
   /// Serahkan ke kurir. Salah satu: kurir terdaftar (id) atau nama ketikan.
-  Future<String?> dispatch(String orderId, {String? courierId, String? courierName}) async {
+  Future<ActionResult> dispatch(String orderId, {String? courierId, String? courierName}) async {
     try {
       await _dio.post('/orders/$orderId/dispatch', data: {
         if (courierId != null) 'courier_id': courierId,
         if (courierName != null && courierName.trim().isNotEmpty) 'courier_name': courierName.trim(),
       });
       await fetch(silent: true);
-      return null;
+      return const ActionResult.ok();
     } on DioException catch (e) {
-      return _msg(e, 'Gagal menyerahkan ke kurir');
+      return _result(e, 'Gagal menyerahkan ke kurir');
     }
   }
 
   /// Kurir sampai. Bukti foto dan nama penerima dua-duanya opsional.
-  Future<String?> delivered(String orderId, {String? proofImageUrl, String? receivedBy}) async {
+  Future<ActionResult> delivered(String orderId, {String? proofImageUrl, String? receivedBy}) async {
     try {
       await _dio.post('/orders/$orderId/delivered', data: {
         if (proofImageUrl != null) 'proof_image_url': proofImageUrl,
         if (receivedBy != null && receivedBy.trim().isNotEmpty) 'received_by': receivedBy.trim(),
       });
       await fetch(silent: true);
-      return null;
+      return const ActionResult.ok();
     } on DioException catch (e) {
-      return _msg(e, 'Gagal menandai sampai');
+      return _result(e, 'Gagal menandai sampai');
     }
   }
 
@@ -494,14 +515,26 @@ class OnlineOrdersNotifier extends StateNotifier<OnlineOrdersState> {
     }
   }
 
-  Future<String?> deliveryFailed(String orderId, String reason) async {
+  Future<ActionResult> deliveryFailed(String orderId, String reason) async {
     try {
       await _dio.post('/orders/$orderId/delivery-failed', data: {'reason': reason});
       await fetch(silent: true);
-      return null;
+      return const ActionResult.ok();
     } on DioException catch (e) {
-      return _msg(e, 'Gagal menandai gagal antar');
+      return _result(e, 'Gagal menandai gagal antar');
     }
+  }
+
+  /// 409 = kasir lain sudah menangani duluan. Daftarnya dimuat ulang supaya
+  /// HP ini langsung ikut keadaan yang benar, lalu pesannya ditampilkan
+  /// sebagai kabar, bukan error.
+  Future<ActionResult> _result(DioException e, String fallback) async {
+    final msg = _msg(e, fallback);
+    if (e.response?.statusCode == 409) {
+      await fetch(silent: true);
+      return ActionResult.conflicted(msg);
+    }
+    return ActionResult.failed(msg);
   }
 
   String _msg(DioException e, String fallback) {

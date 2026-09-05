@@ -91,6 +91,10 @@ class OrderResponse(OrderBase):
     # Pesanan online (mig 101)
     source: str = 'pos'
     accepted_at: Optional[datetime] = None
+    # Kasir yang menekan Terima (mig 110). Tiga kasir bisa pegang app yang
+    # sama; ini yang bikin dua HP lain tahu pesanan itu sudah ada yang pegang.
+    accepted_by: Optional[UUID] = None
+    accepted_by_name: Optional[str] = None
     eta_minutes: Optional[int] = None
     ready_at: Optional[datetime] = None
     cancel_reason: Optional[str] = None

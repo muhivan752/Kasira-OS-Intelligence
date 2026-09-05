@@ -450,6 +450,12 @@ async def _attach_payment_info(db, orders) -> list:
         for row in pay_result.all():
             payment_map[row.order_id] = {"payment_method": row.payment_method, "payment_status": row.status,
                                          "payment_channel": row.channel, "payment_proof_url": row.proof_image_url}
+    # Nama kasir yang menerima, biar semua HP nulis "Diterima Budi".
+    handler_map: dict = {}
+    handler_ids = {o.accepted_by for o in orders if getattr(o, "accepted_by", None)}
+    if handler_ids:
+        for uid, nm in (await db.execute(select(User.id, User.full_name).where(User.id.in_(handler_ids)))).all():
+            handler_map[uid] = nm
     # Link tugas kurir butuh slug outlet; satu query buat semua order.
     slug_map: dict = {}
     outlet_ids = {o.outlet_id for o in orders if getattr(o, "delivery_token", None)}
@@ -465,6 +471,8 @@ async def _attach_payment_info(db, orders) -> list:
             resp.payment_status = info["payment_status"]
             resp.payment_channel = info["payment_channel"]
             resp.payment_proof_url = info["payment_proof_url"]
+        if getattr(o, "accepted_by", None):
+            resp.accepted_by_name = handler_map.get(o.accepted_by)
         if getattr(o, "delivery_token", None) and slug_map.get(o.outlet_id):
             resp.courier_task_url = f"{settings.SITE_URL}/{slug_map[o.outlet_id]}/antar/{o.id}?k={o.delivery_token}"
         out.append(resp)
@@ -594,10 +602,19 @@ async def update_kitchen_status(
     order ke `ready` (pelanggan online dikabari "siap diambil"). Selain itu
     status order dibiarkan: penyelesaian tetap urusan kasir dan pembayaran.
     """
-    order = await _load_order_full(db, order_id)
+    # Dikunci: dua tablet dapur bisa menekan Siap bareng, dan tanpa kunci
+    # dua-duanya lolos cek "masih preparing" lalu pelanggan dapat DUA WA
+    # "pesanan siap". Sama persis dengan bentrok kasir di endpoint accept.
+    order = await _load_order_full(db, order_id, lock=True)
     outlet = await _owned_outlet(db, order.outlet_id, current_user)
     if str(getattr(order.status, "value", order.status)) == "cancelled":
         raise HTTPException(status_code=400, detail="Pesanan sudah dibatalkan")
+    # Sudah di status yang sama = tablet lain baru saja menekannya. Bukan
+    # error (dapur nggak perlu tahu siapa duluan), cuma jangan dicatat dua kali.
+    if order.kitchen_status == body.status:
+        return StandardResponse(success=True, data={"id": str(order.id), "kitchen_status": body.status,
+                                "status": str(getattr(order.status, "value", order.status))},
+                                request_id=request.state.request_id, message="Status dapur sudah diperbarui")
     now = datetime.now(timezone.utc)
     order.kitchen_status = body.status
     order.updated_at = now
@@ -669,13 +686,35 @@ async def stream_orders(
     })
 
 
-async def _load_order_full(db, order_id: UUID) -> Order:
-    order = (await db.execute(
-        select(Order).options(selectinload(Order.items).selectinload(OrderItem.product)).where(Order.id == order_id)
-    )).scalar_one_or_none()
+async def _load_order_full(db, order_id: UUID, *, lock: bool = False) -> Order:
+    """`lock=True` = SELECT ... FOR UPDATE.
+
+    WAJIB dipakai di semua endpoint yang MEMUTUSKAN sesuatu (terima, tolak,
+    serahkan ke kurir, sampai, gagal antar). Tiga kasir bisa sama-sama pegang
+    app dan lihat pesanan yang sama; tanpa kunci baris, dua-duanya lolos cek
+    "masih pending" sebelum salah satunya commit, dan pelanggan dapat DUA WA.
+    Yang kedua sekarang nunggu sebentar lalu lihat status yang sudah berubah,
+    dan dikasih 409 (bukan 400) supaya app bisa membedakan "kolega sudah
+    menangani" dari "gagal beneran".
+
+    selectinload aman dipakai bareng FOR UPDATE: koleksi item ditarik lewat
+    query terpisah, jadi yang dikunci cuma baris order.
+    """
+    q = select(Order).options(selectinload(Order.items).selectinload(OrderItem.product)).where(Order.id == order_id)
+    if lock:
+        q = q.with_for_update(of=Order)
+    order = (await db.execute(q)).scalar_one_or_none()
     if not order or order.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Order tidak ditemukan")
     return order
+
+
+async def _handler_name(db, order: Order) -> str:
+    """Nama kasir yang menerima pesanan ini, buat pesan bentrok yang manusiawi."""
+    if not order.accepted_by:
+        return "kasir lain"
+    name = (await db.execute(select(User.full_name).where(User.id == order.accepted_by))).scalar_one_or_none()
+    return (name or "kasir lain").strip() or "kasir lain"
 
 
 @router.post("/{order_id}/accept", response_model=StandardResponse[OrderResponse])
@@ -687,10 +726,15 @@ async def accept_online_order(
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """Toko menerima pesanan online + memberi perkiraan waktu. pending -> preparing."""
-    order = await _load_order_full(db, order_id)
+    order = await _load_order_full(db, order_id, lock=True)
     outlet = await _owned_outlet(db, order.outlet_id, current_user)
     if str(getattr(order.status, 'value', order.status)) != "pending":
-        raise HTTPException(status_code=400, detail="Pesanan ini sudah diproses")
+        # 409, bukan 400: ini bukan kesalahan kasir yang menekan, cuma kalah
+        # cepat. App menampilkannya sebagai kabar biasa lalu memuat ulang.
+        st = str(getattr(order.status, 'value', order.status))
+        if st == "cancelled":
+            raise HTTPException(status_code=409, detail="Pesanan ini sudah dibatalkan")
+        raise HTTPException(status_code=409, detail=f"Pesanan ini sudah diterima {await _handler_name(db, order)}")
     await accept_order(db, order, outlet, eta_minutes=body.eta_minutes, actor_user_id=current_user.id)
     phone = order.customer_phone
     await db.commit()
@@ -712,10 +756,11 @@ async def reject_online_order(
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """Toko menolak pesanan online dengan alasan. Stok kembali, QRIS di-refund, pelanggan dikabari."""
-    order = await _load_order_full(db, order_id)
+    order = await _load_order_full(db, order_id, lock=True)
     outlet = await _owned_outlet(db, order.outlet_id, current_user)
-    if str(getattr(order.status, 'value', order.status)) in ("completed", "cancelled"):
-        raise HTTPException(status_code=400, detail="Pesanan ini sudah selesai atau dibatalkan")
+    st = str(getattr(order.status, 'value', order.status))
+    if st in ("completed", "cancelled"):
+        raise HTTPException(status_code=409, detail="Pesanan ini sudah dibatalkan" if st == "cancelled" else "Pesanan ini sudah selesai")
     info = await cancel_order(db, order, outlet, reason=body.reason, actor_user_id=current_user.id, by="cashier")
     phone = order.customer_phone
     await db.commit()
@@ -746,14 +791,17 @@ async def dispatch_delivery_order(
     siapa yang nganter plus nomornya, biar bisa dihubungi langsung waktu
     alamatnya susah ketemu.
     """
-    order = await _load_order_full(db, order_id)
+    order = await _load_order_full(db, order_id, lock=True)
     outlet = await _owned_outlet(db, order.outlet_id, current_user)
     if not delivery_dispatch.is_delivery(order):
         raise HTTPException(status_code=400, detail="Pesanan ini bukan pesanan antar")
-    if str(getattr(order.status, 'value', order.status)) in ("pending", "completed", "cancelled"):
-        raise HTTPException(status_code=400, detail="Pesanan ini belum diterima atau sudah selesai")
+    st = str(getattr(order.status, 'value', order.status))
+    if st in ("completed", "cancelled"):
+        raise HTTPException(status_code=409, detail="Pesanan ini sudah selesai" if st == "completed" else "Pesanan ini sudah dibatalkan")
+    if st == "pending":
+        raise HTTPException(status_code=400, detail="Terima pesanannya dulu sebelum diserahkan ke kurir")
     if order.delivery_status == delivery_dispatch.DELIVERED:
-        raise HTTPException(status_code=400, detail="Pesanan ini sudah diantar")
+        raise HTTPException(status_code=409, detail="Pesanan ini sudah sampai")
 
     courier = None
     if body.courier_id:
@@ -810,12 +858,14 @@ async def mark_order_delivered(
     Bukti foto dan nama penerima dua-duanya opsional: kurir kehujanan nggak
     boleh kejebak wajib foto.
     """
-    order = await _load_order_full(db, order_id)
+    order = await _load_order_full(db, order_id, lock=True)
     outlet = await _owned_outlet(db, order.outlet_id, current_user)
     if not delivery_dispatch.is_delivery(order):
         raise HTTPException(status_code=400, detail="Pesanan ini bukan pesanan antar")
     if str(getattr(order.status, 'value', order.status)) == "cancelled":
-        raise HTTPException(status_code=400, detail="Pesanan ini sudah dibatalkan")
+        raise HTTPException(status_code=409, detail="Pesanan ini sudah dibatalkan")
+    if order.delivery_status == delivery_dispatch.DELIVERED:
+        raise HTTPException(status_code=409, detail="Pesanan ini sudah ditandai sampai")
 
     completed = await delivery_dispatch.mark_delivered(
         db, order, outlet, proof_image_url=body.proof_image_url,
@@ -848,12 +898,12 @@ async def mark_order_delivery_failed(
     dibayar. Kasir yang memutuskan mau kirim ulang atau batalkan lewat jalur
     batal yang sudah ada (yang tahu cara refund dan balikin stok).
     """
-    order = await _load_order_full(db, order_id)
+    order = await _load_order_full(db, order_id, lock=True)
     outlet = await _owned_outlet(db, order.outlet_id, current_user)
     if not delivery_dispatch.is_delivery(order):
         raise HTTPException(status_code=400, detail="Pesanan ini bukan pesanan antar")
     if order.delivery_status == delivery_dispatch.DELIVERED:
-        raise HTTPException(status_code=400, detail="Pesanan ini sudah ditandai sampai")
+        raise HTTPException(status_code=409, detail="Pesanan ini sudah ditandai sampai")
 
     await delivery_dispatch.mark_failed(db, order, outlet, reason=body.reason, actor_user_id=current_user.id)
     phone = order.customer_phone

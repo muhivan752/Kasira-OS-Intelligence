@@ -32,6 +32,9 @@ class Order(BaseModel):
     # completed, atau cancelled dengan cancel_reason yang dibaca pelanggan.
     source = Column(String(16), server_default='pos', nullable=False)
     accepted_at = Column(DateTime(timezone=True), nullable=True)
+    # Kasir yang menekan Terima (mig 110). Dipakai buat nulis "Diterima Budi"
+    # di semua HP, dan buat pesan bentrok yang menyebut nama.
+    accepted_by = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     eta_minutes = Column(Integer, nullable=True)
     ready_at = Column(DateTime(timezone=True), nullable=True)
     cancel_reason = Column(String(200), nullable=True)

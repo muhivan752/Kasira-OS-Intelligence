@@ -192,23 +192,23 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
   Future<void> _accept(OnlineOrder order) async {
     final eta = await _pickEta(order);
     if (eta == null || !mounted) return;
-    final err = await ref.read(onlineOrdersProvider.notifier).accept(order.id, eta);
-    _toast(err ?? 'Pesanan #${order.displayNumber} diterima. Pelanggan dikabari siap dalam $eta menit.', ok: err == null);
+    final res = await ref.read(onlineOrdersProvider.notifier).accept(order.id, eta);
+    _report(res, 'Pesanan #${order.displayNumber} diterima. Pelanggan dikabari siap dalam $eta menit.');
   }
 
   Future<void> _reject(OnlineOrder order) async {
     final reason = await _pickReason(order);
     if (reason == null || !mounted) return;
-    final err = await ref.read(onlineOrdersProvider.notifier).reject(order.id, reason);
-    _toast(err ?? 'Pesanan #${order.displayNumber} ditolak. Pelanggan dikabari.', ok: err == null);
+    final res = await ref.read(onlineOrdersProvider.notifier).reject(order.id, reason);
+    _report(res, 'Pesanan #${order.displayNumber} ditolak. Pelanggan dikabari.');
   }
 
   Future<void> _setStatus(OnlineOrder order, String status) async {
-    final err = await ref.read(onlineOrdersProvider.notifier).setStatus(order.id, status);
+    final res = await ref.read(onlineOrdersProvider.notifier).setStatus(order.id, status);
     final label = status == 'ready'
         ? (order.orderType == 'delivery' ? 'ditandai sedang diantar' : order.isTableTab ? 'ditandai diantar ke meja' : 'ditandai siap diambil')
         : 'selesai';
-    _toast(err ?? 'Pesanan #${order.displayNumber} $label.', ok: err == null);
+    _report(res, 'Pesanan #${order.displayNumber} $label.');
   }
 
   // ── Antar (delivery gelombang 2) ──────────────────────────────────────
@@ -219,34 +219,34 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
   Future<void> _dispatch(OnlineOrder order) async {
     final pick = await _pickCourier(order);
     if (pick == null || !mounted) return;
-    final err = await ref.read(onlineOrdersProvider.notifier).dispatch(
+    final res = await ref.read(onlineOrdersProvider.notifier).dispatch(
           order.id, courierId: pick.courierId, courierName: pick.courierName);
-    _toast(
-      err ?? (pick.courierId != null
+    _report(
+      res,
+      pick.courierId != null
           ? 'Pesanan #${order.displayNumber} diserahkan ke ${pick.label}. Link tugas dikirim ke WA kurir, pelanggan dikabari.'
-          : 'Pesanan #${order.displayNumber} diserahkan ke ${pick.label}. Ketuk "Link kurir" di kartu untuk mengirim tugasnya.'),
-      ok: err == null,
+          : 'Pesanan #${order.displayNumber} diserahkan ke ${pick.label}. Ketuk "Link kurir" di kartu untuk mengirim tugasnya.',
     );
   }
 
   Future<void> _delivered(OnlineOrder order) async {
     final res = await _confirmDelivered(order);
     if (res == null || !mounted) return;
-    final err = await ref.read(onlineOrdersProvider.notifier).delivered(
+    final out = await ref.read(onlineOrdersProvider.notifier).delivered(
           order.id, proofImageUrl: res.proofUrl, receivedBy: res.receivedBy);
-    _toast(
-      err ?? (order.isCod
+    _report(
+      out,
+      order.isCod
           ? 'Pesanan #${order.displayNumber} sampai. Tunai ${_rp.format(order.grandTotal)} dicatat lunas.'
-          : 'Pesanan #${order.displayNumber} sampai.'),
-      ok: err == null,
+          : 'Pesanan #${order.displayNumber} sampai.',
     );
   }
 
   Future<void> _deliveryFailed(OnlineOrder order) async {
     final reason = await _pickFailReason(order);
     if (reason == null || !mounted) return;
-    final err = await ref.read(onlineOrdersProvider.notifier).deliveryFailed(order.id, reason);
-    _toast(err ?? 'Pesanan #${order.displayNumber} ditandai gagal antar. Kirim ulang atau tolak dari kartu ini.', ok: err == null);
+    final res = await ref.read(onlineOrdersProvider.notifier).deliveryFailed(order.id, reason);
+    _report(res, 'Pesanan #${order.displayNumber} ditandai gagal antar. Kirim ulang atau tolak dari kartu ini.');
   }
 
   Future<_CourierPick?> _pickCourier(OnlineOrder order) {
@@ -490,13 +490,25 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
     );
   }
 
-  void _toast(String msg, {required bool ok}) {
+  /// Tiga rasa: berhasil, KABAR (kasir lain duluan, bukan salah siapa-siapa),
+  /// dan gagal beneran. Yang tengah dulu tampil merah dan bikin kasir kedua
+  /// mengira sistemnya rusak, padahal yang terjadi normal.
+  void _toast(String msg, {required bool ok, bool info = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: ok ? KasiraDS.textStrong : KasiraDS.danger,
+      backgroundColor: info ? KasiraDS.info : (ok ? KasiraDS.textStrong : KasiraDS.danger),
       behavior: SnackBarBehavior.floating,
     ));
+  }
+
+  /// Satu pintu buat semua aksi: pesan bentrok tampil biru, bukan merah.
+  void _report(ActionResult res, String successMsg) {
+    if (res.isOk) {
+      _toast(successMsg, ok: true);
+    } else {
+      _toast(res.error!, ok: false, info: res.conflict);
+    }
   }
 
   Future<int?> _pickEta(OnlineOrder order) {
@@ -664,7 +676,10 @@ class _OrderCard extends StatelessWidget {
         Text(
           order.isPending
               ? (urgent ? 'Menunggu $waiting menit. Segera putuskan.' : 'Masuk ${_ago(order.createdAt)}')
-              : '${order.statusLabel} · ${_ago(order.createdAt)}',
+              // Nama kasir yang menerima ditulis di SEMUA HP: tiga kasir bisa
+              // pegang app yang sama, dan yang lain perlu tahu ini sudah
+              // dipegang siapa sebelum ikut menyentuh.
+              : '${order.statusLabel}${order.acceptedByName != null ? ' · ${order.acceptedByName}' : ''} · ${_ago(order.createdAt)}',
           style: KasiraDS.sans(size: 12, color: urgent && order.isPending ? KasiraDS.danger : KasiraDS.textMuted, weight: urgent && order.isPending ? FontWeight.w700 : FontWeight.w500),
         ),
         const SizedBox(height: 12),

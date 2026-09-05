@@ -163,6 +163,7 @@ async def accept_order(db, order: Order, outlet: Outlet, *, eta_minutes: int, ac
     now = datetime.now(timezone.utc)
     order.status = "preparing"
     order.accepted_at = now
+    order.accepted_by = actor_user_id
     order.eta_minutes = eta_minutes
     order.row_version += 1
     order.updated_at = now
