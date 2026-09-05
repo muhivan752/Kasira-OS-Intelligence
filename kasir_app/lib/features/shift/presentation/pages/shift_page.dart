@@ -81,16 +81,30 @@ class _ShiftPageState extends State<ShiftPage> {
         content: Text(res.data['message']?.toString() ?? 'Sesi dijeda, sesi baru sudah berjalan'),
         behavior: SnackBarBehavior.floating,
       ));
-      context.go('/dashboard');
+      _kembali();
     } on DioException catch (e) {
       final msg = e.response?.data?['detail'] ?? 'Gagal menjeda sesi';
       if (mounted) {
-        setState(() => _isClosing = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg.toString()), backgroundColor: KasiraDS.danger, behavior: SnackBarBehavior.floating));
       }
     } catch (_) {
+      // sengaja dibiarkan: tombolnya dipulihkan di `finally`
+    } finally {
       if (mounted) setState(() => _isClosing = false);
     }
+  }
+
+  /// Balik ke layar sebelumnya.
+  ///
+  /// WAJIB `pop`, JANGAN `context.go('/dashboard')`. Halaman ini dibuka lewat
+  /// `Navigator.push` dari Beranda (dua tempat), jadi dia duduk di tumpukan
+  /// Navigator biasa DI ATAS rute GoRouter `/dashboard`. Nyuruh GoRouter
+  /// pindah ke `/dashboard` waktu dia memang sudah di situ = nggak ngapa-ngapain,
+  /// halaman ini tetap nangkring, dan kasir mandang tombol muter selamanya
+  /// padahal kasnya sudah ketutup di server. Itu bug yang kejadian 5 Sep 2026.
+  void _kembali() {
+    if (!mounted) return;
+    Navigator.of(context).maybePop();
   }
 
   /// Hitung laci dari sesi yang dijeda atau ditutup sistem di 04.00. Satu
@@ -292,28 +306,29 @@ class _ShiftPageState extends State<ShiftPage> {
             ),
             actions: [
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  // Shift otomatis: sesudah dihitung nggak perlu "buka" lagi,
-                  // sesi berikutnya terbuka sendiri di transaksi pertama.
-                  context.go('/dashboard');
-                },
+                onPressed: () => Navigator.pop(ctx),
                 child: const Text('OK'),
               ),
             ],
           ),
         );
-        return; // already navigated in dialog
+        // Shift otomatis: sesudah dihitung nggak perlu "buka" lagi, sesi
+        // berikutnya terbuka sendiri di transaksi pertama. Jadi tinggal balik.
+        _kembali();
       }
     } on DioException catch (e) {
       final msg = e.response?.data?['detail'] ?? 'Gagal tutup shift';
       if (mounted) {
-        setState(() => _isClosing = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(msg.toString()), backgroundColor: KasiraDS.danger, behavior: SnackBarBehavior.floating),
         );
       }
     } catch (_) {
+      // sengaja dibiarkan: tombolnya dipulihkan di `finally`
+    } finally {
+      // Jaring pengaman. Tombol tutup kas TIDAK BOLEH bisa nyangkut muter:
+      // kalau nyangkut, kasnya sudah ketutup di server tapi kasir nggak tahu,
+      // dan percobaan ulang bakal ditolak "Kas sesi ini sudah dihitung".
       if (mounted) setState(() => _isClosing = false);
     }
   }
