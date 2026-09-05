@@ -9,6 +9,10 @@ import uuid
 _SYNC_SKIP_COLUMNS: frozenset = frozenset({
     "embedding",        # Product.embedding (pgvector numpy.ndarray — AI only)
     "embedding_model",  # metadata field untuk embedding
+    # Kunci link tugas kurir (mig 109). Rahasia per order, cuma dipakai halaman
+    # publik /antar; HP nggak butuh dan Drift nggak punya kolomnya. Pull
+    # `_row_to_dict` ngirim SEMUA kolom model, jadi harus disaring di sini.
+    "delivery_token",
 })
 
 from backend.models.category import Category
