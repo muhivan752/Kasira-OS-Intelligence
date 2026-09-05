@@ -236,165 +236,173 @@ def _format_alert(
 
 
 async def process_price_events_once() -> dict:
+    # Satu worker per siklus (backend/tasks/lock.py). uvicorn jalan 2 worker
+    # dan tiap worker punya supervisor sendiri, jadi tanpa ini pass yang sama
+    # jalan dua kali bersamaan.
     """Single pass: tail recent price events, alert on margin drift."""
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
-    stats = {
-        "events_seen": 0,
-        "skipped_delta": 0,
-        "skipped_tenant_state": 0,
-        "skipped_dedup": 0,
-        "skipped_no_flagged": 0,
-        "skipped_no_owner": 0,
-        "alerts_sent": 0,
-        "alerts_wa_failed": 0,
-    }
+    from backend.tasks.lock import single_flight
+    async with single_flight("kg_price_event", ttl=280) as boleh:
+        if not boleh:
+            return {"skipped_lock": True}
 
-    async with AsyncSessionLocal() as db:
-        # Janitor-style cross-tenant scan
-        await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
+        stats = {
+            "events_seen": 0,
+            "skipped_delta": 0,
+            "skipped_tenant_state": 0,
+            "skipped_dedup": 0,
+            "skipped_no_flagged": 0,
+            "skipped_no_owner": 0,
+            "alerts_sent": 0,
+            "alerts_wa_failed": 0,
+        }
 
-        events = (await db.execute(
-            select(Event).where(
-                Event.event_type == "ingredient.price_updated",
-                Event.created_at > cutoff,
-            ).order_by(Event.created_at.asc())
-        )).scalars().all()
+        async with AsyncSessionLocal() as db:
+            # Janitor-style cross-tenant scan
+            await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
 
-        for event in events:
-            stats["events_seen"] += 1
+            events = (await db.execute(
+                select(Event).where(
+                    Event.event_type == "ingredient.price_updated",
+                    Event.created_at > cutoff,
+                ).order_by(Event.created_at.asc())
+            )).scalars().all()
 
-            data = event.event_data or {}
-            before = data.get("before") or {}
-            after = data.get("after") or {}
-            try:
-                old_cost = float(before.get("cost_per_base_unit", 0) or 0)
-                new_cost = float(after.get("cost_per_base_unit", 0) or 0)
-            except (TypeError, ValueError):
-                continue
-            if old_cost <= 0 or new_cost <= 0:
-                continue
+            for event in events:
+                stats["events_seen"] += 1
 
-            delta_pct = (new_cost - old_cost) / old_cost
-            if delta_pct < COST_DELTA_MIN:
-                stats["skipped_delta"] += 1
-                continue
-
-            ing_id_raw = data.get("ingredient_id")
-            if not ing_id_raw:
-                continue
-            try:
-                ingredient_id = UUID(ing_id_raw)
-            except (TypeError, ValueError):
-                continue
-
-            outlet = await db.get(Outlet, event.outlet_id)
-            if outlet is None or outlet.tenant_id is None:
-                continue
-
-            tenant = await db.get(Tenant, outlet.tenant_id)
-            if tenant is None:
-                continue
-            if getattr(tenant, "is_demo", False):
-                stats["skipped_tenant_state"] += 1
-                continue
-            status_val = (
-                tenant.subscription_status.value
-                if hasattr(tenant.subscription_status, "value")
-                else str(tenant.subscription_status or "")
-            )
-            if status_val not in ("active", "trial"):
-                stats["skipped_tenant_state"] += 1
-                continue
-
-            if await _already_alerted_today(db, tenant.id, ingredient_id):
-                stats["skipped_dedup"] += 1
-                continue
-
-            drift = await _compute_margin_drift(
-                db=db,
-                tenant_id=tenant.id,
-                ingredient_id=ingredient_id,
-                old_cost=old_cost,
-                new_cost=new_cost,
-            )
-            flagged = [
-                d for d in drift
-                if d["margin_drop_pp"] >= MARGIN_DROP_PP
-                or d["margin_after"] < MARGIN_CRITICAL
-            ]
-            if not flagged:
-                stats["skipped_no_flagged"] += 1
-                continue
-
-            owner_phone = await _get_owner_phone(db, tenant.id)
-            if not owner_phone:
-                stats["skipped_no_owner"] += 1
-                logger.info(
-                    "kg_price_events: tenant %s no owner phone (%d flagged)",
-                    tenant.id, len(flagged),
-                )
-                # still emit dedup event so we don't re-evaluate every loop
-                ok = False
-            else:
-                ingredient_name = data.get("name") or "bahan"
-                msg = _format_alert(
-                    ingredient_name, old_cost, new_cost, flagged, len(drift)
-                )
+                data = event.event_data or {}
+                before = data.get("before") or {}
+                after = data.get("after") or {}
                 try:
-                    ok = await send_whatsapp_message(owner_phone, msg)
-                except Exception as e:
-                    logger.error(
-                        "kg_price_events: WA error tenant %s: %s", tenant.id, e
+                    old_cost = float(before.get("cost_per_base_unit", 0) or 0)
+                    new_cost = float(after.get("cost_per_base_unit", 0) or 0)
+                except (TypeError, ValueError):
+                    continue
+                if old_cost <= 0 or new_cost <= 0:
+                    continue
+
+                delta_pct = (new_cost - old_cost) / old_cost
+                if delta_pct < COST_DELTA_MIN:
+                    stats["skipped_delta"] += 1
+                    continue
+
+                ing_id_raw = data.get("ingredient_id")
+                if not ing_id_raw:
+                    continue
+                try:
+                    ingredient_id = UUID(ing_id_raw)
+                except (TypeError, ValueError):
+                    continue
+
+                outlet = await db.get(Outlet, event.outlet_id)
+                if outlet is None or outlet.tenant_id is None:
+                    continue
+
+                tenant = await db.get(Tenant, outlet.tenant_id)
+                if tenant is None:
+                    continue
+                if getattr(tenant, "is_demo", False):
+                    stats["skipped_tenant_state"] += 1
+                    continue
+                status_val = (
+                    tenant.subscription_status.value
+                    if hasattr(tenant.subscription_status, "value")
+                    else str(tenant.subscription_status or "")
+                )
+                if status_val not in ("active", "trial"):
+                    stats["skipped_tenant_state"] += 1
+                    continue
+
+                if await _already_alerted_today(db, tenant.id, ingredient_id):
+                    stats["skipped_dedup"] += 1
+                    continue
+
+                drift = await _compute_margin_drift(
+                    db=db,
+                    tenant_id=tenant.id,
+                    ingredient_id=ingredient_id,
+                    old_cost=old_cost,
+                    new_cost=new_cost,
+                )
+                flagged = [
+                    d for d in drift
+                    if d["margin_drop_pp"] >= MARGIN_DROP_PP
+                    or d["margin_after"] < MARGIN_CRITICAL
+                ]
+                if not flagged:
+                    stats["skipped_no_flagged"] += 1
+                    continue
+
+                owner_phone = await _get_owner_phone(db, tenant.id)
+                if not owner_phone:
+                    stats["skipped_no_owner"] += 1
+                    logger.info(
+                        "kg_price_events: tenant %s no owner phone (%d flagged)",
+                        tenant.id, len(flagged),
                     )
+                    # still emit dedup event so we don't re-evaluate every loop
                     ok = False
-                if ok:
-                    stats["alerts_sent"] += 1
                 else:
-                    stats["alerts_wa_failed"] += 1
+                    ingredient_name = data.get("name") or "bahan"
+                    msg = _format_alert(
+                        ingredient_name, old_cost, new_cost, flagged, len(drift)
+                    )
+                    try:
+                        ok = await send_whatsapp_message(owner_phone, msg)
+                    except Exception as e:
+                        logger.error(
+                            "kg_price_events: WA error tenant %s: %s", tenant.id, e
+                        )
+                        ok = False
+                    if ok:
+                        stats["alerts_sent"] += 1
+                    else:
+                        stats["alerts_wa_failed"] += 1
 
-            # Emit dedup event regardless of WA outcome — prevents retry storm
-            db.add(Event(
-                outlet_id=event.outlet_id,
-                stream_id=f"tenant:{tenant.id}:ingredient:{ingredient_id}",
-                event_type="margin_alert.sent",
-                event_data={
-                    "tenant_id": str(tenant.id),
-                    "ingredient_id": str(ingredient_id),
-                    "ingredient_name": data.get("name"),
-                    "old_cost": old_cost,
-                    "new_cost": new_cost,
-                    "delta_pct": round(delta_pct * 100, 2),
-                    "affected_count": len(drift),
-                    "flagged_count": len(flagged),
-                    "sample_products": [
-                        {
-                            "name": f["product_name"],
-                            "margin_before": f["margin_before"],
-                            "margin_after": f["margin_after"],
-                            "drop_pp": f["margin_drop_pp"],
-                        }
-                        for f in sorted(
-                            flagged, key=lambda x: x["margin_drop_pp"], reverse=True
-                        )[:MAX_PRODUCTS_IN_MSG]
-                    ],
-                    "wa_sent": ok,
-                },
-                event_metadata={
-                    "actor": "kg_price_event_loop",
-                    "trigger_event_id": str(event.id),
-                    "ts": datetime.now(timezone.utc).isoformat(),
-                },
-            ))
+                # Emit dedup event regardless of WA outcome — prevents retry storm
+                db.add(Event(
+                    outlet_id=event.outlet_id,
+                    stream_id=f"tenant:{tenant.id}:ingredient:{ingredient_id}",
+                    event_type="margin_alert.sent",
+                    event_data={
+                        "tenant_id": str(tenant.id),
+                        "ingredient_id": str(ingredient_id),
+                        "ingredient_name": data.get("name"),
+                        "old_cost": old_cost,
+                        "new_cost": new_cost,
+                        "delta_pct": round(delta_pct * 100, 2),
+                        "affected_count": len(drift),
+                        "flagged_count": len(flagged),
+                        "sample_products": [
+                            {
+                                "name": f["product_name"],
+                                "margin_before": f["margin_before"],
+                                "margin_after": f["margin_after"],
+                                "drop_pp": f["margin_drop_pp"],
+                            }
+                            for f in sorted(
+                                flagged, key=lambda x: x["margin_drop_pp"], reverse=True
+                            )[:MAX_PRODUCTS_IN_MSG]
+                        ],
+                        "wa_sent": ok,
+                    },
+                    event_metadata={
+                        "actor": "kg_price_event_loop",
+                        "trigger_event_id": str(event.id),
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                    },
+                ))
 
-        try:
-            await db.commit()
-        except Exception as e:
-            logger.error("kg_price_events: commit failed: %s", e)
-            await db.rollback()
+            try:
+                await db.commit()
+            except Exception as e:
+                logger.error("kg_price_events: commit failed: %s", e)
+                await db.rollback()
 
-    if any(v for k, v in stats.items() if k != "events_seen") or stats["events_seen"]:
-        logger.info("kg_price_events: %s", stats)
-    return stats
+        if any(v for k, v in stats.items() if k != "events_seen") or stats["events_seen"]:
+            logger.info("kg_price_events: %s", stats)
+        return stats
 
 
 async def kg_price_event_loop():

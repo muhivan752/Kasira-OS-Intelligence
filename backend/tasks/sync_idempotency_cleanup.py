@@ -35,6 +35,9 @@ STARTUP_DELAY_SECONDS = 300  # stagger: 5min after boot
 
 
 async def cleanup_idempotency_keys_once() -> int:
+    # Satu worker per siklus (backend/tasks/lock.py). uvicorn jalan 2 worker
+    # dan tiap worker punya supervisor sendiri, jadi tanpa ini pass yang sama
+    # jalan dua kali bersamaan.
     """
     Single pass: delete keys older than retention window across all tenants.
 
@@ -43,43 +46,48 @@ async def cleanup_idempotency_keys_once() -> int:
     breaks with `invalid input syntax for type uuid`. Fix: iterate tenants + set
     context per-tenant. Tenants table has no RLS → enumeration is free.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
-    total_deleted = 0
-    tenant_count = 0
-    async with AsyncSessionLocal() as db:
-        try:
-            tenants = (await db.execute(
-                text("SELECT id FROM tenants WHERE deleted_at IS NULL")
-            )).scalars().all()
-            tenant_count = len(tenants)
-
-            for tid in tenants:
-                # Scope RLS to this tenant — satisfies `tenant_id = ...::uuid` policy
-                await db.execute(
-                    text("SELECT set_config('app.current_tenant_id', :tid, true)"),
-                    {"tid": str(tid)},
-                )
-                result = await db.execute(
-                    text(
-                        "DELETE FROM sync_idempotency_keys "
-                        "WHERE processed_at < :cutoff"
-                    ),
-                    {"cutoff": cutoff},
-                )
-                total_deleted += result.rowcount or 0
-            await db.commit()
-        except Exception as e:
-            logger.error(f"sync_idempotency_cleanup: delete failed: {e}")
-            await db.rollback()
+    from backend.tasks.lock import single_flight
+    async with single_flight("sync_idempotency_cleanup", ttl=3600) as boleh:
+        if not boleh:
             return 0
 
-    if total_deleted:
-        logger.info(
-            f"sync_idempotency_cleanup: deleted {total_deleted} key(s) "
-            f"older than {RETENTION_DAYS}d across {tenant_count} tenants "
-            f"(cutoff={cutoff.isoformat()})"
-        )
-    return total_deleted
+        cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+        total_deleted = 0
+        tenant_count = 0
+        async with AsyncSessionLocal() as db:
+            try:
+                tenants = (await db.execute(
+                    text("SELECT id FROM tenants WHERE deleted_at IS NULL")
+                )).scalars().all()
+                tenant_count = len(tenants)
+
+                for tid in tenants:
+                    # Scope RLS to this tenant — satisfies `tenant_id = ...::uuid` policy
+                    await db.execute(
+                        text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+                        {"tid": str(tid)},
+                    )
+                    result = await db.execute(
+                        text(
+                            "DELETE FROM sync_idempotency_keys "
+                            "WHERE processed_at < :cutoff"
+                        ),
+                        {"cutoff": cutoff},
+                    )
+                    total_deleted += result.rowcount or 0
+                await db.commit()
+            except Exception as e:
+                logger.error(f"sync_idempotency_cleanup: delete failed: {e}")
+                await db.rollback()
+                return 0
+
+        if total_deleted:
+            logger.info(
+                f"sync_idempotency_cleanup: deleted {total_deleted} key(s) "
+                f"older than {RETENTION_DAYS}d across {tenant_count} tenants "
+                f"(cutoff={cutoff.isoformat()})"
+            )
+        return total_deleted
 
 
 async def sync_idempotency_cleanup_loop():

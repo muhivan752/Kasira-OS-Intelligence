@@ -226,115 +226,123 @@ async def _reconcile_qris_payment(
 
 
 async def reconcile_payments():
+    # Satu worker per siklus (backend/tasks/lock.py). uvicorn jalan 2 worker
+    # dan tiap worker punya supervisor sendiri, jadi tanpa ini pass yang sama
+    # jalan dua kali bersamaan.
     """
     Main reconciliation loop body. Run setiap RECONCILE_INTERVAL detik.
 
     Returns dict stats: {total, paid, expired, failed, skipped}
     (atau dict dengan 'error' key kalau exception di outer scope).
     """
-    try:
-        async with AsyncSessionLocal() as db:
-            # RLS bypass — background task lintas tenant. Pattern sama dengan
-            # stale_order_cleanup.py:57. Tanpa ini, RLS policy `payments`
-            # block query (current_setting unset = NULL ≠ '').
-            await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
+    from backend.tasks.lock import single_flight
+    async with single_flight("payment_reconciliation", ttl=280) as boleh:
+        if not boleh:
+            return {"total": 0, "paid": 0, "expired": 0, "failed": 0, "skipped": 0, "skipped_lock": True}
 
-            now = datetime.now(timezone.utc)
-            cutoff = now - PENDING_TIMEOUT
+        try:
+            async with AsyncSessionLocal() as db:
+                # RLS bypass — background task lintas tenant. Pattern sama dengan
+                # stale_order_cleanup.py:57. Tanpa ini, RLS policy `payments`
+                # block query (current_setting unset = NULL ≠ '').
+                await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
 
-            # Query: pending_manual_check (selalu poll) + pending stale.
-            #
-            # Channel `manual` DIKECUALIKAN (fix 5 Sep 2026). Tunai antar (COD)
-            # sengaja pending sampai kurir sampai, QRIS statis dan transfer
-            # sengaja pending sampai kasir memastikan bukti. Aturan lama
-            # "non-QRIS pending > 10 menit = expired" lahir waktu tunai selalu
-            # lunas seketika di kasir; sejak ada COD dia meng-expire pembayaran
-            # yang masih hidup: order #5467 Ivan (56.000) diantar 1 jam, sampai
-            # dengan selamat, tapi uangnya hilang dari Beranda karena
-            # settle_cod_payment cuma mau mengubah yang masih `pending`.
-            # Yang manusia selesaikan, jangan diselesaikan mesin.
-            stmt = select(Payment).where(
-                Payment.deleted_at.is_(None),
-                or_(Payment.channel.is_(None), Payment.channel != "manual"),
-                or_(
-                    Payment.status == "pending_manual_check",
-                    and_(
-                        Payment.status == "pending",
-                        Payment.created_at < cutoff,
+                now = datetime.now(timezone.utc)
+                cutoff = now - PENDING_TIMEOUT
+
+                # Query: pending_manual_check (selalu poll) + pending stale.
+                #
+                # Channel `manual` DIKECUALIKAN (fix 5 Sep 2026). Tunai antar (COD)
+                # sengaja pending sampai kurir sampai, QRIS statis dan transfer
+                # sengaja pending sampai kasir memastikan bukti. Aturan lama
+                # "non-QRIS pending > 10 menit = expired" lahir waktu tunai selalu
+                # lunas seketika di kasir; sejak ada COD dia meng-expire pembayaran
+                # yang masih hidup: order #5467 Ivan (56.000) diantar 1 jam, sampai
+                # dengan selamat, tapi uangnya hilang dari Beranda karena
+                # settle_cod_payment cuma mau mengubah yang masih `pending`.
+                # Yang manusia selesaikan, jangan diselesaikan mesin.
+                stmt = select(Payment).where(
+                    Payment.deleted_at.is_(None),
+                    or_(Payment.channel.is_(None), Payment.channel != "manual"),
+                    or_(
+                        Payment.status == "pending_manual_check",
+                        and_(
+                            Payment.status == "pending",
+                            Payment.created_at < cutoff,
+                        ),
                     ),
-                ),
-            )
-            result = await db.execute(stmt)
-            candidates = result.scalars().all()
+                )
+                result = await db.execute(stmt)
+                candidates = result.scalars().all()
 
-            stats = {
-                "total": len(candidates),
-                "paid": 0,
-                "expired": 0,
-                "failed": 0,
-                "skipped": 0,
-            }
+                stats = {
+                    "total": len(candidates),
+                    "paid": 0,
+                    "expired": 0,
+                    "failed": 0,
+                    "skipped": 0,
+                }
 
-            if not candidates:
+                if not candidates:
+                    return stats
+
+                logger.info(
+                    "Payment reconciliation cycle: %d candidates to check",
+                    stats["total"],
+                )
+
+                for payment in candidates:
+                    # Branch: QRIS payment → poll Xendit
+                    if payment.payment_method == "qris":
+                        await _reconcile_qris_payment(db, payment, now, stats)
+                    else:
+                        # Non-QRIS pending stale → legacy auto-expire (cash/transfer
+                        # rarely stuck pending; biasanya cash settle immediate).
+                        # `pending_manual_check` non-QRIS shouldn't exist tapi
+                        # defensive: skip (admin manual).
+                        if payment.status == "pending":
+                            payment.status = "expired"
+                            payment.row_version += 1
+                            payment.reconciled_at = now
+                            await log_audit(
+                                db=db,
+                                action="RECONCILE_PAYMENT_EXPIRED",
+                                entity="payment",
+                                entity_id=str(payment.id),
+                                after_state={
+                                    "reason": "Non-QRIS pending > 10 minutes",
+                                    "payment_method": payment.payment_method,
+                                    "amount_due": float(payment.amount_due),
+                                },
+                                user_id=None,
+                                tenant_id=None,
+                            )
+                            stats["expired"] += 1
+                            logger.info(
+                                "reconcile: non-QRIS payment %s (%s) → expired (stale)",
+                                payment.id, payment.payment_method,
+                            )
+                        else:
+                            stats["skipped"] += 1
+                            logger.warning(
+                                "reconcile: non-QRIS payment %s in status %s, skip "
+                                "(admin manual review)",
+                                payment.id, payment.status,
+                            )
+
+                await db.commit()
+
+                if any(stats[k] > 0 for k in ("paid", "expired", "failed")):
+                    logger.info(
+                        "Payment reconciliation done: total=%d paid=%d expired=%d failed=%d skipped=%d",
+                        stats["total"], stats["paid"], stats["expired"],
+                        stats["failed"], stats["skipped"],
+                    )
                 return stats
 
-            logger.info(
-                "Payment reconciliation cycle: %d candidates to check",
-                stats["total"],
-            )
-
-            for payment in candidates:
-                # Branch: QRIS payment → poll Xendit
-                if payment.payment_method == "qris":
-                    await _reconcile_qris_payment(db, payment, now, stats)
-                else:
-                    # Non-QRIS pending stale → legacy auto-expire (cash/transfer
-                    # rarely stuck pending; biasanya cash settle immediate).
-                    # `pending_manual_check` non-QRIS shouldn't exist tapi
-                    # defensive: skip (admin manual).
-                    if payment.status == "pending":
-                        payment.status = "expired"
-                        payment.row_version += 1
-                        payment.reconciled_at = now
-                        await log_audit(
-                            db=db,
-                            action="RECONCILE_PAYMENT_EXPIRED",
-                            entity="payment",
-                            entity_id=str(payment.id),
-                            after_state={
-                                "reason": "Non-QRIS pending > 10 minutes",
-                                "payment_method": payment.payment_method,
-                                "amount_due": float(payment.amount_due),
-                            },
-                            user_id=None,
-                            tenant_id=None,
-                        )
-                        stats["expired"] += 1
-                        logger.info(
-                            "reconcile: non-QRIS payment %s (%s) → expired (stale)",
-                            payment.id, payment.payment_method,
-                        )
-                    else:
-                        stats["skipped"] += 1
-                        logger.warning(
-                            "reconcile: non-QRIS payment %s in status %s, skip "
-                            "(admin manual review)",
-                            payment.id, payment.status,
-                        )
-
-            await db.commit()
-
-            if any(stats[k] > 0 for k in ("paid", "expired", "failed")):
-                logger.info(
-                    "Payment reconciliation done: total=%d paid=%d expired=%d failed=%d skipped=%d",
-                    stats["total"], stats["paid"], stats["expired"],
-                    stats["failed"], stats["skipped"],
-                )
-            return stats
-
-    except Exception as e:
-        logger.error("Payment reconciliation error: %s", e, exc_info=True)
-        return {"total": 0, "paid": 0, "expired": 0, "failed": 0, "skipped": 0, "error": str(e)}
+        except Exception as e:
+            logger.error("Payment reconciliation error: %s", e, exc_info=True)
+            return {"total": 0, "paid": 0, "expired": 0, "failed": 0, "skipped": 0, "error": str(e)}
 
 
 async def payment_reconciliation_loop():

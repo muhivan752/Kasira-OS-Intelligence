@@ -36,48 +36,56 @@ CHECK_INTERVAL_SECONDS = 600  # 10 menit
 
 
 async def close_expired_shifts_once() -> dict:
-    now = datetime.now(timezone.utc)
-    closed = 0
-    failed = 0
+    # Satu worker per siklus (backend/tasks/lock.py). uvicorn jalan 2 worker
+    # dan tiap worker punya supervisor sendiri, jadi tanpa ini pass yang sama
+    # jalan dua kali bersamaan.
+    from backend.tasks.lock import single_flight
+    async with single_flight("shift_cutoff", ttl=570) as boleh:
+        if not boleh:
+            return {"closed": 0, "skipped_lock": True}
 
-    async with AsyncSessionLocal() as db:
-        await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
+        now = datetime.now(timezone.utc)
+        closed = 0
+        failed = 0
 
-        rows = (await db.execute(
-            select(Shift, Outlet.timezone, Outlet.tenant_id)
-            .join(Outlet, Outlet.id == Shift.outlet_id)
-            .where(
-                Shift.status.in_([ShiftStatus.open, ShiftStatus.paused]),
-                Shift.deleted_at.is_(None),
-            )
-        )).all()
+        async with AsyncSessionLocal() as db:
+            await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
 
-        for shift, tz_name, tenant_id in rows:
-            cutoff = business_day_cutoff(now, tz_name)
-            if shift.start_time >= cutoff:
-                continue
-            try:
-                was = shift.status.value if hasattr(shift.status, "value") else str(shift.status)
-                await close_shift(
-                    db, shift,
-                    reason="auto_cutoff",
-                    tenant_id=tenant_id,
-                    end_time=cutoff,
-                    notes="Ditutup otomatis di batas hari usaha 04.00, kas belum dihitung",
+            rows = (await db.execute(
+                select(Shift, Outlet.timezone, Outlet.tenant_id)
+                .join(Outlet, Outlet.id == Shift.outlet_id)
+                .where(
+                    Shift.status.in_([ShiftStatus.open, ShiftStatus.paused]),
+                    Shift.deleted_at.is_(None),
                 )
-                await db.flush()
-                closed += 1
-                logger.info(
-                    "shift_cutoff: closed shift=%s outlet=%s was=%s start=%s cutoff=%s",
-                    shift.id, shift.outlet_id, was, shift.start_time.isoformat(), cutoff.isoformat(),
-                )
-            except Exception as e:  # noqa: BLE001
-                failed += 1
-                logger.error("shift_cutoff: failed shift=%s: %s", shift.id, e, exc_info=True)
+            )).all()
 
-        await db.commit()
+            for shift, tz_name, tenant_id in rows:
+                cutoff = business_day_cutoff(now, tz_name)
+                if shift.start_time >= cutoff:
+                    continue
+                try:
+                    was = shift.status.value if hasattr(shift.status, "value") else str(shift.status)
+                    await close_shift(
+                        db, shift,
+                        reason="auto_cutoff",
+                        tenant_id=tenant_id,
+                        end_time=cutoff,
+                        notes="Ditutup otomatis di batas hari usaha 04.00, kas belum dihitung",
+                    )
+                    await db.flush()
+                    closed += 1
+                    logger.info(
+                        "shift_cutoff: closed shift=%s outlet=%s was=%s start=%s cutoff=%s",
+                        shift.id, shift.outlet_id, was, shift.start_time.isoformat(), cutoff.isoformat(),
+                    )
+                except Exception as e:  # noqa: BLE001
+                    failed += 1
+                    logger.error("shift_cutoff: failed shift=%s: %s", shift.id, e, exc_info=True)
 
-    return {"closed": closed, "failed": failed}
+            await db.commit()
+
+        return {"closed": closed, "failed": failed}
 
 
 async def shift_cutoff_loop():
