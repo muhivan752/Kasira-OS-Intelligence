@@ -162,12 +162,19 @@ async def _send_one(client: httpx.AsyncClient, url: str, headers: Dict[str, str]
         return "error"
     if resp.status_code == 200:
         return "ok"
-    # Token yang sudah nggak sah: app di-uninstall, data dibersihkan, atau
-    # token diganti Firebase. 404 NOT_FOUND dan 400 dengan alasan token
-    # nggak sah dua-duanya berarti buang.
     teks = resp.text or ""
-    if resp.status_code == 404 or "UNREGISTERED" in teks or "INVALID_ARGUMENT" in teks:
+    # Token yang sudah nggak sah: app di-uninstall, data dibersihkan, atau
+    # token diganti Firebase.
+    if resp.status_code == 404 or "UNREGISTERED" in teks:
         logger.info("fcm: token mati (%s), dibuang", resp.status_code)
+        return "gone"
+    # 400 INVALID_ARGUMENT punya DUA arti: tokennya yang jelek, atau PESANnya
+    # yang jelek. Jangan pukul rata jadi "buang" — pesan yang cacat bakal
+    # ditolak buat SEMUA token, dan tiap HP di toko itu kecabut sekaligus,
+    # diam-diam, gara-gara satu bug bentuk payload. Cuma buang kalau Google
+    # nyebut tokennya secara eksplisit.
+    if resp.status_code == 400 and "registration token" in teks.lower():
+        logger.info("fcm: token ditolak Google, dibuang")
         return "gone"
     logger.warning("fcm: ditolak %s %s", resp.status_code, teks[:300])
     return "error"
