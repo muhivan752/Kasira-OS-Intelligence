@@ -160,9 +160,10 @@ async def _pnl_block(db: AsyncSession, outlet: Outlet, start: datetime, end: dat
         _paid_order_filter(),
     ]
     rev_row = (await db.execute(
-        select(func.coalesce(func.sum(Order.total_amount), 0), func.count(Order.id)).where(*base)
+        select(func.coalesce(func.sum(Order.total_amount), 0), func.count(Order.id),
+               func.coalesce(func.sum(Order.delivery_fee), 0)).where(*base)
     )).one()
-    revenue = _q2(rev_row[0]); orders_count = int(rev_row[1])
+    revenue = _q2(rev_row[0]); orders_count = int(rev_row[1]); delivery_fees = _q2(rev_row[2])
 
     items = (await db.execute(
         select(OrderItem.product_id, func.sum(OrderItem.quantity))
@@ -192,6 +193,13 @@ async def _pnl_block(db: AsyncSession, outlet: Outlet, start: datetime, end: dat
     return {
         "revenue": revenue, "refunds": refunds, "cogs": _q2(cogs), "orders_count": orders_count,
         "coverage": (qty_costed / qty_total) if qty_total else 1.0,
+        # Ongkir (delivery gelombang 1) disimpan di kolomnya sendiri, DI LUAR
+        # total_amount. Sampai gelombang 2 dia nggak pernah muncul di laba
+        # rugi sama sekali: pemilik lihat uangnya di arus kas (dari payments)
+        # tapi nggak pernah tahu berapa yang dari ongkir. Sekarang jadi baris
+        # sendiri, dan dihitung sebagai pendapatan karena kurirnya orang toko:
+        # yang nganter digaji lewat beban, ongkirnya masuk kantong toko.
+        "delivery_fees": delivery_fees,
     }
 
 
@@ -334,7 +342,10 @@ async def summary(db: AsyncSession, *, tenant_id: UUID, outlet: Outlet, month: s
     cash = await _cash_block(db, tenant_id, outlet, start, end, accounts)
 
     net_revenue = pnl["revenue"] - pnl["refunds"]
-    gross = net_revenue - pnl["cogs"]
+    # Ongkir masuk pendapatan, terpisah dari penjualan barang, supaya margin
+    # produk tetap kebaca apa adanya di baris atasnya.
+    income = net_revenue + pnl["delivery_fees"]
+    gross = income - pnl["cogs"]
     beban = exp["total"] + exp["petty_out"]
     net = gross - beban
 
@@ -357,7 +368,7 @@ async def summary(db: AsyncSession, *, tenant_id: UUID, outlet: Outlet, month: s
         else:
             p = await _pnl_block(db, outlet, s, e, cost)
             x = await _expense_block(db, tenant_id, outlet, s, e)
-        rev = p["revenue"] - p["refunds"]; ex = x["total"] + x["petty_out"]
+        rev = p["revenue"] - p["refunds"] + p["delivery_fees"]; ex = x["total"] + x["petty_out"]
         trend.append(MonthPoint(month=key, label=_ID_MONTHS[mm - 1], revenue=_q2(rev), cogs=p["cogs"],
                                 expenses=_q2(ex), net=_q2(rev - p["cogs"] - ex)))
 
@@ -366,10 +377,11 @@ async def summary(db: AsyncSession, *, tenant_id: UUID, outlet: Outlet, month: s
     return FinanceSummary(
         month=month, outlet_id=outlet.id,
         revenue=pnl["revenue"], refunds=pnl["refunds"], net_revenue=_q2(net_revenue),
+        delivery_fees=pnl["delivery_fees"],
         cogs=pnl["cogs"], cogs_coverage=round(float(pnl["coverage"]), 3),
-        gross_profit=_q2(gross), gross_margin_pct=round(float(gross / net_revenue * 100), 1) if net_revenue else 0.0,
+        gross_profit=_q2(gross), gross_margin_pct=round(float(gross / income * 100), 1) if income else 0.0,
         expenses_total=exp["total"], expenses_by_category=by_cat, petty_cash_out=exp["petty_out"],
-        net_profit=_q2(net), net_margin_pct=round(float(net / net_revenue * 100), 1) if net_revenue else 0.0,
+        net_profit=_q2(net), net_margin_pct=round(float(net / income * 100), 1) if income else 0.0,
         orders_count=pnl["orders_count"],
         cash_in=cash["in"], cash_out=cash["out"], cash_net=_q2(cash["in"] - cash["out"]),
         accounts=cash["accounts"], purchases_paid=cash["purchases_paid"], payables_outstanding=cash["payables"],

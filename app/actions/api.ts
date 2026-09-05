@@ -909,3 +909,45 @@ export async function setupOutletWhatsApp(outletId: string, fonnteToken: string)
   if (!res.ok) throw new Error(extractError(data, 'Gagal menyimpan token Fonnte'));
   return { connected: !!data.data?.wa_connected, message: data.message as string };
 }
+
+// ── Kurir toko (delivery gelombang 2) ────────────────────────────────────
+// Kurirnya orang toko, bukan armada agregator: toko daftarin sendiri siapa
+// yang biasa nganter, kasir tinggal pilih, pelanggan lihat namanya.
+
+export async function getCouriers(outletId?: string, includeInactive = false) {
+  try {
+    const qs = new URLSearchParams();
+    if (outletId) qs.set('outlet_id', outletId);
+    if (includeInactive) qs.set('include_inactive', 'true');
+    const res = await fetchWithAuth(`/couriers/?${qs.toString()}`);
+    const data = await res.json();
+    return (data.data || []) as any[];
+  } catch { return []; }
+}
+
+export async function createCourier(body: { name: string; phone?: string | null; vehicle?: string; outlet_id?: string | null }) {
+  try {
+    const res = await fetchWithAuth('/couriers/', { method: 'POST', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) return { success: false, message: extractError(data, 'Gagal menambah kurir') };
+    return { success: true, data: data.data };
+  } catch { return { success: false, message: 'Terjadi kesalahan jaringan' }; }
+}
+
+export async function updateCourier(id: string, body: any) {
+  try {
+    const res = await fetchWithAuth(`/couriers/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) return { success: false, message: extractError(data, 'Gagal menyimpan kurir') };
+    return { success: true, data: data.data };
+  } catch { return { success: false, message: 'Terjadi kesalahan jaringan' }; }
+}
+
+export async function deleteCourier(id: string) {
+  try {
+    const res = await fetchWithAuth(`/couriers/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) return { success: false, message: extractError(data, 'Gagal menghapus kurir') };
+    return { success: true };
+  } catch { return { success: false, message: 'Terjadi kesalahan jaringan' }; }
+}

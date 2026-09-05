@@ -11,8 +11,9 @@ import { geoAutocomplete, geoPlace } from '@/app/actions/storefront';
  * Dua kartu, disimpan lewat tombol Simpan masing masing (bukan per ketukan,
  * karena angka tarif diketik). Rumus ongkir hidup di server
  * (services/delivery_service): base + per km di atas km gratis, dibulatkan
- * ke atas ke Rp 500. Jadwal: 7 hari, satu rentang per hari (rentang kedua
- * belum ada di UI, servernya sudah dukung). Tutup < buka = lewat tengah malam.
+ * ke atas ke Rp 500. Jadwal: 7 hari, sampai dua rentang per
+ * hari (gelombang 2: warung yang istirahat siang). Tutup < buka = lewat
+ * tengah malam.
  */
 const DAYS: { key: string; label: string }[] = [
   { key: 'mon', label: 'Senin' }, { key: 'tue', label: 'Selasa' }, { key: 'wed', label: 'Rabu' },
@@ -55,7 +56,11 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
 
   // ── Jam buka ──
   const [mode, setMode] = useState<'manual' | 'schedule'>('manual');
-  const [hours, setHours] = useState<Record<string, { open: string; close: string; closed: boolean }>>({});
+  // Dua rentang per hari: warung yang istirahat siang (08:00-14:00, lalu
+  // 17:00-22:00) nggak bisa diwakili satu rentang, dan server sudah lama
+  // dukung banyak rentang. Rentang kedua opsional, disembunyikan sampai
+  // dipakai supaya yang buka lurus nggak lihat kolom kosong.
+  const [hours, setHours] = useState<Record<string, { open: string; close: string; closed: boolean; has2: boolean; open2: string; close2: string }>>({});
   const [hSaving, setHSaving] = useState(false);
   const [hMsg, setHMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -76,7 +81,15 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
     const next: typeof hours = {};
     for (const d of DAYS) {
       const r = h?.[d.key]?.[0];
-      next[d.key] = r ? { open: r[0], close: r[1], closed: false } : { open: '08:00', close: '22:00', closed: !!h };
+      const r2 = h?.[d.key]?.[1];
+      next[d.key] = {
+        open: r ? r[0] : '08:00',
+        close: r ? r[1] : '22:00',
+        closed: r ? false : !!h,
+        has2: !!r2,
+        open2: r2 ? r2[0] : '17:00',
+        close2: r2 ? r2[1] : '22:00',
+      };
     }
     setHours(next);
   }, [outlet]);
@@ -107,7 +120,8 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
     const bh: Hours = {};
     for (const d of DAYS) {
       const v = hours[d.key];
-      bh[d.key] = !v || v.closed ? [] : [[v.open, v.close]];
+      if (!v || v.closed) { bh[d.key] = []; continue; }
+      bh[d.key] = v.has2 ? [[v.open, v.close], [v.open2, v.close2]] : [[v.open, v.close]];
     }
     const patch = { hours_mode: mode, business_hours: mode === 'schedule' ? bh : outlet.business_hours ?? null };
     const res = await updateOutlet(outlet.id, patch);
@@ -157,7 +171,7 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
   };
 
   const applyAll = () => {
-    const first = hours[DAYS[0].key] || { open: '08:00', close: '22:00', closed: false };
+    const first = hours[DAYS[0].key] || { open: '08:00', close: '22:00', closed: false, has2: false, open2: '17:00', close2: '22:00' };
     const next: typeof hours = {};
     for (const d of DAYS) next[d.key] = { ...first };
     setHours(next);
@@ -291,17 +305,32 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
                 <button type="button" onClick={applyAll} className="text-xs font-semibold text-blue-600 hover:underline">Samakan semua hari dengan Senin</button>
               </div>
               {DAYS.map(d => {
-                const v = hours[d.key] || { open: '08:00', close: '22:00', closed: false };
+                const v = hours[d.key] || { open: '08:00', close: '22:00', closed: false, has2: false, open2: '17:00', close2: '22:00' };
                 const set = (patch: Partial<typeof v>) => setHours(h => ({ ...h, [d.key]: { ...v, ...patch } }));
                 return (
-                  <div key={d.key} className="flex items-center gap-3">
-                    <span className="w-16 text-sm text-gray-700">{d.label}</span>
-                    <input type="time" value={v.open} disabled={v.closed} onChange={e => set({ open: e.target.value })} className={`${inputCls} w-28 disabled:opacity-40`} />
-                    <span className="text-xs text-gray-400">sampai</span>
-                    <input type="time" value={v.close} disabled={v.closed} onChange={e => set({ close: e.target.value })} className={`${inputCls} w-28 disabled:opacity-40`} />
-                    <label className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-600">
-                      <input type="checkbox" checked={v.closed} onChange={e => set({ closed: e.target.checked })} /> Tutup
-                    </label>
+                  <div key={d.key} className="space-y-1.5">
+                    <div className="flex items-center gap-3">
+                      <span className="w-16 text-sm text-gray-700">{d.label}</span>
+                      <input type="time" value={v.open} disabled={v.closed} onChange={e => set({ open: e.target.value })} className={`${inputCls} w-28 disabled:opacity-40`} />
+                      <span className="text-xs text-gray-400">sampai</span>
+                      <input type="time" value={v.close} disabled={v.closed} onChange={e => set({ close: e.target.value })} className={`${inputCls} w-28 disabled:opacity-40`} />
+                      <label className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-600">
+                        <input type="checkbox" checked={v.closed} onChange={e => set({ closed: e.target.checked })} /> Tutup
+                      </label>
+                    </div>
+                    {!v.closed && (v.has2 ? (
+                      <div className="flex items-center gap-3">
+                        <span className="w-16 text-xs text-gray-400">buka lagi</span>
+                        <input type="time" value={v.open2} onChange={e => set({ open2: e.target.value })} className={`${inputCls} w-28`} />
+                        <span className="text-xs text-gray-400">sampai</span>
+                        <input type="time" value={v.close2} onChange={e => set({ close2: e.target.value })} className={`${inputCls} w-28`} />
+                        <button type="button" onClick={() => set({ has2: false })} className="ml-auto text-xs text-gray-500 hover:text-red-600">Hapus</button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => set({ has2: true })} className="ml-[4.75rem] text-xs font-medium text-blue-600 hover:underline">
+                        Tambah jam kedua (istirahat siang)
+                      </button>
+                    ))}
                   </div>
                 );
               })}

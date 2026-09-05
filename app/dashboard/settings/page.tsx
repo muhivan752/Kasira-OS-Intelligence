@@ -6,6 +6,7 @@ import { getOutlets, updateOutlet, updateStockMode, getCurrentUser, getTaxConfig
 import { Loader2, Store, Clock, Link as LinkIcon, CreditCard, Upload, ImageOff, Image, Package, Receipt, Gift, Copy, Share2, Check, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
 import { DeliveryHoursSettings } from '@/components/dashboard/delivery-hours-settings';
+import { CourierSettings } from '@/components/dashboard/courier-settings';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -813,6 +814,11 @@ export default function SettingsPage() {
               </Link>
             </div>
           </div>
+
+          {/* Kurir toko. Ditaruh di kolom KIRI, bukan nempel ke kartu Antar di
+              kanan, supaya dua kolomnya seimbang: kanan sudah menumpuk stok,
+              pesanan online, dapur, sesi kas, dan referral. */}
+          <CourierSettings outletId={outlet?.id} />
 
         </div>
 

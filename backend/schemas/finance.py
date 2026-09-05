@@ -138,6 +138,11 @@ class FinanceSummary(BaseModel):
     revenue: Decimal            # total order lunas (sesudah diskon, termasuk pajak/service)
     refunds: Decimal
     net_revenue: Decimal
+    # Ongkir terkumpul (delivery gelombang 2). Disimpan di kolom sendiri, di
+    # luar total_amount, tapi ikut dihitung sebagai pendapatan: kurirnya orang
+    # toko, jadi ongkirnya masuk kantong toko dan biayanya sudah kehitung di
+    # beban (gaji, bensin).
+    delivery_fees: Decimal = Decimal("0")
     cogs: Decimal               # HPP barang terjual
     cogs_coverage: float        # 0..1 — porsi item terjual yang punya HPP
     gross_profit: Decimal

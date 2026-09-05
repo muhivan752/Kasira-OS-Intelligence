@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getStorefrontOrder } from '@/app/actions/storefront';
 import { rp, timeShort, waNumber, waLink, ORDER_TYPE_LABEL, Card, TopBar, EmptyState, Spinner, PoweredBy, btnPrimary, btnSecondary } from '../../_ui';
-import { MessageCircle, MapPin, Utensils, Loader2, CheckCircle2, XCircle, Clock, ChefHat, PackageCheck, Receipt, RefreshCw, Upload } from 'lucide-react';
+import { MessageCircle, MapPin, Utensils, Loader2, CheckCircle2, XCircle, Clock, ChefHat, PackageCheck, Receipt, RefreshCw, Upload, Bike } from 'lucide-react';
 
 type Phase = 'awaiting_payment' | 'payment_failed' | 'awaiting_confirm' | 'preparing' | 'ready' | 'completed' | 'cancelled';
 
@@ -161,7 +161,9 @@ export default function OrderStatusPage() {
     },
     ready: {
       title: typeKey === 'delivery' ? 'Pesanan sedang diantar' : typeKey === 'dine_in' ? 'Pesanan menuju meja Anda' : 'Pesanan siap diambil',
-      body: typeKey === 'delivery' ? 'Kurir toko sedang menuju alamat Anda.' : typeKey === 'dine_in' ? 'Selamat menikmati.' : `Silakan ambil di ${outlet.name}. Sebutkan nomor pesanan #${order.display_number}.`,
+      body: typeKey === 'delivery'
+        ? (order.courier_name ? `${order.courier_name} sedang menuju alamat Anda.` : 'Kurir toko sedang menuju alamat Anda.')
+        : typeKey === 'dine_in' ? 'Selamat menikmati.' : `Silakan ambil di ${outlet.name}. Sebutkan nomor pesanan #${order.display_number}.`,
       tone: 'bg-[color-mix(in_srgb,var(--success)_16%,white)] text-[var(--text-strong)]', icon: PackageCheck,
     },
     completed: {
@@ -182,8 +184,18 @@ export default function OrderStatusPage() {
   const steps = [
     { label: 'Pesanan dikirim', at: order.created_at, done: true },
     { label: 'Dikonfirmasi toko', at: order.accepted_at, done: !!order.accepted_at },
-    { label: typeKey === 'delivery' ? 'Diantar' : 'Siap', at: order.ready_at, done: !!order.ready_at || phase === 'completed' },
-    { label: 'Selesai', at: phase === 'completed' ? order.updated_at : null, done: phase === 'completed' },
+    // Kurir berangkat = makanannya jelas sudah siap, walau kasir nggak sempat
+    // menekan tombol Siap. Tanpa ini langkahnya bolong di tengah dan penanda
+    // "sedang berjalan" meleset satu baris.
+    { label: typeKey === 'delivery' ? 'Siap diantar' : 'Siap', at: order.ready_at,
+      done: !!order.ready_at || !!order.dispatched_at || phase === 'completed' },
+    // Langkah "Berangkat" cuma muncul buat pesanan antar yang memang sudah
+    // diserahkan ke kurir. Pesanan ambil sendiri nggak punya langkah ini.
+    ...(typeKey === 'delivery' && order.dispatched_at
+      ? [{ label: 'Kurir berangkat', at: order.dispatched_at, done: true }] : []),
+    { label: typeKey === 'delivery' ? 'Sampai' : 'Selesai',
+      at: order.delivered_at || (phase === 'completed' ? order.updated_at : null),
+      done: phase === 'completed' || !!order.delivered_at },
   ];
   const currentStep = steps.filter((s) => s.done).length - 1;
 
@@ -307,6 +319,52 @@ export default function OrderStatusPage() {
           </Card>
         )}
 
+        {/* Kurir yang mengantar (delivery gelombang 2). Kurirnya orang toko,
+            jadi pelanggan tahu siapa yang akan datang ke rumahnya dan bisa
+            chat langsung waktu alamatnya susah ketemu. */}
+        {typeKey === 'delivery' && order.courier_name && phase !== 'cancelled' && (
+          <Card className="p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand-tint)]">
+                <Bike className="h-5 w-5 text-[var(--brand-secondary)]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-[var(--text-muted)]">
+                  {order.delivery_status === 'delivered' ? 'Diantar oleh' : 'Sedang diantar oleh'}
+                </p>
+                <p className="font-display font-extrabold text-[var(--text-strong)]">{order.courier_name}</p>
+                {order.delivery_status === 'delivered' && order.delivery_received_by && (
+                  <p className="mt-0.5 text-xs text-[var(--text-muted)]">Diterima {order.delivery_received_by}</p>
+                )}
+              </div>
+              {waNumber(order.courier_phone) && order.delivery_status !== 'delivered' && (
+                <a
+                  href={waLink(waNumber(order.courier_phone)!, `Halo, saya pemesan #${order.display_number} di ${outlet.name}.`)}
+                  target="_blank" rel="noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[var(--success)] px-3.5 py-2 text-[13px] font-semibold text-white"
+                >
+                  <MessageCircle className="h-4 w-4" /> Chat kurir
+                </a>
+              )}
+            </div>
+            {order.delivery_proof_url && (
+              <div className="mt-4">
+                <p className="mb-2 text-xs text-[var(--text-muted)]">Bukti serah terima</p>
+                {/* Foto yang gagal dimuat disembunyikan seluruh bloknya: ikon
+                    gambar rusak di halaman pelanggan lebih buruk daripada
+                    nggak ada foto sama sekali. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={order.delivery_proof_url}
+                  alt="Bukti serah terima"
+                  className="max-h-56 w-full rounded-xl object-cover"
+                  onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }}
+                />
+              </div>
+            )}
+          </Card>
+        )}
+
         {/* Perjalanan pesanan */}
         {phase !== 'cancelled' && phase !== 'payment_failed' && (
           <Card className="p-5">
@@ -354,7 +412,9 @@ export default function OrderStatusPage() {
             <dt className="text-[var(--text-muted)]">Cara menerima</dt><dd className="text-right font-medium text-[var(--text-strong)]">{typeLabel}{order.table_name ? ` · Meja ${order.table_name}` : ''}</dd>
             <dt className="text-[var(--text-muted)]">Pembayaran</dt>
             <dd className="text-right font-medium text-[var(--text-strong)]">
-              {order.payment?.method === 'qris' ? 'QRIS' : order.payment?.method === 'cash' ? 'Di kasir' : 'Tagihan meja'}
+              {order.payment?.method === 'qris' ? 'QRIS'
+                : order.payment?.method === 'cash' ? (typeKey === 'delivery' ? 'Bayar di tempat' : 'Di kasir')
+                : 'Tagihan meja'}
               {order.payment?.status === 'paid' && ' · Lunas'}
               {order.payment?.status === 'refunded' && ' · Dikembalikan'}
             </dd>

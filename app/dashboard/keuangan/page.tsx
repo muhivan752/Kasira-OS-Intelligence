@@ -20,7 +20,7 @@ interface Expense {
   purchase_id?: string | null; note?: string | null; recurring: string; row_version: number;
 }
 interface Summary {
-  month: string; revenue: string; refunds: string; net_revenue: string; cogs: string; cogs_coverage: number;
+  month: string; revenue: string; refunds: string; net_revenue: string; delivery_fees?: string; cogs: string; cogs_coverage: number;
   gross_profit: string; gross_margin_pct: number; expenses_total: string; petty_cash_out: string;
   expenses_by_category: { key: string; label: string; amount: string; count: number }[];
   net_profit: string; net_margin_pct: number; orders_count: number;
@@ -130,8 +130,13 @@ export default function KeuanganPage() {
           </div>
           <Trend trend={s?.trend || []} />
         </div>
-        <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5 text-sm">
-          <Row label="Pendapatan" value={s?.revenue} hint={Number(s?.refunds) > 0 ? `− refund ${rp(s?.refunds)}` : undefined} />
+        <div className={`mt-5 grid gap-2 sm:grid-cols-2 text-sm ${Number(s?.delivery_fees || 0) > 0 ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
+          <Row label="Pendapatan" value={s?.revenue} hint={Number(s?.refunds) > 0 ? `- refund ${rp(s?.refunds)}` : undefined} />
+          {/* Ongkir baru muncul kalau tokonya memang mengantar. Warung yang
+              nggak pernah antar nggak perlu lihat baris kosong. */}
+          {Number(s?.delivery_fees || 0) > 0 && (
+            <Row label="Ongkir terkumpul" value={s?.delivery_fees} hint="di luar penjualan barang" />
+          )}
           <Row label="HPP terjual" value={s?.cogs} neg hint={s && s.cogs_coverage < 1 ? `${Math.round(s.cogs_coverage * 100)}% item punya HPP` : 'semua item punya HPP'} />
           <Row label="Laba kotor" value={s?.gross_profit} bold hint={`margin ${s?.gross_margin_pct ?? 0}%`} />
           <Row label="Pengeluaran" value={Number(s?.expenses_total || 0) + Number(s?.petty_cash_out || 0)} neg hint={Number(s?.petty_cash_out) > 0 ? `termasuk kas kecil shift ${rp(s?.petty_cash_out)}` : undefined} />

@@ -1404,6 +1404,16 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
         if rf is not None:
             refund_data = {"amount": float(rf.amount), "status": rf.status}
 
+    # Kurir (delivery gelombang 2). Nomornya SENGAJA dibuka ke pelanggan:
+    # kurirnya orang toko dan seluruh gunanya memang biar bisa ditelepon waktu
+    # alamatnya susah ketemu. Halaman ini dikunci UUID order, bukan ditebak.
+    courier_phone = None
+    if order.courier_id:
+        from backend.models.courier import Courier as _Courier
+        courier_phone = (await db.execute(
+            select(_Courier.phone).where(_Courier.id == order.courier_id)
+        )).scalar_one_or_none()
+
     return StandardResponse(
         success=True,
         data={
@@ -1431,6 +1441,13 @@ async def get_connect_order_status(order_id: uuid.UUID, db: AsyncSession = Depen
             "delivery_distance_km": float(order.delivery_distance_km) if order.delivery_distance_km is not None else None,
             "delivery_fee": float(getattr(order, "delivery_fee", 0) or 0),
             "grand_total": float(_delivery.grand_total(order)),
+            "delivery_status": order.delivery_status,
+            "courier_name": order.courier_name,
+            "courier_phone": courier_phone,
+            "dispatched_at": _iso(order.dispatched_at),
+            "delivered_at": _iso(order.delivered_at),
+            "delivery_received_by": order.delivery_received_by,
+            "delivery_proof_url": order.delivery_proof_url,
             "payment_method": payment.payment_method if payment else None,
             "items": items_data,
             "payment": payment_data,
