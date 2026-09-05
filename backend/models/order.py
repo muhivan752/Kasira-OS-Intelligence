@@ -57,6 +57,9 @@ class Order(BaseModel):
     delivery_proof_url = Column(Text, nullable=True)
     delivery_received_by = Column(String(80), nullable=True)
     delivery_failed_reason = Column(String(200), nullable=True)
+    # Kunci link tugas kurir (mig 109). Acak per order, dibuat waktu dispatch.
+    # Bukan UUID order: itu sudah beredar di link lacak pelanggan.
+    delivery_token = Column(String(48), nullable=True)
 
     @property
     def grand_total(self):

@@ -87,6 +87,10 @@ class OnlineOrder {
   final DateTime? deliveredAt;
   final String? deliveryReceivedBy;
   final String? deliveryFailedReason;
+  /// Link tugas kurir (mig 109): halaman publik tanpa login, dikunci token.
+  /// Dikirim otomatis ke WA kurir terdaftar; buat kurir ketikan sekali jalan
+  /// kasir bagikan manual lewat tombol di kartu.
+  final String? courierTaskUrl;
   final int rowVersion;
   final List<OnlineOrderItem> items;
 
@@ -121,6 +125,7 @@ class OnlineOrder {
     this.deliveredAt,
     this.deliveryReceivedBy,
     this.deliveryFailedReason,
+    this.courierTaskUrl,
     required this.rowVersion,
     required this.items,
   });
@@ -156,6 +161,7 @@ class OnlineOrder {
         deliveredAt: _toDate(j['delivered_at']),
         deliveryReceivedBy: j['delivery_received_by'] as String?,
         deliveryFailedReason: j['delivery_failed_reason'] as String?,
+        courierTaskUrl: j['courier_task_url'] as String?,
         rowVersion: (j['row_version'] as num?)?.toInt() ?? 0,
         items: (j['items'] as List? ?? []).map((e) => OnlineOrderItem.fromJson(e as Map<String, dynamic>)).toList(),
       );

@@ -14,8 +14,11 @@ Semua fungsi di sini TIDAK commit. Pemanggil yang commit.
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import datetime, timezone
 from typing import Optional
+
+from backend.core.config import settings
 
 from backend.models.event import Event
 from backend.models.order import Order
@@ -49,6 +52,21 @@ def _event(db, order: Order, event_type: str, data: dict, actor_user_id=None) ->
     ))
 
 
+def courier_task_url(outlet, order: Order) -> Optional[str]:
+    """Link tugas kurir (mig 109): halaman publik tanpa login, dikunci token
+    acak. Kurir orang toko nggak selalu punya app kasir, dan memang nggak
+    boleh dipaksa punya: dari link ini dia lihat alamat, buka peta, chat
+    pelanggan, lalu tekan Sampai dengan foto dari kamera HP lewat browser."""
+    slug = getattr(outlet, "slug", None)
+    if not slug or not order.delivery_token:
+        return None
+    return f"{settings.SITE_URL}/{slug}/antar/{order.id}?k={order.delivery_token}"
+
+
+def token_matches(order: Order, token: Optional[str]) -> bool:
+    return bool(order.delivery_token) and bool(token) and secrets.compare_digest(order.delivery_token, token)
+
+
 async def dispatch(db, order: Order, outlet, *, courier=None, courier_name: Optional[str] = None,
                    actor_user_id=None) -> None:
     """Pesanan diserahkan ke kurir. Nama kurir di-snapshot ke order.
@@ -63,6 +81,10 @@ async def dispatch(db, order: Order, outlet, *, courier=None, courier_name: Opti
     order.delivery_status = ON_THE_WAY
     order.dispatched_at = now
     order.delivery_failed_reason = None
+    # Token dibuat sekali per order dan dipakai ulang waktu kirim ulang,
+    # supaya link yang sudah terlanjur dipegang kurir tetap hidup.
+    if not order.delivery_token:
+        order.delivery_token = secrets.token_urlsafe(24)
     order.row_version += 1
     order.updated_at = now
     _event(db, order, "delivery.dispatched", {
@@ -75,7 +97,7 @@ async def dispatch(db, order: Order, outlet, *, courier=None, courier_name: Opti
 
 
 async def mark_delivered(db, order: Order, outlet, *, proof_image_url: Optional[str] = None,
-                         received_by: Optional[str] = None, actor_user_id=None) -> bool:
+                         received_by: Optional[str] = None, actor_user_id=None, by: str = "cashier") -> bool:
     """Kurir sampai. Pesanan ditutup dan COD ditandai lunas.
 
     Return True kalau status order ikut naik jadi `completed` di sini.
@@ -114,12 +136,13 @@ async def mark_delivered(db, order: Order, outlet, *, proof_image_url: Optional[
         "delivery_fee": float(order.delivery_fee or 0),
         "total_amount": float(order.total_amount or 0),
         "order_completed": completed,
+        "by": by,
     }, actor_user_id)
     await online_orders.publish(order.outlet_id, "delivery.delivered", {"order_id": str(order.id)})
     return completed
 
 
-async def mark_failed(db, order: Order, outlet, *, reason: str, actor_user_id=None) -> None:
+async def mark_failed(db, order: Order, outlet, *, reason: str, actor_user_id=None, by: str = "cashier") -> None:
     """Gagal antar: alamat nggak ketemu, orangnya nggak ada, ditolak.
 
     SENGAJA nggak membatalkan order dan nggak balikin stok: barangnya sudah
@@ -133,6 +156,6 @@ async def mark_failed(db, order: Order, outlet, *, reason: str, actor_user_id=No
     order.row_version += 1
     order.updated_at = now
     _event(db, order, "delivery.failed", {"reason": order.delivery_failed_reason,
-                                          "courier_name": order.courier_name}, actor_user_id)
+                                          "courier_name": order.courier_name, "by": by}, actor_user_id)
     await online_orders.publish(order.outlet_id, "delivery.failed",
                                 {"order_id": str(order.id), "reason": order.delivery_failed_reason})

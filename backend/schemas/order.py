@@ -109,6 +109,9 @@ class OrderResponse(OrderBase):
     delivery_proof_url: Optional[str] = None
     delivery_received_by: Optional[str] = None
     delivery_failed_reason: Optional[str] = None
+    # Link tugas kurir (mig 109), diisi _attach_payment_info. Kasir bagikan
+    # lewat WA kalau kurirnya nggak punya nomor terdaftar.
+    courier_task_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

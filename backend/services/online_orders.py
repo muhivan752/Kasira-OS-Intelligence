@@ -227,6 +227,21 @@ def msg_on_the_way(order, outlet, *, courier_name: Optional[str], courier_phone:
     )
 
 
+def msg_courier_task(order, outlet, *, link: str, cod_pending: bool, customer_name: Optional[str], items: Iterable) -> str:
+    """WA ke KURIR waktu pesanan diserahkan. Kurir orang toko nggak butuh app:
+    semua yang dia perlu ada di link (alamat, peta, chat pelanggan, tombol
+    Sampai dengan foto, tombol Gagal antar)."""
+    alamat = getattr(order, "delivery_address", None) or "-"
+    tagih = f"\nTAGIH TUNAI: {_rp(_tagihan(order))}" if cod_pending else "\nSudah dibayar, tidak perlu tagih."
+    return (
+        f"Tugas antar #{order.display_number} dari {outlet.name}\n"
+        f"Pemesan: {customer_name or '-'}\n"
+        f"Alamat: {alamat}\n"
+        f"{_items_lines(items)}{tagih}\n\n"
+        f"Buka link ini untuk peta, chat pelanggan, dan tandai sampai (bisa foto):\n{link}"
+    )
+
+
 def msg_delivered(order, outlet) -> str:
     return (
         f"Pesanan #{order.display_number} sudah sampai. Terima kasih sudah pesan di {outlet.name}.\n"

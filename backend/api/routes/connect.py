@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form, Query
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -1682,3 +1682,141 @@ async def create_storefront_reservation(
         },
         message=status_msg,
     )
+
+
+# ─── Link tugas kurir (delivery gelombang 2b, mig 109) ─────────────────────
+# Publik tanpa login, dikunci `orders.delivery_token` acak. Kurir orang toko
+# nggak selalu punya app kasir; dari halaman ini dia lihat alamat, buka peta,
+# chat pelanggan, lalu tekan Sampai (foto dari kamera HP lewat browser) atau
+# Gagal antar. Efek sampingnya lewat services/delivery_dispatch, satu pintu
+# dengan tombol di app kasir.
+
+async def _courier_order(db: AsyncSession, slug: str, order_id: uuid.UUID, token: Optional[str]):
+    from backend.services import delivery_dispatch as _dd
+    outlet = (await db.execute(
+        select(Outlet).where(Outlet.slug == slug, Outlet.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    if outlet is None:
+        raise HTTPException(status_code=404, detail="Toko tidak ditemukan")
+    order = (await db.execute(
+        select(Order).options(selectinload(Order.items).selectinload(OrderItem.product))
+        .where(Order.id == order_id, Order.outlet_id == outlet.id, Order.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    # Token salah = 404 juga, jangan bocorin bahwa order-nya ada.
+    if order is None or not _dd.token_matches(order, token):
+        raise HTTPException(status_code=404, detail="Link tugas tidak valid atau sudah tidak berlaku")
+    return outlet, order
+
+
+def _courier_payload(outlet: Outlet, order: Order, payment) -> dict:
+    from backend.services import delivery_dispatch as _dd
+    status = order.status.value if hasattr(order.status, "value") else str(order.status)
+    p_method = (payment.payment_method.value if hasattr(payment.payment_method, "value") else str(payment.payment_method)) if payment else None
+    p_status = (payment.status.value if hasattr(payment.status, "value") else str(payment.status)) if payment else None
+    cod_pending = p_method == "cash" and p_status == "pending"
+    return {
+        "id": str(order.id),
+        "display_number": order.display_number,
+        "status": status,
+        "delivery_status": order.delivery_status,
+        "courier_name": order.courier_name,
+        "outlet": {"name": outlet.name, "slug": outlet.slug, "whatsapp": getattr(outlet, "whatsapp_number", None) or getattr(outlet, "phone", None)},
+        "customer_name": order.customer_name,
+        # Nomor pelanggan dibuka ke kurir (dia yang bakal nelepon di depan pagar).
+        "customer_phone": order.customer_phone,
+        "delivery_address": order.delivery_address,
+        "delivery_lat": order.delivery_lat,
+        "delivery_lng": order.delivery_lng,
+        "delivery_distance_km": float(order.delivery_distance_km) if order.delivery_distance_km is not None else None,
+        "notes": order.notes,
+        "items": [{"product_name": it.product_name, "quantity": it.quantity} for it in order.items],
+        "total_amount": float(order.total_amount or 0),
+        "delivery_fee": float(order.delivery_fee or 0),
+        "grand_total": float(_delivery.grand_total(order)),
+        "cod_pending": cod_pending,
+        "dispatched_at": _iso(order.dispatched_at),
+        "delivered_at": _iso(order.delivered_at),
+        "delivery_received_by": order.delivery_received_by,
+        "delivery_proof_url": order.delivery_proof_url,
+        "delivery_failed_reason": order.delivery_failed_reason,
+        "track_url": f"{settings.SITE_URL}/{outlet.slug}/order/{order.id}",
+    }
+
+
+@router.get("/{slug}/antar/{order_id}", response_model=StandardResponse)
+async def courier_task(slug: str, order_id: uuid.UUID, k: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)):
+    from backend.services.order_lifecycle import latest_payment
+    outlet, order = await _courier_order(db, slug, order_id, k)
+    payment = await latest_payment(db, order.id)
+    return StandardResponse(success=True, data=_courier_payload(outlet, order, payment))
+
+
+@router.post("/{slug}/antar/{order_id}/delivered", response_model=StandardResponse)
+async def courier_delivered(
+    slug: str, order_id: uuid.UUID,
+    k: Optional[str] = Query(None),
+    received_by: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Kurir menandai sampai dari HP-nya sendiri. Foto opsional (kamera lewat
+    browser), nama penerima opsional. Efeknya sama persis dengan tombol
+    Sampai di app kasir: order selesai, COD lunas, pelanggan dikabari."""
+    import os
+    from backend.api.routes.media import UPLOAD_DIR, ALLOWED_EXTENSIONS, MAX_SIZE_MB
+    from backend.services import delivery_dispatch as _dd
+    from backend.services import online_orders as _oo
+    from backend.services.order_lifecycle import latest_payment
+    outlet, order = await _courier_order(db, slug, order_id, k)
+    status = order.status.value if hasattr(order.status, "value") else str(order.status)
+    if status == "cancelled":
+        raise HTTPException(status_code=400, detail="Pesanan ini sudah dibatalkan toko")
+    if order.delivery_status == _dd.DELIVERED:
+        payment = await latest_payment(db, order.id)
+        return StandardResponse(success=True, data=_courier_payload(outlet, order, payment), message="Sudah ditandai sampai")
+
+    proof_url = None
+    if file is not None and file.filename:
+        ext = os.path.splitext(file.filename or "")[1].lower() or ".jpg"
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Format gambar tidak didukung. Kirim JPG, PNG, atau WEBP.")
+        content = await file.read()
+        if len(content) > MAX_SIZE_MB * 1024 * 1024:
+            raise HTTPException(status_code=400, detail=f"Ukuran foto maksimal {MAX_SIZE_MB} MB")
+        if len(content) >= 1024:
+            os.makedirs(UPLOAD_DIR, exist_ok=True)
+            filename = f"antar-{uuid.uuid4()}{ext}"
+            with open(os.path.join(UPLOAD_DIR, filename), "wb") as f:
+                f.write(content)
+            proof_url = f"{settings.SITE_URL}/uploads/{filename}"
+
+    await _dd.mark_delivered(db, order, outlet, proof_image_url=proof_url, received_by=received_by, by="courier")
+    phone = order.customer_phone
+    await db.commit()
+    if order.source == "storefront":
+        asyncio.create_task(_oo.wa_customer(outlet, phone, _oo.msg_delivered(order, outlet)))
+    payment = await latest_payment(db, order.id)
+    return StandardResponse(success=True, data=_courier_payload(outlet, order, payment), message="Pesanan ditandai sampai")
+
+
+class CourierFailedInput(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=200)
+
+
+@router.post("/{slug}/antar/{order_id}/failed", response_model=StandardResponse)
+async def courier_failed(slug: str, order_id: uuid.UUID, body: CourierFailedInput, k: Optional[str] = Query(None),
+                         db: AsyncSession = Depends(get_db)):
+    from backend.services import delivery_dispatch as _dd
+    from backend.services import online_orders as _oo
+    from backend.services.order_lifecycle import latest_payment
+    outlet, order = await _courier_order(db, slug, order_id, k)
+    if order.delivery_status == _dd.DELIVERED:
+        raise HTTPException(status_code=400, detail="Pesanan ini sudah ditandai sampai")
+    await _dd.mark_failed(db, order, outlet, reason=body.reason, by="courier")
+    phone = order.customer_phone
+    await db.commit()
+    if order.source == "storefront":
+        asyncio.create_task(_oo.wa_customer(outlet, phone, _oo.msg_delivery_failed(order, outlet, reason=body.reason)))
+    asyncio.create_task(_oo.wa_owner(outlet, _oo.msg_owner_delivery_failed(order, outlet, reason=body.reason)))
+    payment = await latest_payment(db, order.id)
+    return StandardResponse(success=True, data=_courier_payload(outlet, order, payment), message="Ditandai gagal antar")

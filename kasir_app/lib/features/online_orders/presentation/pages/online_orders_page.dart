@@ -221,7 +221,12 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
     if (pick == null || !mounted) return;
     final err = await ref.read(onlineOrdersProvider.notifier).dispatch(
           order.id, courierId: pick.courierId, courierName: pick.courierName);
-    _toast(err ?? 'Pesanan #${order.displayNumber} diserahkan ke ${pick.label}. Pelanggan dikabari.', ok: err == null);
+    _toast(
+      err ?? (pick.courierId != null
+          ? 'Pesanan #${order.displayNumber} diserahkan ke ${pick.label}. Link tugas dikirim ke WA kurir, pelanggan dikabari.'
+          : 'Pesanan #${order.displayNumber} diserahkan ke ${pick.label}. Ketuk "Link kurir" di kartu untuk mengirim tugasnya.'),
+      ok: err == null,
+    );
   }
 
   Future<void> _delivered(OnlineOrder order) async {
@@ -762,6 +767,25 @@ class _OrderCard extends StatelessWidget {
                   style: KasiraDS.sans(size: 12.5, weight: FontWeight.w600, color: order.isDeliveryFailed ? KasiraDS.danger : KasiraDS.textStrong),
                 ),
               ),
+              // Kurir nggak butuh app: link tugasnya (peta, chat pelanggan,
+              // Sampai dengan foto) dikirim ke WA-nya. Tombol ini buat kurir
+              // ketikan tanpa nomor, atau kalau WA otomatisnya nggak nyampe.
+              if (!order.isDelivered && order.courierTaskUrl != null)
+                InkWell(
+                  onTap: () => launchUrl(
+                    Uri.parse('https://wa.me/?text=${Uri.encodeComponent('Tugas antar #${order.displayNumber}: ${order.courierTaskUrl}')}'),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                  borderRadius: KasiraDS.brPill,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(children: [
+                      const Icon(LucideIcons.send, size: 13, color: KasiraDS.brandPrimary),
+                      const SizedBox(width: 4),
+                      Text('Link kurir', style: KasiraDS.sans(size: 12, weight: FontWeight.w700, color: KasiraDS.brandPrimary)),
+                    ]),
+                  ),
+                ),
             ]),
           ),
         ],

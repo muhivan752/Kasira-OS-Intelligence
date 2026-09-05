@@ -450,6 +450,12 @@ async def _attach_payment_info(db, orders) -> list:
         for row in pay_result.all():
             payment_map[row.order_id] = {"payment_method": row.payment_method, "payment_status": row.status,
                                          "payment_channel": row.channel, "payment_proof_url": row.proof_image_url}
+    # Link tugas kurir butuh slug outlet; satu query buat semua order.
+    slug_map: dict = {}
+    outlet_ids = {o.outlet_id for o in orders if getattr(o, "delivery_token", None)}
+    if outlet_ids:
+        for oid, slug in (await db.execute(select(Outlet.id, Outlet.slug).where(Outlet.id.in_(outlet_ids)))).all():
+            slug_map[oid] = slug
     out = []
     for o in orders:
         resp = OrderResponse.model_validate(o)
@@ -459,6 +465,8 @@ async def _attach_payment_info(db, orders) -> list:
             resp.payment_status = info["payment_status"]
             resp.payment_channel = info["payment_channel"]
             resp.payment_proof_url = info["payment_proof_url"]
+        if getattr(o, "delivery_token", None) and slug_map.get(o.outlet_id):
+            resp.courier_task_url = f"{settings.SITE_URL}/{slug_map[o.outlet_id]}/antar/{o.id}?k={o.delivery_token}"
         out.append(resp)
     return out
 
@@ -777,6 +785,13 @@ async def dispatch_delivery_order(
     if order.source == "storefront":
         asyncio.create_task(online_orders.wa_customer(outlet, phone, online_orders.msg_on_the_way(
             order, outlet, courier_name=courier_name, courier_phone=courier_phone, cod_pending=cod_pending)))
+    # Link tugas ke KURIR (mig 109): dia nggak butuh app kasir. Cuma kalau
+    # nomornya ada; kurir ketikan sekali jalan dibagikan manual dari app.
+    task_link = delivery_dispatch.courier_task_url(outlet, order)
+    if courier_phone and task_link:
+        asyncio.create_task(online_orders.wa_customer(outlet, courier_phone, online_orders.msg_courier_task(
+            order, outlet, link=task_link, cod_pending=cod_pending,
+            customer_name=order.customer_name, items=order.items)))
     order = await _load_order_full(db, order_id)
     return StandardResponse(success=True, data=(await _attach_payment_info(db, [order]))[0],
                             request_id=request.state.request_id, message="Pesanan sedang diantar")
