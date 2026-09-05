@@ -1,5 +1,6 @@
 import { SITE_URL, BRAND } from '@/lib/brand';
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { CartProvider } from './CartContext';
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +11,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   try {
     const res = await fetch(`${BACKEND_URL}/connect/${slug}`, { cache: 'no-store' });
-    if (!res.ok) return {};
+    // Slug ngawur: jangan kasih judul default situs, itu bikin Google lihat
+    // ratusan alamat sampah dengan isi yang sama.
+    if (!res.ok) return { title: 'Toko tidak ditemukan', robots: { index: false, follow: false } };
     const { data } = await res.json();
     const name = data?.outlet?.name || slug;
     const desc = `Pesan langsung dari ${name}. Dikonfirmasi toko, status pesanan bisa dilacak, bayar QRIS atau di kasir. Didukung ${BRAND}.`;
@@ -88,13 +91,22 @@ export default async function StorefrontLayout({
 }) {
   const { slug } = await params;
   let jsonLd: Record<string, any> | null = null;
+  // Slug yang nggak ada HARUS balik 404 beneran. Dulu semua alamat ngawur
+  // (/version.json, salah ketik, tautan basi) balas 200 dengan judul default
+  // situs: Google nyebutnya soft 404 dan bisa ngindeks alamat sampah itu.
+  // Backend yang lagi mati (fetch gagal) SENGAJA nggak di-404-in: toko beneran
+  // nggak boleh hilang cuma gara-gara satu request meleset.
+  let missing = false;
   try {
     const res = await fetch(`${BACKEND_URL}/connect/${slug}`, { cache: 'no-store' });
-    if (res.ok) {
+    if (res.status === 404) {
+      missing = true;
+    } else if (res.ok) {
       const { data } = await res.json();
       if (data?.outlet?.name) jsonLd = businessJsonLd(slug, data.outlet);
     }
   } catch {}
+  if (missing) notFound();
 
   return (
     <CartProvider slug={slug}>

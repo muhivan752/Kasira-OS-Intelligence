@@ -7,14 +7,16 @@ const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_
 // dari waktu build. Backend udah nge-cache daftarnya 5 menit di Redis.
 export const dynamic = 'force-dynamic';
 
-async function getStorefrontSlugs(): Promise<string[]> {
+type Listed = { slug: string; updated_at?: string | null };
+
+async function getStorefronts(): Promise<Listed[]> {
   try {
     // Direktori publik (outlets.py:public_outlet_list, mig 105). Dulu 404 sejak
     // lahir, jadi nol toko yang pernah masuk sitemap.
     const res = await fetch(`${API_URL}/outlets/public/list`, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.data || []).map((o: any) => o.slug).filter(Boolean);
+    return (data.data || []).filter((o: any) => o?.slug);
   } catch {
     return [];
   }
@@ -32,11 +34,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/jelajah`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.8 },
   ];
 
-  // Dynamic storefront pages
-  const slugs = await getStorefrontSlugs();
-  const storefrontPages: MetadataRoute.Sitemap = slugs.map((slug) => ({
-    url: `${baseUrl}/${slug}`,
-    lastModified: new Date(),
+  // Halaman storefront. lastModified dari `updated_at` toko, BUKAN new Date():
+  // sitemap yang nulis "semua berubah barusan" tiap kali diminta bikin Google
+  // berhenti percaya tanggalnya.
+  const outlets = await getStorefronts();
+  const storefrontPages: MetadataRoute.Sitemap = outlets.map((o) => ({
+    url: `${baseUrl}/${o.slug}`,
+    lastModified: o.updated_at ? new Date(o.updated_at) : new Date(),
     changeFrequency: 'daily' as const,
     priority: 0.8,
   }));

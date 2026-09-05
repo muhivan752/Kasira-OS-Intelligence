@@ -34,7 +34,8 @@ type Listed = {
 };
 
 export const metadata: Metadata = {
-  title: `Jelajah Toko · ${BRAND}`,
+  // Template layout udah nambahin "| Selaris", jadi judulnya jangan bawa merek lagi.
+  title: 'Jelajah Toko',
   description: `Cari kafe, warung, dan toko di dekatmu yang menerima pesanan online lewat ${BRAND}. Pesan dari HP, dikonfirmasi toko, tanpa aplikasi tambahan.`,
   alternates: { canonical: `${SITE_URL}/jelajah` },
   openGraph: { title: `Jelajah Toko · ${BRAND}`, url: `${SITE_URL}/jelajah` },

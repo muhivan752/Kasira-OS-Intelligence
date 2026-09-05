@@ -67,6 +67,12 @@ export const metadata: Metadata = {
   alternates: {
     canonical: SITE_URL,
   },
+  // Google Search Console: cara verifikasi cadangan lewat meta tag. Jalur
+  // utamanya TXT di DNS Cloudflare (satu properti buat semua subdomain);
+  // isi env ini cuma kalau mau verifikasi per-URL dari HTML.
+  verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
+    : undefined,
 };
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID || '';
