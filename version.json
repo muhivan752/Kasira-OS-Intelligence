@@ -3,12 +3,12 @@
     "version": "1.6.27",
     "is_mandatory": false,
     "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.27/selaris-pos-v1.6.27.apk",
-    "release_notes": "Bug fixes and improvements"
+    "release_notes": "Perbaikan untuk tablet: tombol Bayar tidak lagi ketutup keyboard, Pengaturan punya tombol kembali, dan mode berdiri tidak lagi pakai tata letak layar tidur. Tombol tutup kas juga tidak lagi macet berputar."
   },
   "dapur": {
     "version": "1.6.27",
     "is_mandatory": false,
     "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.27/selaris-dapur-v1.6.27.apk",
-    "release_notes": "Bug fixes and improvements"
+    "release_notes": "Perbaikan untuk tablet: tombol Bayar tidak lagi ketutup keyboard, Pengaturan punya tombol kembali, dan mode berdiri tidak lagi pakai tata letak layar tidur. Tombol tutup kas juga tidak lagi macet berputar."
   }
 }
