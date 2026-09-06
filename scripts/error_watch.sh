@@ -76,8 +76,19 @@ docker logs --since "$WINDOW" "$FRONTEND" 2>&1 \
 
 # 3. nginx 5xx (kecuali /health, sudah diurus healthcheck_ping.sh)
 if [[ -r "$NGINX_LOG" ]]; then
-  SEJAK=$(date -d "-16 min" '+%d/%b/%Y:%H:%M' 2>/dev/null || echo "")
-  awk -v sejak="$SEJAK" '$9 ~ /^(500|502|503|504)$/ && $7 !~ /^\/health/ {print $9, $7}' "$NGINX_LOG" 2>/dev/null \
+  # Daftar menit yang masuk jendela, sebagai pola untuk dicocokkan ke kolom
+  # waktu nginx ("[05/Sep/2026:05:43:17"). WAJIB menyaring per baris: awk
+  # membaca SELURUH access.log, dan log itu baru dirotasi tengah malam. Tanpa
+  # saringan ini satu 5xx jam 5 pagi ikut terhitung sepanjang hari, lalu
+  # ditagih ulang tiap kali throttle 6 jam habis. Kejadian 5 Sep 2026: satu
+  # 500 dari smoke test sendiri jadi tiga alarm Telegram, dan alarm yang
+  # isinya sampah bikin alarm yang benar ikut diabaikan.
+  MENIT=""
+  for i in $(seq 0 16); do
+    m=$(date -d "-$i min" '+%d/%b/%Y:%H:%M' 2>/dev/null) || continue
+    MENIT="${MENIT}${MENIT:+|}${m}"
+  done
+  awk -v menit="$MENIT" '$9 ~ /^(500|502|503|504)$/ && $7 !~ /^\/health/ && index(menit, substr($4, 2, 17)) > 0 {print $9, $7}' "$NGINX_LOG" 2>/dev/null \
     | sort | uniq -c | sort -rn | head -5 \
     | while read -r n kode jalur; do printf 'nginx\t%s x%s %s\n' "$kode" "$n" "$jalur"; done >> "$TMPI" || true
 fi
