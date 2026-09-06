@@ -21,11 +21,42 @@ class SettingsPage extends ConsumerWidget {
       body: Column(
         children: [
           // Header
+          //
+          // Tombol kembali WAJIB ada di sini. Halaman ini dibuka lewat
+          // `Navigator.push` dari Beranda, jadi dia nutupin dashboard beserta
+          // bar navigasi bawahnya. Dulu header-nya cuma tulisan "Pengaturan",
+          // tanpa AppBar dan tanpa tombol apa pun, jadi satu-satunya jalan
+          // keluar itu tombol kembali bawaan Android. Di perangkat yang
+          // pakai navigasi gestur (banyak tablet, termasuk Huawei yang dites
+          // 5 Sep 2026) tombol itu TIDAK ADA di layar, dan pemakainya
+          // terkunci di halaman ini sampai app-nya dimatikan paksa.
+          //
+          // SafeArea juga wajib: halaman ini tidak punya AppBar yang biasanya
+          // ngurus zona status bar, jadi tanpa ini judulnya nyelip ke bawah
+          // jam dan ikon sinyal.
           Container(
-            padding: const EdgeInsets.all(24),
             color: KasiraDS.surfaceCard,
             width: double.infinity,
-            child: Text('Pengaturan', style: Theme.of(context).textTheme.headlineMedium),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 24, 20),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(LucideIcons.chevronLeft,
+                          color: KasiraDS.textStrong),
+                      tooltip: 'Kembali',
+                    ),
+                    Expanded(
+                      child: Text('Pengaturan',
+                          style: Theme.of(context).textTheme.headlineMedium),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
           
           // Settings List

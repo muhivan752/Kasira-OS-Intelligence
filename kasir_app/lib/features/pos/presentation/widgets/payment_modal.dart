@@ -459,8 +459,17 @@ class _PaymentModalState extends State<PaymentModal> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isNarrow = screenWidth < 600;
+    final layar = MediaQuery.of(context).size;
+    // Lebar SAJA tidak cukup buat milih layout. Tablet tidur itu lebar tapi
+    // PENDEK, dan layout dua kolom di bawah ini butuh ruang tegak. Tablet
+    // 1024x600 cuma nyisain ~550px sesudah inset dialog, jadi isinya kepotong
+    // padahal layarnya lebar. Layout HP justru benar di situ: satu kolom yang
+    // bisa digulung. Kegigit di tablet Huawei, 5 Sep 2026.
+    //
+    // Pakai `size.height`, BUKAN sisa ruang sesudah keyboard: `size` tidak
+    // berubah waktu keyboard muncul, jadi layoutnya tidak loncat di tengah
+    // kasir lagi ngetik nominal.
+    final isNarrow = layar.width < 600 || layar.height < 620;
 
     // Rule #43: payment immutable. Block device back button biar user gak
     // tidak sengaja batalin pembayaran yang sedang in-flight (cash typed,
@@ -499,9 +508,19 @@ class _PaymentModalState extends State<PaymentModal> {
     final change = _amountReceived - widget.totalAmount;
     final isCash = _paymentMethod == 'Cash';
 
+    // 760x580 dulunya angka mati. Dialog nambah insetPadding 40 kiri-kanan dan
+    // 24 atas-bawah, dan waktu keyboard angka naik buat nominal tunai, ruang
+    // tegaknya kepotong lagi ~300px. Kotak yang tidak bisa mengecil = isinya
+    // kepotong, dan yang paling bawah itu tombol Bayar. Sekarang ukurannya
+    // dibatasi ruang yang benar-benar ada; kalau kurang, isinya digulung.
+    final media = MediaQuery.of(context);
+    final lebar = (media.size.width - 80).clamp(280.0, 760.0);
+    final tinggi = (media.size.height - media.viewInsets.bottom - 48)
+        .clamp(280.0, 580.0);
+
     return SizedBox(
-      width: 760,
-      height: 580,
+      width: lebar,
+      height: tinggi,
       child: Row(
         children: [
           // Left: Payment Methods
@@ -513,16 +532,21 @@ class _PaymentModalState extends State<PaymentModal> {
                 color: KasiraDS.surfaceSunken,
                 borderRadius: BorderRadius.horizontal(left: Radius.circular(24)),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Pilih Metode', style: Theme.of(context).textTheme.headlineMedium),
-                  const SizedBox(height: 24),
-                  for (final m in _methods) ...[
-                    _buildMethodBtn(m.value, m.icon, label: m.label),
-                    const SizedBox(height: 12),
+              // Digulung: daftar metode tumbuh terus (tunai, QRIS, transfer,
+              // kartu) sementara tinggi dialog malah menyusut waktu keyboard
+              // naik.
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Pilih Metode', style: Theme.of(context).textTheme.headlineMedium),
+                    const SizedBox(height: 24),
+                    for (final m in _methods) ...[
+                      _buildMethodBtn(m.value, m.icon, label: m.label),
+                      const SizedBox(height: 12),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -557,7 +581,20 @@ class _PaymentModalState extends State<PaymentModal> {
                         ),
                   ),
                   const Divider(height: 40, color: KasiraDS.borderSubtle),
-                  if (isCash) ..._buildCashDetails(context, change)
+                  // Rincian tunai dulunya ditempel apa adanya di Column
+                  // bertinggi mati, jadi begitu keyboard naik dia mendorong
+                  // tombol Bayar ke luar layar. Sekarang cuma bagian ini yang
+                  // digulung; tombol Bayar di bawah tetap kelihatan. Di kasir,
+                  // tombol Bayar tidak boleh pernah perlu dicari.
+                  if (isCash)
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: _buildCashDetails(context, change),
+                        ),
+                      ),
+                    )
                   else if (_qrisDynamic)
                     Expanded(child: _buildQrisDetails(context))
                   else

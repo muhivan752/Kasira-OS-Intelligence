@@ -316,7 +316,16 @@ class _PosPageState extends ConsumerState<PosPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.shortestSide >= 600;
+    // Pakai LEBAR SAAT INI, bukan `shortestSide`. `shortestSide` itu sisi
+    // terpendek perangkat dan angkanya TIDAK berubah waktu tablet diputar,
+    // jadi tablet berdiri tetap dianggap "lebar" dan tetap dikasih layout dua
+    // kolom yang dirancang buat tidur: keranjang keremet jadi ~240px dan
+    // produk dipaksa 4 kolom di ruang 560px. Itu sebabnya mode berdiri
+    // kelihatan rusak di tablet Huawei, 5 Sep 2026.
+    //
+    // Dengan lebar, tablet berdiri (~800px) jatuh ke layout HP yang sudah
+    // matang: satu kolom, keranjang jadi lembar bawah. Nol layout baru.
+    final isWide = MediaQuery.of(context).size.width >= 900;
     final productsAsync = ref.watch(productsProvider);
     final cart = ref.watch(cartProvider);
     final posMode = ref.watch(posModeProvider);
@@ -464,7 +473,10 @@ class _PosPageState extends ConsumerState<PosPage> {
   }
 
   Widget _buildMainContent(AsyncValue<List<ProductModel>> productsAsync, PosMode posMode, {required bool isWide}) {
-    final crossAxisCount = isWide ? 4 : 2;
+    // Tablet berdiri sekarang pakai layout HP, tapi lebarnya tetap ~800px.
+    // Dua kolom di situ bikin kartu produk selebar 380px, kelihatan kosong.
+    final lebar = MediaQuery.of(context).size.width;
+    final crossAxisCount = isWide ? 4 : (lebar >= 700 ? 3 : 2);
     switch (posMode) {
       case PosMode.dineInTableSelect:
         return Expanded(
@@ -881,7 +893,11 @@ class _PosPageState extends ConsumerState<PosPage> {
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
-              childAspectRatio: crossAxisCount == 2 ? 0.82 : 0.72,
+              // 0.72 dikalibrasi buat kartu sempit di layout tablet 4 kolom;
+              // 0.82 buat layout HP. Tablet berdiri sekarang 3 kolom dan dia
+              // ikut jalur HP, jadi ikut 0.82. Perlu dilihat langsung di
+              // perangkat: ini belum pernah dilihat di layar tablet berdiri.
+              childAspectRatio: crossAxisCount >= 4 ? 0.72 : 0.82,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
             ),
