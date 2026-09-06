@@ -13,6 +13,7 @@ import '../widgets/product_detail_sheet.dart';
 import 'restock_page.dart';
 import '../widgets/stock_count_sheet.dart';
 import 'margin_report_page.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 class ProductManagementPage extends ConsumerStatefulWidget {
   const ProductManagementPage({super.key});
@@ -110,7 +111,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
             // dan ikon sinyal kalau zona status bar nggak diambil.
             Container(
               color: KasiraDS.surfaceCard,
-              child: SafeArea(
+              child: LebarKonten(child: SafeArea(
                 bottom: false,
                 child: Padding(
               padding: const EdgeInsets.all(20),
@@ -154,7 +155,7 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
                 ],
               ),
                 ),
-              ),
+              )),
             ),
 
             // Stok value summary (design: Nilai stok modal + Perlu restok)
@@ -212,14 +213,14 @@ class _ProductManagementPageState extends ConsumerState<ProductManagementPage> {
 
             // Content
             Expanded(
-              child: TabBarView(
+              child: LebarKonten(child: TabBarView(
                 physics: const ClampingScrollPhysics(),
                 children: [
                   _buildProductsTab(productsAsync),
                   const RestockPage(embedded: true),
                   const MarginReportPage(embedded: true),
                 ],
-              ),
+              )),
             ),
           ],
         ),

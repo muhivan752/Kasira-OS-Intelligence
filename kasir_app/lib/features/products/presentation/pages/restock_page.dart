@@ -11,6 +11,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/sync/sync_provider.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 /// Restock page — support simple & recipe mode.
 /// Simple mode: list product stock_enabled, tap → restock product.
@@ -268,7 +269,7 @@ class _RestockPageState extends ConsumerState<RestockPage> {
         elevation: 0,
         iconTheme: const IconThemeData(color: KasiraDS.textStrong),
       ),
-      body: body,
+      body: LebarKonten(child: body),
     );
   }
 }

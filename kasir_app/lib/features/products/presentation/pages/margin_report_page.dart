@@ -9,6 +9,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 /// Laporan Untung-Rugi — Starter margin tracking.
 /// Sumber data: GET /api/v1/reports/margin?outlet_id=...
@@ -220,7 +221,7 @@ class _MarginReportPageState extends ConsumerState<MarginReportPage> {
         foregroundColor: KasiraDS.textStrong,
         elevation: 0,
       ),
-      body: body,
+      body: LebarKonten(child: body),
     );
   }
 }

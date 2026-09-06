@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/reservation_provider.dart';
 import '../widgets/create_reservation_modal.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 const _proTiers = {'pro', 'business', 'enterprise'};
 
@@ -76,7 +77,7 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
           Container(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
             color: KasiraDS.surfaceCard,
-            child: Column(
+            child: LebarKonten(child: Column(
               children: [
                 Row(
                   children: [
@@ -140,12 +141,12 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
                   ],
                 ),
               ],
-            ),
+            )),
           ),
 
           // Content
           Expanded(
-            child: state.isLoading
+            child: LebarKonten(child: state.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : state.error != null
                     ? Center(
@@ -199,7 +200,7 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
                                 ...others.map((r) => _buildReservationCard(r)),
                               ],
                             ],
-                          ),
+                          )),
           ),
         ],
       ),

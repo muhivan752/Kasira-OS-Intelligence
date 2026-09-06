@@ -7,6 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 /// Pengaturan metode bayar dari HP (mig 103). Sumber kebenaran tetap server
 /// (`PUT /outlets/{id}`), halaman ini dan Pengaturan web ngubah data yang
@@ -158,7 +159,7 @@ class _PaymentMethodsSettingsPageState extends State<PaymentMethodsSettingsPage>
         elevation: 0,
         title: Text('Metode pembayaran', style: KasiraDS.display(size: 18, color: KasiraDS.textStrong)),
       ),
-      body: ListView(
+      body: LebarKonten(child: ListView(
         padding: const EdgeInsets.fromLTRB(KasiraDS.space4, KasiraDS.space3, KasiraDS.space4, KasiraDS.space5),
         children: [
           Text(
@@ -201,7 +202,7 @@ class _PaymentMethodsSettingsPageState extends State<PaymentMethodsSettingsPage>
             onChanged: _saving ? null : (v) => _toggle('card', v),
           ),
         ],
-      ),
+      )),
     );
   }
 

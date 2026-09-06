@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 class StaffPage extends StatefulWidget {
   const StaffPage({super.key});
@@ -217,7 +218,7 @@ class _StaffPageState extends State<StaffPage> {
         label: const Text('Tambah Kasir'),
         backgroundColor: KasiraDS.brandPrimary,
       ),
-      body: _isLoading
+      body: LebarKonten(child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(
@@ -334,7 +335,7 @@ class _StaffPageState extends State<StaffPage> {
                           ),
                         );
                       },
-                    ),
+                    )),
     );
   }
 }

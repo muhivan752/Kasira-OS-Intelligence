@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/orders_provider.dart';
 import '../widgets/order_detail_modal.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 final _currencyFmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -64,7 +65,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
           Container(
             padding: EdgeInsets.all(isWide ? 24 : 16),
             color: KasiraDS.surfaceCard,
-            child: SafeArea(
+            child: LebarKonten(child: SafeArea(
               bottom: false,
               child: Row(
                 children: [
@@ -104,7 +105,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
                   ),
                 ],
               ),
-            ),
+            )),
           ),
           Container(
             color: KasiraDS.surfaceCard,
@@ -119,13 +120,13 @@ class _OrderListPageState extends ConsumerState<OrderListPage>
             ),
           ),
           Expanded(
-            child: state.isLoading
+            child: LebarKonten(child: state.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : state.error != null
                     ? _buildError(state.error!)
                     : filtered.isEmpty
                         ? _buildEmpty()
-                        : _buildList(filtered, isWide),
+                        : _buildList(filtered, isWide)),
           ),
         ],
       ),

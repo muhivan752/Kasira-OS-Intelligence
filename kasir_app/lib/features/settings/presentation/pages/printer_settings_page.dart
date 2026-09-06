@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/services/printer_service.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 class PrinterSettingsPage extends ConsumerWidget {
   const PrinterSettingsPage({super.key});
@@ -39,7 +40,7 @@ class PrinterSettingsPage extends ConsumerWidget {
           child: Container(color: KasiraDS.borderSubtle, height: 1),
         ),
       ),
-      body: ListView(
+      body: LebarKonten(child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
           // Status Card
@@ -183,7 +184,7 @@ class PrinterSettingsPage extends ConsumerWidget {
             ),
           ],
         ],
-      ),
+      )),
     );
   }
 }

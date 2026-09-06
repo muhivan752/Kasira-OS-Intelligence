@@ -8,6 +8,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import 'cash_drawer_history_page.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 class ShiftPage extends StatefulWidget {
   const ShiftPage({super.key});
@@ -351,11 +352,11 @@ class _ShiftPageState extends State<ShiftPage> {
           const SizedBox(width: 16),
         ],
       ),
-      body: _isLoading
+      body: LebarKonten(child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? _buildError()
-              : _buildContent(),
+              : _buildContent()),
     );
   }
 

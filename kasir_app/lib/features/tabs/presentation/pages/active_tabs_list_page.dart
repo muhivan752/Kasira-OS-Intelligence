@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/tab_provider.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 class ActiveTabsListPage extends ConsumerStatefulWidget {
   const ActiveTabsListPage({super.key});
@@ -44,7 +45,7 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
           ),
         ],
       ),
-      body: state.isLoading && activeTabs.isEmpty
+      body: LebarKonten(child: state.isLoading && activeTabs.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : activeTabs.isEmpty
               ? _buildEmpty()
@@ -56,7 +57,7 @@ class _ActiveTabsListPageState extends ConsumerState<ActiveTabsListPage> {
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (_, i) => _buildTabCard(activeTabs[i]),
                   ),
-                ),
+                )),
     );
   }
 

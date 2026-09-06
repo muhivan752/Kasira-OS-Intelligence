@@ -8,6 +8,7 @@ import '../../../../core/services/session_cache.dart';
 import '../../../../core/sync/sync_provider.dart';
 import '../../../../core/offline/local_reads.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 enum StockLevel { out, critical, low }
 
@@ -160,7 +161,7 @@ class _LowStockAlertPageState extends ConsumerState<LowStockAlertPage> {
               )
             : null,
       ),
-      body: _isLoading
+      body: LebarKonten(child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? _buildError()
@@ -213,7 +214,7 @@ class _LowStockAlertPageState extends ConsumerState<LowStockAlertPage> {
                             ),
                     ),
                   ],
-                ),
+                )),
     );
   }
 

@@ -5,6 +5,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../../auth/presentation/pages/login_page.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -82,7 +83,7 @@ class _ProfilePageState extends State<ProfilePage> {
         iconTheme: const IconThemeData(color: KasiraDS.textStrong),
         elevation: 0,
       ),
-      body: _isLoading
+      body: LebarKonten(child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(24),
@@ -206,7 +207,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
               ],
-            ),
+            )),
     );
   }
 

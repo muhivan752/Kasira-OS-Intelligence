@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../../../core/widgets/sefrekuensi_nudge_banner.dart';
 import '../../providers/online_orders_provider.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 final _rp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -56,7 +57,7 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
                 child: Text(state.error!, style: KasiraDS.sans(size: 12.5, color: KasiraDS.danger)),
               ),
             Expanded(
-              child: RefreshIndicator(
+              child: LebarKonten(child: RefreshIndicator(
                 color: KasiraDS.brandPrimary,
                 onRefresh: () => ref.read(onlineOrdersProvider.notifier).fetch(),
                 child: list.isEmpty
@@ -74,7 +75,7 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
                           onDispatch: _dispatch, onDelivered: _delivered, onDeliveryFailed: _deliveryFailed,
                         ),
                       ),
-              ),
+              )),
             ),
           ],
         ),
@@ -86,7 +87,7 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
     final n = ref.read(onlineOrdersProvider.notifier);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 12, 8),
-      child: Row(
+      child: LebarKonten(child: Row(
         children: [
           IconButton(
             onPressed: () => Navigator.of(context).maybePop(),
@@ -124,7 +125,7 @@ class _OnlineOrdersPageState extends ConsumerState<OnlineOrdersPage> {
                 color: state.soundEnabled ? KasiraDS.textStrong : KasiraDS.textMuted),
           ),
         ],
-      ),
+      )),
     );
   }
 

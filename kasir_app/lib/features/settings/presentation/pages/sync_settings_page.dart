@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../../pos/utils/post_payment_refresh.dart';
 import '../../../../core/sync/sync_provider.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 class SyncSettingsPage extends ConsumerStatefulWidget {
   const SyncSettingsPage({super.key});
@@ -100,7 +101,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
         iconTheme: const IconThemeData(color: KasiraDS.textStrong),
         elevation: 0,
       ),
-      body: ListView(
+      body: LebarKonten(child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
           // Status Card
@@ -247,7 +248,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 }

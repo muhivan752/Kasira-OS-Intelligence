@@ -10,6 +10,7 @@ import 'printer_settings_page.dart';
 import 'sync_settings_page.dart';
 import 'profile_page.dart';
 import 'staff_page.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -37,7 +38,7 @@ class SettingsPage extends ConsumerWidget {
           Container(
             color: KasiraDS.surfaceCard,
             width: double.infinity,
-            child: SafeArea(
+            child: LebarKonten(child: SafeArea(
               bottom: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 8, 24, 20),
@@ -56,12 +57,12 @@ class SettingsPage extends ConsumerWidget {
                   ],
                 ),
               ),
-            ),
+            )),
           ),
           
           // Settings List
           Expanded(
-            child: ListView(
+            child: LebarKonten(child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
                 _buildSectionTitle('Perangkat & Hardware'),
@@ -167,7 +168,7 @@ class SettingsPage extends ConsumerWidget {
                   onTap: () => _confirmLogout(context, ref),
                 ),
               ],
-            ),
+            )),
           ),
         ],
       ),

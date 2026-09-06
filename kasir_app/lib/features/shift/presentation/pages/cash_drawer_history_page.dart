@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
+import '../../../../core/widgets/lebar_konten.dart';
 
 class CashDrawerHistoryPage extends StatefulWidget {
   const CashDrawerHistoryPage({super.key});
@@ -114,7 +115,7 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _isLoading
+      body: LebarKonten(child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? _buildError()
@@ -141,7 +142,7 @@ class _CashDrawerHistoryPageState extends State<CashDrawerHistoryPage> {
                             ),
                     ),
                   ],
-                ),
+                )),
     );
   }
 
