@@ -17,11 +17,22 @@ class PrinterSettingsPage extends ConsumerWidget {
 
     ref.listen<PrinterState>(printerProvider, (_, next) {
       if (next.error != null) {
+        final butuhIzin = next.needsPermission;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.error!),
             backgroundColor: KasiraDS.danger,
             behavior: SnackBarBehavior.floating,
+            // Pesan izin perlu waktu baca lebih panjang, dan percuma kalau
+            // hilang sebelum kasir sempat nekan tombolnya.
+            duration: Duration(seconds: butuhIzin ? 10 : 4),
+            action: butuhIzin
+                ? SnackBarAction(
+                    label: 'Buka Pengaturan',
+                    textColor: Colors.white,
+                    onPressed: notifier.bukaPengaturanIzin,
+                  )
+                : null,
           ),
         );
         notifier.clearError();

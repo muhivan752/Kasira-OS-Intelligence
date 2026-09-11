@@ -22,6 +22,10 @@ class PrinterState {
   final bool isPrinting;
   final List<BluetoothInfo> scanResults;
   final String? error;
+  /// true = yang bikin gagal itu IZIN BLUETOOTH, bukan printernya. UI wajib
+  /// nampilin tombol "Buka Pengaturan", karena sesudah user nekan "Tolak"
+  /// Android nggak pernah nanya lagi dari dalam app.
+  final bool needsPermission;
 
   const PrinterState({
     this.savedDevice,
@@ -30,6 +34,7 @@ class PrinterState {
     this.isPrinting = false,
     this.scanResults = const [],
     this.error,
+    this.needsPermission = false,
   });
 
   PrinterState copyWith({
@@ -40,6 +45,7 @@ class PrinterState {
     List<BluetoothInfo>? scanResults,
     String? error,
     bool clearError = false,
+    bool? needsPermission,
   }) {
     return PrinterState(
       savedDevice: savedDevice ?? this.savedDevice,
@@ -48,6 +54,7 @@ class PrinterState {
       isPrinting: isPrinting ?? this.isPrinting,
       scanResults: scanResults ?? this.scanResults,
       error: clearError ? null : (error ?? this.error),
+      needsPermission: needsPermission ?? (clearError ? false : this.needsPermission),
     );
   }
 }
@@ -78,31 +85,44 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
     } catch (_) {}
   }
 
-  Future<bool> _requestPermissions() async {
-    if (!Platform.isAndroid) return true;
-    final statuses = await [
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.locationWhenInUse,
-    ].request();
-    final denied = statuses.entries
-        .where((e) => !e.value.isGranted)
-        .map((e) => e.key.toString())
-        .toList();
-    if (denied.isNotEmpty) {
-      state = state.copyWith(
-        isScanning: false,
-        error: 'Izin Bluetooth/Lokasi ditolak. Aktifkan di Pengaturan HP.',
-      );
-      return false;
+  /// Minta izin, tapi JANGAN dijadikan gerbang. Dulu `startScan()` berhenti
+  /// begitu salah satu dari tiga izin ditolak, dan itu ngunci printer buat
+  /// dua kelompok merchant sekaligus:
+  ///
+  ///  - **Android 12+**: daftar printer yang SUDAH di-pair cuma butuh
+  ///    BLUETOOTH_CONNECT. Lokasi nggak ada hubungannya (kita nggak pernah
+  ///    discovery perangkat baru, cuma baca daftar bonded). Merchant yang
+  ///    nolak lokasi jadi nggak bisa cetak sama sekali, dan nggak ada jalan
+  ///    lain di app.
+  ///  - **Android 11 ke bawah**: `Permission.bluetoothScan` malah balik
+  ///    `denied` SELALU. Plugin permission_handler nggak nambah nama izin
+  ///    apa pun buat BLUETOOTH_SCAN di bawah SDK 31 (`PermissionUtils.java`
+  ///    case PERMISSION_GROUP_BLUETOOTH_SCAN dibungkus `if SDK_INT >= S`),
+  ///    dan nama kosong dibaca sebagai DENIED (`PermissionManager.java:368`).
+  ///    Jadi syarat "semua harus granted" nggak akan pernah kepenuhan.
+  ///
+  /// Sekarang: minta izinnya, lalu tetap coba baca daftar printer. Yang
+  /// menentukan boleh atau nggak adalah OS waktu panggilan beneran jalan,
+  /// bukan tebakan kita. Kalau ditolak OS, `pairedBluetooths` melempar dan
+  /// pesan errornya yang ngarahin user ke Pengaturan.
+  Future<void> _requestPermissions() async {
+    if (!Platform.isAndroid) return;
+    try {
+      // Bluetooth: WAJIB. Tanpa ini printer nggak jalan, titik.
+      await [Permission.bluetoothScan, Permission.bluetoothConnect].request();
+      // Lokasi: cuma diminta, nggak pernah dipaksa. Di Android 12+ daftar
+      // printer bonded nggak butuh lokasi sama sekali; kita minta karena
+      // Android 11 ke bawah masih memakainya buat urusan Bluetooth.
+      await Permission.locationWhenInUse.request();
+    } catch (_) {
+      // Dialog izin gagal muncul bukan alasan buat matiin halaman printer.
     }
-    return true;
   }
 
   Future<void> startScan() async {
     state = state.copyWith(isScanning: true, scanResults: [], clearError: true);
 
-    if (!await _requestPermissions()) return;
+    await _requestPermissions();
 
     // Check Bluetooth enabled
     try {
@@ -121,14 +141,34 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
     try {
       final devices = await PrintBluetoothThermal.pairedBluetooths;
       if (mounted) {
-        state = state.copyWith(
-          scanResults: devices,
-          isScanning: false,
-        );
+        // Daftar kosong itu keadaan yang paling sering kejadian di HP baru,
+        // dan dulu nggak ada tulisan apa pun di layar: tombol selesai
+        // berputar lalu senyap. Kasir nggak tahu harus ngapain.
+        //
+        // `copyWith(error: null)` TIDAK ngapus error (lihat `error ?? this.error`),
+        // jadi cabang "ada printer" wajib lewat clearError.
+        state = devices.isEmpty
+            ? state.copyWith(
+                scanResults: devices,
+                isScanning: false,
+                error: 'Belum ada printer yang di-pair di HP ini. Buka Pengaturan '
+                    'Bluetooth HP, pair printernya dulu, lalu cari lagi di sini.',
+              )
+            : state.copyWith(
+                scanResults: devices,
+                isScanning: false,
+                clearError: true,
+              );
       }
     } catch (e) {
       if (mounted) {
-        state = state.copyWith(isScanning: false, error: 'Gagal scan Bluetooth: $e');
+        state = state.copyWith(
+          isScanning: false,
+          needsPermission: true,
+          error: 'Izin Bluetooth wajib supaya printer bisa dipakai. '
+              'Buka Pengaturan HP, izinkan Bluetooth untuk aplikasi ini, '
+              'lalu cari lagi.',
+        );
       }
     }
   }
@@ -247,6 +287,10 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
   }
 
   void clearError() => state = state.copyWith(clearError: true);
+
+  /// Android nggak nampilin dialog izin lagi sesudah user nekan "Tolak"
+  /// dua kali. Satu-satunya jalan balik ya halaman Pengaturan aplikasi.
+  Future<void> bukaPengaturanIzin() => openAppSettings();
 }
 
 final printerProvider = StateNotifierProvider<PrinterNotifier, PrinterState>(
