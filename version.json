@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.6.28",
+    "version": "1.6.29",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.28/selaris-pos-v1.6.28.apk",
-    "release_notes": "Perbaikan untuk tablet. Tombol Bayar tidak lagi ketutup keyboard, Pengaturan punya tombol kembali, mode berdiri tidak lagi pakai tata letak layar tidur, dan halaman daftar tidak melebar sampai ke tepi. Tombol tutup kas juga tidak lagi macet berputar."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.29/selaris-pos-v1.6.29.apk",
+    "release_notes": "Aplikasi pindah ke nama paket baru, jadi versi ini TIDAK menimpa yang lama. Urutannya: buka aplikasi lama, jalankan Pengaturan lalu Sinkronisasi sampai selesai, baru uninstall yang lama, lalu pasang yang baru. Kalau langkah sinkron dilewati, transaksi yang belum terkirim akan hilang. Perbaikan di versi ini: izin lokasi tidak lagi mengunci halaman printer, dan daftar printer kosong sekarang ada penjelasannya."
   },
   "dapur": {
-    "version": "1.6.28",
+    "version": "1.6.29",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.28/selaris-dapur-v1.6.28.apk",
-    "release_notes": "Perbaikan untuk tablet. Tombol Bayar tidak lagi ketutup keyboard, Pengaturan punya tombol kembali, mode berdiri tidak lagi pakai tata letak layar tidur, dan halaman daftar tidak melebar sampai ke tepi. Tombol tutup kas juga tidak lagi macet berputar."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.29/selaris-dapur-v1.6.29.apk",
+    "release_notes": "Aplikasi pindah ke nama paket baru, jadi versi ini TIDAK menimpa yang lama. Urutannya: buka aplikasi lama, jalankan Pengaturan lalu Sinkronisasi sampai selesai, baru uninstall yang lama, lalu pasang yang baru. Kalau langkah sinkron dilewati, transaksi yang belum terkirim akan hilang. Perbaikan di versi ini: izin lokasi tidak lagi mengunci halaman printer, dan daftar printer kosong sekarang ada penjelasannya."
   }
 }
