@@ -51,7 +51,7 @@ jobs:
 
       - name: Recreate Platform Directories
         run: |
-          flutter create --org com.kasira --project-name kasira_kasir .
+          flutter create --org com.selaris --project-name selaris_pos .
           rm -rf test/widget_test.dart
         working-directory: kasir_app
 
@@ -147,11 +147,36 @@ jobs:
           else
             printf '%s' "$GOOGLE_SERVICES_JSON" | base64 -d > android/app/google-services.json
           fi
-          python3 -c "import json,sys; d=json.load(open('android/app/google-services.json')); print('project:', d['project_info']['project_id']); print('paket:', [c['client_info']['android_client_info']['package_name'] for c in d['client']])"
-          echo "ada=true" >> $GITHUB_OUTPUT
+          # applicationId POS dan Dapur sekarang BEDA (dua listing Play).
+          # Plugin google-services nolak build kalau paketnya nggak terdaftar,
+          # jadi dicek di sini: kurang satu = seluruh Firebase dilewati dan
+          # APK tetap kebentuk (tanpa push), bukan build yang mati.
+          python3 - <<'PY'
+          import json, os, sys
+          d = json.load(open('android/app/google-services.json'))
+          paket = [c['client_info']['android_client_info']['package_name'] for c in d['client']]
+          print('project:', d['project_info']['project_id'])
+          print('paket terdaftar:', paket)
+          butuh = ['com.selaris.pos', 'com.selaris.dapur']
+          kurang = [x for x in butuh if x not in paket]
+          out = os.environ['GITHUB_OUTPUT']
+          if kurang:
+              print(f'::warning::google-services.json belum punya {kurang}. '
+                    'Tambahkan app Android itu di Firebase Console, unduh ulang '
+                    'google-services.json, perbarui secret GOOGLE_SERVICES_JSON. '
+                    'Build ini jalan TANPA notifikasi push.')
+              os.remove('android/app/google-services.json')
+              open(out, 'a').write('ada=false\n')
+          else:
+              open(out, 'a').write('ada=true\n')
+          PY
         working-directory: kasir_app
 
-      - name: Patch Gradle — plugin google-services + desugaring
+      - name: Patch Gradle — plugin google-services
+        # Desugaring PISAH ke langkah berikutnya: dia syarat
+        # flutter_local_notifications 22.x, jadi harus jalan walau Firebase
+        # dilewati. Dulu keduanya satu langkah bersyarat, dan build tanpa
+        # Firebase langsung mati di desugaring.
         if: steps.firebase.outputs.ada == 'true'
         run: |
           set -e
@@ -182,6 +207,17 @@ jobs:
           if "google-services" not in s:
               anchor = '    id("dev.flutter.flutter-gradle-plugin")'
               s = s.replace(anchor, anchor + '\n    id("com.google.gms.google-services")', 1)
+          open(p, "w").write(s)
+          print(open(p).read())
+          PY
+        working-directory: kasir_app
+
+      - name: Patch Gradle — desugaring (selalu)
+        run: |
+          python3 - android/app/build.gradle.kts <<'PY'
+          import sys
+          p = sys.argv[1]
+          s = open(p).read()
           if "isCoreLibraryDesugaringEnabled" not in s:
               s = s.replace(
                   "    compileOptions {",
@@ -189,8 +225,67 @@ jobs:
           if "coreLibraryDesugaring(" not in s:
               s = s.rstrip() + '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
           open(p, "w").write(s)
-          print(open(p).read())
           PY
+        working-directory: kasir_app
+
+      # ── Tanda tangan rilis ────────────────────────────────────────────────
+      # Tanpa langkah ini Flutter nandatangani rilis pakai DEBUG KEY, dan Play
+      # nolak mentah-mentah. `android/` dibikin ulang tiap build, jadi
+      # keystore-nya diinject dari secret, sama seperti google-services.json.
+      # Secret kosong = balik ke debug key + peringatan, main tetap hijau.
+      - name: Pasang upload keystore
+        id: signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "ada=false" >> $GITHUB_OUTPUT
+            echo "::warning::ANDROID_KEYSTORE_BASE64 kosong — rilis ditandatangani DEBUG KEY. Bisa di-sideload, TAPI Play Store nolak."
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE_B64" | base64 -d > android/app/upload-keystore.jks
+          cat > android/key.properties <<PROPS
+          storeFile=upload-keystore.jks
+          storePassword=${KEYSTORE_PASSWORD}
+          keyAlias=${KEY_ALIAS}
+          keyPassword=${KEY_PASSWORD}
+          PROPS
+          python3 - android/app/build.gradle.kts <<'PY'
+          import sys
+          p = sys.argv[1]
+          s = open(p).read()
+          if "keystoreProperties" not in s:
+              header = (
+                  'import java.util.Properties\n'
+                  'import java.io.FileInputStream\n\n'
+                  'val keystoreProperties = Properties()\n'
+                  'val keystorePropertiesFile = rootProject.file("key.properties")\n'
+                  'if (keystorePropertiesFile.exists()) {\n'
+                  '    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n'
+                  '}\n\n'
+              )
+              s = header + s
+              s = s.replace(
+                  "    buildTypes {",
+                  '    signingConfigs {\n'
+                  '        create("release") {\n'
+                  '            keyAlias = keystoreProperties["keyAlias"] as String\n'
+                  '            keyPassword = keystoreProperties["keyPassword"] as String\n'
+                  '            storeFile = file(keystoreProperties["storeFile"] as String)\n'
+                  '            storePassword = keystoreProperties["storePassword"] as String\n'
+                  '        }\n'
+                  '    }\n\n'
+                  '    buildTypes {', 1)
+              s = s.replace(
+                  'signingConfig = signingConfigs.getByName("debug")',
+                  'signingConfig = signingConfigs.getByName("release")', 1)
+          open(p, "w").write(s)
+          PY
+          grep -n "signingConfig" android/app/build.gradle.kts
+          echo "ada=true" >> $GITHUB_OUTPUT
         working-directory: kasir_app
 
       - name: Update version in pubspec.yaml
@@ -205,26 +300,64 @@ jobs:
         run: flutter analyze
         working-directory: kasir_app
 
-      - name: Build POS APK Release
-        run: flutter build apk --release --target lib/main.dart
-        working-directory: kasir_app
-
-      - name: Rename POS APK
+      # POS dan Dapur sekarang DUA app terpisah di Play (`com.selaris.pos`
+      # dan `com.selaris.dapur`). Dulu keduanya keluar dengan applicationId
+      # yang sama, jadi nggak bisa dipasang barengan di satu HP, nggak bisa
+      # jadi dua listing, dan cek versi `packageName.contains('dapur')` di
+      # splash nggak pernah cocok.
+      #
+      # `namespace` (paket kode) SENGAJA dibiarkan `com.selaris.selaris_pos`:
+      # yang dilihat Play itu applicationId, dan mengubah namespace berarti
+      # mindahin MainActivity.kt juga.
+      - name: Build POS (APK + AAB)
         run: |
           VERSION="${{ github.event.inputs.version }}"
+          sed -i 's/^\( *applicationId = \).*/\1"com.selaris.pos"/' android/app/build.gradle.kts
+          grep -n 'applicationId' android/app/build.gradle.kts
+          flutter build apk --release --target lib/main.dart
           mv build/app/outputs/flutter-apk/app-release.apk \
              build/app/outputs/flutter-apk/selaris-pos-v${VERSION}.apk
+          flutter build appbundle --release --target lib/main.dart
+          mv build/app/outputs/bundle/release/app-release.aab \
+             build/app/outputs/bundle/release/selaris-pos-v${VERSION}.aab
         working-directory: kasir_app
 
-      - name: Build Dapur APK Release
-        run: flutter build apk --release --target lib/main_dapur.dart
-        working-directory: kasir_app
-
-      - name: Rename Dapur APK
+      - name: Build Dapur (APK + AAB)
         run: |
           VERSION="${{ github.event.inputs.version }}"
+          sed -i 's/^\( *applicationId = \).*/\1"com.selaris.dapur"/' android/app/build.gradle.kts
+          # Nama yang kelihatan di layar HP. POS dan Dapur sekarang bisa
+          # kepasang barengan di satu tablet, jadi dua-duanya nggak boleh
+          # nulis "Selaris" doang.
+          sed -i 's/android:label="Selaris"/android:label="Selaris Dapur"/' android/app/src/main/AndroidManifest.xml
+          grep -n 'applicationId' android/app/build.gradle.kts
+          grep -n 'android:label' android/app/src/main/AndroidManifest.xml
+          flutter build apk --release --target lib/main_dapur.dart
           mv build/app/outputs/flutter-apk/app-release.apk \
              build/app/outputs/flutter-apk/selaris-dapur-v${VERSION}.apk
+          flutter build appbundle --release --target lib/main_dapur.dart
+          mv build/app/outputs/bundle/release/app-release.aab \
+             build/app/outputs/bundle/release/selaris-dapur-v${VERSION}.aab
+        working-directory: kasir_app
+
+      # Bukti, bukan asumsi: kalau ini nulis "Android Debug", AAB-nya bakal
+      # ditolak Play dan lebih baik ketahuan di sini daripada di Play Console.
+      - name: Verifikasi tanda tangan
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          APK="build/app/outputs/flutter-apk/selaris-pos-v${VERSION}.apk"
+          python3 - "$APK" <<'PY'
+          import sys
+          data = open(sys.argv[1], 'rb').read()
+          debug = b'Android Debug' in data
+          print('APK Signing Block:', 'ADA' if data.rfind(b'APK Sig Block 42') > 0 else 'TIDAK ADA')
+          print('ditandatangani debug key:', debug)
+          if debug:
+              print('::error::APK masih ditandatangani DEBUG KEY. Play Store bakal nolak. '
+                    'Cek secret ANDROID_KEYSTORE_BASE64.')
+              sys.exit(1)
+          PY
+        if: steps.signing.outputs.ada == 'true'
         working-directory: kasir_app
 
       # ── Generate version.json → commit ke repo (Flutter baca via raw.githubusercontent.com) ──
@@ -311,6 +444,8 @@ jobs:
           path: |
             kasir_app/build/app/outputs/flutter-apk/selaris-pos-v${{ github.event.inputs.version }}.apk
             kasir_app/build/app/outputs/flutter-apk/selaris-dapur-v${{ github.event.inputs.version }}.apk
+            kasir_app/build/app/outputs/bundle/release/selaris-pos-v${{ github.event.inputs.version }}.aab
+            kasir_app/build/app/outputs/bundle/release/selaris-dapur-v${{ github.event.inputs.version }}.aab
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -330,8 +465,10 @@ jobs:
             ### APK yang Tersedia
             | APK | Deskripsi |
             |-----|-----------|
-            | `selaris-pos-v*.apk` | Aplikasi kasir utama (POS) |
-            | `selaris-dapur-v*.apk` | Aplikasi kitchen display untuk dapur |
+            | `selaris-pos-v*.apk` | Aplikasi kasir utama (POS), pasang langsung dari HP |
+            | `selaris-dapur-v*.apk` | Aplikasi layar dapur, pasang langsung dari HP |
+            | `selaris-pos-v*.aab` | Paket untuk diunggah ke Google Play (POS) |
+            | `selaris-dapur-v*.aab` | Paket untuk diunggah ke Google Play (Dapur) |
 
             ### version.json URL (untuk Flutter update checker)
             ```
@@ -347,5 +484,7 @@ jobs:
           files: |
             kasir_app/build/app/outputs/flutter-apk/selaris-pos-v${{ github.event.inputs.version }}.apk
             kasir_app/build/app/outputs/flutter-apk/selaris-dapur-v${{ github.event.inputs.version }}.apk
+            kasir_app/build/app/outputs/bundle/release/selaris-pos-v${{ github.event.inputs.version }}.aab
+            kasir_app/build/app/outputs/bundle/release/selaris-dapur-v${{ github.event.inputs.version }}.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

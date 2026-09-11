@@ -898,6 +898,526 @@ class ProductsCompanion extends UpdateCompanion<ProductLocal> {
   }
 }
 
+class $ProductVariantsTable extends ProductVariants
+    with TableInfo<$ProductVariantsTable, ProductVariantLocal> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProductVariantsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+      'id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _rowVersionMeta =
+      const VerificationMeta('rowVersion');
+  @override
+  late final GeneratedColumn<int> rowVersion = GeneratedColumn<int>(
+      'row_version', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _isDeletedMeta =
+      const VerificationMeta('isDeleted');
+  @override
+  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
+      'is_deleted', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_deleted" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _lastModifiedHlcMeta =
+      const VerificationMeta('lastModifiedHlc');
+  @override
+  late final GeneratedColumn<String> lastModifiedHlc = GeneratedColumn<String>(
+      'last_modified_hlc', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _isSyncedMeta =
+      const VerificationMeta('isSynced');
+  @override
+  late final GeneratedColumn<bool> isSynced = GeneratedColumn<bool>(
+      'is_synced', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_synced" IN (0, 1))'),
+      defaultValue: const Constant(true));
+  static const VerificationMeta _productIdMeta =
+      const VerificationMeta('productId');
+  @override
+  late final GeneratedColumn<String> productId = GeneratedColumn<String>(
+      'product_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+      'name', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _priceAdjustmentMeta =
+      const VerificationMeta('priceAdjustment');
+  @override
+  late final GeneratedColumn<double> priceAdjustment = GeneratedColumn<double>(
+      'price_adjustment', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0.0));
+  static const VerificationMeta _isActiveMeta =
+      const VerificationMeta('isActive');
+  @override
+  late final GeneratedColumn<bool> isActive = GeneratedColumn<bool>(
+      'is_active', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_active" IN (0, 1))'),
+      defaultValue: const Constant(true));
+  static const VerificationMeta _sortOrderMeta =
+      const VerificationMeta('sortOrder');
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+      'sort_order', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        rowVersion,
+        isDeleted,
+        lastModifiedHlc,
+        isSynced,
+        productId,
+        name,
+        priceAdjustment,
+        isActive,
+        sortOrder
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'product_variants';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<ProductVariantLocal> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('row_version')) {
+      context.handle(
+          _rowVersionMeta,
+          rowVersion.isAcceptableOrUnknown(
+              data['row_version']!, _rowVersionMeta));
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(_isDeletedMeta,
+          isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta));
+    }
+    if (data.containsKey('last_modified_hlc')) {
+      context.handle(
+          _lastModifiedHlcMeta,
+          lastModifiedHlc.isAcceptableOrUnknown(
+              data['last_modified_hlc']!, _lastModifiedHlcMeta));
+    }
+    if (data.containsKey('is_synced')) {
+      context.handle(_isSyncedMeta,
+          isSynced.isAcceptableOrUnknown(data['is_synced']!, _isSyncedMeta));
+    }
+    if (data.containsKey('product_id')) {
+      context.handle(_productIdMeta,
+          productId.isAcceptableOrUnknown(data['product_id']!, _productIdMeta));
+    } else if (isInserting) {
+      context.missing(_productIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+          _nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('price_adjustment')) {
+      context.handle(
+          _priceAdjustmentMeta,
+          priceAdjustment.isAcceptableOrUnknown(
+              data['price_adjustment']!, _priceAdjustmentMeta));
+    }
+    if (data.containsKey('is_active')) {
+      context.handle(_isActiveMeta,
+          isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta));
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(_sortOrderMeta,
+          sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ProductVariantLocal map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProductVariantLocal(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+      rowVersion: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}row_version'])!,
+      isDeleted: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_deleted'])!,
+      lastModifiedHlc: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}last_modified_hlc']),
+      isSynced: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_synced'])!,
+      productId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}product_id'])!,
+      name: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      priceAdjustment: attachedDatabase.typeMapping.read(
+          DriftSqlType.double, data['${effectivePrefix}price_adjustment'])!,
+      isActive: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_active'])!,
+      sortOrder: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}sort_order'])!,
+    );
+  }
+
+  @override
+  $ProductVariantsTable createAlias(String alias) {
+    return $ProductVariantsTable(attachedDatabase, alias);
+  }
+}
+
+class ProductVariantLocal extends DataClass
+    implements Insertable<ProductVariantLocal> {
+  final String id;
+  final int rowVersion;
+  final bool isDeleted;
+  final String? lastModifiedHlc;
+  final bool isSynced;
+  final String productId;
+  final String name;
+  final double priceAdjustment;
+  final bool isActive;
+  final int sortOrder;
+  const ProductVariantLocal(
+      {required this.id,
+      required this.rowVersion,
+      required this.isDeleted,
+      this.lastModifiedHlc,
+      required this.isSynced,
+      required this.productId,
+      required this.name,
+      required this.priceAdjustment,
+      required this.isActive,
+      required this.sortOrder});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['row_version'] = Variable<int>(rowVersion);
+    map['is_deleted'] = Variable<bool>(isDeleted);
+    if (!nullToAbsent || lastModifiedHlc != null) {
+      map['last_modified_hlc'] = Variable<String>(lastModifiedHlc);
+    }
+    map['is_synced'] = Variable<bool>(isSynced);
+    map['product_id'] = Variable<String>(productId);
+    map['name'] = Variable<String>(name);
+    map['price_adjustment'] = Variable<double>(priceAdjustment);
+    map['is_active'] = Variable<bool>(isActive);
+    map['sort_order'] = Variable<int>(sortOrder);
+    return map;
+  }
+
+  ProductVariantsCompanion toCompanion(bool nullToAbsent) {
+    return ProductVariantsCompanion(
+      id: Value(id),
+      rowVersion: Value(rowVersion),
+      isDeleted: Value(isDeleted),
+      lastModifiedHlc: lastModifiedHlc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastModifiedHlc),
+      isSynced: Value(isSynced),
+      productId: Value(productId),
+      name: Value(name),
+      priceAdjustment: Value(priceAdjustment),
+      isActive: Value(isActive),
+      sortOrder: Value(sortOrder),
+    );
+  }
+
+  factory ProductVariantLocal.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProductVariantLocal(
+      id: serializer.fromJson<String>(json['id']),
+      rowVersion: serializer.fromJson<int>(json['rowVersion']),
+      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
+      lastModifiedHlc: serializer.fromJson<String?>(json['lastModifiedHlc']),
+      isSynced: serializer.fromJson<bool>(json['isSynced']),
+      productId: serializer.fromJson<String>(json['productId']),
+      name: serializer.fromJson<String>(json['name']),
+      priceAdjustment: serializer.fromJson<double>(json['priceAdjustment']),
+      isActive: serializer.fromJson<bool>(json['isActive']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'rowVersion': serializer.toJson<int>(rowVersion),
+      'isDeleted': serializer.toJson<bool>(isDeleted),
+      'lastModifiedHlc': serializer.toJson<String?>(lastModifiedHlc),
+      'isSynced': serializer.toJson<bool>(isSynced),
+      'productId': serializer.toJson<String>(productId),
+      'name': serializer.toJson<String>(name),
+      'priceAdjustment': serializer.toJson<double>(priceAdjustment),
+      'isActive': serializer.toJson<bool>(isActive),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+    };
+  }
+
+  ProductVariantLocal copyWith(
+          {String? id,
+          int? rowVersion,
+          bool? isDeleted,
+          Value<String?> lastModifiedHlc = const Value.absent(),
+          bool? isSynced,
+          String? productId,
+          String? name,
+          double? priceAdjustment,
+          bool? isActive,
+          int? sortOrder}) =>
+      ProductVariantLocal(
+        id: id ?? this.id,
+        rowVersion: rowVersion ?? this.rowVersion,
+        isDeleted: isDeleted ?? this.isDeleted,
+        lastModifiedHlc: lastModifiedHlc.present
+            ? lastModifiedHlc.value
+            : this.lastModifiedHlc,
+        isSynced: isSynced ?? this.isSynced,
+        productId: productId ?? this.productId,
+        name: name ?? this.name,
+        priceAdjustment: priceAdjustment ?? this.priceAdjustment,
+        isActive: isActive ?? this.isActive,
+        sortOrder: sortOrder ?? this.sortOrder,
+      );
+  ProductVariantLocal copyWithCompanion(ProductVariantsCompanion data) {
+    return ProductVariantLocal(
+      id: data.id.present ? data.id.value : this.id,
+      rowVersion:
+          data.rowVersion.present ? data.rowVersion.value : this.rowVersion,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      lastModifiedHlc: data.lastModifiedHlc.present
+          ? data.lastModifiedHlc.value
+          : this.lastModifiedHlc,
+      isSynced: data.isSynced.present ? data.isSynced.value : this.isSynced,
+      productId: data.productId.present ? data.productId.value : this.productId,
+      name: data.name.present ? data.name.value : this.name,
+      priceAdjustment: data.priceAdjustment.present
+          ? data.priceAdjustment.value
+          : this.priceAdjustment,
+      isActive: data.isActive.present ? data.isActive.value : this.isActive,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProductVariantLocal(')
+          ..write('id: $id, ')
+          ..write('rowVersion: $rowVersion, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('lastModifiedHlc: $lastModifiedHlc, ')
+          ..write('isSynced: $isSynced, ')
+          ..write('productId: $productId, ')
+          ..write('name: $name, ')
+          ..write('priceAdjustment: $priceAdjustment, ')
+          ..write('isActive: $isActive, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, rowVersion, isDeleted, lastModifiedHlc,
+      isSynced, productId, name, priceAdjustment, isActive, sortOrder);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProductVariantLocal &&
+          other.id == this.id &&
+          other.rowVersion == this.rowVersion &&
+          other.isDeleted == this.isDeleted &&
+          other.lastModifiedHlc == this.lastModifiedHlc &&
+          other.isSynced == this.isSynced &&
+          other.productId == this.productId &&
+          other.name == this.name &&
+          other.priceAdjustment == this.priceAdjustment &&
+          other.isActive == this.isActive &&
+          other.sortOrder == this.sortOrder);
+}
+
+class ProductVariantsCompanion extends UpdateCompanion<ProductVariantLocal> {
+  final Value<String> id;
+  final Value<int> rowVersion;
+  final Value<bool> isDeleted;
+  final Value<String?> lastModifiedHlc;
+  final Value<bool> isSynced;
+  final Value<String> productId;
+  final Value<String> name;
+  final Value<double> priceAdjustment;
+  final Value<bool> isActive;
+  final Value<int> sortOrder;
+  final Value<int> rowid;
+  const ProductVariantsCompanion({
+    this.id = const Value.absent(),
+    this.rowVersion = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.lastModifiedHlc = const Value.absent(),
+    this.isSynced = const Value.absent(),
+    this.productId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.priceAdjustment = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProductVariantsCompanion.insert({
+    required String id,
+    this.rowVersion = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.lastModifiedHlc = const Value.absent(),
+    this.isSynced = const Value.absent(),
+    required String productId,
+    required String name,
+    this.priceAdjustment = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : id = Value(id),
+        productId = Value(productId),
+        name = Value(name);
+  static Insertable<ProductVariantLocal> custom({
+    Expression<String>? id,
+    Expression<int>? rowVersion,
+    Expression<bool>? isDeleted,
+    Expression<String>? lastModifiedHlc,
+    Expression<bool>? isSynced,
+    Expression<String>? productId,
+    Expression<String>? name,
+    Expression<double>? priceAdjustment,
+    Expression<bool>? isActive,
+    Expression<int>? sortOrder,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (rowVersion != null) 'row_version': rowVersion,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (lastModifiedHlc != null) 'last_modified_hlc': lastModifiedHlc,
+      if (isSynced != null) 'is_synced': isSynced,
+      if (productId != null) 'product_id': productId,
+      if (name != null) 'name': name,
+      if (priceAdjustment != null) 'price_adjustment': priceAdjustment,
+      if (isActive != null) 'is_active': isActive,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProductVariantsCompanion copyWith(
+      {Value<String>? id,
+      Value<int>? rowVersion,
+      Value<bool>? isDeleted,
+      Value<String?>? lastModifiedHlc,
+      Value<bool>? isSynced,
+      Value<String>? productId,
+      Value<String>? name,
+      Value<double>? priceAdjustment,
+      Value<bool>? isActive,
+      Value<int>? sortOrder,
+      Value<int>? rowid}) {
+    return ProductVariantsCompanion(
+      id: id ?? this.id,
+      rowVersion: rowVersion ?? this.rowVersion,
+      isDeleted: isDeleted ?? this.isDeleted,
+      lastModifiedHlc: lastModifiedHlc ?? this.lastModifiedHlc,
+      isSynced: isSynced ?? this.isSynced,
+      productId: productId ?? this.productId,
+      name: name ?? this.name,
+      priceAdjustment: priceAdjustment ?? this.priceAdjustment,
+      isActive: isActive ?? this.isActive,
+      sortOrder: sortOrder ?? this.sortOrder,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (rowVersion.present) {
+      map['row_version'] = Variable<int>(rowVersion.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<bool>(isDeleted.value);
+    }
+    if (lastModifiedHlc.present) {
+      map['last_modified_hlc'] = Variable<String>(lastModifiedHlc.value);
+    }
+    if (isSynced.present) {
+      map['is_synced'] = Variable<bool>(isSynced.value);
+    }
+    if (productId.present) {
+      map['product_id'] = Variable<String>(productId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (priceAdjustment.present) {
+      map['price_adjustment'] = Variable<double>(priceAdjustment.value);
+    }
+    if (isActive.present) {
+      map['is_active'] = Variable<bool>(isActive.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProductVariantsCompanion(')
+          ..write('id: $id, ')
+          ..write('rowVersion: $rowVersion, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('lastModifiedHlc: $lastModifiedHlc, ')
+          ..write('isSynced: $isSynced, ')
+          ..write('productId: $productId, ')
+          ..write('name: $name, ')
+          ..write('priceAdjustment: $priceAdjustment, ')
+          ..write('isActive: $isActive, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $OrdersTable extends Orders with TableInfo<$OrdersTable, OrderLocal> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -6803,6 +7323,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $ProductsTable products = $ProductsTable(this);
+  late final $ProductVariantsTable productVariants =
+      $ProductVariantsTable(this);
   late final $OrdersTable orders = $OrdersTable(this);
   late final $OrderItemsTable orderItems = $OrderItemsTable(this);
   late final $PaymentsTable payments = $PaymentsTable(this);
@@ -6819,6 +7341,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
         products,
+        productVariants,
         orders,
         orderItems,
         payments,
@@ -7210,6 +7733,259 @@ typedef $$ProductsTableProcessedTableManager = ProcessedTableManager<
     $$ProductsTableUpdateCompanionBuilder,
     (ProductLocal, BaseReferences<_$AppDatabase, $ProductsTable, ProductLocal>),
     ProductLocal,
+    PrefetchHooks Function()>;
+typedef $$ProductVariantsTableCreateCompanionBuilder = ProductVariantsCompanion
+    Function({
+  required String id,
+  Value<int> rowVersion,
+  Value<bool> isDeleted,
+  Value<String?> lastModifiedHlc,
+  Value<bool> isSynced,
+  required String productId,
+  required String name,
+  Value<double> priceAdjustment,
+  Value<bool> isActive,
+  Value<int> sortOrder,
+  Value<int> rowid,
+});
+typedef $$ProductVariantsTableUpdateCompanionBuilder = ProductVariantsCompanion
+    Function({
+  Value<String> id,
+  Value<int> rowVersion,
+  Value<bool> isDeleted,
+  Value<String?> lastModifiedHlc,
+  Value<bool> isSynced,
+  Value<String> productId,
+  Value<String> name,
+  Value<double> priceAdjustment,
+  Value<bool> isActive,
+  Value<int> sortOrder,
+  Value<int> rowid,
+});
+
+class $$ProductVariantsTableFilterComposer
+    extends Composer<_$AppDatabase, $ProductVariantsTable> {
+  $$ProductVariantsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get rowVersion => $composableBuilder(
+      column: $table.rowVersion, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isDeleted => $composableBuilder(
+      column: $table.isDeleted, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get lastModifiedHlc => $composableBuilder(
+      column: $table.lastModifiedHlc,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isSynced => $composableBuilder(
+      column: $table.isSynced, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get productId => $composableBuilder(
+      column: $table.productId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get priceAdjustment => $composableBuilder(
+      column: $table.priceAdjustment,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isActive => $composableBuilder(
+      column: $table.isActive, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+      column: $table.sortOrder, builder: (column) => ColumnFilters(column));
+}
+
+class $$ProductVariantsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ProductVariantsTable> {
+  $$ProductVariantsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get rowVersion => $composableBuilder(
+      column: $table.rowVersion, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isDeleted => $composableBuilder(
+      column: $table.isDeleted, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get lastModifiedHlc => $composableBuilder(
+      column: $table.lastModifiedHlc,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isSynced => $composableBuilder(
+      column: $table.isSynced, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get productId => $composableBuilder(
+      column: $table.productId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get priceAdjustment => $composableBuilder(
+      column: $table.priceAdjustment,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isActive => $composableBuilder(
+      column: $table.isActive, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+      column: $table.sortOrder, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ProductVariantsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ProductVariantsTable> {
+  $$ProductVariantsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get rowVersion => $composableBuilder(
+      column: $table.rowVersion, builder: (column) => column);
+
+  GeneratedColumn<bool> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<String> get lastModifiedHlc => $composableBuilder(
+      column: $table.lastModifiedHlc, builder: (column) => column);
+
+  GeneratedColumn<bool> get isSynced =>
+      $composableBuilder(column: $table.isSynced, builder: (column) => column);
+
+  GeneratedColumn<String> get productId =>
+      $composableBuilder(column: $table.productId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<double> get priceAdjustment => $composableBuilder(
+      column: $table.priceAdjustment, builder: (column) => column);
+
+  GeneratedColumn<bool> get isActive =>
+      $composableBuilder(column: $table.isActive, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+}
+
+class $$ProductVariantsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ProductVariantsTable,
+    ProductVariantLocal,
+    $$ProductVariantsTableFilterComposer,
+    $$ProductVariantsTableOrderingComposer,
+    $$ProductVariantsTableAnnotationComposer,
+    $$ProductVariantsTableCreateCompanionBuilder,
+    $$ProductVariantsTableUpdateCompanionBuilder,
+    (
+      ProductVariantLocal,
+      BaseReferences<_$AppDatabase, $ProductVariantsTable, ProductVariantLocal>
+    ),
+    ProductVariantLocal,
+    PrefetchHooks Function()> {
+  $$ProductVariantsTableTableManager(
+      _$AppDatabase db, $ProductVariantsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProductVariantsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProductVariantsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProductVariantsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<int> rowVersion = const Value.absent(),
+            Value<bool> isDeleted = const Value.absent(),
+            Value<String?> lastModifiedHlc = const Value.absent(),
+            Value<bool> isSynced = const Value.absent(),
+            Value<String> productId = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<double> priceAdjustment = const Value.absent(),
+            Value<bool> isActive = const Value.absent(),
+            Value<int> sortOrder = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProductVariantsCompanion(
+            id: id,
+            rowVersion: rowVersion,
+            isDeleted: isDeleted,
+            lastModifiedHlc: lastModifiedHlc,
+            isSynced: isSynced,
+            productId: productId,
+            name: name,
+            priceAdjustment: priceAdjustment,
+            isActive: isActive,
+            sortOrder: sortOrder,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            Value<int> rowVersion = const Value.absent(),
+            Value<bool> isDeleted = const Value.absent(),
+            Value<String?> lastModifiedHlc = const Value.absent(),
+            Value<bool> isSynced = const Value.absent(),
+            required String productId,
+            required String name,
+            Value<double> priceAdjustment = const Value.absent(),
+            Value<bool> isActive = const Value.absent(),
+            Value<int> sortOrder = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProductVariantsCompanion.insert(
+            id: id,
+            rowVersion: rowVersion,
+            isDeleted: isDeleted,
+            lastModifiedHlc: lastModifiedHlc,
+            isSynced: isSynced,
+            productId: productId,
+            name: name,
+            priceAdjustment: priceAdjustment,
+            isActive: isActive,
+            sortOrder: sortOrder,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ProductVariantsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ProductVariantsTable,
+    ProductVariantLocal,
+    $$ProductVariantsTableFilterComposer,
+    $$ProductVariantsTableOrderingComposer,
+    $$ProductVariantsTableAnnotationComposer,
+    $$ProductVariantsTableCreateCompanionBuilder,
+    $$ProductVariantsTableUpdateCompanionBuilder,
+    (
+      ProductVariantLocal,
+      BaseReferences<_$AppDatabase, $ProductVariantsTable, ProductVariantLocal>
+    ),
+    ProductVariantLocal,
     PrefetchHooks Function()>;
 typedef $$OrdersTableCreateCompanionBuilder = OrdersCompanion Function({
   required String id,
@@ -9889,6 +10665,8 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$ProductsTableTableManager get products =>
       $$ProductsTableTableManager(_db, _db.products);
+  $$ProductVariantsTableTableManager get productVariants =>
+      $$ProductVariantsTableTableManager(_db, _db.productVariants);
   $$OrdersTableTableManager get orders =>
       $$OrdersTableTableManager(_db, _db.orders);
   $$OrderItemsTableTableManager get orderItems =>
