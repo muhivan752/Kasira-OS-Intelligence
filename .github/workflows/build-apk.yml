@@ -157,18 +157,25 @@ jobs:
           paket = [c['client_info']['android_client_info']['package_name'] for c in d['client']]
           print('project:', d['project_info']['project_id'])
           print('paket terdaftar:', paket)
-          butuh = ['com.selaris.pos', 'com.selaris.dapur']
-          kurang = [x for x in butuh if x not in paket]
+          # Dicek PER APP, bukan semua-atau-tidak: kalau Dapur belum didaftarkan
+          # di Firebase, POS tetap dapat push. Versi pertama aturan ini minta
+          # kedua paket sekaligus, dan satu yang kurang bikin DUA-DUANYA
+          # kehilangan push tanpa alasan.
           out = os.environ['GITHUB_OUTPUT']
-          if kurang:
-              print(f'::warning::google-services.json belum punya {kurang}. '
+          ada_pos = 'com.selaris.pos' in paket
+          ada_dapur = 'com.selaris.dapur' in paket
+          if not ada_pos:
+              print('::warning::google-services.json belum punya com.selaris.pos. '
                     'Tambahkan app Android itu di Firebase Console, unduh ulang '
-                    'google-services.json, perbarui secret GOOGLE_SERVICES_JSON. '
+                    'berkasnya, perbarui secret GOOGLE_SERVICES_JSON. '
                     'Build ini jalan TANPA notifikasi push.')
               os.remove('android/app/google-services.json')
-              open(out, 'a').write('ada=false\n')
+              open(out, 'a').write('ada=false\ndapur=false\n')
           else:
-              open(out, 'a').write('ada=true\n')
+              if not ada_dapur:
+                  print('::warning::com.selaris.dapur belum terdaftar di Firebase. '
+                        'APK POS dapat push, APK Dapur dibangun tanpa push.')
+              open(out, 'a').write(f'ada=true\ndapur={str(ada_dapur).lower()}\n')
           PY
         working-directory: kasir_app
 
@@ -325,6 +332,16 @@ jobs:
       - name: Build Dapur (APK + AAB)
         run: |
           VERSION="${{ github.event.inputs.version }}"
+          # Plugin google-services MEMATIKAN build kalau applicationId-nya nggak
+          # ada di google-services.json. Jadi kalau Dapur belum didaftarkan,
+          # Firebase dicopot khusus build ini: APK tetap jadi, push-nya saja
+          # yang mati (`Firebase.initializeApp()` dilempar, ditangkap PushService).
+          # Dapur dibangun TERAKHIR, jadi nggak perlu dipasang balik.
+          if [ "${{ steps.firebase.outputs.ada }}" = "true" ] && [ "${{ steps.firebase.outputs.dapur }}" != "true" ]; then
+            echo "::warning::Dapur dibangun tanpa Firebase (paket belum terdaftar)."
+            rm -f android/app/google-services.json
+            sed -i '/com.google.gms.google-services/d' android/app/build.gradle.kts
+          fi
           sed -i 's/^\( *applicationId = \).*/\1"com.selaris.dapur"/' android/app/build.gradle.kts
           # Nama yang kelihatan di layar HP. POS dan Dapur sekarang bisa
           # kepasang barengan di satu tablet, jadi dua-duanya nggak boleh

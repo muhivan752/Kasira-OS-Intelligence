@@ -19,7 +19,7 @@ from nacl import encoding, public
 path = sys.argv[1]
 d = json.load(open(path))
 paket = [c['client_info']['android_client_info']['package_name'] for c in d['client']]
-butuh = ['com.selaris.pos', 'com.selaris.dapur']
+butuh = ["com.selaris.pos"]
 kurang = [x for x in butuh if x not in paket]
 print("project :", d['project_info']['project_id'])
 print("paket   :", paket)
@@ -27,7 +27,11 @@ if kurang:
     print(f"\nBERHENTI: paket {kurang} belum ada di berkas ini.")
     print("Tambahkan app Android itu di Firebase Console dulu, unduh ulang berkasnya.")
     sys.exit(1)
-print("dua paket lengkap\n")
+if 'com.selaris.dapur' not in paket:
+    print("CATATAN: com.selaris.dapur belum terdaftar. APK Dapur bakal dibangun")
+    print("         tanpa notifikasi push. POS tetap dapat push.\n")
+else:
+    print("dua paket lengkap\n")
 
 tok = open('/home/linuxuser/.git-credentials').read().split(':')[2].split('@')[0]
 repo = "muhivan752/Kasira-OS-Intelligence"
