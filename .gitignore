@@ -27,3 +27,11 @@ kasir_app/build/
 
 # TypeScript incremental build info
 tsconfig.tsbuildinfo
+
+# Android dibikin ulang `flutter create` tiap build (lihat workflow build-apk).
+# Folder ini SENGAJA nggak dilacak. Lebih penting lagi: waktu build lokal dia
+# berisi upload-keystore.jks + key.properties yang ada password rilisnya.
+kasir_app/android/
+*.jks
+*.keystore
+key.properties
