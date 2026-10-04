@@ -4,7 +4,55 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
-## HANDOFF TERAKHIR — revisi chat biasa, live 4 Oktober 2026
+## HANDOFF TERAKHIR — estimasi langsung melengkapi HPP, live 4 Oktober 2026
+
+- Ivan meminta estimasi tetapi masih bingung. Baca read-only sesi terbaru:
+  permintaan estimasi dalam chat tidak mengubah mode Manual, model bilang siap
+  padahal harga baru kosong dan minyak estimasi ml tidak cocok bahan toko kg.
+  Source **a36c9ca** sudah live; tidak menjalankan/mutasi sesi asli otomatis.
+- Web baru default Estimasi. Server conversation_mode mengenali permintaan
+  langsung; session.mode efektif berubah, turn.mode tetap mode payload asli
+  supaya duplicate-ID check dan retry dari request awal konsisten. Manual tetap
+  memblokir tebakan dan negasi estimasi dihormati. Bukan classifier LLM.
+- Estimasi langsung susun bahan/takaran/porsi/harga/jumlah beli dari nama menu.
+  Takaran perkiraan mengikuti keluarga satuan bahan toko, bukan konversi massa-
+  volume. Angka/kutipan nyata, bahan yang dihapus dan cost toko dipertahankan.
+- generate melakukan prepare, lalu satu completion feedback jika estimate masih
+  incomplete. Maksimal dua provider call total dengan schema repair, output
+  8192/16384 unchanged. Usage input/output akumulatif. Backend re-read harga tetap.
+  reply_for_preview dipanggil lagi worker: incomplete tidak mengaku siap dan
+  pembahasan angka uang dari model diganti ajakan Lihat resep. Tidak math di LLM.
+- Lengkapi estimasi di kartu incomplete mengirim pesan bantuan mode estimate;
+  disabled pending/busy/unsent. Guard URL idle+href berubah, typed correction
+  retry, human approval dan atomic transaction dipertahankan. Old replies unchanged.
+- Build/TypeScript final image
+  `sha256:cd6bd24f7fdf016663fd97de6e17aa42808a2a4ad9880e05865ef676f4dc1017`,
+  live frontend Created2026-10-04T17:19:10Z; image sama QA. Backend dua file
+  `services/hpp_setup_service.py` dan `api/routes/hpp_setup.py` docker cp/restart
+  existing setelah active_hpp_jobs=0. Backup `/tmp/selaris-hpp-estimate-backup`.
+  Jangan recreate backend. Migration112/APK1.6.31+198 unchanged, layanan healthy.
+- QA: math18/500 oracle dan fake provider completion/usage/financial reply guard;
+  PG RLS non-superuser/schema-only, explicit estimate/raw replay/manual rejection,
+  longchat/concurrent/atomic rollback/POS/cancel/storefront/HTTP202 worker PASS.
+  Browser chat lima lebar dua tema/AA44/200%/short/keyboard/retry/409/500 dan
+  assistance incomplete320 dua tema PASS. Tidak mengubah CSS global task ini.
+- Provider nyata empat fixture lama PASS; fixture sintetis replay harga kosong,
+  oil kg-versus-ml estimates, reuse cost, human correction dan single-menu ready
+  PASS. Auto-review menolak replay original conversation+shop context ke provider,
+  tidak dieksekusi; alternatif tanpa DB/merchant payload selesai. Jangan mencoba
+  replay data merchant tanpa authorization untuk ekspor tersebut.
+- Review/gate `docs/HPP_CONVERSATION_REVIEW.md`; test provider sintetis tersimpan
+  `tests/hpp-estimate-provider.py`, modul QA dipasang ke /tmp sesuai header loader.
+  Log `/tmp/selaris-hpp-estimate-*`. Smoke HTTPS actual baca saja, tidak message/
+  approve/write harga/resep/stok/mode/pesanan toko.
+- Smoke HTTPS awal segera sesudah deploy sekali lagi mencatat React418 pada
+  chat. Diagnostic ulang enam kombinasi ukuran/tema + history/form/entry PASS
+  tanpa error; cache dokumen CF DYNAMIC. Penyebab belum teridentifikasi, jangan
+  mengklaim hydration sudah diperbaiki. Source chat baru/fill ditest fixture
+  seluruhnya tanpa pageerror. Bila berulang di penggunaan nyata, simpan fase
+  document/theme/history/form-return untuk melokalisasi, bukan menonaktifkan guard.
+
+## ARSIP — revisi chat biasa, live 4 Oktober 2026
 
 - Permintaan Ivan: percakapan jangan textbook, seperti chat biasa. Source
   **cdcc2ec** live, satu kolom dengan user bubble kanan, asisten kiri dan composer

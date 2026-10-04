@@ -41,6 +41,12 @@ kosong dan takaran minyak berbeda keluarga satuan dengan bahan toko.
 - Image frontend final revisi estimasi:
   `sha256:cd6bd24f7fdf016663fd97de6e17aa42808a2a4ad9880e05865ef676f4dc1017`.
   Catatan deployment/latest source ada di MEMORY.md dan SESSION.md.
+- Source `a36c9ca` terpasang, frontend Created2026-10-04T17:19:10Z; empat layanan
+  healthy. Migration112 dan APK unchanged. Provider sintetis regresi tersimpan
+  di `tests/hpp-estimate-provider.py` tanpa akses database/merchant payload.
+- Smoke HTTPS actual tiga lebar kedua tema/default/riwayat/form/entry lolos pada
+  diagnostic ulang tanpa write merchant. Smoke awal sempat React418 lagi;
+  penyebab belum teridentifikasi dan tidak diklaim telah diperbaiki.
 
 ## Perubahan UI awal
 

@@ -1,7 +1,45 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## TERKINI — HPP SEPERTI CHAT BIASA, LIVE 2026-10-04
+## TERKINI — ESTIMASI HPP LANGSUNG DILENGKAPI, LIVE 2026-10-04
+
+- Ivan bingung karena sudah meminta estimasi dalam chat tetapi sesi masih Manual;
+  AI mengatakan siap meski harga kosong dan satuan bahan mismatch. Source
+  **a36c9ca** sudah live. Chat web baru default Estimasi; Manual tetap tersedia.
+  Permintaan langsung "bantu estimasikan" mengubah session.mode efektif server.
+  Turn.mode tetap mode payload asli agar UUID retry/replay tidak berubah identitas.
+  Negasi/pertanyaan/kutipan tidak diperlakukan sebagai consent estimasi bebas.
+- Prompt Estimasi harus langsung mengisi bahan/takaran/porsi serta harga/jumlah
+  beli perkiraan dari nama menu; tidak mewawancarai harga tiap bahan. Angka nyata,
+  kutipan, larangan bahan dan biaya existing tetap. Backend tidak mengonversi
+  massa-volume; AI boleh mengusulkan takaran ESTIMASI dalam satuan toko.
+- Backend prepare memeriksa draft; bila estimate incomplete dengan nama menu,
+  satu call pelengkapan dengan missing aktual dalam budget kedua yang sudah ada.
+  Tetap maksimum dua call termasuk schema repair; usage kedua dijumlahkan.
+  Balasan incomplete tidak boleh mengaku siap. Reply model berisi pembahasan
+  uang/hitungan finansial diganti ajakan review; HPP hanya angka backend di kartu.
+- Draft lama punya tombol **Lengkapi estimasi**; klik mengirim permintaan bantuan
+  mode estimate, disabled saat pending/busy atau ada teks belum terkirim. Jangan
+  menjalankan ulang percakapan asli atau menyimpan tabel operasional otomatis.
+  Human approval/revision/fingerprint/transaction, rumus Decimal dan stok tetap.
+- Backend deploy dua file service+route via docker cp lalu restart container
+  existing setelah active_hpp_jobs=0. Jangan recreate backend. Backup
+  `/tmp/selaris-hpp-estimate-backup`. Migration112/APK1.6.31+198 tetap.
+- Frontend final/live
+  `sha256:cd6bd24f7fdf016663fd97de6e17aa42808a2a4ad9880e05865ef676f4dc1017`,
+  Created2026-10-04T17:19:10Z. Empat layanan healthy, compose frontend --no-deps.
+- QA math/protocol18/500oracle; PG QA RLS, mode efektif/replay asli/kembali Manual,
+  atomic approval/rollback/POS/stock/HTTP202; browser chat/default/bantuan/HP kedua
+  tema/keyboard/200%/409/500/retry; provider synthetic missing prices/oil units/
+  exact correction/single-menu dan empat kasus lama PASS. Auto-review menolak
+  replay payload merchant ke provider; tidak dilakukan, diganti fixture tanpa DB.
+  Test regresi provider `tests/hpp-estimate-provider.py`, review/gate
+  `docs/HPP_CONVERSATION_REVIEW.md`. Source history baru tidak mengubah balasan lama.
+- Smoke HTTPS tiga lebar/kedua tema/default/riwayat/refresh/form/entry PASS pada
+  diagnostic ulang. React418 sempat muncul sekali saat smoke awal sesudah deploy;
+  penyebab masih belum teridentifikasi. Detail dan monitoring di SESSION.md.
+
+## ARSIP — HPP SEPERTI CHAT BIASA, 2026-10-04
 
 - Ivan melihat flow awal terlalu textbook dan meminta chat biasa yang modern.
   Revisi source **cdcc2ec** sudah live. UI satu kolom: pesan pengguna kanan,
