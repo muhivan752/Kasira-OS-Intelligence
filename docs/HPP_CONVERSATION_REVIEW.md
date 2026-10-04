@@ -40,6 +40,11 @@ tanpa nama menu tertimpa "Mau bikin menu apa?", meskipun context toko sudah diki
   Tidak membuka database atau mengekspor cerita/katalog merchant untuk QA provider.
 - Image yang diuji: `sha256:7fa2f9a2d721a8230038fd894bda2bdc6105379ae1a9f554073b26e1d6da17fe`.
   Handoff/deployment aktual dicatat di MEMORY.md dan SESSION.md. Migration112/APK tetap.
+- Source `3909d09` live, frontend Created2026-10-04T18:07:10.130566704Z dan empat
+  layanan healthy. Ketiga module backend cocok source hash. Smoke HTTPS aktual
+  tiga lebar/dua tema/navigasi PASS tanpa pageerror atau write data operasional.
+  React418 dari deployment sebelumnya belum diketahui penyebabnya; tidak muncul
+  pada smoke kali ini. Backup dan bukti `/tmp/selaris-hpp-context-*`.
 
 ## Revisi estimasi setelah tes pengguna
 

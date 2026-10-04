@@ -1,7 +1,44 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## TERKINI — ESTIMASI HPP LANGSUNG DILENGKAPI, LIVE 2026-10-04
+## TERKINI — ASISTEN RESEP/Bahan MEMBACA KATALOG, LIVE 2026-10-04
+
+- Ivan meminta chat lebih fleksibel: bisa bertanya bahan/resep yang sudah ada,
+  termasuk toko kosong. Read-only sesi terakhir menunjukkan balasan pertanyaan
+  tertimpa "Mau bikin menu apa?": semua output dipaksa melalui pemeriksaan draft.
+  Source **3909d09** live; tidak replay atau mengubah sesi asli secara otomatis.
+- ModelReply membedakan action=answer (draft=null, lookup opsional) dari edit_recipe.
+  Lookup enam jenis: overview, ingredients, recipes, missing_recipes,
+  recipe_details, ingredient_usage. Backend `services/hpp_catalog.py` mengambil
+  nama/jumlah/takaran/biaya aktual dari context brand dengan RLS. Biaya memakai
+  Decimal/shared helper resep; optional/archived/nonpositif tidak dihitung. Unit
+  invalid tidak menghasilkan angka tebakan. Menu bukan selalu resep aktif.
+- Katalog model yang dipadatkan menyertakan total dan jumlah item input; lookup
+  tetap memakai seluruh context backend. Pertanyaan tidak menjalankan estimate
+  completion atau mengganti draft, preview, revision, fingerprint dan mode.
+  Turn.usage.previous_mode menyimpan mode sebelum request untuk worker/retry;
+  turn.mode tetap payload asli. Re-read katalog sesudah network call dipertahankan.
+- Chat tetap terbuka setelah approve. Pertanyaan bisa dilanjutkan; edit proposal
+  di applied diabaikan dan diarahkan ke Resep baru. Welcome menyebut cek bahan
+  dan membuat resep. Approval manusia, rumus, stok dan default Estimasi tetap.
+- QA PASS: katalog4 termasuk 700 item/input compaction; math18/500oracle;
+  PG non-superuser RLS, toko tenant lain kosong, pertanyaan/replay/current/applied,
+  lanjut estimasi/repeat approval/no operational writes/rollback/POS/HTTP202;
+  chat browser lima lebar/dua tema/AA/44px/fokus/200% dan chat setelah approve.
+  Provider enam pertanyaan katalog+bantuan umum serta empat regresi lama dan
+  synthetic estimate/correction PASS. Provider QA hanya fixture sintetis tanpa DB,
+  tidak ekspor percakapan/catalog merchant. Review `docs/HPP_CONVERSATION_REVIEW.md`.
+- Deploy tiga file backend via docker cp lalu restart existing saat active_hpp_jobs=0;
+  backup `/tmp/selaris-hpp-context-backup`. JANGAN recreate backend karena hotfix
+  sebelumnya masih di container. Migration112/APK1.6.31+198 unchanged.
+- Frontend live image
+  `sha256:7fa2f9a2d721a8230038fd894bda2bdc6105379ae1a9f554073b26e1d6da17fe`,
+  Created2026-10-04T18:07:10.130566704Z. Compose --no-deps frontend, kedua mount
+  APK terjaga, empat layanan healthy. HTTPS actual tiga lebar/dua tema/navigasi
+  PASS tanpa write bahan/resep/stok atau pageerror. Catatan React418 sebelumnya
+  tetap belum teridentifikasi; tidak muncul pada smoke deployment kali ini.
+
+## ARSIP — ESTIMASI HPP LANGSUNG DILENGKAPI, LIVE 2026-10-04
 
 - Ivan bingung karena sudah meminta estimasi dalam chat tetapi sesi masih Manual;
   AI mengatakan siap meski harga kosong dan satuan bahan mismatch. Source

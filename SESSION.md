@@ -4,7 +4,43 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
-## HANDOFF TERAKHIR — estimasi langsung melengkapi HPP, live 4 Oktober 2026
+## HANDOFF TERAKHIR — asisten bahan dan resep toko, live 4 Oktober 2026
+
+- Source **3909d09** live. Ivan menguji pertanyaan katalog, tetapi balasannya
+  tertimpa normalizer draft kosong. Model sekarang answer/lookup/edit_recipe;
+  `services/hpp_catalog.py` menjawab enam jenis pertanyaan dari data aktual.
+  Jangan paksa pertanyaan ke prepare/reply_for_preview atau membuat resep baru.
+- Lookup membaca full context tenant/brand terbaru. Nama/count/biaya dari backend;
+  ringkasan model lengkap meski input katalog dipadatkan. HPP shared Decimal helper,
+  quantity/unit canonical stored, optional/archived/nonpositif dikecualikan.
+  Pertanyaan tidak mutasi draft/preview/revision/fingerprint/result. previous_mode
+  di turn.usage memulihkan mode saat answer, turn.mode menjaga retry identity.
+- Composer tetap tersedia setelah applied. Jawaban katalog diperbolehkan, proposal
+  edit applied diabaikan dengan ajakan Resep baru; repeat approval idempotent.
+  Welcome menyebut cek bahan dan membuat resep. Manual/default Estimasi tetap,
+  human approval, durable worker, token budget dan rumus lama unchanged.
+- QA PASS: build/TypeScript, katalog4 (700-item compaction), math18/500 oracle;
+  PG RLS non-superuser+empty other tenant, question/replay/current/applied,
+  continue estimate/repeat approve/no operational writes, atomic/POS/stock/HTTP202;
+  browser chat lima lebar/dua tema/AA/44px/fokus/200%/applied question.
+  Provider6 lookup+general help, provider4 legacy, synthetic estimate/correction
+  PASS. Semua provider memakai fixture tanpa akses DB/merchant export.
+  Tests `hpp-catalog.py`, `hpp-assistant-provider.py`; review/gate diperbarui.
+- Frontend image `sha256:7fa2f9a2d721a8230038fd894bda2bdc6105379ae1a9f554073b26e1d6da17fe`,
+  Created2026-10-04T18:07:10.130566704Z; compose frontend --no-deps preserves APK mounts.
+  Backend existing restart, tiga module source hashes cocok: catalog/service/route.
+  Backup `/tmp/selaris-hpp-context-backup`; active_hpp_jobs=0 sebelum restart.
+  Jangan recreate backend. Migration112/APK1.6.31+198 unchanged, empat healthy.
+- HTTPS actual demo PASS endpoint200/navigasi form/history/Bahan Baku/320,768,1440
+  kedua tema/no overflow/no pageerror, tidak mengirim AI story atau write merchant.
+  `/tmp/selaris-hpp-context-*.log` menyimpan bukti QA/deploy. React418 lama tetap
+  belum teridentifikasi, tidak muncul pada smoke kali ini; kumpulkan fase/URL
+  jika muncul lagi, jangan klaim fixed atau menghapus guards tanpa bukti.
+- Cleanup container/network QA dan temp module QA backend dilakukan setelah smoke;
+  preview/screens/logs/backup bukan data operasional. Origin backend hotfix lama
+  tetap, source sudah disimpan dan pushed. Catatan Oktober terbaru adalah acuan.
+
+## ARSIP — estimasi langsung melengkapi HPP, live 4 Oktober 2026
 
 - Ivan meminta estimasi tetapi masih bingung. Baca read-only sesi terbaru:
   permintaan estimasi dalam chat tidak mengubah mode Manual, model bilang siap
