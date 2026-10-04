@@ -153,18 +153,20 @@ export default function DashboardPage() {
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-default)" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)' }} />
                 <YAxis 
                   axisLine={false} 
                   tickLine={false} 
+                  tick={{ fill: 'var(--text-muted)' }}
                   tickFormatter={(value) => `Rp${value / 1000}k`}
                 />
                 <Tooltip 
                   formatter={(value: any) => [formatCurrency(Number(value)), 'Pendapatan']}
-                  cursor={{ fill: '#f3f4f6' }}
+                  cursor={{ fill: 'var(--surface-sunken)' }}
+                  contentStyle={{ background: 'var(--surface-card)', color: 'var(--text-body)', borderColor: 'var(--border-default)', borderRadius: 10 }}
                 />
-                <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="revenue" fill="var(--brand-fill)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -1,55 +1,54 @@
 @import "tailwindcss";
 
 /* ============================================================
-   KASIRA DESIGN SYSTEM — "Aurora" (redesign 2026-07)
+   SELARIS DESIGN SYSTEM — Sefrekuensi palette (2026-10)
    Single source of truth. Every web surface (login, register,
-   landing, dashboard) consumes these tokens. Ported faithfully
-   from the Kasira F&B Redesign design-component.
-   Palette: pink → violet → coral → mint. Light default + dark.
+   landing, dashboard) consumes these tokens. Legacy color names
+   remain aliases for compatibility. Warm neutrals and coral.
    Apply dark via <html class="dark"> or [data-theme="dark"].
    ============================================================ */
 
 :root {
   /* ---- Raw palette ---- */
   --neutral-0:   #FFFFFF;
-  --neutral-50:  #FCF7FB;
-  --neutral-100: #F6EEF4;
-  --neutral-200: #ECE0EA;
-  --neutral-300: #DCCBD8;
-  --neutral-400: #BCA8B8;
-  --neutral-500: #927E8F;
-  --neutral-600: #6B596A;
-  --neutral-700: #4C3E4F;
-  --neutral-800: #2E2436;
-  --neutral-900: #1C1426;
-  --neutral-950: #120B19;
+  --neutral-50:  #F7F5F2;
+  --neutral-100: #F0EDE8;
+  --neutral-200: #DCD5CE;
+  --neutral-300: #D0C8BF;
+  --neutral-400: #B0A79D;
+  --neutral-500: #68605B;
+  --neutral-600: #68605B;
+  --neutral-700: #4C4843;
+  --neutral-800: #303135;
+  --neutral-900: #282725;
+  --neutral-950: #121212;
 
-  --pink-50:  #FFF0F6;
-  --pink-100: #FFE0EC;
-  --pink-200: #FFB8D2;
-  --pink-300: #FF8AB6;
-  --pink-400: #FF5C97;
-  --pink-500: #FF2E7E;
-  --pink-600: #ED1268;
-  --pink-700: #C70A55;
-  --pink-800: #9E0944;
-  --pink-900: #7A0B38;
+  --pink-50:  #F7F5F2;
+  --pink-100: #F3E2DA;
+  --pink-200: #D7B3A5;
+  --pink-300: #B47A67;
+  --pink-400: #99503B;
+  --pink-500: #914C38;
+  --pink-600: #703A2A;
+  --pink-700: #703A2A;
+  --pink-800: #593023;
+  --pink-900: #30241F;
 
-  --violet-50:  #F4EEFE;
-  --violet-100: #E9DEFD;
-  --violet-200: #D0BAFB;
-  --violet-300: #B492F6;
-  --violet-400: #9966EF;
-  --violet-500: #7C3AED;
-  --violet-600: #6A28D9;
-  --violet-700: #561FB5;
-  --violet-800: #441A8E;
-  --violet-900: #34176C;
+  --violet-50:  var(--pink-50);
+  --violet-100: var(--pink-100);
+  --violet-200: var(--pink-200);
+  --violet-300: var(--pink-300);
+  --violet-400: var(--pink-400);
+  --violet-500: var(--pink-500);
+  --violet-600: var(--pink-600);
+  --violet-700: var(--pink-700);
+  --violet-800: var(--pink-800);
+  --violet-900: var(--pink-900);
 
-  --coral-300: #FFB59B;
-  --coral-400: #FF9466;
-  --coral-500: #FF7A4D;
-  --coral-600: #F2602F;
+  --coral-300: #F0C6B7;
+  --coral-400: #E5A08C;
+  --coral-500: #E5A08C;
+  --coral-600: #914C38;
 
   --mint-300: #7DF5CE;
   --mint-400: #3DF0B5;
@@ -65,11 +64,11 @@
   --red-600:   #E23030;
 
   /* ---- Gradients ---- */
-  --gradient-frekuensi: linear-gradient(120deg, var(--pink-500) 0%, var(--violet-500) 100%);
-  --gradient-frekuensi-soft: linear-gradient(120deg, var(--pink-400) 0%, var(--violet-400) 100%);
-  --gradient-hangat: linear-gradient(120deg, var(--coral-400) 0%, var(--pink-500) 60%, var(--violet-500) 100%);
-  --gradient-aurora: linear-gradient(135deg, #FF2E7E 0%, #C03BE6 45%, #7C3AED 100%);
-  --gradient-glow: radial-gradient(120% 120% at 50% 0%, rgba(255,46,126,0.20) 0%, rgba(124,58,237,0.05) 55%, transparent 80%);
+  --gradient-frekuensi: linear-gradient(#914C38, #914C38);
+  --gradient-frekuensi-soft: linear-gradient(#E5A08C, #E5A08C);
+  --gradient-hangat: linear-gradient(#E5A08C, #E5A08C);
+  --gradient-aurora: linear-gradient(#914C38, #914C38);
+  --gradient-glow: none;
 
   /* ---- Semantic aliases — LIGHT (default) ---- */
   --bg-base:        var(--neutral-50);
@@ -89,22 +88,26 @@
   --text-inverse: var(--neutral-0);
   --text-on-brand: #FFFFFF;
 
-  --brand-primary:    var(--pink-500);
-  --brand-primary-hover: var(--pink-600);
-  --brand-secondary:  var(--violet-500);
-  --brand-secondary-hover: var(--violet-600);
-  --brand-tint:       var(--pink-50);
-  --brand-tint-2:     var(--violet-50);
+  --brand-primary:    #914C38;
+  --brand-on-primary: #FFFFFF;
+  --brand-primary-hover: #703A2A;
+  --brand-secondary:  #914C38;
+  --brand-secondary-hover: #703A2A;
+  --brand-fill:       #E5A08C;
+  --brand-on-fill:    #30241F;
+  --brand-tint:       #F3E2DA;
+  --brand-tint-2:     #F0EDE8;
+  --control-border:   #8B8178;
 
-  --success: var(--mint-600);
+  --success: #137A53;
   --warning: var(--amber-500);
-  --danger:  var(--red-500);
+  --danger:  #B63530;
   --info:    var(--blue-500);
 
-  --focus-ring: var(--violet-400);
+  --focus-ring: #914C38;
 
   /* ---- Typography (next/font exposes families as CSS vars) ---- */
-  --font-display: var(--font-gabarito), var(--font-plus-jakarta), system-ui, sans-serif;
+  --font-display: var(--font-plus-jakarta), system-ui, sans-serif;
   --font-sans:    var(--font-plus-jakarta), system-ui, -apple-system, sans-serif;
   --font-mono:    var(--font-space-mono), ui-monospace, 'SF Mono', monospace;
 
@@ -137,10 +140,10 @@
   --shadow-lg: 0 16px 38px rgba(46, 36, 54, 0.14);
   --shadow-xl: 0 28px 64px rgba(46, 36, 54, 0.20);
 
-  --glow-pink:   0 8px 30px rgba(255, 46, 126, 0.40);
-  --glow-violet: 0 8px 30px rgba(124, 58, 237, 0.40);
-  --glow-brand:  0 10px 34px rgba(255, 46, 126, 0.28), 0 4px 14px rgba(124, 58, 237, 0.24);
-  --ring-focus:  0 0 0 3px rgba(124, 58, 237, 0.35);
+  --glow-pink: none;
+  --glow-violet: none;
+  --glow-brand: none;
+  --ring-focus: 0 0 0 3px #914C38;
 
   /* ---- Motion ---- */
   --dur-fast: 120ms;
@@ -157,9 +160,9 @@
 .dark,
 [data-theme="dark"] {
   --bg-base:        var(--neutral-950);
-  --bg-subtle:      #1A1023;
-  --surface-card:   var(--neutral-900);
-  --surface-raised: #251A30;
+  --bg-subtle:      #222326;
+  --surface-card:   #27282B;
+  --surface-raised: #303135;
   --surface-sunken: var(--neutral-950);
   --surface-inverse: var(--neutral-50);
 
@@ -167,20 +170,24 @@
   --border-default: rgba(255,255,255,0.12);
   --border-strong:  rgba(255,255,255,0.22);
 
-  --text-strong:  #F8F1F6;
-  --text-body:    #D7C7D4;
-  --text-muted:   #9A879A;
+  --text-strong:  #F2EFEA;
+  --text-body:    #DAD5CE;
+  --text-muted:   #B5B1AB;
   --text-inverse: var(--neutral-950);
   --text-on-brand: #FFFFFF;
 
-  --brand-primary:    var(--pink-400);
-  --brand-primary-hover: var(--pink-300);
-  --brand-secondary:  var(--violet-400);
-  --brand-secondary-hover: var(--violet-300);
-  --brand-tint:       rgba(255,46,126,0.14);
-  --brand-tint-2:     rgba(124,58,237,0.16);
+  --brand-primary:    #F2EFEA;
+  --brand-on-primary: #30241F;
+  --brand-primary-hover: #DAD5CE;
+  --brand-secondary:  #E5A08C;
+  --brand-secondary-hover: #F2EFEA;
+  --brand-fill:       #F2EFEA;
+  --brand-on-fill:    #30241F;
+  --brand-tint:       #37312E;
+  --brand-tint-2:     #303135;
+  --control-border:   #8E8B86;
 
-  --focus-ring: var(--violet-300);
+  --focus-ring: #F2EFEA;
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.40);
   --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45);
@@ -188,10 +195,11 @@
   --shadow-lg: 0 18px 42px rgba(0, 0, 0, 0.58);
   --shadow-xl: 0 30px 70px rgba(0, 0, 0, 0.66);
 
-  --glow-pink:   0 8px 34px rgba(255, 46, 126, 0.55);
-  --glow-violet: 0 8px 34px rgba(124, 58, 237, 0.55);
-  --glow-brand:  0 10px 38px rgba(255, 46, 126, 0.38), 0 4px 16px rgba(124, 58, 237, 0.34);
-  --ring-focus:  0 0 0 3px rgba(180, 146, 246, 0.45);
+  --glow-pink: none;
+  --glow-violet: none;
+  --glow-brand: none;
+  --ring-focus: 0 0 0 3px #F2EFEA;
+  --danger: #FF6B6B;
 }
 
 /* ------------------------------------------------------------
@@ -200,7 +208,7 @@
    ------------------------------------------------------------ */
 @theme inline {
   --font-sans: var(--font-plus-jakarta), system-ui, sans-serif;
-  --font-display: var(--font-gabarito), var(--font-plus-jakarta), sans-serif;
+  --font-display: var(--font-plus-jakarta), sans-serif;
   --font-mono: var(--font-space-mono), ui-monospace, monospace;
 
   --color-brand: var(--brand-primary);
@@ -256,7 +264,7 @@ body {
   background: var(--surface-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
+  box-shadow: none;
 }
 
 /* Field — ports SEFREKUENSI <Input>: bordered wrapper (1.5px, white
@@ -327,16 +335,16 @@ body {
   min-height: 44px;
   padding: 11px 22px;
   border: 1px solid transparent;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   font-family: var(--font-sans);
   font-weight: 700;
   font-size: 15px;
   line-height: 1;
   letter-spacing: -0.005em;
   cursor: pointer;
-  color: var(--text-on-brand);
-  background: var(--gradient-frekuensi);
-  box-shadow: var(--glow-brand);
+  color: var(--brand-on-fill);
+  background: var(--brand-fill);
+  box-shadow: none;
   transition: transform var(--dur-fast) var(--ease-spring),
               box-shadow var(--dur-base) var(--ease-out),
               opacity var(--dur-base) var(--ease-standard);
@@ -370,3 +378,72 @@ body {
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 4px; }
+.auth-layout { min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg-base); color: var(--text-body); }
+.auth-topbar { width: min(100%, 1120px); margin: 0 auto; padding: 24px; display: flex; align-items: center; justify-content: space-between; color: var(--text-strong); }
+.auth-topbar > a { padding: 6px 0; }
+.auth-theme { width: 44px; height: 44px; border: 1px solid var(--control-border); border-radius: 14px; display: grid; place-items: center; background: transparent; color: var(--text-strong); cursor: pointer; }
+.auth-content { width: min(100%, 480px); padding: 40px 24px; margin: auto; }
+.auth-heading { margin-bottom: 32px; }
+.auth-kicker { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 14px; }
+.auth-heading h1 { font-size: clamp(28px, 4vw, 36px); line-height: 1.2; font-weight: 800; letter-spacing: -.04em; color: var(--text-strong); }
+.auth-heading > p:last-child { margin-top: 12px; font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+.auth-actions, .auth-form { display: flex; flex-direction: column; gap: 16px; }
+.auth-layout .ks-btn-outline { border-color: var(--control-border); }
+.auth-google { min-height: 52px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px 20px; border: 1px solid #747775; border-radius: 14px; background: #fff; color: #1f1f1f; font-size: 15px; font-weight: 600; cursor: pointer; }
+.auth-google svg { flex-shrink: 0; }
+.auth-google:disabled { cursor: not-allowed; color: #68605b; }
+.auth-note { font-size: 13px; line-height: 1.6; color: var(--text-muted); }
+.auth-divider { display: flex; align-items: center; gap: 16px; color: var(--text-muted); font-size: 13px; padding: 4px 0; }
+.auth-divider::before, .auth-divider::after { content: ''; height: 1px; flex: 1; background: var(--border-default); }
+.auth-switch { margin-top: 20px; text-align: center; font-size: 14px; line-height: 1.7; }
+.auth-switch a { color: var(--brand-primary); font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
+.auth-form label, .auth-businesses legend { display: block; color: var(--text-strong); font-size: 14px; font-weight: 600; }
+.auth-form input:not([type='radio']), .auth-form select { display: block; width: 100%; min-width: 0; margin-top: 8px; min-height: 52px; padding: 12px 16px; border: 1px solid var(--control-border); border-radius: 14px; background: var(--surface-card); color: var(--text-strong); font-size: 16px; font-weight: 500; }
+.auth-form input::placeholder { color: var(--text-muted); }
+.auth-form input.auth-otp { font-family: var(--font-mono); letter-spacing: .3em; text-align: center; font-size: 24px; }
+.auth-error { padding: 14px 16px; border: 1px solid var(--danger); border-radius: 14px; color: var(--danger); font-size: 14px; line-height: 1.6; margin-bottom: 24px; overflow-wrap: anywhere; }
+.auth-back, .auth-text-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; gap: 8px; background: none; color: var(--brand-primary); font-size: 14px; font-weight: 600; cursor: pointer; }
+.auth-back { margin-bottom: 20px; justify-content: flex-start; }
+.auth-text-button:disabled { color: var(--text-muted); cursor: not-allowed; }
+.auth-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.auth-businesses { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.auth-businesses legend { margin-bottom: 8px; }
+.auth-businesses label { min-height: 48px; display: flex; gap: 10px; align-items: center; border: 1px solid var(--control-border); border-radius: 14px; padding: 12px; cursor: pointer; }
+.auth-businesses label:has(input:checked) { background: var(--brand-tint); border-color: var(--brand-primary); }
+.auth-businesses input { accent-color: var(--brand-primary); }
+.auth-form summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-size: 14px; }
+.auth-footer { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 24px; font-size: 12px; line-height: 1.6; color: var(--text-muted); }
+.auth-footer a { text-decoration: underline; text-underline-offset: 4px; min-height: 44px; display: inline-flex; align-items: center; }
+.auth-footer span { align-self: center; }
+.auth-loading { padding: 40px 24px; color: var(--text-muted); text-align: center; }
+.auth-progress { display: flex; gap: 8px; margin: 12px 0 32px; }
+.auth-progress span { height: 4px; flex: 1; background: var(--border-default); border-radius: 6px; }
+.auth-progress span:first-child, .auth-progress .complete { background: var(--brand-primary); }
+.auth-setup-list p { padding: 16px 0; border-bottom: 1px solid var(--border-default); }
+.auth-setup-list strong { display: block; color: var(--text-strong); font-size: 15px; }
+.auth-setup-list span { display: block; margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6; }
+@media (max-width: 360px) { .auth-pair { grid-template-columns: 1fr; } .auth-content { padding-top: 24px; } }
+
+/* Bridge existing merchant screens onto the shared palette. */
+.merchant-shell { background: var(--bg-base); color: var(--text-body); }
+.merchant-shell .bg-white { background-color: var(--surface-card); }
+.merchant-shell .bg-gray-50 { background-color: var(--bg-base); }
+.merchant-shell .bg-gray-100 { background-color: var(--surface-sunken); }
+.merchant-shell :is(.text-gray-900, .text-gray-800) { color: var(--text-strong); }
+.merchant-shell .text-gray-700 { color: var(--text-body); }
+.merchant-shell :is(.text-gray-600, .text-gray-500, .text-gray-400) { color: var(--text-muted); }
+.merchant-shell :is(.border-gray-100, .border-gray-200) { border-color: var(--border-default); }
+.merchant-shell :is(.bg-blue-50, .bg-blue-100) { background-color: var(--brand-tint); }
+.merchant-shell :is(.text-blue-500, .text-blue-600, .text-blue-700, .text-indigo-600) { color: var(--brand-primary); }
+.merchant-shell :is(.bg-blue-500, .bg-blue-600) { background-color: var(--brand-fill); color: var(--brand-on-fill); }
+.merchant-shell :is(.bg-blue-500, .bg-blue-600) .text-white { color: var(--brand-on-fill); }
+.merchant-shell .hover\:bg-blue-700:hover { background-color: var(--brand-fill); opacity: .9; }
+.merchant-shell :is(.hover\:bg-gray-50, .hover\:bg-gray-100):hover { background-color: var(--surface-sunken); }
+.merchant-shell .hover\:text-gray-900:hover { color: var(--text-strong); }
+.merchant-shell :is(.text-red-600, .text-red-700) { color: var(--danger); }
+.merchant-shell .bg-red-50 { background-color: color-mix(in srgb, var(--danger) 8%, var(--surface-card)); }
+.merchant-shell .hover\:bg-red-50:hover { background-color: var(--surface-sunken); }
+.merchant-shell :is(.text-yellow-600, .text-yellow-700) { color: var(--brand-primary); }
+.merchant-shell :is(.bg-yellow-50, .hover\:bg-yellow-50:hover) { background-color: var(--brand-tint); }

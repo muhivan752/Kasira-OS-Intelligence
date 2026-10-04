@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -28,9 +28,14 @@ import {
 import { logout } from '@/app/actions/auth';
 import { getCurrentUser, getOutlets } from '@/app/actions/api';
 import { Logo } from '@/components/ui/logo';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktop, setDesktop] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
   const [outletName, setOutletName] = useState('Memuat...');
   const [tier, setTier] = useState('starter');
   const [subStatus, setSubStatus] = useState('active');
@@ -39,6 +44,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
 
   const isPro = ['pro', 'business', 'enterprise'].includes(tier);
+
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 1024px)');
+    const sync = () => setDesktop(query.matches);
+    sync(); query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
+  useEffect(() => {
+    if (sidebarOpen) closeButton.current?.focus();
+    else if (wasOpen.current) menuButton.current?.focus();
+    wasOpen.current = sidebarOpen;
+  }, [sidebarOpen]);
+
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setSidebarOpen(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -74,7 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Build navigation based on tier
   const mainNav = [
-    { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Beranda', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Menu', href: '/dashboard/menu', icon: MenuIcon },
     { name: 'Toko Online', href: '/dashboard/toko', icon: Globe },
     { name: 'Kasir', href: '/dashboard/kasir', icon: Store },
@@ -102,9 +125,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return (
       <Link
         key={item.name}
+        onClick={() => setSidebarOpen(false)}
         href={locked ? '/dashboard/pro' : item.href}
         className={`
-          flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+          flex items-center gap-3 px-3 py-2.5 min-h-11 rounded-lg text-sm font-medium transition-colors
           ${isActive
             ? 'bg-blue-50 text-blue-700'
             : locked
@@ -121,7 +145,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="merchant-shell min-h-screen bg-gray-50 flex">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -131,7 +155,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       {/* Sidebar */}
-      <div className={`
+      <div inert={!desktop && !sidebarOpen} aria-hidden={!desktop && !sidebarOpen} className={`
         fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
@@ -146,7 +170,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </span>
               </div>
               {isPro && (
-                <span className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
+                <span className="inline-flex items-center gap-1 bg-[var(--brand-fill)] text-[var(--brand-on-fill)] text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
                   <Crown className="w-3 h-3" />
                   PRO
                 </span>
@@ -154,7 +178,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-md"
+              ref={closeButton}
+              aria-label="Tutup menu"
+              className="lg:hidden p-2 min-h-11 min-w-11 text-gray-500 hover:bg-gray-100 rounded-md"
             >
               <X className="w-5 h-5" />
             </button>
@@ -201,9 +227,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Sidebar Footer */}
           <div className="p-4 border-t border-gray-200">
+            <div className="hidden lg:flex items-center justify-between mb-3 text-sm text-[var(--text-muted)]"><span>Tampilan</span><ThemeToggle /></div>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="flex items-center gap-3 w-full min-h-11 px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             >
               <LogOut className="w-5 h-5" />
               Keluar
@@ -216,19 +243,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile Header */}
         <div className="lg:hidden flex items-center justify-between h-16 px-4 bg-white border-b border-gray-200">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 min-w-0">
             <Logo size="sm" variant="light" showWordmark={false} />
-            <span className="text-lg font-bold text-gray-900 truncate max-w-[150px]">
+            <span className="text-base font-bold text-gray-900 truncate max-w-[120px]">
               {outletName}
             </span>
             {isPro && (
-              <span className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+              <span className="inline-flex items-center gap-1 bg-[var(--brand-fill)] text-[var(--brand-on-fill)] text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
                 <Crown className="w-3 h-3" />
                 PRO
               </span>
             )}
           </div>
           <div className="flex items-center gap-1">
+            <ThemeToggle />
             {/* Keluar juga ada di footer sidebar, tapi di HP itu ketutup menu
                 hamburger dan harus di-scroll ke paling bawah — praktisnya
                 nggak keliatan. Ditaruh langsung di header biar kejangkau. */}
@@ -236,14 +264,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={handleLogout}
               aria-label="Keluar"
               title="Keluar"
-              className="p-2 text-red-600 hover:bg-red-50 rounded-md"
+              className="p-2 min-h-11 min-w-11 text-red-600 hover:bg-red-50 rounded-md"
             >
               <LogOut className="w-5 h-5" />
             </button>
             <button
               onClick={() => setSidebarOpen(true)}
+              ref={menuButton}
               aria-label="Buka menu"
-              className="p-2 text-gray-500 hover:bg-gray-100 rounded-md"
+              aria-expanded={sidebarOpen}
+              className="p-2 min-h-11 min-w-11 text-gray-500 hover:bg-gray-100 rounded-md"
             >
               <MenuIcon className="w-6 h-6" />
             </button>

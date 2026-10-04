@@ -1,6 +1,44 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
+## ARAH REDESIGN SELARIS × SEFREKUENSI — 2026-10-04
+
+- Permintaan Ivan: mulai dari onboarding, lalu UI/UX mengikuti theme, warna dan konsep desain Sefrekuensi di server; kedua produk direncanakan bergabung. Login mendatang memakai Google/Gmail dan OTP Sefrekuensi.
+- Antislop dipilih **during untuk sesi ini** (jawaban pengguna "1"); bukan preferensi global yang disimpan.
+- Referensi kode: `/var/www/sefrekuensi`, HEAD `fcd2dec` pada branch `bond-tingkat` ketika diperiksa. Baca `AGENTS.md`, `CLAUDE.md`, `DESIGN.md`, lalu source terbaru; dokumen/screenshot lama memuat arah yang sudah digantikan.
+- Acuan visual terbaru adalah **Sefrekuensi 2.0**: `mobile/app/lib/native/theme.dart` dan `frontend/src/app/globals.css`. Terang: latar `#F7F5F2`, kartu putih, teks `#282725`, fill coral `#E5A08C`, tinta tombol `#30241F`, aksen teks coral tua `#914C38`. Gelap: latar `#121212`, kartu `#27282B`, teks/fill utama `#F2EFEA`, aksen coral. Font native Plus Jakarta Sans; Space Mono untuk kode fungsional. Native default terang, pilihan gelap/ikut sistem tersedia. Web memiliki scope tema tersendiri.
+- Komponen: radius input/tombol 14, kartu 20, sheet 28; skala spasi 4/8/12/16/24/32. Tombol utama min-height 48, warna rata, tanpa glow; bergerak singkat sebagai respons interaksi. Tombol Google mempertahankan identitas provider.
+- Kontras pasangan yang dihitung dari token source: tinta tombol/coral, coral tua/latar terang, teks sekunder/latar terang, teks utama/latar gelap, teks sekunder/kartu gelap dan tinta tombol/fill gelap semuanya >=4.5:1. Ini pemeriksaan token, bukan audit seluruh layar.
+- Native login Sefrekuensi: `auth_screen.dart` sekarang Google sebagai pintu utama Android; Apple juga ada di iOS. Jalur nomor WA lama dibuka lewat tautan. Backend `handlers/firebase_auth.go` memverifikasi Firebase ID token dan memetakan `firebase_uid` ke akun. Akun lama dihubungkan dari sesi yang sudah login melalui alur `login-cepat`, bukan dicocokkan otomatis ke email ketikan.
+- Onboarding Sefrekuensi terbaru: `onboard_pilih_screen.dart` (25 September), pilihan kota/minat/tujuan, progress, retry, dan pending flag untuk melanjutkan saat app dibuka lagi. Yang diadaptasi untuk Selaris adalah pola interaksi; isi merchant tetap setup usaha.
+- Selaris masih memakai Aurora pink/violet di `app/globals.css` dan `kasir_app/lib/core/theme/kasira_ds.dart`. Login/daftar web dan Flutter serta onboarding web/WelcomePage/ReadyPage dibaca sebagai cakupan awal yang perlu diselaraskan.
+- **Google login belum ditemukan di auth Selaris**: model `backend/models/user.py` masih berbasis nomor + tenant, tanpa provider UID; register mensyaratkan OTP nomor + nama usaha + owner + PIN. Perlu kontrak identitas dan tautan akun lama/toko yang sama sebelum mengaktifkan pintu Google.
+- **OTP Sefrekuensi sudah terhubung dan dikonfigurasi di backend produksi Selaris** (`enabled()` true). Service `backend/services/sefrekuensi.py` memakai partner OTP API + DM Yasmin/push. Kode tetap dibuat/diverifikasi Selaris: ini pengiriman OTP, belum login akun bersama. Tidak mengirim OTP atau login pengguna dalam pemeriksaan.
+- Usulan awal untuk desain berikutnya: Google sebagai pintu utama, OTP Sefrekuensi sebagai jalur alternatif; sesudah identitas dikenali, user lama kembali ke tokonya, user baru lanjut setup usaha. Hubungan alternatif vs verifikasi berurutan belum ditetapkan pengguna.
+- Hanya pemeriksaan referensi/source/konfigurasi; belum mengubah UI, auth, DB, rilis atau deployment. Screenshot auth September yang diperiksa adalah fixture lama, bukan bukti layout login terbaru.
+
+## STATUS AKTUAL TERVERIFIKASI — 2026-10-04
+
+Bagian ini mengoreksi ringkasan April di bawah. Entri lama dipertahankan sebagai riwayat, bukan status saat ini.
+
+- Brand sekarang **Selaris**, domain kanonik **https://selaris.id**. API lama `kasira.online/api/v1/auth/app/version` masih HTTP 200.
+- Git lokal bersih di `main`; HEAD lokal dan remote `origin/main` sama: `4aabf547bb3b0513fa9c39e644c0f3a5a5b2a3d9` (2026-09-11).
+- Rilis GitHub terbaru **v1.6.29**, published 2026-09-11, tersedia APK + AAB POS dan Dapur. `version.json` checkout juga 1.6.29.
+- **Deployment APK tertinggal:** endpoint update produksi masih **1.6.28**. `/api/download/pos` dan `/api/download/dapur` HTTP 200, ukuran cocok dengan APK bind-mount `public/apk/` bertanggal 2026-09-06.
+- Manifest kedua APK lokal: `versionName=1.6.28`, `versionCode=194`, package sama `com.kasira.kasira_kasir`. Workflow 1.6.29 memisahkan `com.selaris.pos` / `com.selaris.dapur`; release notes mewajibkan sinkron sebelum uninstall aplikasi lama karena perubahan package.
+- Migration **kode dan DB produksi: 110**, bukan 086.
+- Container backend, frontend, PostgreSQL, Redis semuanya healthy. `/health` HTTP 200: DB ok, background tasks healthy, tidak ada task dead. `/health/background` HTTP 200; frontend lokal dan homepage selaris.id HTTP 200.
+- Sampel hash backend aktif cocok dengan checkout: `backend/main.py`, `backend/api/routes/outlets.py`, `backend/services/xendit.py`, `backend/services/fonnte.py`. Hash `version.json` berbeda. Ini pemeriksaan sampel, bukan bukti seluruh deployment identik.
+- DB: **7 tenant aktif**, termasuk **4 demo**; tier aktif 4 Starter + 3 Pro. Tidak ada tenant Business/Enterprise aktif.
+- Outlet aktif belum memiliki `xendit_business_id`, own `xendit_api_key`, atau `xendit_callback_token`. **QRIS otomatis belum terbukti siap live**; keberadaan toggle QRIS bukan bukti aktivasi gateway.
+- Token Fonnte platform tersedia; 1 outlet aktif memiliki own Fonnte token. Pengiriman OTP dan pemisahan nomor sender/admin belum diuji dalam pemeriksaan ini.
+- Multi-outlet sudah memiliki endpoint create + batas tier (Starter 1, Pro 5, Business 20, Enterprise unlimited). Tidak ditemukan tenant dengan beberapa outlet aktif; kesiapan UI dan alur lengkap belum diuji. Status lama "belum mulai" terlalu mutlak.
+- Cron root: 1 healthcheck setiap 2 menit dan 1 entri backup ditemukan. Eksekusi terakhir, delivery Telegram, dan restore backup belum diuji.
+- Fitur September tercatat di CLAUDE.md/kode: varian produk, purchasing, keuangan, CRM/promo WA, online order/delivery, push notification, rebrand, serta perubahan rilis Android. MEMORY/SESSION/ROADMAP April tidak merangkum perkembangan ini.
+- Pemeriksaan ini hanya membaca layanan dan DB; tidak melakukan deploy, transaksi, pengiriman pesan, atau aktivasi gateway.
+
+Prioritas temuan: selaraskan distribusi APK/endpoint versi dengan keputusan migrasi v1.6.29, lalu verifikasi integrasi Xendit live dan OTP sesuai kebutuhan merchant.
+
 ## 🗺️ ROADMAP PROGRESS (Menuju Tier Starter)
 - ✅ **FASE 0: Fondasi** (Semua Migration, Docker, VPS, Backend Core)
 - ✅ **FASE 1: Auth** (OTP WA, JWT, Device Binding, Role Check)
@@ -333,3 +371,14 @@ Production-ready. Fokus pivot ke **acquisition + monetisation**:
 - context/flutter-kasir.md → ⏳ Belum dibuat
 - context/connect.md     → ⏳ Belum dibuat
 - context/dapur.md       → ⏳ Belum dibuat
+# IMPLEMENTASI REDESIGN DAN GOOGLE LOGIN — 2026-10-04
+
+- Ivan menegaskan semua toko di server adalah demo dan mengizinkan perubahan langsung, sekaligus meminta panduan pendaftaran login Google.
+- Web login/register/onboarding baru mengikuti token Sefrekuensi September 2026 (coral, warm white, charcoal, Plus Jakarta Sans). Theme toggle tersimpan, dashboard memakai palette yang sama. Onboarding usaha mengarah ke produk pertama; tidak membuat stok fiktif.
+- Backend Google memakai verifikasi Firebase ID token RS256 (aud/iss/exp/iat/sub wajib, provider google.com, email terverifikasi). Google pertama kali + OTP nomor menghubungkan user/toko lama; nomor baru mendapat proof sekali pakai untuk register. Tautan tidak berdasarkan email ketikan. Schema 111 menambah project/uid/email nullable dengan unique/check constraint.
+- Backend sudah direcreate dan sehat, database sudah revision 111. Source runtime lama dibandingkan seluruh file .py: perbedaan hanya perubahan task ini. Backup DB/source ada di /tmp/selaris-before-redesign-20261004.dump dan /tmp/selaris-backend-before-redesign.
+- Google belum diaktifkan pada environment: empat GOOGLE_FIREBASE_* masih menunggu konfigurasi Firebase pemilik. Provider API mengembalikan google.enabled=false dan sefrekuensi=true; UI menjelaskan Google belum tersedia.
+- Flutter POS: theme/font dibundel, welcome ringkas, OTP Sefrekuensi utama, Google login dan tautan nomor, business setup, PIN lokal, ready page scrollable. Register tidak lagi memakai PIN sementara tetap 000000; update PIN server harus berhasil sebelum lanjut.
+- Panduan lengkap beserta fingerprint upload sertifikat publik: docs/GOOGLE_LOGIN.md. Gunakan project Firebase Sefrekuensi untuk UID yang sama; jika pindah project, samakan kredensial FCM backend.
+- Validasi: 8 unit tests Google; integrasi Postgres toko lama/baru/replay; upgrade-downgrade-upgrade 111; 8 widget tests pada 320/768 px dan teks 160%; browser click-through dan WCAG AA pada 320/375/768/1440 dan kedua tema. Production web build dan APK release lokal lolos. Analyzer: nol error, empat warning lama. Delivery gate: docs/REDESIGN_REVIEW.md.
+- APK lokal hanya validasi build (tanpa google-services.json). Distribusi harus memakai CI yang mempertahankan secret Firebase dan signing rilis. Versi berikutnya 1.6.30; jangan menyalin APK lokal tanpa Firebase ke public/apk sebagai pengganti rilis.

@@ -11,6 +11,7 @@ import 'core/services/push_service.dart';
 import 'core/services/session_cache.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/pages/login_page.dart';
+import 'features/auth/presentation/pages/google_connect_page.dart';
 import 'features/dashboard/presentation/pages/dashboard_page.dart';
 import 'features/onboarding/presentation/pages/server_setup_page.dart';
 import 'features/inventory/presentation/pages/low_stock_alert_page.dart';
@@ -53,7 +54,17 @@ final _router = GoRouter(
     ),
     GoRoute(
       path: '/register',
-      builder: (context, state) => const RegisterPage(),
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return RegisterPage(
+            phone: extra?['phone'],
+            ownerName: extra?['owner_name'],
+            googleProof: extra?['google_proof']);
+      },
+    ),
+    GoRoute(
+      path: '/google',
+      builder: (context, state) => const GoogleConnectPage(),
     ),
     GoRoute(
       path: '/shift/open',

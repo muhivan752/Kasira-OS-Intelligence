@@ -58,8 +58,8 @@ export function Logo({
       >
         {!mono && (
           <defs>
-            <linearGradient id="selaris-a" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#8A16D6" /><stop offset="1" stopColor="#FF3D63" /></linearGradient>
-            <linearGradient id="selaris-b" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#FF3D63" /><stop offset="1" stopColor="#8A16D6" /></linearGradient>
+            <linearGradient id="selaris-a"><stop stopColor="var(--brand-primary)" /><stop offset="1" stopColor="var(--brand-primary)" /></linearGradient>
+            <linearGradient id="selaris-b"><stop stopColor="var(--brand-primary)" /><stop offset="1" stopColor="var(--brand-primary)" /></linearGradient>
           </defs>
         )}
         {/* Logo resmi Selaris (file dari Ivan, 2 Sep): dua pil naik ke kanan,
@@ -70,7 +70,7 @@ export function Logo({
       {showWordmark && (
         <div
           className={cn(
-            'font-[family-name:var(--font-gabarito)] font-extrabold leading-none tracking-[-0.03em]',
+            'font-[family-name:var(--font-plus-jakarta)] font-extrabold leading-none tracking-[-0.03em]',
             variant === 'brand' && 'ks-gradient-text',
             textColor,
             s.text

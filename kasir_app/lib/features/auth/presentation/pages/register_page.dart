@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
@@ -14,7 +15,10 @@ import '../../../../core/widgets/sefrekuensi_otp_card.dart';
 enum RegStep { inputInfo, inputOtp, setPin }
 
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+  const RegisterPage({super.key, this.phone, this.ownerName, this.googleProof});
+  final String? phone;
+  final String? ownerName;
+  final String? googleProof;
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -28,7 +32,7 @@ class _RegisterPageState extends State<RegisterPage> {
   int _countdown = 0;
   // Kanal kode masuk yang dipilih user: 'whatsapp' | 'sefrekuensi'. Kirim
   // ulang pakai kanal yang sama, kode nggak loncat.
-  String _channel = 'whatsapp';
+  String _channel = 'sefrekuensi';
   bool _sefreNotFound = false;
   bool _sefreLoading = false;
 
@@ -48,17 +52,26 @@ class _RegisterPageState extends State<RegisterPage> {
   // persist ke SessionCache SETELAH register success (bukan sebelum).
   Timer? _classifyDebounce;
   CancelToken? _classifyCancelToken;
-  String? _detectedDomain;       // 'fnb' | 'retail' | 'service'
-  String? _detectedDisplayName;  // e.g. "Salon/Barber", "Laundry"
+  String? _detectedDomain; // 'fnb' | 'retail' | 'service'
+  String? _detectedDisplayName; // e.g. "Salon/Barber", "Laundry"
   bool _showDomainSuggestion = false;
-  bool? _userAcceptedDomain;     // null = belum interaksi, true/false = pilihan user
+  bool?
+      _userAcceptedDomain; // null = belum interaksi, true/false = pilihan user
 
   final _cache = SessionCache.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _phoneCtrl.text = widget.phone?.replaceFirst(RegExp(r'^62'), '') ?? '';
+    _nameCtrl.text = widget.ownerName ?? '';
+  }
+
   Dio get _dio => Dio(BaseOptions(
-    baseUrl: AppConfig.baseUrl,
-    connectTimeout: const Duration(seconds: 15),
-    receiveTimeout: const Duration(seconds: 15),
-  ));
+        baseUrl: AppConfig.baseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+      ));
 
   @override
   void dispose() {
@@ -164,7 +177,9 @@ class _RegisterPageState extends State<RegisterPage> {
   String get _phoneNormalized {
     var d = _phoneCtrl.text.replaceAll(RegExp(r'\D'), '');
     if (d.startsWith('62')) d = d.substring(2);
-    while (d.startsWith('0')) { d = d.substring(1); }
+    while (d.startsWith('0')) {
+      d = d.substring(1);
+    }
     return d.isEmpty ? '' : '62$d';
   }
 
@@ -183,6 +198,10 @@ class _RegisterPageState extends State<RegisterPage> {
     }
     if (business.isEmpty) {
       setState(() => _error = 'Nama usaha harus diisi');
+      return;
+    }
+    if (widget.googleProof != null) {
+      await _register('');
       return;
     }
 
@@ -219,10 +238,16 @@ class _RegisterPageState extends State<RegisterPage> {
       _startTimer();
     } on DioException catch (e) {
       dynamic detail;
-      try { detail = e.response?.data?['detail']; } catch (_) {}
+      try {
+        detail = e.response?.data?['detail'];
+      } catch (_) {}
       if (!mounted) return;
       if (otpErrorCode(detail) == kSefrekuensiNotFoundCode) {
-        setState(() { _isLoading = false; _sefreLoading = false; _sefreNotFound = true; });
+        setState(() {
+          _isLoading = false;
+          _sefreLoading = false;
+          _sefreNotFound = true;
+        });
         return;
       }
       setState(() {
@@ -245,8 +270,11 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _register(String otp) async {
-    if (otp.length != 6) return;
-    setState(() { _isLoading = true; _error = null; });
+    if (_isLoading || (widget.googleProof == null && otp.length != 6)) return;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     try {
       final resp = await _dio.post('/api/v1/auth/register', data: {
@@ -254,8 +282,9 @@ class _RegisterPageState extends State<RegisterPage> {
         'owner_name': _nameCtrl.text.trim(),
         'business_name': _businessCtrl.text.trim(),
         'business_type': _businessType,
-        'otp': otp,
-        'pin': '000000', // Temporary, user sets real PIN next
+        if (widget.googleProof == null) 'otp': otp,
+        if (widget.googleProof != null) 'google_proof': widget.googleProof,
+        'pin': Random.secure().nextInt(1000000).toString().padLeft(6, '0'),
         if (_referralCode.isNotEmpty) 'referral_code': _referralCode,
       });
 
@@ -264,12 +293,16 @@ class _RegisterPageState extends State<RegisterPage> {
           : (resp.data as Map<String, dynamic>)['data'] as Map<String, dynamic>;
 
       final token = data['access_token']?.toString() ?? '';
+      if (_cache.phone != _phoneNormalized) await _cache.clear();
       await _cache.setAccessToken(token);
       await _cache.setPhone(_phoneNormalized);
-      if (data['tenant_id'] != null) await _cache.setTenantId(data['tenant_id'].toString());
-      if (data['outlet_id'] != null) await _cache.setOutletId(data['outlet_id'].toString());
+      if (data['tenant_id'] != null)
+        await _cache.setTenantId(data['tenant_id'].toString());
+      if (data['outlet_id'] != null)
+        await _cache.setOutletId(data['outlet_id'].toString());
       await _cache.setStockMode(data['stock_mode']?.toString() ?? 'simple');
-      await _cache.setSubscriptionTier(data['subscription_tier']?.toString() ?? 'starter');
+      await _cache.setSubscriptionTier(
+          data['subscription_tier']?.toString() ?? 'starter');
 
       // Persist domain pilihan user (Batch #26). Null kalau user tolak atau
       // suggestion tidak muncul (default F&B via BusinessLabels fallback).
@@ -278,8 +311,13 @@ class _RegisterPageState extends State<RegisterPage> {
       }
 
       _timer?.cancel();
-      setState(() { _step = RegStep.setPin; _isLoading = false; });
+      if (!mounted) return;
+      setState(() {
+        _step = RegStep.setPin;
+        _isLoading = false;
+      });
     } on DioException catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _error = e.response?.data?['detail']?.toString() ?? 'Registrasi gagal';
@@ -299,32 +337,35 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-    setState(() { _isLoading = true; _error = null; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
     try {
-      // PIN stored via SecureStorage through cache write
-      const FlutterSecureStorage().write(key: 'user_pin', value: pin);
-
-      // Set PIN on server too
       final token = _cache.accessToken;
-      if (token != null) {
-        try {
-          await _dio.post('/api/v1/auth/pin/set',
-            data: {'pin': pin},
-            options: Options(headers: {'Authorization': 'Bearer $token'}),
-          );
-        } catch (_) {} // Non-blocking
-      }
+      if (token == null) throw StateError('Session missing');
+      await _dio.post('/api/v1/auth/pin/set',
+          data: {'pin': pin},
+          options: Options(headers: {'Authorization': 'Bearer $token'}));
+      await const FlutterSecureStorage().write(key: 'user_pin', value: pin);
 
       if (!mounted) return;
       context.go('/ready');
     } catch (e) {
-      setState(() { _isLoading = false; _error = 'Gagal menyimpan PIN'; });
+      setState(() {
+        _isLoading = false;
+        _error = 'Gagal menyimpan PIN';
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final stepNo = _step == RegStep.inputInfo ? 1 : _step == RegStep.inputOtp ? 2 : 3;
+    final stepNo = _step == RegStep.inputInfo
+        ? 1
+        : _step == RegStep.inputOtp
+            ? 2
+            : 3;
     return Scaffold(
       backgroundColor: KasiraDS.bgBase,
       body: SafeArea(
@@ -336,10 +377,14 @@ class _RegisterPageState extends State<RegisterPage> {
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back, color: KasiraDS.textStrong),
+                    icon: const Icon(Icons.arrow_back,
+                        color: KasiraDS.textStrong),
                     onPressed: () {
                       if (_step == RegStep.inputOtp) {
-                        setState(() { _step = RegStep.inputInfo; _error = null; });
+                        setState(() {
+                          _step = RegStep.inputInfo;
+                          _error = null;
+                        });
                       } else {
                         context.go('/welcome');
                       }
@@ -348,30 +393,38 @@ class _RegisterPageState extends State<RegisterPage> {
                   const Spacer(),
                   const SelarisMark(size: 24),
                   const SizedBox(width: 6),
-                  Text('Selaris', style: KasiraDS.display(size: 18, color: KasiraDS.textStrong)),
+                  Text('Selaris',
+                      style: KasiraDS.display(
+                          size: 18, color: KasiraDS.textStrong)),
                 ],
               ),
               const SizedBox(height: 8),
-              Text('Langkah $stepNo dari 3', style: KasiraDS.eyebrow(color: KasiraDS.brandPrimary)),
+              Text('Langkah $stepNo dari 3',
+                  style: KasiraDS.eyebrow(color: KasiraDS.brandPrimary)),
               const SizedBox(height: 6),
               Text(
-                _step == RegStep.inputInfo ? 'Ceritain usahamu'
-                    : _step == RegStep.inputOtp ? (_channel == 'sefrekuensi' ? 'Periksa $kSefrekuensiName Anda' : 'Periksa WhatsApp Anda')
-                    : 'Buat PIN kasir',
+                _step == RegStep.inputInfo
+                    ? 'Kenalkan usaha Anda'
+                    : _step == RegStep.inputOtp
+                        ? (_channel == 'sefrekuensi'
+                            ? 'Periksa $kSefrekuensiName Anda'
+                            : 'Periksa WhatsApp Anda')
+                        : 'Buat PIN kasir',
                 style: KasiraDS.display(size: 26, color: KasiraDS.textStrong),
               ),
               const SizedBox(height: 6),
               Text(
-                _step == RegStep.inputInfo ? 'Nama & jenis usaha nentuin menu awal dan mode stok. Bisa diubah nanti.'
+                _step == RegStep.inputInfo
+                    ? 'Nama dan jenis usaha membantu menyiapkan kategori awal. Bisa diubah nanti.'
                     : _step == RegStep.inputOtp
                         ? (_channel == 'sefrekuensi'
                             ? 'Kode 6 angka dikirim sebagai pesan dari Yasmin ke +$_phoneNormalized'
                             : 'Kode 6 angka dikirim ke WhatsApp +$_phoneNormalized')
-                    : '6 angka. Dipakai buat masuk cepat tiap hari tanpa nunggu OTP.',
-                style: KasiraDS.sans(size: 13.5, color: KasiraDS.textMuted, height: 1.45),
+                        : '6 angka. Dipakai buat masuk cepat tiap hari tanpa nunggu OTP.',
+                style: KasiraDS.sans(
+                    size: 13.5, color: KasiraDS.textMuted, height: 1.45),
               ),
               const SizedBox(height: 24),
-
               if (_error != null)
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -381,22 +434,31 @@ class _RegisterPageState extends State<RegisterPage> {
                     borderRadius: KasiraDS.brSm,
                     border: Border.all(color: KasiraDS.danger.withOpacity(0.3)),
                   ),
-                  child: Text(_error!, style: KasiraDS.sans(size: 13, color: KasiraDS.danger)),
+                  child: Text(_error!,
+                      style: KasiraDS.sans(size: 13, color: KasiraDS.danger)),
                 ),
-
               if (_step == RegStep.inputInfo) ...[
                 _label('Nomor HP'),
                 TextField(
                   controller: _phoneCtrl,
+                  readOnly: widget.googleProof != null,
                   keyboardType: TextInputType.phone,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  style: KasiraDS.sans(size: 16, weight: FontWeight.w600, color: KasiraDS.textStrong),
+                  style: KasiraDS.sans(
+                      size: 16,
+                      weight: FontWeight.w600,
+                      color: KasiraDS.textStrong),
                   decoration: _deco(hint: '812 3456 7890').copyWith(
                     prefixIcon: Padding(
                       padding: const EdgeInsets.only(left: 14, right: 8),
-                      child: Text('🇮🇩 +62', style: KasiraDS.sans(size: 15, weight: FontWeight.w600, color: KasiraDS.textMuted)),
+                      child: Text('🇮🇩 +62',
+                          style: KasiraDS.sans(
+                              size: 15,
+                              weight: FontWeight.w600,
+                              color: KasiraDS.textMuted)),
                     ),
-                    prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                    prefixIconConstraints:
+                        const BoxConstraints(minWidth: 0, minHeight: 0),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -404,23 +466,25 @@ class _RegisterPageState extends State<RegisterPage> {
                 _buildField('', _nameCtrl, hint: 'Ivan'),
                 const SizedBox(height: 14),
                 _label('Nama usaha'),
-                _buildField('', _businessCtrl, hint: 'Kopi Senja', onChanged: _onBusinessNameChanged),
+                _buildField('', _businessCtrl,
+                    hint: 'Kopi Senja', onChanged: _onBusinessNameChanged),
                 if (_showDomainSuggestion && _detectedDomain != null)
                   _buildDomainSuggestionCard(),
                 const SizedBox(height: 14),
                 _label('Jenis usaha'),
                 GridView.count(
-                  crossAxisCount: 2,
+                  crossAxisCount:
+                      MediaQuery.textScalerOf(context).scale(1) > 1.3 ? 1 : 2,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   mainAxisSpacing: 8,
                   crossAxisSpacing: 8,
-                  childAspectRatio: 3.1,
+                  mainAxisExtent: 56,
                   children: const [
-                    ('cafe', '☕', 'Coffee shop'),
-                    ('warung', '🍛', 'Warung makan'),
-                    ('resto', '🍽️', 'Resto bermeja'),
-                    ('other', '🛍️', 'Toko lainnya'),
+                    ('cafe', 'Kafe'),
+                    ('warung', 'Warung'),
+                    ('resto', 'Restoran'),
+                    ('other', 'Usaha lain'),
                   ].map((t) {
                     final selected = _businessType == t.$1;
                     return InkWell(
@@ -429,16 +493,28 @@ class _RegisterPageState extends State<RegisterPage> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          color: selected ? KasiraDS.brandTint : KasiraDS.surfaceCard,
+                          color: selected
+                              ? KasiraDS.brandTint
+                              : KasiraDS.surfaceCard,
                           borderRadius: KasiraDS.brMd,
-                          border: Border.all(color: selected ? KasiraDS.brandPrimary : KasiraDS.borderSubtle, width: selected ? 1.5 : 1),
+                          border: Border.all(
+                              color: selected
+                                  ? KasiraDS.brandPrimary
+                                  : KasiraDS.controlBorder,
+                              width: selected ? 1.5 : 1),
                         ),
                         child: Row(
                           children: [
-                            Text(t.$2, style: const TextStyle(fontSize: 18)),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(t.$3, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                style: KasiraDS.sans(size: 13.5, weight: FontWeight.w700, color: selected ? KasiraDS.brandPrimary : KasiraDS.textStrong))),
+                            Expanded(
+                                child: Text(t.$2,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: KasiraDS.sans(
+                                        size: 13.5,
+                                        weight: FontWeight.w700,
+                                        color: selected
+                                            ? KasiraDS.brandPrimary
+                                            : KasiraDS.textStrong))),
                           ],
                         ),
                       ),
@@ -450,22 +526,40 @@ class _RegisterPageState extends State<RegisterPage> {
                 TextField(
                   onChanged: (v) => _referralCode = v,
                   style: KasiraDS.sans(size: 15, color: KasiraDS.textStrong),
-                  decoration: _deco(hint: 'Dari teman yang sudah memakai Selaris'),
+                  decoration:
+                      _deco(hint: 'Dari teman yang sudah memakai Selaris'),
                 ),
                 const SizedBox(height: 24),
-                _primary((_isLoading || _sefreLoading) ? null : () => _sendOtp(channel: 'whatsapp'), 'Lanjut → kirim kode WhatsApp'),
+                _primary(
+                    (_isLoading || _sefreLoading)
+                        ? null
+                        : () => _sendOtp(channel: 'sefrekuensi'),
+                    widget.googleProof != null
+                        ? 'Buat usaha'
+                        : 'Kirim kode ke Sefrekuensi'),
                 const SizedBox(height: 12),
-                SefrekuensiOtpCard(
-                  loading: _isLoading || _sefreLoading,
-                  notFound: _sefreNotFound,
-                  onPick: () => _sendOtp(channel: 'sefrekuensi'),
-                  onFallbackWhatsapp: () => _sendOtp(channel: 'whatsapp'),
-                ),
+                if (widget.googleProof == null && _sefreNotFound)
+                  SefrekuensiOtpCard(
+                    loading: _isLoading || _sefreLoading,
+                    notFound: _sefreNotFound,
+                    onPick: () => _sendOtp(channel: 'sefrekuensi'),
+                    onFallbackWhatsapp: () => _sendOtp(channel: 'whatsapp'),
+                  ),
+                if (widget.googleProof == null && !_sefreNotFound)
+                  TextButton(
+                    onPressed: (_isLoading || _sefreLoading)
+                        ? null
+                        : () => _sendOtp(channel: 'whatsapp'),
+                    child: const Text('Gunakan WhatsApp'),
+                  ),
                 const SizedBox(height: 10),
-                Center(child: Text('Dengan melanjutkan, Anda menyetujui Ketentuan & Privasi Selaris.',
-                    textAlign: TextAlign.center, style: KasiraDS.sans(size: 11, color: KasiraDS.textMuted))),
+                Center(
+                    child: Text(
+                        'Dengan melanjutkan, Anda menyetujui Ketentuan & Privasi Selaris.',
+                        textAlign: TextAlign.center,
+                        style: KasiraDS.sans(
+                            size: 11, color: KasiraDS.textMuted))),
               ],
-
               if (_step == RegStep.inputOtp) ...[
                 TextField(
                   controller: _otpCtrl,
@@ -473,45 +567,70 @@ class _RegisterPageState extends State<RegisterPage> {
                   maxLength: 6,
                   autofocus: true,
                   textAlign: TextAlign.center,
-                  style: KasiraDS.mono(size: 28, weight: FontWeight.w700, color: KasiraDS.textStrong, letterSpacing: 12),
+                  style: KasiraDS.mono(
+                      size: 24,
+                      weight: FontWeight.w700,
+                      color: KasiraDS.textStrong,
+                      letterSpacing: 4),
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  autofillHints: const [AutofillHints.oneTimeCode],
                   decoration: _deco(hint: '••••••').copyWith(counterText: ''),
-                  onChanged: (v) { if (v.length == 6) _register(v); },
+                  onChanged: (v) {
+                    if (v.length == 6) _register(v);
+                  },
                 ),
                 const SizedBox(height: 12),
-                if (_channel != 'sefrekuensi')
-                  Center(child: Text('Kode otomatis terbaca kalau WA di HP ini',
-                      style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted))),
                 const SizedBox(height: 16),
                 Center(
                   child: TextButton(
-                    onPressed: (_countdown <= 240 && !_isLoading && !_sefreLoading) ? () => _sendOtp() : null,
+                    onPressed:
+                        (_countdown <= 240 && !_isLoading && !_sefreLoading)
+                            ? () => _sendOtp()
+                            : null,
                     child: Text(
                       _countdown > 240
                           ? 'Belum dapat? Kirim ulang · ${_countdown ~/ 60}:${(_countdown % 60).toString().padLeft(2, '0')}'
-                          : (_channel == 'sefrekuensi' ? 'Belum dapat? Kirim ulang ke $kSefrekuensiName' : 'Belum dapat? Kirim ulang'),
-                      style: KasiraDS.sans(size: 13, color: _countdown > 240 ? KasiraDS.textMuted : KasiraDS.brandPrimary),
+                          : (_channel == 'sefrekuensi'
+                              ? 'Belum dapat? Kirim ulang ke $kSefrekuensiName'
+                              : 'Belum dapat? Kirim ulang'),
+                      style: KasiraDS.sans(
+                          size: 13,
+                          color: _countdown > 240
+                              ? KasiraDS.textMuted
+                              : KasiraDS.brandPrimary),
                     ),
                   ),
                 ),
                 if (_isLoading)
                   const Padding(
                     padding: EdgeInsets.only(top: 16),
-                    child: Center(child: CircularProgressIndicator(color: KasiraDS.brandPrimary)),
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: KasiraDS.brandPrimary)),
                   ),
               ],
-
               if (_step == RegStep.setPin) ...[
                 _label('PIN baru (6 angka)'),
-                _buildField('', _pinCtrl, obscure: true, keyboardType: TextInputType.number, maxLength: 6, hint: '••••••'),
+                _buildField('', _pinCtrl,
+                    obscure: true,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    hint: '••••••'),
                 const SizedBox(height: 14),
                 _label('Ulangi PIN'),
-                _buildField('', _pinConfirmCtrl, obscure: true, keyboardType: TextInputType.number, maxLength: 6, hint: '••••••'),
+                _buildField('', _pinConfirmCtrl,
+                    obscure: true,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    hint: '••••••'),
                 const SizedBox(height: 24),
                 _primary(_isLoading ? null : _setPin, 'Mulai pakai Selaris'),
                 const SizedBox(height: 10),
-                Center(child: Text('Lupa PIN? Masuk kembali dengan OTP WhatsApp.',
-                    style: KasiraDS.sans(size: 11.5, color: KasiraDS.textMuted))),
+                Center(
+                    child: Text(
+                        'Lupa PIN? Masuk kembali dengan Google atau kode Sefrekuensi.',
+                        style: KasiraDS.sans(
+                            size: 11.5, color: KasiraDS.textMuted))),
               ],
             ],
           ),
@@ -530,29 +649,50 @@ class _RegisterPageState extends State<RegisterPage> {
         hintStyle: KasiraDS.sans(size: 15, color: KasiraDS.textMuted),
         filled: true,
         fillColor: KasiraDS.surfaceCard,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.borderDefault)),
-        enabledBorder: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.borderDefault)),
-        focusedBorder: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 1.5)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+            borderRadius: KasiraDS.brMd,
+            borderSide: const BorderSide(color: KasiraDS.controlBorder)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: KasiraDS.brMd,
+            borderSide: const BorderSide(color: KasiraDS.controlBorder)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: KasiraDS.brMd,
+            borderSide:
+                const BorderSide(color: KasiraDS.brandPrimary, width: 1.5)),
       );
 
   Widget _primary(VoidCallback? onPressed, String label) => SizedBox(
         width: double.infinity,
-        height: 54,
         child: FilledButton(
           onPressed: onPressed,
           style: FilledButton.styleFrom(
-            backgroundColor: KasiraDS.brandPrimary,
-            shape: RoundedRectangleBorder(borderRadius: KasiraDS.brPill),
+            backgroundColor: KasiraDS.brandFill,
+            foregroundColor: KasiraDS.onBrandFill,
+            shape: RoundedRectangleBorder(borderRadius: KasiraDS.brMd),
           ),
           child: _isLoading
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : Text(label, style: KasiraDS.sans(size: 15.5, weight: FontWeight.w700, color: KasiraDS.textOnBrand)),
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : Text(label,
+                  style: KasiraDS.sans(
+                      size: 15.5,
+                      weight: FontWeight.w700,
+                      color: KasiraDS.onBrandFill)),
         ),
       );
 
-  Widget _buildField(String label, TextEditingController ctrl, {
-    String? hint, bool obscure = false, TextInputType? keyboardType, int? maxLength,
+  Widget _buildField(
+    String label,
+    TextEditingController ctrl, {
+    String? hint,
+    bool obscure = false,
+    TextInputType? keyboardType,
+    int? maxLength,
     ValueChanged<String>? onChanged,
   }) {
     return TextField(
@@ -560,10 +700,14 @@ class _RegisterPageState extends State<RegisterPage> {
       obscureText: obscure,
       keyboardType: keyboardType,
       maxLength: maxLength,
-      style: KasiraDS.sans(size: 15, weight: FontWeight.w600, color: KasiraDS.textStrong),
-      inputFormatters: keyboardType == TextInputType.number ? [FilteringTextInputFormatter.digitsOnly] : null,
+      style: KasiraDS.sans(
+          size: 15, weight: FontWeight.w600, color: KasiraDS.textStrong),
+      inputFormatters: keyboardType == TextInputType.number
+          ? [FilteringTextInputFormatter.digitsOnly]
+          : null,
       onChanged: onChanged,
-      decoration: _deco(hint: hint).copyWith(counterText: '', labelText: label.isEmpty ? null : label),
+      decoration: _deco(hint: hint)
+          .copyWith(counterText: '', labelText: label.isEmpty ? null : label),
     );
   }
 
@@ -578,7 +722,8 @@ class _RegisterPageState extends State<RegisterPage> {
       decoration: BoxDecoration(
         color: KasiraDS.brandPrimary.withOpacity(0.09),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: KasiraDS.brandPrimary.withOpacity(0.4), width: 1),
+        border:
+            Border.all(color: KasiraDS.brandPrimary.withOpacity(0.4), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -590,7 +735,8 @@ class _RegisterPageState extends State<RegisterPage> {
               Expanded(
                 child: Text.rich(
                   TextSpan(
-                    style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.35),
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 13, height: 1.35),
                     children: [
                       const TextSpan(text: 'Kami deteksi bisnisnya '),
                       TextSpan(
@@ -619,12 +765,14 @@ class _RegisterPageState extends State<RegisterPage> {
                     _showDomainSuggestion = false;
                   }),
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: KasiraDS.brandPrimary.withOpacity(0.6)),
+                    side: BorderSide(
+                        color: KasiraDS.brandPrimary.withOpacity(0.6)),
                     foregroundColor: KasiraDS.brandPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 6),
                   ),
                   icon: const Icon(Icons.check, size: 16),
-                  label: const Text('Iya, pakai', style: TextStyle(fontSize: 12)),
+                  label:
+                      const Text('Iya, pakai', style: TextStyle(fontSize: 12)),
                 ),
               ),
               const SizedBox(width: 8),

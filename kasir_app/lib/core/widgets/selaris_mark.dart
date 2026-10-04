@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/kasira_ds.dart';
 
 /// Logo Selaris: dua pil miring naik ke kanan (32°), pil atas ungu → pink,
 /// pil bawah pink → ungu. Geometri sama dengan `components/ui/logo.tsx` di
@@ -22,7 +23,7 @@ class SelarisMark extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(painter: _MarkPainter(color)),
+      child: CustomPaint(painter: _MarkPainter(color ?? KasiraDS.brandPrimary)),
     );
   }
 }

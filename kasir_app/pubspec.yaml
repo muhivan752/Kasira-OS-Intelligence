@@ -43,6 +43,8 @@ dependencies:
   # layar, bukan cuma masuk laci) dan nampilin pesan yang datang saat
   # app lagi dibuka — FCM sendiri nggak nampilin apa-apa di foreground.
   flutter_local_notifications: ^22.3.0
+  firebase_auth: ^6.7.0
+  google_sign_in: ^7.2.0
 
 dev_dependencies:
   flutter_test:
@@ -67,6 +69,15 @@ flutter_launcher_icons:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans.ttf
+    - family: SpaceMono
+      fonts:
+        - asset: assets/fonts/SpaceMono-Regular.ttf
+        - asset: assets/fonts/SpaceMono-Bold.ttf
+          weight: 700
   assets:
     - assets/sounds/
     - assets/onboarding/

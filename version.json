@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.6.29",
+    "version": "1.6.30",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.29/selaris-pos-v1.6.29.apk",
-    "release_notes": "Aplikasi pindah ke nama paket baru, jadi versi ini TIDAK menimpa yang lama. Urutannya: buka aplikasi lama, jalankan Pengaturan lalu Sinkronisasi sampai selesai, baru uninstall yang lama, lalu pasang yang baru. Kalau langkah sinkron dilewati, transaksi yang belum terkirim akan hilang. Perbaikan di versi ini: izin lokasi tidak lagi mengunci halaman printer, dan daftar printer kosong sekarang ada penjelasannya."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.30/selaris-pos-v1.6.30.apk",
+    "release_notes": "Tampilan masuk, daftar dan onboarding mengikuti Sefrekuensi: coral, putih hangat dan Plus Jakarta Sans. Login Google tersedia sesudah Firebase dikonfigurasi. Kode Sefrekuensi menjadi pilihan utama, WhatsApp tetap tersedia. Dari paket lama com.kasira.kasira_kasir: sinkronkan transaksi terlebih dahulu, lalu uninstall dan pasang aplikasi paket baru com.selaris.pos."
   },
   "dapur": {
-    "version": "1.6.29",
+    "version": "1.6.30",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.29/selaris-dapur-v1.6.29.apk",
-    "release_notes": "Aplikasi pindah ke nama paket baru, jadi versi ini TIDAK menimpa yang lama. Urutannya: buka aplikasi lama, jalankan Pengaturan lalu Sinkronisasi sampai selesai, baru uninstall yang lama, lalu pasang yang baru. Kalau langkah sinkron dilewati, transaksi yang belum terkirim akan hilang. Perbaikan di versi ini: izin lokasi tidak lagi mengunci halaman printer, dan daftar printer kosong sekarang ada penjelasannya."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.30/selaris-dapur-v1.6.30.apk",
+    "release_notes": "Build pendamping Selaris POS 1.6.30. Aplikasi Dapur tetap memakai login PIN dan package com.selaris.dapur. Dari aplikasi paket lama: sinkronkan transaksi sebelum uninstall, lalu pasang paket baru."
   }
 }

@@ -8,6 +8,9 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
+from jose import jwt, JWTError
+from datetime import datetime, timezone
 
 from backend.api import deps
 from backend.core import security
@@ -24,12 +27,136 @@ from backend.services.fonnte import send_whatsapp_message
 from backend.services import sefrekuensi as _sefre
 from backend.services.redis import get_redis_client
 from backend.services.audit import log_audit
+from backend.services.google_auth import verify_google_token
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 def _site_host() -> str:
     return settings.SITE_URL.replace("https://", "").replace("http://", "").rstrip("/")
+
+
+async def _login_payload(user: User, db: AsyncSession) -> dict:
+    if not user.is_active or user.deleted_at is not None:
+        raise HTTPException(403, "Akun tidak aktif")
+    tenant = (await db.execute(select(Tenant).where(
+        Tenant.id == user.tenant_id, Tenant.deleted_at.is_(None),
+    ))).scalar_one_or_none()
+    if tenant is None or not tenant.is_active:
+        raise HTTPException(403, "Usaha tidak aktif. Hubungi admin.")
+    outlet = (await db.execute(select(Outlet).where(
+        Outlet.tenant_id == user.tenant_id, Outlet.deleted_at.is_(None),
+        Outlet.is_active.is_(True),
+    ).order_by(Outlet.created_at).limit(1))).scalar_one_or_none()
+    tier = tenant.subscription_tier
+    mode = getattr(outlet, "stock_mode", "simple")
+    return {
+        "access_token": security.create_access_token(user.id),
+        "token_type": "bearer", "tenant_id": str(user.tenant_id),
+        "outlet_id": str(outlet.id) if outlet else None,
+        "stock_mode": mode.value if hasattr(mode, "value") else str(mode),
+        "subscription_tier": tier.value if hasattr(tier, "value") else str(tier),
+        "phone": user.phone,
+    }
+
+
+@router.get("/providers", response_model=StandardResponse[dict])
+async def auth_providers():
+    project = settings.GOOGLE_FIREBASE_PROJECT_ID.strip()
+    web_config = None
+    if project and settings.GOOGLE_FIREBASE_WEB_API_KEY and settings.GOOGLE_FIREBASE_WEB_APP_ID:
+        web_config = {
+            "projectId": project, "apiKey": settings.GOOGLE_FIREBASE_WEB_API_KEY,
+            "authDomain": settings.GOOGLE_FIREBASE_AUTH_DOMAIN or f"{project}.firebaseapp.com",
+            "appId": settings.GOOGLE_FIREBASE_WEB_APP_ID,
+        }
+    return StandardResponse(data={"google": {"enabled": bool(project), "web_config": web_config}, "sefrekuensi": _sefre.enabled()})
+
+
+class GoogleSignInRequest(BaseModel):
+    id_token: str = Field(..., min_length=20, max_length=8192)
+
+
+@router.post("/google", response_model=StandardResponse[dict])
+async def google_sign_in(request: GoogleSignInRequest, db: AsyncSession = Depends(deps.get_db)):
+    identity = await verify_google_token(request.id_token)
+    user = (await db.execute(select(User).where(
+        User.google_project_id == identity["project"], User.google_uid == identity["uid"],
+    ))).scalar_one_or_none()
+    if user:
+        return StandardResponse(data={"registered": True, **await _login_payload(user, db)})
+    return StandardResponse(data={"registered": False, "name": identity["name"], "email": identity["email"]})
+
+
+class GooglePhoneRequest(GoogleSignInRequest, OTPVerifyRequest):
+    pass
+
+
+async def _check_google_phone_otp(phone: str, otp: str, redis) -> None:
+    key = f"otp_verify:{phone}"
+    attempts = await redis.get(key)
+    if attempts and int(attempts) >= 5:
+        raise HTTPException(429, "Terlalu banyak percobaan. Coba lagi dalam 15 menit.")
+    stored = await redis.get(f"otp:{phone}")
+    value = stored.decode() if isinstance(stored, bytes) else stored
+    if not value or value != otp:
+        count = await redis.incr(key)
+        if count == 1:
+            await redis.expire(key, 900)
+        raise HTTPException(400, "Kode tidak valid atau sudah kedaluwarsa. Kirim ulang kode.")
+
+
+@router.post("/otp/register/verify", response_model=StandardResponse[dict])
+async def verify_registration_otp(request: OTPVerifyRequest):
+    redis = await get_redis_client()
+    await _check_google_phone_otp(request.phone, request.otp, redis)
+    nonce = str(uuid.uuid4())
+    proof = jwt.encode({"aud": "selaris:registration", "phone": request.phone, "jti": nonce,
+                        "exp": datetime.now(timezone.utc) + timedelta(minutes=15)},
+                       settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    await redis.setex(f"google_onboarding:{nonce}", 900, request.phone)
+    await redis.delete(f"otp:{request.phone}")
+    return StandardResponse(data={"otp_proof": proof})
+
+
+@router.post("/google/phone", response_model=StandardResponse[dict])
+async def google_phone(request: GooglePhoneRequest, db: AsyncSession = Depends(deps.get_db)):
+    identity = await verify_google_token(request.id_token)
+    redis = await get_redis_client()
+    await _check_google_phone_otp(request.phone, request.otp, redis)
+    user = (await db.execute(select(User).where(
+        User.phone == request.phone, User.deleted_at.is_(None),
+    ).with_for_update())).scalar_one_or_none()
+    owner = (await db.execute(select(User).where(
+        User.google_project_id == identity["project"], User.google_uid == identity["uid"],
+    ))).scalar_one_or_none()
+    if owner and (user is None or owner.id != user.id):
+        raise HTTPException(409, "Google ini sudah terhubung ke akun lain. Masuk dengan Google tersebut.")
+    if user:
+        payload = await _login_payload(user, db)
+        if user.google_uid and (user.google_uid != identity["uid"] or user.google_project_id != identity["project"]):
+            raise HTTPException(409, "Nomor ini sudah terhubung ke Google lain. Gunakan Google yang sebelumnya.")
+        user.google_project_id = identity["project"]
+        user.google_uid = identity["uid"]
+        user.google_email = identity["email"]
+        user.row_version += 1
+        try:
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(409, "Google ini sudah terhubung. Silakan masuk kembali.") from None
+        await log_audit(db, action="google.link", entity="user", entity_id=str(user.id),
+                        after_state={"google_connected": True}, user_id=str(user.id), tenant_id=str(user.tenant_id))
+        await db.commit()
+        await redis.delete(f"otp:{request.phone}")
+        return StandardResponse(data={"registered": True, **payload})
+    nonce = str(uuid.uuid4())
+    claims = {"aud": "selaris:onboarding", "phone": request.phone, **identity,
+              "jti": nonce, "exp": datetime.now(timezone.utc) + timedelta(minutes=15)}
+    proof = jwt.encode(claims, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    await redis.setex(f"google_onboarding:{nonce}", 900, request.phone)
+    await redis.delete(f"otp:{request.phone}")
+    return StandardResponse(data={"registered": False, "google_proof": proof, "name": identity["name"], "email": identity["email"]})
 
 
 @router.post("/otp/send", response_model=StandardResponse[dict])
@@ -47,7 +174,11 @@ async def send_otp(
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
-    if request.purpose == "register":
+    if request.purpose == "google":
+        if not request.id_token:
+            raise HTTPException(422, "Pilih akun Google terlebih dahulu.")
+        await verify_google_token(request.id_token)
+    elif request.purpose == "register":
         if user:
             raise HTTPException(status_code=400, detail="Nomor HP sudah terdaftar. Silakan login.")
     else:
@@ -251,7 +382,9 @@ class RegisterRequest(BaseModel):
     phone: str = Field(..., description="Format: 628xxx")
     owner_name: str = Field(..., min_length=2)
     pin: str = Field(..., min_length=6, max_length=6)
-    otp: str = Field(..., min_length=6, max_length=6)
+    otp: Optional[str] = Field(None, min_length=6, max_length=6)
+    google_proof: Optional[str] = Field(None, max_length=8192)
+    otp_proof: Optional[str] = Field(None, max_length=8192)
     business_type: str = Field("cafe", description="warung/cafe/resto/other")
     referral_code: Optional[str] = Field(None, description="Kode referral dari tenant lain")
 
@@ -270,15 +403,30 @@ async def register(
     db: AsyncSession = Depends(deps.get_db),
 ) -> Any:
     """Daftarkan tenant baru beserta owner user-nya."""
-    # Verifikasi OTP
+    identity = None
+    proof_nonce = None
     redis = await get_redis_client()
-    stored_otp = await redis.get(f"otp:{request.phone}")
-    if not stored_otp:
-        raise HTTPException(status_code=400, detail="OTP expired atau tidak ditemukan. Kirim ulang OTP.")
-    otp_str_reg = stored_otp.decode() if isinstance(stored_otp, bytes) else str(stored_otp)
-    if otp_str_reg != request.otp:
-        raise HTTPException(status_code=400, detail="OTP tidak valid")
-    await redis.delete(f"otp:{request.phone}")
+    if request.google_proof or request.otp_proof:
+        try:
+            claims = jwt.decode(request.google_proof or request.otp_proof, settings.SECRET_KEY,
+                                algorithms=[settings.ALGORITHM],
+                                audience="selaris:onboarding" if request.google_proof else "selaris:registration")
+            if claims["phone"] != request.phone:
+                raise ValueError("Identity mismatch")
+            if request.google_proof:
+                identity = claims
+                if identity["project"] != settings.GOOGLE_FIREBASE_PROJECT_ID:
+                    raise ValueError("Project mismatch")
+            proof_nonce = claims["jti"]
+            pending = await redis.get(f"google_onboarding:{proof_nonce}")
+            if isinstance(pending, bytes):
+                pending = pending.decode()
+            if pending != request.phone:
+                raise ValueError("Proof consumed")
+        except (JWTError, ValueError, KeyError):
+            raise HTTPException(401, "Verifikasi akun kedaluwarsa. Silakan masuk kembali.") from None
+    else:
+        await _check_google_phone_otp(request.phone, request.otp or "", redis)
 
     # Cek duplikat phone
     stmt = select(User).where(User.phone == request.phone, User.deleted_at == None)
@@ -314,6 +462,10 @@ async def register(
                 full_name=request.owner_name, phone=request.phone,
                 pin_hash=security.get_pin_hash(request.pin), is_active=True,
                 is_superuser=True)
+    if identity:
+        user.google_project_id = identity["project"]
+        user.google_uid = identity["uid"]
+        user.google_email = identity["email"]
 
     # Auto-seed default categories
     categories = [
@@ -322,7 +474,15 @@ async def register(
     ]
 
     db.add_all([tenant, brand, outlet, user] + categories)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, "Nomor atau Google ini sudah terdaftar. Silakan masuk.") from None
+    if proof_nonce:
+        await redis.delete(f"google_onboarding:{proof_nonce}")
+    else:
+        await redis.delete(f"otp:{request.phone}")
 
     # Process referral code if provided
     referral_msg = ""

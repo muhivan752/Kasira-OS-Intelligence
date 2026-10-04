@@ -79,8 +79,9 @@ const GA_ID = process.env.NEXT_PUBLIC_GA_ID || '';
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="id" className={`${plusJakarta.variable} ${gabarito.variable} ${spaceMono.variable}`}>
+    <html lang="id" className={`${plusJakarta.variable} ${gabarito.variable} ${spaceMono.variable}`} suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: "try{document.documentElement.classList.toggle('dark',localStorage.getItem('selaris-theme')==='dark')}catch{}" }} />
         {GA_ID && (
           <>
             <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} />

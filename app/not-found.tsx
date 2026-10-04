@@ -27,7 +27,7 @@ export default function NotFound() {
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
           <Link
             href="/jelajah"
-            className="rounded-xl bg-[var(--brand-primary)] px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            className="rounded-xl bg-[var(--brand-primary)] px-5 py-3 text-sm font-semibold text-[var(--brand-on-primary)] transition-opacity hover:opacity-90"
           >
             Lihat toko yang ada
           </Link>

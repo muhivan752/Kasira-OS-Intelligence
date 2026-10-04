@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     FCM_CLIENT_EMAIL: str = ""
     FCM_PRIVATE_KEY: str = ""
 
+    GOOGLE_FIREBASE_PROJECT_ID: str = ""
+    GOOGLE_FIREBASE_WEB_API_KEY: str = ""
+    GOOGLE_FIREBASE_AUTH_DOMAIN: str = ""
+    GOOGLE_FIREBASE_WEB_APP_ID: str = ""
+
     # Xendit Master Keys
     XENDIT_API_KEY: str = ""
     XENDIT_WEBHOOK_TOKEN: str = ""

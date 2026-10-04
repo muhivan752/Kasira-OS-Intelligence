@@ -13,6 +13,7 @@ import '../../../../core/widgets/selaris_mark.dart';
 import '../../../../core/widgets/sefrekuensi_otp_card.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/session_cache.dart';
+import '../../../../core/services/google_auth_service.dart';
 
 // --- STATE ---
 enum AuthStep { inputPhone, inputOtp, setPin, pinLogin }
@@ -50,7 +51,7 @@ class AuthState {
     this.countdown = 300,
     this.canResendOtp = false,
     this.isSuccess = false,
-    this.channel = 'whatsapp',
+    this.channel = 'sefrekuensi',
     this.sefreNotFound = false,
     this.sefreLoading = false,
   });
@@ -97,16 +98,16 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
 });
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier() : super(AuthState()) {
-    _checkInitialState();
+  AuthNotifier({bool restoreSession = true}) : super(AuthState()) {
+    if (restoreSession) _checkInitialState();
   }
 
   final _storage = const FlutterSecureStorage();
   Dio get _dio => Dio(BaseOptions(
-    baseUrl: AppConfig.baseUrl,
-    connectTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 10),
-  ));
+        baseUrl: AppConfig.baseUrl,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+      ));
   Timer? _timer;
 
   Future<void> _checkInitialState() async {
@@ -126,12 +127,41 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(phone: phone, clearError: true);
   }
 
+  Future<void> acceptGoogleSession(Map<String, dynamic> data) async {
+    final cache = SessionCache.instance;
+    final phone = data['phone']?.toString() ?? '';
+    if (cache.phone != phone) {
+      await cache.clear();
+      await _storage.delete(key: 'user_pin');
+    }
+    await cache.setAccessToken(data['access_token'] as String);
+    await cache.setPhone(phone);
+    await cache.setTenantId(data['tenant_id'] as String);
+    await cache.setOutletId(data['outlet_id']?.toString() ?? '');
+    await cache.setStockMode(data['stock_mode']?.toString() ?? 'simple');
+    await cache.setSubscriptionTier(
+        data['subscription_tier']?.toString() ?? 'starter');
+    final pin = await _storage.read(key: 'user_pin');
+    state = state.copyWith(
+        phone: phone,
+        isLoading: false,
+        clearError: true,
+        step: pin == null ? AuthStep.setPin : AuthStep.pinLogin,
+        isSuccess: false,
+        pinAttempts: 0,
+        isLocked: false,
+        firstPin: '');
+  }
+
   /// [channel] null = pakai kanal yang lagi dipilih di state (buat kirim
   /// ulang). Sefrekuensi loading-nya dipisah supaya tombol WhatsApp nggak
   /// ikut muter waktu yang ditekan kartu Sefrekuensi.
   Future<void> sendOtp({String? channel}) async {
-    if (state.phone.isEmpty || state.phone.length < 10 || !state.phone.startsWith('628')) {
-      state = state.copyWith(error: 'Format nomor HP tidak valid (harus 628xxx dan min 10 digit)');
+    if (state.phone.isEmpty ||
+        state.phone.length < 10 ||
+        !state.phone.startsWith('628')) {
+      state = state.copyWith(
+          error: 'Format nomor HP tidak valid (harus 628xxx dan min 10 digit)');
       return;
     }
     final via = channel ?? state.channel;
@@ -145,7 +175,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
 
     try {
-      final response = await _dio.post('/api/v1/auth/otp/send', data: {'phone': state.phone, 'channel': via});
+      final response = await _dio.post('/api/v1/auth/otp/send',
+          data: {'phone': state.phone, 'channel': via});
       String got = 'whatsapp';
       try {
         final respData = response.data is String
@@ -165,16 +196,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _startTimer();
     } on DioException catch (e) {
       dynamic detail;
-      try { detail = e.response?.data['detail']; } catch (_) {}
+      try {
+        detail = e.response?.data['detail'];
+      } catch (_) {}
       if (otpErrorCode(detail) == kSefrekuensiNotFoundCode) {
-        state = state.copyWith(isLoading: false, sefreLoading: false, sefreNotFound: true);
+        state = state.copyWith(
+            isLoading: false, sefreLoading: false, sefreNotFound: true);
         return;
       }
-      final errMsg = otpErrorMessage(detail, '[${e.type.name}] ${e.message ?? e.error?.toString() ?? 'no message'}');
-      state = state.copyWith(isLoading: false, sefreLoading: false, error: errMsg);
+      final errMsg = otpErrorMessage(detail,
+          '[${e.type.name}] ${e.message ?? e.error?.toString() ?? 'no message'}');
+      state =
+          state.copyWith(isLoading: false, sefreLoading: false, error: errMsg);
     } catch (e) {
       final msg = e.toString();
-      state = state.copyWith(isLoading: false, sefreLoading: false, error: 'Exception: ${msg.length > 80 ? msg.substring(0, 80) : msg}');
+      state = state.copyWith(
+          isLoading: false,
+          sefreLoading: false,
+          error: 'Exception: ${msg.length > 80 ? msg.substring(0, 80) : msg}');
     }
   }
 
@@ -202,14 +241,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> verifyOtp(String otp) async {
     if (otp.length != 6) return;
-    
+
     state = state.copyWith(isLoading: true, otp: otp, clearError: true);
-    
+
     try {
-      final response = await _dio.post('/api/v1/auth/otp/verify', data: {
-        'phone': state.phone,
-        'otp': otp
-      });
+      final response = await _dio.post('/api/v1/auth/otp/verify',
+          data: {'phone': state.phone, 'otp': otp});
 
       final respData = response.data is String
           ? json.decode(response.data as String) as Map<String, dynamic>
@@ -222,7 +259,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final subscriptionTier = data['subscription_tier']?.toString();
 
       if (token.isEmpty) {
-        state = state.copyWith(isLoading: false, error: 'Token tidak ditemukan dalam response');
+        state = state.copyWith(
+            isLoading: false, error: 'Token tidak ditemukan dalam response');
         return;
       }
 
@@ -233,7 +271,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (tenantId != null) await cache.setTenantId(tenantId);
       if (outletId != null) await cache.setOutletId(outletId);
       if (stockMode != null) await cache.setStockMode(stockMode);
-      if (subscriptionTier != null) await cache.setSubscriptionTier(subscriptionTier);
+      if (subscriptionTier != null)
+        await cache.setSubscriptionTier(subscriptionTier);
 
       _timer?.cancel();
 
@@ -241,7 +280,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (savedPin != null && savedPin.isNotEmpty) {
         state = state.copyWith(isLoading: false, isSuccess: true);
       } else {
-        state = state.copyWith(step: AuthStep.setPin, isLoading: false, firstPin: '');
+        state = state.copyWith(
+            step: AuthStep.setPin, isLoading: false, firstPin: '');
       }
     } on DioException catch (e) {
       state = state.copyWith(
@@ -255,7 +295,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         debugPrint('[AUTH] verifyOtp error: $e');
         debugPrint('[AUTH] stack: $stack');
       }
-      state = state.copyWith(isLoading: false, error: 'Terjadi kesalahan sistem: $e');
+      state = state.copyWith(
+          isLoading: false, error: 'Terjadi kesalahan sistem: $e');
     }
   }
 
@@ -268,7 +309,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(error: 'PIN tidak cocok');
       return;
     }
-    
+
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       await _storage.write(key: 'user_pin', value: pin);
@@ -292,7 +333,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (savedPin == pin) {
         // PIN benar → init cache + langsung masuk (jangan block UI)
         await SessionCache.instance.init();
-        state = state.copyWith(isLoading: false, pinAttempts: 0, isSuccess: true);
+        state =
+            state.copyWith(isLoading: false, pinAttempts: 0, isSuccess: true);
         // Fire-and-forget token check
         final token = SessionCache.instance.accessToken;
         if (token != null) {
@@ -300,9 +342,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
             baseUrl: AppConfig.apiV1,
             connectTimeout: const Duration(seconds: 3),
             receiveTimeout: const Duration(seconds: 3),
-          )).get('/auth/me',
-              options: Options(headers: {'Authorization': 'Bearer $token'}))
-          .then((res) {
+          ))
+              .get('/auth/me',
+                  options: Options(headers: {'Authorization': 'Bearer $token'}))
+              .then((res) {
             if (res.statusCode != 200) {
               // Token invalid — will be caught by 401 interceptor on next API call
             }
@@ -314,14 +357,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final attempts = state.pinAttempts + 1;
         if (attempts >= 3) {
           state = state.copyWith(
-            isLoading: false, 
-            pinAttempts: attempts, 
+            isLoading: false,
+            pinAttempts: attempts,
             isLocked: true,
             error: 'PIN salah 3 kali. Akun terkunci, gunakan OTP.',
           );
         } else {
           state = state.copyWith(
-            isLoading: false, 
+            isLoading: false,
             pinAttempts: attempts,
             error: 'PIN salah. Sisa percobaan: ${3 - attempts}',
           );
@@ -334,11 +377,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void useOtpInstead() {
     state = state.copyWith(
-      step: AuthStep.inputPhone, 
-      clearError: true, 
-      isLocked: false, 
-      pinAttempts: 0
-    );
+        step: AuthStep.inputPhone,
+        clearError: true,
+        isLocked: false,
+        pinAttempts: 0);
   }
 }
 
@@ -352,17 +394,41 @@ class LoginPage extends ConsumerStatefulWidget {
 
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _phoneController = TextEditingController();
-  final _otpControllers = List.generate(6, (_) => TextEditingController());
-  final _otpFocusNodes = List.generate(6, (_) => FocusNode());
-  
+  final _otpController = TextEditingController();
+
   String _pinInput = '';
   bool _isConfirmingPin = false;
+  bool _googleAvailable = false;
+  bool _checkingGoogle = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGoogle();
+  }
+
+  Future<void> _loadGoogle() async {
+    try {
+      final response = await Dio(BaseOptions(
+              baseUrl: AppConfig.apiV1,
+              connectTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 10)))
+          .get('/auth/providers');
+      final enabled = response.data['data']['google']['enabled'] == true;
+      final firebase = enabled && await GoogleAuthService.available();
+      if (mounted) {
+        setState(() => _googleAvailable = firebase);
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _checkingGoogle = false);
+    }
+  }
 
   @override
   void dispose() {
     _phoneController.dispose();
-    for (var c in _otpControllers) { c.dispose(); }
-    for (var f in _otpFocusNodes) { f.dispose(); }
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -460,11 +526,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.check_circle_outline, color: Colors.white, size: 64),
+              const Icon(Icons.check_circle_outline,
+                  color: Colors.white, size: 64),
               const SizedBox(height: 16),
-              const Text('Login berhasil!', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+              const Text('Login berhasil!',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('Menyiapkan...', style: TextStyle(color: Colors.white70, fontSize: 14)),
+              const Text('Menyiapkan...',
+                  style: TextStyle(color: Colors.white70, fontSize: 14)),
               const SizedBox(height: 24),
               const CircularProgressIndicator(color: Colors.white),
             ],
@@ -473,7 +545,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       );
     }
 
-    if (authState.isLoading && authState.step == AuthStep.pinLogin && _pinInput.isEmpty) {
+    if (authState.isLoading &&
+        authState.step == AuthStep.pinLogin &&
+        _pinInput.isEmpty) {
       return const Scaffold(
         backgroundColor: KasiraDS.brandPrimary,
         body: Center(child: CircularProgressIndicator(color: Colors.white)),
@@ -482,23 +556,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     return Scaffold(
       backgroundColor: KasiraDS.bgBase,
-      body: Center(
+      body: SafeArea(
+          child: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: Container(
             constraints: const BoxConstraints(maxWidth: 440),
             width: double.infinity,
-            padding: const EdgeInsets.all(32),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: KasiraDS.surfaceCard,
               borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
-                ),
-              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -506,15 +574,23 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 _buildHeader(),
                 const SizedBox(height: 32),
                 _buildContent(authState),
-                if (authState.step == AuthStep.inputPhone || authState.step == AuthStep.pinLogin) ...[
+                if (authState.step == AuthStep.inputPhone ||
+                    authState.step == AuthStep.pinLogin) ...[
                   const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text('Belum punya akun? ', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
-                      GestureDetector(
-                        onTap: () => context.go('/register'),
-                        child: const Text('Daftar Gratis', style: TextStyle(color: KasiraDS.brandPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                      Text('Belum punya akun? ',
+                          style: TextStyle(
+                              color: KasiraDS.textMuted, fontSize: 13)),
+                      TextButton(
+                        onPressed: () => context.go('/register'),
+                        child: const Text('Daftar Gratis',
+                            style: TextStyle(
+                                color: KasiraDS.brandPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600)),
                       ),
                     ],
                   ),
@@ -523,7 +599,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             ),
           ),
         ),
-      ),
+      )),
     );
   }
 
@@ -533,7 +609,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       children: [
         const SelarisMark(size: 36),
         const SizedBox(width: 10),
-        Text('Selaris', style: KasiraDS.display(size: 26, color: KasiraDS.textStrong)),
+        Flexible(
+            child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('Selaris',
+                    style: KasiraDS.display(
+                        size: 26, color: KasiraDS.textStrong)))),
       ],
     );
   }
@@ -555,9 +636,34 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Nomor HP Anda', style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
+        Text('Masuk ke usaha Anda',
+            style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
+        const SizedBox(height: 8),
+        Text('Gunakan akun Google, atau kode masuk dari Sefrekuensi.',
+            style: KasiraDS.sans(size: 15, color: KasiraDS.textBody)),
+        const SizedBox(height: 20),
+        SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _googleAvailable ? () => context.go('/google') : null,
+              icon: const Icon(Icons.account_circle_outlined),
+              label: const Text('Lanjut dengan Google'),
+            )),
+        if (_checkingGoogle) ...[
+          const SizedBox(height: 8),
+          Text('Menyiapkan pilihan login…',
+              style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
+        ] else if (!_googleAvailable) ...[
+          const SizedBox(height: 8),
+          Text('Google belum tersedia. Gunakan kode Sefrekuensi.',
+              style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
+        ],
+        const SizedBox(height: 24),
+        Text('Nomor HP Anda',
+            style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
         const SizedBox(height: 6),
-        Text('Kode masuk dikirim ke WhatsApp atau $kSefrekuensiName. Nggak ada password.',
+        Text(
+            'Kode masuk dikirim ke WhatsApp atau $kSefrekuensiName. Nggak ada password.',
             style: KasiraDS.sans(size: 13.5, color: KasiraDS.textMuted)),
         const SizedBox(height: 20),
         Text('NOMOR HP', style: KasiraDS.eyebrow()),
@@ -568,56 +674,97 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           controller: _phoneController,
           keyboardType: TextInputType.phone,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: KasiraDS.sans(size: 17, weight: FontWeight.w600, color: KasiraDS.textStrong),
+          style: KasiraDS.sans(
+              size: 17, weight: FontWeight.w600, color: KasiraDS.textStrong),
           decoration: InputDecoration(
             hintText: '812 3456 7890',
             prefixIcon: Padding(
               padding: const EdgeInsets.only(left: 14, right: 8),
-              child: Text('🇮🇩 +62', style: KasiraDS.sans(size: 15, weight: FontWeight.w600, color: KasiraDS.textMuted)),
+              child: Text('🇮🇩 +62',
+                  style: KasiraDS.sans(
+                      size: 15,
+                      weight: FontWeight.w600,
+                      color: KasiraDS.textMuted)),
             ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+            prefixIconConstraints:
+                const BoxConstraints(minWidth: 0, minHeight: 0),
             filled: true,
             fillColor: KasiraDS.surfaceCard,
-            border: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.borderDefault)),
-            enabledBorder: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.borderDefault)),
-            focusedBorder: OutlineInputBorder(borderRadius: KasiraDS.brMd, borderSide: const BorderSide(color: KasiraDS.brandPrimary, width: 1.5)),
+            border: OutlineInputBorder(
+                borderRadius: KasiraDS.brMd,
+                borderSide: const BorderSide(color: KasiraDS.controlBorder)),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: KasiraDS.brMd,
+                borderSide: const BorderSide(color: KasiraDS.controlBorder)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: KasiraDS.brMd,
+                borderSide:
+                    const BorderSide(color: KasiraDS.brandPrimary, width: 1.5)),
           ),
           onChanged: (val) {
             var d = val;
             if (d.startsWith('62')) d = d.substring(2);
-            while (d.startsWith('0')) { d = d.substring(1); }
+            while (d.startsWith('0')) {
+              d = d.substring(1);
+            }
             ref.read(authProvider.notifier).setPhone(d.isEmpty ? '' : '62$d');
           },
         ),
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: KasiraDS.surfaceSunken, borderRadius: KasiraDS.brSm),
-          child: Text('Nomor ini juga jadi nomor WA pemilik buat struk & laporan pagi.',
+          decoration: BoxDecoration(
+              color: KasiraDS.surfaceSunken, borderRadius: KasiraDS.brSm),
+          child: Text(
+              'Nomor ini juga jadi nomor WA pemilik buat struk & laporan pagi.',
               style: KasiraDS.sans(size: 11.5, color: KasiraDS.textBody)),
         ),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
-          height: 54,
           child: FilledButton(
-            onPressed: (state.isLoading || state.sefreLoading) ? null : () => ref.read(authProvider.notifier).sendOtp(channel: 'whatsapp'),
+            onPressed: (state.isLoading || state.sefreLoading)
+                ? null
+                : () => ref
+                    .read(authProvider.notifier)
+                    .sendOtp(channel: 'sefrekuensi'),
             style: FilledButton.styleFrom(
-              backgroundColor: KasiraDS.brandPrimary,
-              shape: RoundedRectangleBorder(borderRadius: KasiraDS.brPill),
+              backgroundColor: KasiraDS.brandFill,
+              foregroundColor: KasiraDS.onBrandFill,
+              shape: RoundedRectangleBorder(borderRadius: KasiraDS.brMd),
             ),
-            child: state.isLoading
-                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text('Kirim kode ke WhatsApp →', style: KasiraDS.sans(size: 15.5, weight: FontWeight.w700, color: KasiraDS.textOnBrand)),
+            child: (state.isLoading || state.sefreLoading)
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        color: KasiraDS.onBrandFill, strokeWidth: 2))
+                : Text('Kirim kode ke Sefrekuensi',
+                    style: KasiraDS.sans(
+                        size: 15.5,
+                        weight: FontWeight.w700,
+                        color: KasiraDS.onBrandFill)),
           ),
         ),
         const SizedBox(height: 12),
-        SefrekuensiOtpCard(
-          loading: state.isLoading || state.sefreLoading,
-          notFound: state.sefreNotFound,
-          onPick: () => ref.read(authProvider.notifier).sendOtp(channel: 'sefrekuensi'),
-          onFallbackWhatsapp: () => ref.read(authProvider.notifier).sendOtp(channel: 'whatsapp'),
-        ),
+        if (state.sefreNotFound)
+          SefrekuensiOtpCard(
+            loading: state.isLoading || state.sefreLoading,
+            notFound: state.sefreNotFound,
+            onPick: () =>
+                ref.read(authProvider.notifier).sendOtp(channel: 'sefrekuensi'),
+            onFallbackWhatsapp: () =>
+                ref.read(authProvider.notifier).sendOtp(channel: 'whatsapp'),
+          ),
+        if (!state.sefreNotFound)
+          TextButton(
+            onPressed: (state.isLoading || state.sefreLoading)
+                ? null
+                : () => ref
+                    .read(authProvider.notifier)
+                    .sendOtp(channel: 'whatsapp'),
+            child: const Text('Gunakan WhatsApp'),
+          ),
       ],
     );
   }
@@ -626,11 +773,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final lewatSefre = state.channel == 'sefrekuensi';
     final minutes = (state.countdown / 60).floor();
     final seconds = state.countdown % 60;
-    final timeString = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    final timeString =
+        '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
 
     return Column(
       children: [
-        Text(lewatSefre ? 'Periksa $kSefrekuensiName Anda' : 'Periksa WhatsApp Anda',
+        Text(
+            lewatSefre
+                ? 'Periksa $kSefrekuensiName Anda'
+                : 'Periksa WhatsApp Anda',
             style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
         const SizedBox(height: 6),
         Text(
@@ -641,55 +792,55 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(6, (index) {
-            return SizedBox(
-              width: 45,
-              child: TextField(
-                controller: _otpControllers[index],
-                focusNode: _otpFocusNodes[index],
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                maxLength: 1,
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                decoration: InputDecoration(
-                  counterText: '',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onChanged: (value) {
-                  if (value.isNotEmpty && index < 5) {
-                    _otpFocusNodes[index + 1].requestFocus();
-                  } else if (value.isEmpty && index > 0) {
-                    _otpFocusNodes[index - 1].requestFocus();
-                  }
-                  
-                  final otp = _otpControllers.map((c) => c.text).join();
-                  if (otp.length == 6) {
-                    ref.read(authProvider.notifier).verifyOtp(otp);
-                  }
-                },
-              ),
-            );
-          }),
+        TextField(
+          controller: _otpController,
+          enabled: !state.isLoading,
+          keyboardType: TextInputType.number,
+          autofillHints: const [AutofillHints.oneTimeCode],
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          textAlign: TextAlign.center,
+          maxLength: 6,
+          style: KasiraDS.mono(size: 24, weight: FontWeight.w700),
+          decoration:
+              const InputDecoration(labelText: 'Kode 6 angka', counterText: ''),
+          onChanged: (_) => setState(() {}),
         ),
+        const SizedBox(height: 16),
+        SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: state.isLoading || _otpController.text.length != 6
+                  ? null
+                  : () => ref
+                      .read(authProvider.notifier)
+                      .verifyOtp(_otpController.text),
+              child: const Text('Verifikasi kode'),
+            )),
         const SizedBox(height: 24),
         if (state.isLoading)
           const CircularProgressIndicator()
         else
           Column(
             children: [
-              Text(timeString, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              Text(timeString,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 8),
               TextButton(
-                onPressed: state.canResendOtp ? () {
-                  for (var c in _otpControllers) { c.clear(); }
-                  _otpFocusNodes[0].requestFocus();
-                  ref.read(authProvider.notifier).sendOtp();
-                } : null,
+                onPressed: state.canResendOtp
+                    ? () {
+                        _otpController.clear();
+                        ref.read(authProvider.notifier).sendOtp();
+                      }
+                    : null,
                 child: Text(
-                  lewatSefre ? 'Belum dapat? Kirim ulang ke $kSefrekuensiName' : 'Belum dapat? Kirim ulang',
-                  style: TextStyle(color: state.canResendOtp ? KasiraDS.brandPrimary : Colors.grey),
+                  lewatSefre
+                      ? 'Belum dapat? Kirim ulang ke $kSefrekuensiName'
+                      : 'Belum dapat? Kirim ulang',
+                  style: TextStyle(
+                      color: state.canResendOtp
+                          ? KasiraDS.brandPrimary
+                          : Colors.grey),
                 ),
               ),
             ],
@@ -707,23 +858,27 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             color: KasiraDS.brandPrimary.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.check_circle, color: KasiraDS.brandPrimary, size: 18),
-              SizedBox(width: 8),
-              Text('OTP terverifikasi', style: TextStyle(color: KasiraDS.brandPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
-            ],
+          child: const Text(
+            'Akun terverifikasi',
+            style: TextStyle(
+                color: KasiraDS.brandPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 13),
           ),
         ),
         const SizedBox(height: 16),
         Text(
           _isConfirmingPin ? 'Konfirmasi PIN' : 'Buat PIN Baru',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Text(
-          _isConfirmingPin ? 'Masukkan ulang PIN 6 digit Anda' : 'PIN digunakan untuk login cepat berikutnya',
+          _isConfirmingPin
+              ? 'Masukkan ulang PIN 6 digit Anda'
+              : 'PIN digunakan untuk login cepat berikutnya',
           style: const TextStyle(color: KasiraDS.textMuted),
           textAlign: TextAlign.center,
         ),
@@ -744,7 +899,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   _isConfirmingPin = true;
                   _pinInput = '';
                 } else {
-                  ref.read(authProvider.notifier).confirmPin(_pinInput).then((_) {
+                  ref
+                      .read(authProvider.notifier)
+                      .confirmPin(_pinInput)
+                      .then((_) {
                     final currentState = ref.read(authProvider);
                     if (currentState.error != null) {
                       setState(() {
@@ -771,19 +929,23 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       children: [
         Text(
           'Masukkan PIN',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Text(
           state.isLocked ? 'Akun terkunci' : 'Masukkan PIN 6 digit Anda',
-          style: TextStyle(color: state.isLocked ? KasiraDS.danger : KasiraDS.textMuted),
+          style: TextStyle(
+              color: state.isLocked ? KasiraDS.danger : KasiraDS.textMuted),
         ),
         const SizedBox(height: 24),
         _buildPinDots(_pinInput.length),
         const SizedBox(height: 32),
         _buildCustomKeypad((val) {
           if (state.isLocked || state.isLoading) return;
-          
+
           setState(() {
             if (val == 'del') {
               if (_pinInput.isNotEmpty) {
@@ -792,7 +954,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             } else if (_pinInput.length < 6) {
               _pinInput += val;
               if (_pinInput.length == 6) {
-                ref.read(authProvider.notifier).loginWithPin(_pinInput).then((_) {
+                ref
+                    .read(authProvider.notifier)
+                    .loginWithPin(_pinInput)
+                    .then((_) {
                   final currentState = ref.read(authProvider);
                   if (!currentState.isSuccess) {
                     setState(() {
@@ -831,7 +996,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           height: 16,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: index < length ? KasiraDS.brandPrimary : KasiraDS.borderSubtle,
+            color:
+                index < length ? KasiraDS.brandPrimary : KasiraDS.borderSubtle,
           ),
         );
       }),
@@ -847,7 +1013,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       crossAxisSpacing: 8,
       physics: const NeverScrollableScrollPhysics(),
       children: [
-        for (var i = 1; i <= 9; i++) _buildKeypadButton(i.toString(), onKeyPress),
+        for (var i = 1; i <= 9; i++)
+          _buildKeypadButton(i.toString(), onKeyPress),
         const SizedBox(),
         _buildKeypadButton('0', onKeyPress),
         _buildKeypadButton('del', onKeyPress, icon: Icons.backspace_outlined),
@@ -855,7 +1022,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 
-  Widget _buildKeypadButton(String value, Function(String) onKeyPress, {IconData? icon}) {
+  Widget _buildKeypadButton(String value, Function(String) onKeyPress,
+      {IconData? icon}) {
     return InkWell(
       onTap: () => onKeyPress(value),
       borderRadius: BorderRadius.circular(12),
@@ -870,7 +1038,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               ? Icon(icon, color: KasiraDS.textStrong)
               : Text(
                   value,
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.bold),
                 ),
         ),
       ),

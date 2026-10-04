@@ -1,0 +1,16 @@
+.git
+.env*
+node_modules
+.next
+kasir_app
+public/apk
+__pycache__
+**/__pycache__
+*.log
+load_test/results
+load_test/config.json
+loadtest
+.claude
+.codex
+.agents
+.aws

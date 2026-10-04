@@ -7,6 +7,9 @@ class User(BaseModel):
 
     phone = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
+    google_project_id = Column(String(128), nullable=True)
+    google_uid = Column(String(128), nullable=True)
+    google_email = Column(String(320), nullable=True)
     is_active = Column(Boolean(), default=True)
     is_superuser = Column(Boolean(), default=False)
     

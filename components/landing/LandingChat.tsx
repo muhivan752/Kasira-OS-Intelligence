@@ -161,7 +161,7 @@ export default function LandingChat({ waLink }: { waLink: string }) {
                 onClick={() => send(draft)}
                 disabled={loading || !draft.trim()}
                 aria-label="Kirim"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-primary)] text-white transition disabled:opacity-40"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-primary)] text-[var(--brand-on-primary)] transition disabled:opacity-40"
               >
                 <Send className="h-4 w-4" />
               </button>

@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-/// KASIRA "Aurora" Design System — ported 1:1 from the SEFREKUENSI design
-/// system (claude.ai/design 629d2b64) used by `Selaris POS.dc.html`.
-///
-/// Palette: hot-pink → electric-violet on warm plum-tinted neutrals.
-/// Light default (the POS redesign is light-mode). Dark aliases included
-/// for a future toggle. Fonts: Gabarito (display) · Plus Jakarta Sans
-/// (body/UI) · Space Mono (mono eyebrows / numeric readouts).
+/// Selaris follows Sefrekuensi's warm neutrals, coral and Plus Jakarta Sans.
+/// Legacy color names remain aliases so existing POS screens share the theme.
 ///
 /// Use these tokens directly in the redesigned POS widgets — do NOT reach
 /// for the legacy [AppColors] (dark emerald) in new screens.
@@ -16,40 +10,40 @@ class KasiraDS {
 
   // ══════════════════════════ RAW PALETTE ══════════════════════════
   // Brand: GETAR (pink, primary)
-  static const pink50 = Color(0xFFFFF0F6);
-  static const pink100 = Color(0xFFFFE0EC);
-  static const pink200 = Color(0xFFFFB8D2);
-  static const pink300 = Color(0xFFFF8AB6);
-  static const pink400 = Color(0xFFFF5C97);
-  static const pink500 = Color(0xFFFF2E7E); // base
-  static const pink600 = Color(0xFFED1268);
-  static const pink700 = Color(0xFFC70A55);
-  static const pink800 = Color(0xFF9E0944);
-  static const pink900 = Color(0xFF7A0B38);
+  static const pink50 = Color(0xFFF7F5F2);
+  static const pink100 = Color(0xFFF3E2DA);
+  static const pink200 = Color(0xFFD7B3A5);
+  static const pink300 = Color(0xFFB47A67);
+  static const pink400 = Color(0xFF99503B);
+  static const pink500 = Color(0xFF914C38);
+  static const pink600 = Color(0xFF703A2A);
+  static const pink700 = Color(0xFF703A2A);
+  static const pink800 = Color(0xFF593023);
+  static const pink900 = Color(0xFF30241F);
 
   // Brand: FREKUENSI (violet, secondary)
-  static const violet50 = Color(0xFFF4EEFE);
-  static const violet100 = Color(0xFFE9DEFD);
-  static const violet200 = Color(0xFFD0BAFB);
-  static const violet300 = Color(0xFFB492F6);
-  static const violet400 = Color(0xFF9966EF);
-  static const violet500 = Color(0xFF7C3AED); // base
-  static const violet600 = Color(0xFF6A28D9);
-  static const violet700 = Color(0xFF561FB5);
-  static const violet800 = Color(0xFF441A8E);
-  static const violet900 = Color(0xFF34176C);
+  static const violet50 = pink50;
+  static const violet100 = pink100;
+  static const violet200 = pink200;
+  static const violet300 = pink300;
+  static const violet400 = pink400;
+  static const violet500 = pink500;
+  static const violet600 = pink600;
+  static const violet700 = pink700;
+  static const violet800 = pink800;
+  static const violet900 = pink900;
 
   // Accent: HANGAT (coral)
-  static const coral300 = Color(0xFFFFB59B);
-  static const coral400 = Color(0xFFFF9466);
-  static const coral500 = Color(0xFFFF7A4D);
-  static const coral600 = Color(0xFFF2602F);
+  static const coral300 = Color(0xFFF0C6B7);
+  static const coral400 = Color(0xFFE5A08C);
+  static const coral500 = Color(0xFFE5A08C);
+  static const coral600 = Color(0xFF914C38);
 
   // Accent: NYALA (neon mint — "online / active")
-  static const mint300 = Color(0xFF7DF5CE);
-  static const mint400 = Color(0xFF3DF0B5);
-  static const mint500 = Color(0xFF12E0A0);
-  static const mint600 = Color(0xFF06B884);
+  static const mint300 = Color(0xFF00704F);
+  static const mint400 = Color(0xFF178A5E);
+  static const mint500 = Color(0xFF137A53);
+  static const mint600 = Color(0xFF137A53);
 
   // Support hues
   static const amber400 = Color(0xFFFFC24B);
@@ -62,17 +56,17 @@ class KasiraDS {
 
   // Neutrals: warm plum-tinted ramp
   static const neutral0 = Color(0xFFFFFFFF);
-  static const neutral50 = Color(0xFFFCF7FB);
-  static const neutral100 = Color(0xFFF6EEF4);
-  static const neutral200 = Color(0xFFECE0EA);
-  static const neutral300 = Color(0xFFDCCBD8);
-  static const neutral400 = Color(0xFFBCA8B8);
-  static const neutral500 = Color(0xFF927E8F);
-  static const neutral600 = Color(0xFF6B596A);
-  static const neutral700 = Color(0xFF4C3E4F);
-  static const neutral800 = Color(0xFF2E2436);
-  static const neutral900 = Color(0xFF1C1426);
-  static const neutral950 = Color(0xFF120B19);
+  static const neutral50 = Color(0xFFF7F5F2);
+  static const neutral100 = Color(0xFFF0EDE8);
+  static const neutral200 = Color(0xFFDCD5CE);
+  static const neutral300 = Color(0xFFD0C8BF);
+  static const neutral400 = Color(0xFFB0A79D);
+  static const neutral500 = Color(0xFF68605B);
+  static const neutral600 = Color(0xFF68605B);
+  static const neutral700 = Color(0xFF4C4843);
+  static const neutral800 = Color(0xFF303135);
+  static const neutral900 = Color(0xFF282725);
+  static const neutral950 = Color(0xFF121212);
 
   // ═══════════════════ SEMANTIC ALIASES — LIGHT (default) ═══════════════════
   static const bgBase = neutral50;
@@ -85,6 +79,7 @@ class KasiraDS {
   static const borderSubtle = neutral200;
   static const borderDefault = neutral300;
   static const borderStrong = neutral400;
+  static const controlBorder = Color(0xFF8B8178);
 
   static const textStrong = neutral900;
   static const textBody = neutral700;
@@ -93,17 +88,19 @@ class KasiraDS {
   static const textOnBrand = Color(0xFFFFFFFF);
 
   static const brandPrimary = pink500;
+  static const brandFill = coral400;
+  static const onBrandFill = Color(0xFF30241F);
   static const brandPrimaryHover = pink600;
   static const brandSecondary = violet500;
   static const brandSecondaryHover = violet600;
   static const accentWarm = coral500;
   static const accentNeon = mint500;
-  static const brandTint = pink50;
-  static const brandTint2 = violet50;
+  static const brandTint = pink100;
+  static const brandTint2 = neutral100;
 
   static const success = mint600;
   static const warning = amber500;
-  static const danger = red500;
+  static const danger = Color(0xFFB63530);
   static const info = blue500;
   static const focusRing = violet400;
 
@@ -114,14 +111,14 @@ class KasiraDS {
 
   // ═══════════════════ SEMANTIC ALIASES — DARK (future toggle) ═══════════════
   static const darkBgBase = neutral950;
-  static const darkBgSubtle = Color(0xFF1A1023);
-  static const darkSurfaceCard = neutral900;
-  static const darkSurfaceRaised = Color(0xFF251A30);
-  static const darkTextStrong = Color(0xFFF8F1F6);
-  static const darkTextBody = Color(0xFFD7C7D4);
-  static const darkTextMuted = Color(0xFF9A879A);
-  static const darkBrandPrimary = pink400;
-  static const darkBrandSecondary = violet400;
+  static const darkBgSubtle = Color(0xFF1C1D1F);
+  static const darkSurfaceCard = Color(0xFF27282B);
+  static const darkSurfaceRaised = Color(0xFF303135);
+  static const darkTextStrong = Color(0xFFF2EFEA);
+  static const darkTextBody = Color(0xFFDAD5CE);
+  static const darkTextMuted = Color(0xFFB5B1AB);
+  static const darkBrandPrimary = darkTextStrong;
+  static const darkBrandSecondary = coral400;
 
   // ═══════════════════════════ GRADIENTS ═══════════════════════════
   /// pink→violet 120°, the primary brand gradient
@@ -138,14 +135,15 @@ class KasiraDS {
   static const gradientHangat = LinearGradient(
     begin: Alignment(-1, -0.3),
     end: Alignment(1, 0.3),
-    colors: [coral400, pink500, violet500],
+    colors: [pink500, pink500, pink500],
     stops: [0.0, 0.6, 1.0],
   );
+
   /// 135° tri-stop aurora — logo mark + hero backdrops
   static const gradientAurora = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFFF2E7E), Color(0xFFC03BE6), Color(0xFF7C3AED)],
+    colors: [pink500, pink500, pink500],
     stops: [0.0, 0.45, 1.0],
   );
 
@@ -180,26 +178,41 @@ class KasiraDS {
   // ═══════════════════════════ SHADOWS (warm plum tint) ═══════════════════════
   static const Color _sh = Color(0xFF2E2436); // rgba(46,36,54)
 
-  static List<BoxShadow> get shadowXs =>
-      [BoxShadow(color: _sh.withOpacity(0.06), blurRadius: 2, offset: const Offset(0, 1))];
-  static List<BoxShadow> get shadowSm =>
-      [BoxShadow(color: _sh.withOpacity(0.08), blurRadius: 6, offset: const Offset(0, 2))];
-  static List<BoxShadow> get shadowMd =>
-      [BoxShadow(color: _sh.withOpacity(0.10), blurRadius: 18, offset: const Offset(0, 6))];
-  static List<BoxShadow> get shadowLg =>
-      [BoxShadow(color: _sh.withOpacity(0.14), blurRadius: 38, offset: const Offset(0, 16))];
-  static List<BoxShadow> get shadowXl =>
-      [BoxShadow(color: _sh.withOpacity(0.20), blurRadius: 64, offset: const Offset(0, 28))];
+  static List<BoxShadow> get shadowXs => [
+        BoxShadow(
+            color: _sh.withOpacity(0.06),
+            blurRadius: 2,
+            offset: const Offset(0, 1))
+      ];
+  static List<BoxShadow> get shadowSm => [
+        BoxShadow(
+            color: _sh.withOpacity(0.08),
+            blurRadius: 6,
+            offset: const Offset(0, 2))
+      ];
+  static List<BoxShadow> get shadowMd => [
+        BoxShadow(
+            color: _sh.withOpacity(0.10),
+            blurRadius: 18,
+            offset: const Offset(0, 6))
+      ];
+  static List<BoxShadow> get shadowLg => [
+        BoxShadow(
+            color: _sh.withOpacity(0.14),
+            blurRadius: 38,
+            offset: const Offset(0, 16))
+      ];
+  static List<BoxShadow> get shadowXl => [
+        BoxShadow(
+            color: _sh.withOpacity(0.20),
+            blurRadius: 64,
+            offset: const Offset(0, 28))
+      ];
 
   /// Neon brand glow — under gradient CTAs / active tiles
-  static List<BoxShadow> get glowBrand => [
-        BoxShadow(color: pink500.withOpacity(0.28), blurRadius: 34, offset: const Offset(0, 10)),
-        BoxShadow(color: violet500.withOpacity(0.24), blurRadius: 14, offset: const Offset(0, 4)),
-      ];
-  static List<BoxShadow> get glowPink =>
-      [BoxShadow(color: pink500.withOpacity(0.40), blurRadius: 30, offset: const Offset(0, 8))];
-  static List<BoxShadow> get glowViolet =>
-      [BoxShadow(color: violet500.withOpacity(0.40), blurRadius: 30, offset: const Offset(0, 8))];
+  static List<BoxShadow> get glowBrand => [];
+  static List<BoxShadow> get glowPink => [];
+  static List<BoxShadow> get glowViolet => [];
 
   // ═══════════════════════════ MOTION ═══════════════════════════
   static const Duration durFast = Duration(milliseconds: 120);
@@ -219,7 +232,8 @@ class KasiraDS {
     double height = 1.05,
     double letterSpacing = -0.015 * 27,
   }) =>
-      GoogleFonts.gabarito(
+      TextStyle(
+        fontFamily: 'PlusJakartaSans',
         fontSize: size,
         fontWeight: weight,
         color: color,
@@ -234,7 +248,8 @@ class KasiraDS {
     double? height,
     double? letterSpacing,
   }) =>
-      GoogleFonts.plusJakartaSans(
+      TextStyle(
+        fontFamily: 'PlusJakartaSans',
         fontSize: size,
         fontWeight: weight,
         color: color,
@@ -248,7 +263,8 @@ class KasiraDS {
     Color color = textBody,
     double letterSpacing = 0,
   }) =>
-      GoogleFonts.spaceMono(
+      TextStyle(
+        fontFamily: 'SpaceMono',
         fontSize: size,
         fontWeight: weight,
         color: color,
@@ -256,11 +272,12 @@ class KasiraDS {
       );
 
   /// Mono all-caps eyebrow — the "frequency readout" label motif.
-  static TextStyle eyebrow({Color color = textMuted}) => GoogleFonts.spaceMono(
-        fontSize: 11,
+  static TextStyle eyebrow({Color color = textMuted}) => TextStyle(
+        fontFamily: 'PlusJakartaSans',
+        fontSize: 13,
         fontWeight: FontWeight.w700,
         color: color,
-        letterSpacing: 0.12 * 11, // 0.12em
+        letterSpacing: 0,
       );
 
   // Type-scale (px): 2xs11 xs12 sm14 base16 md18 lg22 xl28 2xl36 3xl46

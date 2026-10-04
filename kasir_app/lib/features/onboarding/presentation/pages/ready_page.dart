@@ -33,49 +33,73 @@ class ReadyPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: KasiraDS.bgBase,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(KasiraDS.space5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: KasiraDS.space3),
-              Text('$bizName siap jualan 🎉', style: KasiraDS.display(size: 26, color: KasiraDS.textStrong)),
+              Text('$bizName siap digunakan',
+                  style:
+                      KasiraDS.display(size: 26, color: KasiraDS.textStrong)),
               const SizedBox(height: KasiraDS.space2),
               Text(
                 'Tiga langkah supaya transaksi pertama lancar. Bisa dilewati, pengaturannya tetap tersedia nanti.',
-                style: KasiraDS.sans(size: 14, color: KasiraDS.textMuted, height: 1.5),
+                style: KasiraDS.sans(
+                    size: 14, color: KasiraDS.textMuted, height: 1.5),
               ),
               const SizedBox(height: KasiraDS.space5),
-              _Step(done: true, index: 0, title: 'Akun & PIN', subtitle: phone.isNotEmpty ? '+$phone' : 'Sudah dibuat'),
+              _Step(
+                  done: true,
+                  index: 0,
+                  title: 'Akun & PIN',
+                  subtitle: phone.isNotEmpty ? '+$phone' : 'Sudah dibuat'),
               const SizedBox(height: KasiraDS.space2),
-              _Step(index: 1, title: 'Tambah 3 menu terlaris', subtitle: 'Cukup nama dan harga. Resep bisa menyusul.', onTap: () => _done(context, '/dashboard')),
+              _Step(
+                  index: 1,
+                  title: 'Siapkan menu jualan',
+                  subtitle:
+                      'Atur nama dan harga dari Beranda. Resep bisa menyusul.',
+                  onTap: () => _done(context, '/dashboard')),
               const SizedBox(height: KasiraDS.space2),
               _Step(
                 index: 2,
                 title: 'Hubungkan printer Bluetooth',
                 subtitle: 'Opsional, struk bisa lewat WhatsApp dulu.',
                 onTap: () async {
-                  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrinterSettingsPage()));
+                  await Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const PrinterSettingsPage()));
                 },
               ),
               const SizedBox(height: KasiraDS.space2),
-              _Step(index: 3, title: 'Buka shift & mulai kasir', subtitle: 'Isi modal awal laci, kasir langsung siap dipakai.', onTap: () => _done(context, '/shift/open')),
-              const Spacer(),
+              _Step(
+                  index: 3,
+                  title: 'Atur modal awal',
+                  subtitle: 'Isi modal laci sebelum mulai menerima transaksi.',
+                  onTap: () => _done(context, '/shift/open')),
+              const SizedBox(height: 32),
               SizedBox(
-                height: 54,
                 child: FilledButton(
                   onPressed: () => _done(context, '/dashboard'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: KasiraDS.brandPrimary,
-                    shape: RoundedRectangleBorder(borderRadius: KasiraDS.brPill),
+                    backgroundColor: KasiraDS.brandFill,
+                    shape: RoundedRectangleBorder(borderRadius: KasiraDS.brMd),
                   ),
-                  child: Text('Mulai: tambah menu', style: KasiraDS.sans(size: 16, weight: FontWeight.w700, color: KasiraDS.textOnBrand)),
+                  child: Text('Buka Beranda',
+                      style: KasiraDS.sans(
+                          size: 16,
+                          weight: FontWeight.w700,
+                          color: KasiraDS.onBrandFill)),
                 ),
               ),
               const SizedBox(height: KasiraDS.space2),
               TextButton(
-                onPressed: () => _done(context, '/shift/open'),
-                child: Text('Lewati, langsung ke kasir', style: KasiraDS.sans(size: 14, weight: FontWeight.w600, color: KasiraDS.textMuted)),
+                onPressed: () => _done(context, '/dashboard'),
+                child: Text('Atur nanti',
+                    style: KasiraDS.sans(
+                        size: 14,
+                        weight: FontWeight.w600,
+                        color: KasiraDS.textMuted)),
               ),
             ],
           ),
@@ -92,7 +116,12 @@ class _Step extends StatelessWidget {
   final String subtitle;
   final VoidCallback? onTap;
 
-  const _Step({this.done = false, required this.index, required this.title, required this.subtitle, this.onTap});
+  const _Step(
+      {this.done = false,
+      required this.index,
+      required this.title,
+      required this.subtitle,
+      this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -115,22 +144,33 @@ class _Step extends StatelessWidget {
                 width: 34,
                 height: 34,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: tint.withOpacity(0.12), borderRadius: KasiraDS.brSm),
+                decoration: BoxDecoration(
+                    color: tint.withOpacity(0.12), borderRadius: KasiraDS.brSm),
                 child: done
                     ? Icon(LucideIcons.check, size: 18, color: tint)
-                    : Text('$index', style: KasiraDS.sans(size: 14, weight: FontWeight.w800, color: tint)),
+                    : Text('$index',
+                        style: KasiraDS.sans(
+                            size: 14, weight: FontWeight.w800, color: tint)),
               ),
               const SizedBox(width: KasiraDS.space3),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: KasiraDS.sans(size: 14.5, weight: FontWeight.w700, color: KasiraDS.textStrong)),
-                    Text(subtitle, style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted)),
+                    Text(title,
+                        style: KasiraDS.sans(
+                            size: 14.5,
+                            weight: FontWeight.w700,
+                            color: KasiraDS.textStrong)),
+                    Text(subtitle,
+                        style:
+                            KasiraDS.sans(size: 12, color: KasiraDS.textMuted)),
                   ],
                 ),
               ),
-              if (!done) const Icon(LucideIcons.chevronRight, size: 18, color: KasiraDS.textMuted),
+              if (!done)
+                const Icon(LucideIcons.chevronRight,
+                    size: 18, color: KasiraDS.textMuted),
             ],
           ),
         ),
