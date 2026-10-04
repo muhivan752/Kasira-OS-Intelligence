@@ -1,34 +1,64 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## ARAH BERIKUTNYA — SETUP HPP LEWAT CHAT (DISKUSI 2026-10-04)
+## TERKINI — SETUP HPP CHAT SUDAH LIVE, 2026-10-04
 
-- Ivan menginginkan setup dari percakapan: AI menyiapkan bahan, harga, satuan,
-  takaran dan resep; manusia approve ringkasan sebelum data operasional ditulis.
-  Bahan Baku/Atur HPP menjadi hasil setup, dengan edit manual tetap tersedia.
-- Dua mode tetap lewat chat: manual memakai data nyata pengguna; estimasi AI
-  mengusulkan bahan/takaran saat pengguna bingung, bisa dikoreksi lewat chat lalu
-  approve. Mode dapat dicampur per field: harga nyata + takaran estimasi, misalnya.
-  Potong/batch/jumlah porsi diterima sebagai jawaban, tidak langsung memaksa gram.
-- Estimasi tetap berlabel estimasi setelah approve selama belum diverifikasi.
-  Stok fisik harus berasal dari keterangan pengguna, bukan ukuran kemasan tebakan.
-- **Token jangan terlalu dibatasi pada mode ini**, karena cerita pengguna dapat
-  panjang. Ini mencakup input/context/riwayat dan output draft, bukan sekadar
-  menaikkan max_tokens jawaban. Belum ada angka budget yang ditetapkan Ivan.
-  Simpan percakapan + draft/fakta setup secara durable; ringkasan context harus
-  mempertahankan angka, satuan, sumber, asumsi dan koreksi. Approval untuk draft
-  terakhir yang ditinjau, apply tidak ganda, hitungan tetap helper sistem.
-- KG/pgvector/event store existing jadi fondasi konteks, relasi dan audit;
-  sambungkan ke jalur setup. Ini masih keputusan diskusi, belum fitur baru live
-  atau instruksi eksplisit mulai implementasi pada giliran diskusi ini.
-- Temuan kode: generator setup sekarang max_tokens=1200 OUTPUT, single latest
-  message, prompt memakai default harga pasar dan initial_stock ukuran paket.
-  Branch setup return sebelum load history/RAG chat biasa. Chat biasa memakai
-  Redis 30min dan lima pasangan turn; ChatRequest.message tidak punya max_length.
-  Ada proposal editable + /ai/apply-recipe setelah klik Buat Resep. Jangan
-  menyebut fondasi ini sudah memenuhi percakapan panjang atau approval durable.
+- Ivan menyuruh implementasi dan menegaskan **seluruh rumus langsung backend,
+  jangan bergantung ke LLM**. Source `a94dd85` + fix `360b049`, dipush main. Semua
+  toko demo dan deploy langsung sudah diizinkan. Bahasa ke Ivan tetap Indonesia;
+  ada satu update Portugis yang keliru dan sudah dijelaskan.
+- Web Atur HPP → Atur lewat percakapan (`/dashboard/hpp/chat`), juga dari Bahan
+  Baku. Dua mode Manual/Estimasi, cerita panjang, koreksi, sumber/kutipan, review
+  revisi terakhir dan approval manusia. Form manual existing tetap tersedia.
+- Model hanya mengekstrak/saran input. `hpp_math.py` + helper Decimal bersama
+  `unit_utils.py` menghitung harga per kg × jumlah beli, isi kemasan, konversi,
+  biaya satuan, takaran batch ÷ porsi dan jumlah HPP. Total model diabaikan.
+  Quantity disimpan base_unit agar konsisten dengan stock paths raw existing.
+- Harga bahan existing memakai weighted cost server kecuali perubahan nyata
+  diminta/diapprove. Tebakan tidak boleh mengubah harga bahan toko. Manual
+  memblokir angka perkiraan dan sumber yang tidak cocok; Estimasi tetap berlabel
+  di resep/editor/laporan setelah approve. Harga bahan baru estimated needs_review.
+  Kutipan/numerik diverifikasi, tetapi semantik input tetap perlu review manusia.
+- Harga pembelian maksimal 2 desimal; unit cost Numeric(18,8), total tampilan
+  HALF_UP 2 desimal. Purchasing bahan mempertahankan 8 desimal; produk tetap 2.
+  Papan/dus/tray tidak punya isi tetap; kemasan harus punya ukuran eksplisit atau
+  estimasi berlabel. Beras mentah tidak disamakan dengan berat nasi matang.
+- Migration **112** menambah session/turn durable dengan FORCE RLS serta
+  recipe.is_estimated. Semua history tersimpan; input 100k karakter/pesan,
+  output 8192/16384 untuk repair schema, tanpa kuota harian chat biasa. Context
+  besar memangkas katalog/turn lama sambil menjaga cerita terbaru serta draft
+  terakhir lengkap angka/satuan/sumber/kutipan/catatan. Tidak klaim semua turn
+  lama selalu masuk context model. Maksimal dua proses bersamaan per pengguna.
+- POST pesan 202 setelah user turn tersimpan, BackgroundTasks punya AsyncSession
+  sendiri + tenant scope dan lepas transaksi sebelum provider; UI polling GET
+  2,5 detik. Lease 8 menit, retry request UUID sama; draft sebelumnya aman.
+  Teks belum terkirim disimpan lokal. Jangan memakai history.replaceState di
+  tengah rangkaian Server Actions create→send; update URL sesudah busy selesai
+  dan hanya jika href berubah. No-op replaceState setelah refresh pernah membuat
+  navigasi balik ke form macet. Regression refresh→form→chat ditambahkan.
+- Approval lock session/brand, revision+fingerprint dan re-read dependencies.
+  Perubahan harga/resep menimbulkan 409 + preview/revisi baru untuk review ulang.
+  Repeat/concurrent approve idempotent, nama bahan existing dipakai ulang.
+  Bahan/resep/hasil/audit/event/KG disimpan SATU commit, rollback lengkap saat
+  gagal; jangan pakai audit helper yang commit sendiri. Resep lama soft delete.
+- Setup tidak membuat OutletStock/restock/mengubah mode stok. Produk baru
+  nonaktif dan harga jual diatur lewat Menu. Stok dicatat terpisah Bahan Baku.
+  Gas/gaji/sewa belum masuk HPP bahan. KG + pgvector scoped jadi referensi,
+  retrieval savepoint best effort, context cache seluruh outlet satu brand cleared.
+- Endpoint `/ai/hpp-setup` Pro + tenant/user/outlet. Chat umum `/ai/chat` dan
+  APK/native legacy **unchanged**, jangan menyebut seluruh chat lama sudah diganti.
+- QA math 15 kasus/500 oracle, Postgres RLS non-superuser long chat/replay/repeat/
+  concurrent approval/atomic rollback/actual POS+cancel/storefront/HTTP202 worker,
+  provider nyata draft-only, browser chat + HPP/inventory/auth/stock-storefront
+  lolos. Lima lebar kedua tema AA/44px/keyboard/200%/short viewport, textarea
+  panjang dan source evidence. Tidak seed harga/resep/stok merchant untuk QA.
+- Frontend aktif/tested `sha256:5fcc63cc7be259229df771488cfc30c0bc19146df25ff0381bbd18bd91be8ffb`;
+  backend deploy docker cp terarah + alembic112 + restart existing container.
+  **Jangan recreate backend**, hotfix lain masih melalui docker cp. Frontend
+  `up -d --no-deps frontend`, APK mount tetap, native 1.6.31+198 unchanged.
+  Empat layanan healthy. Review `docs/HPP_CHAT_REVIEW.md`, detail smoke SESSION.md.
 
-## STATUS TERKINI — 2026-10-04 setelah implementasi
+## STATUS SEBELUM SETUP CHAT — ARSIP 2026-10-04
 
 - **Bahan Baku web** dibuat lebih mudah dipakai dan sudah live, source `6d91aac`.
   `/dashboard/bahan-baku`: Tambah bahan langsung form kosong nama/harga/jumlah/

@@ -63,6 +63,9 @@ Antislop during mengikuti pilihan sesi pengguna.
   membuka sesi database sendiri dengan tenant context, melepas transaksi saat
   menunggu provider, lalu menyimpan draft. UI polling GET setiap 2,5 detik dan
   dapat dilanjutkan setelah reload. Teks belum terkirim disimpan lokal.
+  URL diperbarui setelah action selesai dan hanya jika href berubah; no-op
+  history update saat refresh sempat menahan navigasi ke form di smoke live.
+  Regression refresh → form → chat memeriksa perbaikan itu.
 - Lease delapan menit memungkinkan retry jika worker berhenti. Retry memakai
   request UUID yang sama; UUID yang dipakai untuk isi lain ditolak. Error provider
   tidak meneruskan body internal. Draft sebelumnya tetap ada dan approval diblokir
@@ -116,6 +119,13 @@ Antislop during mengikuti pilihan sesi pengguna.
   `auth-browser.cjs` dan `stock-storefront-browser.cjs` memakai image final.
   Catatan deploy/image serta smoke HTTPS disimpan di SESSION.md.
 - Log dan screenshot `/tmp/selaris-hpp-*` merupakan bukti QA, bukan konten toko.
+- Source `a94dd85` + navigasi `360b049` dipush main dan live. Migration112, empat
+  layanan healthy, frontend tested/aktif
+  `sha256:5fcc63cc7be259229df771488cfc30c0bc19146df25ff0381bbd18bd91be8ffb`.
+  Smoke HTTPS chat manual/estimasi/refresh/form/entry pada tiga lebar kedua tema
+  lolos tanpa page error/overflow, termasuk bug navigasi yang ditemukan dan
+  diperbaiki. Form HPP aktual 13 produk, Bahan Baku dan storefront juga lolos.
+  Tidak write setup/bahan/resep/stok/mode/pesanan merchant dari smoke.
 
 ## Delivery gate antislop
 

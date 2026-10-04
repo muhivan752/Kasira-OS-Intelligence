@@ -4,7 +4,63 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
-## HANDOFF TERAKHIR — redesign, sync, Mode Stok dan storefront
+## HANDOFF TERAKHIR — setup HPP percakapan live, 4 Oktober 2026
+
+- Ivan mengizinkan implementasi langsung dan mewajibkan rumus backend; source
+  `a94dd85` + fix `360b049` dipush main dan dipasang. Web Atur HPP → Atur lewat percakapan,
+  `/dashboard/hpp/chat`; entry juga dari Bahan Baku. Manual/Estimasi sama-sama
+  chat, sumber dan kutipan per field, koreksi serta review/approve revisi terakhir.
+  Form manual tetap. Jangan kembali ke status "masih diskusi" di arsip bawah.
+- AI tidak menghitung total: `hpp_math.py` + Decimal/helper `unit_utils.py`
+  untuk harga per unit × pembelian, kemasan, satuan, batch/porsi dan HPP. Harga
+  existing weighted cost dipakai; update nyata harus diminta/diapprove. Manual
+  tidak menerima tebakan. Estimasi tetap flag resep/editor/laporan setelah approve.
+- Migration **112** live: FORCE RLS session/turn, recipe.is_estimated dan cost
+  Numeric(18,8). Quantity/quantity_unit resep canonical ingredient.base_unit.
+  Purchasing bahan 8 desimal, produk 2. Stock paths raw existing unchanged.
+- History/draft durable Postgres, input 100k karakter; output 8192/16384 schema
+  repair, tanpa kuota harian ordinary chat. Model window boleh memangkas turn
+  lama/katalog, cerita terbaru dan draft terakhir beserta angka/units/sumber/
+  kutipan/catatan tetap utuh. Semua turn untuk validasi sumber tetap tersedia.
+- POST messages 202 + own-session BackgroundTasks tenant scope, lepas transaksi
+  saat model, polling GET 2,5 detik. Lease 8 menit/retry UUID sama, local draft
+  text. Jangan update URL/history di tengah create→send Server Action; pernah
+  membuat queue macet. URL hanya diperbarui jika href berubah; no-op replaceState
+  sesudah refresh juga pernah menahan link ke form. Tes refresh→form→chat ditambah.
+  Resize riwayat mengikuti pesan terakhir; textarea 10rem
+  perlu selector sesudah rule merchant-shell yang menimpa min-height form.
+- Approval revision/fingerprint/session+brand locks, dependency conflict 409
+  memperbarui preview/revisi untuk review lagi. Repeat hasil sama; concurrent
+  nama bahan reuse. Satu commit bahan/resep/hasil/KG/audit/event, rollback bila
+  final flush gagal; tidak helper audit commit. Versi resep dari seluruh history.
+- Tidak write stok fisik/OutletStock/restock/mode. Menu baru nonaktif; pengguna
+  atur harga jual/aktifkan di Menu. Gas/gaji/sewa belum dialokasikan ke HPP bahan.
+  Retrieval KG/pgvector scoped/savepoint dan cache brand outlet setelah approve.
+  Flow legacy `/ai/chat` dan APK tidak diganti. Provider error internal disaring.
+- QA final: math 15/500 oracle, actual PostgreSQL RLS + POS/order/cancel/storefront,
+  durable 12 turn/50k cerita/correction/replay/repeat/concurrent/conflict/atomic
+  rollback/provider fail/HTTP202+fresh worker; configured provider draft-only
+  batch/per-unit-price/pack contents + labeled estimates. Chat browser, HPP manual,
+  inventory, auth dan stock/storefront semua lolos image final. Browser AA/44px,
+  lima lebar dua tema/keyboard/200%/viewport pendek/pending polling GET-only.
+- Deployed image `sha256:5fcc63cc7be259229df771488cfc30c0bc19146df25ff0381bbd18bd91be8ffb`,
+  container frontend Created 2026-10-04T16:05:31Z, sesuai image final QA.
+  Backend docker cp file terarah, alembic112, restart existing; tidak recreate
+  backend karena hotfix sebelumnya harus dipertahankan. Source backup sebelum
+  deploy `/tmp/selaris-hpp-deploy-backup`. Frontend-only compose --no-deps;
+  APK mounts/native1.6.31+198 unchanged. Empat layanan healthy.
+- Smoke HTTPS actual: endpoint session list 200 dengan header tenant wajib;
+  chat kosong/mode/refresh/form links serta entry HPP/Bahan Baku, 320/768/1440
+  kedua tema, tinggi textarea/no overflow/page errors PASS. Form manual membaca
+  13 produk × tiga lebar × dua tema; inventory form kosong/cancel dan storefront
+  menu/cart kedua tema 320 px juga PASS. Tidak write setup/bahan/resep/stok/mode/
+  pesanan merchant. Alert diperiksa scoped workspace; router live-region kosong
+  bukan error aplikasi. Semua fixture/temp QA container dibersihkan setelah tes.
+- Review/gate `docs/HPP_CHAT_REVIEW.md`, tests `hpp-{math,setup-isolated,provider-smoke,chat-browser}`.
+  Evidence log/screenshot `/tmp/selaris-hpp-*`, bukan konten/data merchant.
+  Progress ke Ivan tetap Indonesia; update Portugis yang keliru sudah dijelaskan.
+
+## ARSIP — redesign, sync, Mode Stok dan storefront
 
 ### Diskusi berikutnya: setup HPP percakapan dengan approval manusia
 

@@ -391,6 +391,7 @@ Label "Meja/Dapur/Area Servis" auto-swap based on `SessionCache.businessDomain` 
 | Reservasi + booking | ✅ | ✅ | ✅ | ✅ all layers |
 | Tab / Split Bill | ✅ | N/A | ✅ | ✅ all layers |
 | Recipe/Ingredient/HPP | ✅ unit_utils.py | ✅ | ✅ sync+display | ✅ all layers |
+| Setup HPP lewat percakapan (2026-10-04) | ✅ durable draft, Decimal, atomic approval, migration 112 | ✅ Manual/Estimasi, review/poll/resume | Jalur legacy unchanged | ✅ backend + web |
 | AI Chat owner | ✅ Claude API + multi-turn | ✅ | ✅ SSE streaming + markdown | ✅ all layers |
 | AI Pricing Coach (Sonnet) | ✅ quota 5x/hari | ✅ | ✅ | ✅ Pro |
 | AI Setup Resep | ✅ 4 intent | ✅ | ✅ | ✅ Pro |

@@ -567,6 +567,7 @@ Flutter dan Dashboard pakai ini buat tier gating dan stock mode detection.
 | Reservasi + Booking | ❌ | ✅ | ✅ |
 | Tab / Split Bill | ❌ | ✅ | ✅ |
 | Recipe / Ingredient / HPP | ❌ | ✅ | ✅ |
+| Setup HPP lewat chat (web, migration 112) | ❌ | ✅ | ✅ |
 | Recipe mode stock | ❌ | ✅ | ✅ |
 | AI Chat (owner) | ❌ | ✅ | ✅ |
 | Knowledge Graph | ❌ | ✅ | ✅ |
