@@ -6,7 +6,7 @@ export type HppIngredient = {
 
 export type HppProduct = { id: string; name: string; base_price: number | string; is_active: boolean; stock_enabled?: boolean };
 export type HppRecipe = {
-  id: string; product_id: string; notes?: string | null; total_cost: number;
+  id: string; product_id: string; notes?: string | null; total_cost: number; is_estimated?: boolean;
   ingredients: { ingredient_id: string; ingredient_name: string; quantity: number;
     quantity_unit: string; is_optional: boolean; notes?: string | null }[];
 };

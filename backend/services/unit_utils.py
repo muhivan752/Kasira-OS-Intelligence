@@ -78,37 +78,42 @@ def ingredient_cost_contribution(ri) -> "float | None":
     Cost contribution 1 recipe_ingredient row = normalized_qty * cost_per_base_unit.
     Return None kalau unit mismatch.
     """
+    result = decimal_ingredient_cost_contribution(ri)
+    return float(result) if result is not None else None
+
+
+def decimal_ingredient_cost_contribution(ri):
     qty = normalize_recipe_qty(ri)
     if qty is None:
         return None
 
-    ing = ri.ingredient
-    try:
-        cost_per_base = float(ing.cost_per_base_unit or 0)
-    except (TypeError, ValueError):
-        return None
-
-    if cost_per_base <= 0:
-        return 0.0
-
-    return qty * cost_per_base
+    return decimal_cost_from_qty_unit(qty, ri.ingredient.base_unit, ri.ingredient)
 
 
 def cost_from_qty_unit(qty_raw, qty_unit: str, ingredient) -> "float | None":
+    value = decimal_cost_from_qty_unit(qty_raw, qty_unit, ingredient)
+    return float(value) if value is not None else None
+
+
+def decimal_cost_from_qty_unit(qty_raw, qty_unit: str, ingredient):
     """
     Variant untuk caller yang punya qty + unit langsung (tanpa recipe_ingredient).
     Contoh: knowledge_graph_service — qty & unit dari metadata_payload JSONB.
 
     Return: cost contribution dalam Rupiah, atau None kalau unit mismatch.
     """
+    from decimal import Decimal, InvalidOperation
     try:
-        raw = float(qty_raw or 0)
-        cost_per_base = float(getattr(ingredient, "cost_per_base_unit", 0) or 0)
-    except (TypeError, ValueError):
+        raw = Decimal(str(qty_raw or 0))
+        cost_per_base = Decimal(str(getattr(ingredient, "cost_per_base_unit", 0) or 0))
+    except (TypeError, ValueError, InvalidOperation):
+        return None
+
+    if not raw.is_finite() or not cost_per_base.is_finite():
         return None
 
     if raw <= 0 or cost_per_base <= 0:
-        return 0.0
+        return Decimal(0)
 
     base_unit = (getattr(ingredient, "base_unit", None) or "").lower().strip()
     q_unit = (qty_unit or "").lower().strip()
@@ -122,4 +127,4 @@ def cost_from_qty_unit(qty_raw, qty_unit: str, ingredient) -> "float | None":
     mapped_base, multiplier = alias
     if mapped_base != base_unit:
         return None
-    return raw * multiplier * cost_per_base
+    return raw * Decimal(str(multiplier)) * cost_per_base

@@ -69,7 +69,7 @@ def qty_to_base_unit(qty: float, unit: Optional[str], base_unit: str) -> Optiona
     return float(qty) * multiplier
 
 
-def moving_average(old_qty: float, old_cost: Decimal, add_qty: float, add_cost: Decimal) -> Decimal:
+def moving_average(old_qty: float, old_cost: Decimal, add_qty: float, add_cost: Decimal, *, precision=_Q2) -> Decimal:
     """
     Rata-rata tertimbang antara stok lama dan barang baru. Kalau stok lama
     nol atau cost lama belum pernah diisi, harga baru yang dipakai apa
@@ -79,11 +79,12 @@ def moving_average(old_qty: float, old_cost: Decimal, add_qty: float, add_cost: 
     old_cost = Decimal(str(old_cost or 0))
     add_cost = Decimal(str(add_cost or 0))
     if old_qty <= 0 or old_cost <= 0:
-        return _q2(add_cost)
+        return add_cost.quantize(precision, rounding=ROUND_HALF_UP)
     total_qty = Decimal(str(old_qty)) + Decimal(str(add_qty))
     if total_qty <= 0:
-        return _q2(add_cost)
-    return _q2((Decimal(str(old_qty)) * old_cost + Decimal(str(add_qty)) * add_cost) / total_qty)
+        return add_cost.quantize(precision, rounding=ROUND_HALF_UP)
+    value = (Decimal(str(old_qty)) * old_cost + Decimal(str(add_qty)) * add_cost) / total_qty
+    return value.quantize(precision, rounding=ROUND_HALF_UP)
 
 
 def _unit_type_for(base_unit: str) -> str:
@@ -332,7 +333,8 @@ async def receive_purchase(
                     status_code=400,
                     detail=f"Satuan '{line.unit}' tidak bisa dikonversi ke {ing.base_unit} untuk {ing.name}",
                 )
-            cost_per_base_new = _q2(line_total / Decimal(str(qty_base)))
+            from backend.services.hpp_math import UNIT_COST
+            cost_per_base_new = (line_total / Decimal(str(qty_base))).quantize(UNIT_COST, rounding=ROUND_HALF_UP)
 
             # Stok sebelum restock = basis rata-rata bergerak.
             stock_before, _ = await restock_ingredient_stock(
@@ -344,8 +346,8 @@ async def receive_purchase(
                 notes=f"Nota {po.po_number}" + (f" · {supplier.name}" if supplier else ""),
                 source={"purchase_id": str(po.id), "supplier_id": str(supplier.id) if supplier else None},
             )
-            cost_before = _q2(ing.cost_per_base_unit or 0)
-            cost_after = moving_average(stock_before, cost_before, qty_base, cost_per_base_new)
+            cost_before = Decimal(str(ing.cost_per_base_unit or 0))
+            cost_after = moving_average(stock_before, cost_before, qty_base, cost_per_base_new, precision=UNIT_COST)
 
             # buy_price/buy_qty = "terakhir beli": Rp line_total buat qty_base base_unit.
             ing.buy_price = line_total

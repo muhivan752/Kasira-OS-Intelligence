@@ -36,7 +36,7 @@ def _build_recipe_response(recipe: Recipe) -> RecipeResponse:
         ingredient.deleted_at. Ghost ingredient (soft-deleted) excluded dari
         HPP sum + response list.
     """
-    from backend.services.unit_utils import ingredient_cost_contribution
+    from backend.services.unit_utils import decimal_ingredient_cost_contribution
 
     total_cost = Decimal("0")
     ing_responses = []
@@ -55,7 +55,7 @@ def _build_recipe_response(recipe: Recipe) -> RecipeResponse:
         contributes_to_hpp = (not ri.is_optional) and (float(ri.quantity or 0) > 0)
 
         if contributes_to_hpp:
-            contrib = ingredient_cost_contribution(ri)
+            contrib = decimal_ingredient_cost_contribution(ri)
             if contrib is None:
                 # Unit mismatch — don't include dalam HPP sum (avoid under/over-estimate)
                 line_cost = Decimal("0")
@@ -87,6 +87,7 @@ def _build_recipe_response(recipe: Recipe) -> RecipeResponse:
         product_name=product_name,
         version=recipe.version,
         is_active=recipe.is_active,
+        is_estimated=recipe.is_estimated,
         notes=recipe.notes,
         ingredients=ing_responses,
         total_cost=total_cost,
@@ -379,7 +380,7 @@ async def get_hpp_report(
     recipe_map = {r.product_id: r for r in recipes}
 
     # Unified HPP helper — fix CRITICAL #2 + #8
-    from backend.services.unit_utils import ingredient_cost_contribution
+    from backend.services.unit_utils import decimal_ingredient_cost_contribution
 
     responses = []
     for product in products:
@@ -399,7 +400,7 @@ async def get_hpp_report(
                 contributes = (not ri.is_optional) and (float(ri.quantity or 0) > 0)
 
                 if contributes:
-                    contrib = ingredient_cost_contribution(ri)
+                    contrib = decimal_ingredient_cost_contribution(ri)
                     line_cost = Decimal(str(contrib)) if contrib is not None else Decimal("0")
                     recipe_cost += line_cost
                 else:
@@ -429,6 +430,7 @@ async def get_hpp_report(
             margin_amount=margin,
             margin_percent=round(margin_pct, 1),
             has_recipe=recipe is not None,
+            is_estimated=recipe.is_estimated if recipe else False,
             ingredients=ingredient_details,
         ))
 

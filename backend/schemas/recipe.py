@@ -45,6 +45,7 @@ class RecipeResponse(BaseModel):
     product_name: Optional[str] = None
     version: int
     is_active: bool
+    is_estimated: bool = False
     notes: Optional[str] = None
     ingredients: List[RecipeIngredientResponse] = []
     total_cost: Optional[Decimal] = None  # HPP
@@ -72,4 +73,5 @@ class HPPProductResponse(BaseModel):
     margin_amount: Decimal
     margin_percent: float
     has_recipe: bool = True
+    is_estimated: bool = False
     ingredients: List[HPPIngredientDetail] = []

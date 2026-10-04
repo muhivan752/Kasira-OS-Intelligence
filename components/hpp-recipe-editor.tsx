@@ -211,6 +211,7 @@ export function HppRecipeEditor({ brandId, product, onSaved, onDirtyChange, onBu
       </form>}
     </section>
     <aside className="hpp-panel space-y-5 self-start xl:sticky xl:top-24" aria-labelledby="hpp-total-heading">
+      {recipe?.is_estimated && <p className="text-sm font-semibold">Resep ini memakai data estimasi. Periksa sumber harga dan takaran sebelum memakai HPP untuk keputusan usaha.</p>}
       <div><h2 id="hpp-total-heading" className="font-semibold">HPP per porsi</h2><p className="mt-2 text-3xl font-semibold tabular-nums" data-testid="hpp-total">{total === null ? 'Belum dihitung' : hppMoney(total)}</p><p className="mt-2 text-sm text-[var(--text-muted)]">Modal bahan untuk satu {product.name}. Belum termasuk gas, gaji, sewa, dan biaya operasional lain.</p></div>
       <dl className="space-y-3 border-t border-[var(--border-subtle)] pt-4"><div className="flex justify-between gap-3"><dt>Harga jual</dt><dd className="font-semibold">{hppMoney(Number(product.base_price))}</dd></div><div><dt className="text-sm text-[var(--text-muted)]">Selisih sebelum biaya operasional</dt><dd className="mt-1 font-semibold">{total === null ? 'Belum dihitung' : hppMoney(Number(product.base_price) - total)}</dd></div></dl>
       <div className="space-y-3">{error && <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}

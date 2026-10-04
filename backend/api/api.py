@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from backend.api.routes import hpp_setup
 from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect, ai, reservations, loyalty, media, customers, tables, tabs, webhook, ingredients, recipes, knowledge_graph, superadmin, billing, referrals, platform, embeddings, analytics, invoice_ocr, waitlist, landing, purchasing, finance, campaigns, crm, couriers, devices
 
 api_router = APIRouter()
@@ -17,6 +18,7 @@ api_router.include_router(connect.router, prefix="/connect", tags=["connect"])
 # Publik, tanpa auth — chat "Barista Kasira" di landing page.
 api_router.include_router(landing.router, prefix="/landing", tags=["landing"])
 api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
+api_router.include_router(hpp_setup.router, prefix="/ai/hpp-setup", tags=["hpp-setup"])
 api_router.include_router(reservations.router, prefix="/reservations", tags=["reservations"])
 api_router.include_router(loyalty.router, prefix="/loyalty", tags=["loyalty"])
 api_router.include_router(media.router, prefix="/media", tags=["media"])

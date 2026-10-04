@@ -11,6 +11,7 @@ class Recipe(BaseModel):
     version = Column(Integer, server_default='1', nullable=False)
     is_active = Column(Boolean, server_default='true', nullable=False)
     ai_assisted = Column(Boolean, server_default='false', nullable=False)
+    is_estimated = Column(Boolean, server_default='false', nullable=False)
     created_by = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     notes = Column(Text, nullable=True)
     row_version = Column(Integer, server_default='0', nullable=False)

@@ -20,6 +20,7 @@ from .tab import Tab, TabSplit
 from .payment_refund import PaymentRefund
 from .ingredient import Ingredient
 from .recipe import Recipe, RecipeIngredient
+from .hpp_setup import HppSetupSession, HppSetupTurn
 from .knowledge_graph import KnowledgeGraphEdge
 from .outlet_tax_config import OutletTaxConfig
 from .subscription_invoice import SubscriptionInvoice

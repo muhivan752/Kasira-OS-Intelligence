@@ -24,6 +24,7 @@ interface HPPProduct {
   margin_amount: number;
   margin_percent: number;
   has_recipe: boolean;
+  is_estimated?: boolean;
   ingredients: HPPIngredient[];
 }
 
@@ -126,6 +127,7 @@ export default function HPPReportPage() {
                     <td className="px-6 py-4 text-right text-gray-900">{formatCurrency(p.selling_price)}</td>
                     <td className="px-6 py-4 text-right text-gray-600">
                       {p.has_recipe ? formatCurrency(p.recipe_cost) : '-'}
+                      {p.is_estimated && <span className="block text-sm text-muted">Estimasi</span>}
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-gray-900">
                       {p.has_recipe ? formatCurrency(p.margin_amount) : '-'}

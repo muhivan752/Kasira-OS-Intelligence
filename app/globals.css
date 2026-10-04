@@ -10,6 +10,14 @@
 .hpp-control:focus-visible, .hpp-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 .hpp-control:disabled, .hpp-button:disabled { opacity: .6; cursor: default; }
 @media (min-width: 640px) { .hpp-panel { padding: 1.5rem; } }
+.hpp-chat { overflow-wrap: anywhere; }
+.hpp-chat-history { max-height: 34rem; overflow-y: auto; padding-right: .5rem; }
+.hpp-chat-choice { display: flex; align-items: flex-start; gap: .75rem; min-height: 44px; padding-block: .5rem; cursor: pointer; }
+.hpp-chat-choice input { appearance: auto; flex: none; width: 20px; height: 20px; min-height: 20px; margin-top: .125rem; accent-color: var(--brand-primary); }
+.hpp-chat-choice input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.hpp-chat-evidence { display: flex; align-items: center; min-height: 44px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.hpp-chat-evidence:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+@media (max-height: 600px) { .hpp-chat aside { position: static; } .hpp-chat-history { max-height: 18rem; } }
 
 .inventory-dialog { width: calc(100% - 2rem); max-width: 36rem; max-height: calc(100dvh - 2rem); margin: auto; padding: 0; border: 1px solid var(--control-border); border-radius: 1rem; background: var(--surface-card); color: var(--text-strong); overflow-y: auto; }
 .inventory-dialog::backdrop { background: rgb(0 0 0 / .55); }
@@ -650,6 +658,7 @@ body {
 .merchant-shell th { text-transform: none; letter-spacing: 0; font-weight: 600; }
 .merchant-shell :is(input:not([type='checkbox']):not([type='radio']), select, textarea) { min-height: 44px; font-size: 16px; background-color: var(--surface-card); border-color: var(--control-border); color: var(--text-strong); }
 .merchant-shell :is(input, textarea)::placeholder { color: var(--text-muted); }
+.merchant-shell .hpp-chat textarea.hpp-control { min-height: 10rem; resize: vertical; line-height: 1.5; }
 .merchant-shell .focus\:ring-blue-500:focus { --tw-ring-color: var(--focus-ring); }
 .merchant-shell :is(.text-green-600, .text-green-700) { color: var(--success); }
 .merchant-shell :is(.bg-green-50, .bg-green-100) { background-color: color-mix(in srgb, var(--success) 10%, var(--surface-card)); }

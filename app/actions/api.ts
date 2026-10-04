@@ -3,6 +3,53 @@
 import { cookies } from 'next/headers';
 import type { HppIngredient, HppProduct, HppRecipe } from '@/lib/hpp';
 import type { InventoryIngredient } from '@/lib/ingredient-inventory';
+import type { HppChatMode, HppChatSession, HppChatListItem, HppChatResult } from '@/lib/hpp-chat';
+
+async function hppChatRequest<T>(path: string, options: RequestInit = {}): Promise<HppChatResult<T>> {
+  try {
+    const response = await fetchWithAuth(`/ai/hpp-setup/${path}`, { ...options, cache: 'no-store' });
+    const body = await response.json();
+    if (!response.ok) return { success: false, message: response.status >= 500
+      ? 'Hasil belum dapat dipastikan. Periksa percakapan terbaru sebelum mencoba lagi.'
+      : extractError(body, 'Percakapan belum bisa diproses.') };
+    return { success: true, data: body.data as T };
+  } catch (error) {
+    return { success: false, message: error instanceof Error && ['SESSION_EXPIRED', 'Unauthorized'].includes(error.message)
+      ? 'Sesi berakhir. Masuk kembali untuk melanjutkan percakapan.'
+      : 'Koneksi terputus. Periksa percakapan terbaru; pesan dan persetujuan mungkin sudah diterima.' };
+  }
+}
+
+export async function listHppChats(): Promise<HppChatResult<HppChatListItem[]>> {
+  const outlet = (await cookies()).get('outlet_id')?.value;
+  if (!outlet) return { success: false, message: 'Pilih outlet dahulu.' };
+  return hppChatRequest(`sessions?outlet_id=${encodeURIComponent(outlet)}`);
+}
+
+export async function createHppChat(mode: HppChatMode, productId?: string): Promise<HppChatResult<HppChatSession>> {
+  const outlet = (await cookies()).get('outlet_id')?.value;
+  if (!outlet) return { success: false, message: 'Pilih outlet dahulu.' };
+  return hppChatRequest('sessions', { method: 'POST', body: JSON.stringify({ outlet_id: outlet, mode, product_id: productId || null }) });
+}
+
+export async function getHppChat(id: string): Promise<HppChatResult<HppChatSession>> {
+  const result = await hppChatRequest<HppChatSession>(`sessions/${encodeURIComponent(id)}`);
+  const outlet = (await cookies()).get('outlet_id')?.value;
+  if (result.success && result.data.outlet_id !== outlet) return { success: false, message: 'Percakapan ini milik outlet lain. Pilih outlet yang sesuai.' };
+  return result;
+}
+
+export async function sendHppChat(id: string, payload: { request_id: string; revision: number; mode: HppChatMode; message: string }): Promise<HppChatResult<HppChatSession>> {
+  const outlet = (await cookies()).get('outlet_id')?.value;
+  if (!outlet) return { success: false, message: 'Pilih outlet dahulu.' };
+  return hppChatRequest(`sessions/${encodeURIComponent(id)}/messages`, { method: 'POST', body: JSON.stringify({ ...payload, outlet_id: outlet }) });
+}
+
+export async function approveHppChat(id: string, revision: number, fingerprint: string, replaceRecipe: boolean): Promise<HppChatResult<HppChatSession>> {
+  const outlet = (await cookies()).get('outlet_id')?.value;
+  if (!outlet) return { success: false, message: 'Pilih outlet dahulu.' };
+  return hppChatRequest(`sessions/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({ outlet_id: outlet, revision, fingerprint, replace_recipe: replaceRecipe }) });
+}
 
 // Gunakan internal Docker URL untuk server actions (lebih cepat, bypass Nginx)
 const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';

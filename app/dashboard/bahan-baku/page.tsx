@@ -105,6 +105,7 @@ export default function IngredientsPage() {
       <div className="max-w-xl"><h1 className="text-3xl font-semibold tracking-tight">Bahan Baku</h1>
         <p className="mt-2 text-muted">Kelola stok dan harga bahan di sini. Susun takaran per produk melalui Atur HPP.</p></div>
       <div className="flex flex-wrap gap-2"><Link href="/dashboard/hpp" className="hpp-button">Atur HPP</Link>
+        <Link href="/dashboard/hpp/chat" className="hpp-button">Siapkan lewat percakapan</Link>
         <button data-inventory-add className="hpp-button hpp-primary" disabled={!inventory || loading || !!loadError}
           onClick={() => open({ kind: 'ingredient', overhead: view === 'overhead' })}>{view === 'recipe' ? 'Tambah bahan' : 'Tambah biaya'}</button></div>
     </header>

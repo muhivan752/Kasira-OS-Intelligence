@@ -83,6 +83,35 @@ yang memakai stok. Server Action `updateStockMode` mengembalikan hasil
 menyamarkan pesan exception yang dilempar ke client. Pilihan mode hanya berubah
 setelah API sukses; error 500 tidak diteruskan mentah ke browser.
 
+### Web: setup HPP percakapan (migration 112, 4 Oktober 2026)
+
+`/dashboard/hpp/chat` dan `/ai/hpp-setup` menyediakan Manual/Estimasi lewat chat.
+Postgres menyimpan sesi, semua turn, draft, preview, revisi, lease dan hasil approved
+dengan RLS serta scope tenant/user/outlet. POST pesan membalas 202; background
+worker membuka AsyncSession sendiri, SET LOCAL tenant, melepas transaksi saat
+menunggu model; UI polling GET. Retry UUID sama tidak membuat turn kedua.
+
+Model hanya mengekstrak input/sumber/kutipan. `hpp_math.py` memakai Decimal dan
+helper bersama `unit_utils.py`: total beli (termasuk harga per unit), konversi atau
+isi kemasan, biaya satuan, pembagian batch dan jumlah HPP dihitung backend.
+Quantity/quantity_unit disimpan dalam ingredient.base_unit karena stock paths
+tetap raw. Isi papan/dus/tray tidak otomatis diketahui. Presisi biaya bahan 8
+desimal; pembelian bahan mempertahankan presisi ini, biaya produk tetap 2.
+
+Approval memakai revision/fingerprint dan re-read harga/versi/resep setelah lock
+sesi/brand. Konflik memperbarui preview lalu 409 untuk review lagi. Bahan/resep,
+audit/event, KG links dan hasil session disimpan satu commit, tanpa helper audit
+yang commit sendiri. Tidak write OutletStock/restock/mode. Produk baru nonaktif.
+Harga existing tetap weighted cost kecuali perubahan nyata disetujui. Estimasi
+tetap flag di recipe serta needs_review untuk harga bahan baru.
+
+Context memakai toko/KG/pgvector; retrieval dalam savepoint. Seluruh history
+disimpan; model window boleh memangkas turn lama/katalog sambil menjaga cerita
+terbaru dan draft/fakta/kutipan persis. Input sampai 100k karakter, output
+8192/16384, tanpa kuota harian chat biasa. Lease 8 menit, konkurensi dua pekerjaan
+per user. Flow `/ai/chat` legacy/native tetap terpisah. Review dan tes ada
+di `docs/HPP_CHAT_REVIEW.md`; deployment latest ada di SESSION.md.
+
 ### SEMUA Code Path yang Modify Stock
 
 Kalau lo edit salah satu, **cek semua yang lain**.
