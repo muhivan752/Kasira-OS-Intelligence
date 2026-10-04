@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.6.31",
+    "version": "1.6.30",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.31/selaris-pos-v1.6.31.apk",
-    "release_notes": "Perbaikan sinkronisasi: DP reservasi tanpa pesanan tidak lagi membatalkan sync, seluruh halaman data ditarik, dan checkpoint disimpan setelah proses selesai. Update dari 1.6.30 bisa dipasang langsung tanpa uninstall."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.30/selaris-pos-v1.6.30.apk",
+    "release_notes": "Tampilan masuk, daftar dan onboarding mengikuti Sefrekuensi: coral, putih hangat dan Plus Jakarta Sans. Login Google tersedia sesudah Firebase dikonfigurasi. Kode Sefrekuensi menjadi pilihan utama, WhatsApp tetap tersedia. Dari paket lama com.kasira.kasira_kasir: sinkronkan transaksi terlebih dahulu, lalu uninstall dan pasang aplikasi paket baru com.selaris.pos."
   },
   "dapur": {
-    "version": "1.6.31",
+    "version": "1.6.30",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.31/selaris-dapur-v1.6.31.apk",
-    "release_notes": "Build pendamping POS 1.6.31. Login PIN Dapur tetap tersedia. Update dari 1.6.30 bisa dipasang langsung tanpa uninstall."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.30/selaris-dapur-v1.6.30.apk",
+    "release_notes": "Build pendamping Selaris POS 1.6.30. Aplikasi Dapur tetap memakai login PIN dan package com.selaris.dapur. Dari aplikasi paket lama: sinkronkan transaksi sebelum uninstall, lalu pasang paket baru."
   }
 }
