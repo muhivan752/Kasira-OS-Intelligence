@@ -99,6 +99,11 @@ async function appearance(page, label) {
     await page.goto(`${base}/dashboard/hpp/chat`, { waitUntil: 'networkidle' });
     await page.getByLabel('Cerita atau koreksi Anda').waitFor();
     assert.equal(await page.getByLabel('Manual', { exact: false }).isChecked(), true);
+    await page.getByRole('button', { name: 'Periksa percakapan', exact: true }).click();
+    await page.getByRole('link', { name: 'Isi resep dengan form', exact: true }).click();
+    await page.getByRole('heading', { name: 'Atur HPP', exact: true }).waitFor();
+    await page.getByRole('link', { name: 'Atur lewat percakapan', exact: true }).click();
+    await page.getByLabel('Cerita atau koreksi Anda').waitFor();
     assert.equal(calls.filter(c => c.method === 'POST').length, 0);
     const story = 'Resep 10 porsi ayam 1,5 kg untuk 10 porsi beli 1 kg 40000. ' + 'Cerita dapur panjang. '.repeat(2400);
     await page.getByLabel('Cerita atau koreksi Anda').fill(story);

@@ -170,6 +170,7 @@ async function checkAppearance(page, label) {
     await page.getByRole('alert').filter({ hasText: 'Data sudah diubah' }).waitFor();
     assert.equal(await page.getByLabel('Total harga pembelian (Rp)').inputValue(), '22000');
     await page.getByRole('button', { name: 'Simpan harga beli' }).click();
+    await page.getByLabel('Total harga pembelian (Rp)').waitFor({ state: 'hidden' });
     await page.getByRole('status').filter({ hasText: 'Susu fixture: harga beli tersimpan' }).waitFor();
     const priceUpdate = calls.filter(call => call.method === 'PUT' && call.path.includes('/ingredients/')).at(-1).body;
     assert.equal(priceUpdate.row_version, 1); assert.equal(priceUpdate.base_unit, undefined);

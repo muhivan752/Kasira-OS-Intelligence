@@ -62,7 +62,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
     const url = new URL(window.location.href);
     if (session) url.searchParams.set('conversation', session.id);
     else url.searchParams.delete('conversation');
-    window.history.replaceState(null, '', url);
+    if (url.href !== window.location.href) window.history.replaceState(null, '', url);
   }, [session?.id, loading, busy]);
 
   async function reloadList() {
