@@ -6,6 +6,27 @@ merupakan arsip, bukan pekerjaan yang sedang aktif.
 
 ## HANDOFF TERAKHIR — redesign, sync, Mode Stok dan storefront
 
+### Diskusi berikutnya: setup HPP percakapan dengan approval manusia
+
+- Setelah Bahan Baku live, Ivan ingin AI mengurus input/setup lewat chat sampai
+  bahan/harga/takaran/resep siap. User hanya cerita, koreksi dan approve ringkasan;
+  sebelum approve simpan sebagai draft, bukan menulis tabel operasional.
+- Mode manual dan estimasi keduanya conversational. Jika user bingung takaran,
+  AI menawarkan estimasi yang dapat diubah. Terima potong/batch/jumlah porsi,
+  konversikan lewat helper. Field nyata dan estimasi bisa bercampur; sumber dan
+  status estimasi tetap jelas. Stok fisik tidak ditebak dari ukuran kemasan.
+- Arahan terakhir **jangan terlalu membatasi token di mode ini, cerita mereka
+  bisa panjang**. Input/context/history perlu cukup ruang, output draft juga.
+  Belum menentukan angka budget. Perlu percakapan/draft durable dan state angka,
+  satuan, harga, asumsi serta koreksi yang tidak hilang ketika context diringkas.
+- KG, pgvector dan event store memang ada. Setup existing di ai_service.py
+  generate_recipe_proposal masih single-message max_tokens=1200 output + default
+  harga/stock perkiraan; branch setup berhenti sebelum history/RAG normal chat.
+  Chat history biasa Redis TTL30min/lima turn-pair. Apply-recipe existing memakai
+  tombol Buat Resep; bukan workflow approval/draft durable yang baru diminta.
+- Ini masih diskusi arah/requirements. Belum mengubah runtime, limit, backend,
+  UI chat atau deployment. Checkpoint implementasi live tetap Bahan Baku di bawah.
+
 ### Update terbaru: Bahan Baku web, 4 Oktober 2026
 
 - Ivan meminta Bahan Baku lebih user friendly. Source `6d91aac` sudah di main

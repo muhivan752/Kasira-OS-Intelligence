@@ -1,6 +1,33 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
+## ARAH BERIKUTNYA — SETUP HPP LEWAT CHAT (DISKUSI 2026-10-04)
+
+- Ivan menginginkan setup dari percakapan: AI menyiapkan bahan, harga, satuan,
+  takaran dan resep; manusia approve ringkasan sebelum data operasional ditulis.
+  Bahan Baku/Atur HPP menjadi hasil setup, dengan edit manual tetap tersedia.
+- Dua mode tetap lewat chat: manual memakai data nyata pengguna; estimasi AI
+  mengusulkan bahan/takaran saat pengguna bingung, bisa dikoreksi lewat chat lalu
+  approve. Mode dapat dicampur per field: harga nyata + takaran estimasi, misalnya.
+  Potong/batch/jumlah porsi diterima sebagai jawaban, tidak langsung memaksa gram.
+- Estimasi tetap berlabel estimasi setelah approve selama belum diverifikasi.
+  Stok fisik harus berasal dari keterangan pengguna, bukan ukuran kemasan tebakan.
+- **Token jangan terlalu dibatasi pada mode ini**, karena cerita pengguna dapat
+  panjang. Ini mencakup input/context/riwayat dan output draft, bukan sekadar
+  menaikkan max_tokens jawaban. Belum ada angka budget yang ditetapkan Ivan.
+  Simpan percakapan + draft/fakta setup secara durable; ringkasan context harus
+  mempertahankan angka, satuan, sumber, asumsi dan koreksi. Approval untuk draft
+  terakhir yang ditinjau, apply tidak ganda, hitungan tetap helper sistem.
+- KG/pgvector/event store existing jadi fondasi konteks, relasi dan audit;
+  sambungkan ke jalur setup. Ini masih keputusan diskusi, belum fitur baru live
+  atau instruksi eksplisit mulai implementasi pada giliran diskusi ini.
+- Temuan kode: generator setup sekarang max_tokens=1200 OUTPUT, single latest
+  message, prompt memakai default harga pasar dan initial_stock ukuran paket.
+  Branch setup return sebelum load history/RAG chat biasa. Chat biasa memakai
+  Redis 30min dan lima pasangan turn; ChatRequest.message tidak punya max_length.
+  Ada proposal editable + /ai/apply-recipe setelah klik Buat Resep. Jangan
+  menyebut fondasi ini sudah memenuhi percakapan panjang atau approval durable.
+
 ## STATUS TERKINI — 2026-10-04 setelah implementasi
 
 - **Bahan Baku web** dibuat lebih mudah dipakai dan sudah live, source `6d91aac`.
