@@ -12,10 +12,7 @@ import {
   LogOut,
   Store,
   X,
-  Star,
-  Bot,
   CalendarDays,
-  Crown,
   Lock,
   Package,
   Smartphone,
@@ -109,7 +106,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const proNav = [
     { name: 'Bahan Baku', href: '/dashboard/bahan-baku', icon: Package },
     { name: 'Reservasi', href: '/dashboard/reservasi', icon: CalendarDays },
-    { name: 'AI Asisten', href: '/dashboard/ai', icon: Bot },
+    { name: 'AI Asisten', href: '/dashboard/ai', icon: MessageCircle },
   ];
 
   const bottomNav = [
@@ -169,8 +166,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
               {isPro && (
                 <span className="inline-flex items-center gap-1 bg-[var(--brand-fill)] text-[var(--brand-on-fill)] text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
-                  <Crown className="w-3 h-3" />
-                  PRO
+                  Pro
                 </span>
               )}
             </div>
@@ -196,7 +192,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </>
             ) : (
               <div className="pt-3 mt-3 border-t border-gray-100">
-                <p className="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Upgrade ke Pro</p>
+                <p className="px-3 mb-2 text-sm text-gray-500">Fitur paket Pro</p>
                 {proNav.map((item) => renderNavItem(item, true))}
                 <Link
                   href="/dashboard/pro"
@@ -208,7 +204,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     }
                   `}
                 >
-                  <Star className={`w-5 h-5 ${pathname.startsWith('/dashboard/pro') ? 'text-yellow-500' : 'text-yellow-400'}`} />
                   <span className="flex-1">Lihat Fitur Pro</span>
                 </Link>
               </div>
@@ -248,8 +243,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </span>
             {isPro && (
               <span className="inline-flex items-center gap-1 bg-[var(--brand-fill)] text-[var(--brand-on-fill)] text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
-                <Crown className="w-3 h-3" />
-                PRO
+                Pro
               </span>
             )}
           </div>

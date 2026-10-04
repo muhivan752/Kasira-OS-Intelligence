@@ -1,22 +1,19 @@
 import type {Metadata} from 'next';
-import { Plus_Jakarta_Sans, Gabarito, Space_Mono } from 'next/font/google';
-import './globals.css'; // Global styles
+import { Source_Sans_3, Source_Serif_4, Space_Mono } from 'next/font/google';
+import './globals.css';
 
-const plusJakarta = Plus_Jakarta_Sans({
+const sourceSans = Source_Sans_3({
   subsets: ['latin'],
-  variable: '--font-plus-jakarta',
+  variable: '--font-source-sans',
   display: 'swap',
 });
 
-// Display font for the "Aurora" redesign (headlines, brand wordmark, buttons)
-const gabarito = Gabarito({
+const sourceSerif = Source_Serif_4({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800', '900'],
-  variable: '--font-gabarito',
+  variable: '--font-source-serif',
   display: 'swap',
 });
 
-// Mono for numeric / receipt-style values
 const spaceMono = Space_Mono({
   subsets: ['latin'],
   weight: ['400', '700'],
@@ -32,7 +29,7 @@ export const metadata: Metadata = {
     default: 'Selaris · POS Digital untuk UMKM Indonesia',
     template: '%s | Selaris',
   },
-  description: 'Kasir digital yang ngisi pembukuan sendiri: stok, HPP, utang supplier, dan pelanggan terbentuk otomatis dari transaksi, nota belanja, dan nomor WA. Untuk cafe & UMKM Indonesia.',
+  description: 'Kelola kasir, stok, pembelian, pelanggan, dan laporan usaha dengan Selaris. Aplikasi Android untuk kasir dan dashboard web untuk pemilik.',
   keywords: [
     'POS', 'kasir digital', 'kasir online', 'QRIS', 'aplikasi kasir',
     'storefront', 'cafe', 'UMKM', 'Indonesia', 'point of sale',
@@ -45,12 +42,12 @@ export const metadata: Metadata = {
     locale: 'id_ID',
     url: SITE_URL,
     siteName: 'Selaris',
-    title: 'Selaris · Kasir yang ngisi pembukuan sendiri',
-    description: 'Kasir + stok + pembelian + pelanggan dalam satu aplikasi. Foto nota, HPP ke-update. QRIS tanpa komisi.',
+    title: 'Selaris · Kasir dan pengelolaan usaha',
+    description: 'Kasir, stok, pembelian, pelanggan, dan laporan dalam satu sistem.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Selaris · Kasir yang ngisi pembukuan sendiri',
+    title: 'Selaris · Kasir dan pengelolaan usaha',
     description: 'Kasir + stok + pembelian + pelanggan dalam satu aplikasi untuk cafe dan UMKM Indonesia.',
   },
   robots: {
@@ -79,7 +76,7 @@ const GA_ID = process.env.NEXT_PUBLIC_GA_ID || '';
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="id" className={`${plusJakarta.variable} ${gabarito.variable} ${spaceMono.variable}`} suppressHydrationWarning>
+    <html lang="id" className={`${sourceSans.variable} ${sourceSerif.variable} ${spaceMono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: "try{document.documentElement.classList.toggle('dark',localStorage.getItem('selaris-theme')==='dark')}catch{}" }} />
         {GA_ID && (

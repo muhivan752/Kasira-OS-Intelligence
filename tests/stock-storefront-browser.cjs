@@ -139,7 +139,7 @@ async function contrast(locator, label) {
         await checkLayout(page, `menu ${theme} ${width}`);
         await contrast(page.getByRole('button', { name: 'Semua', exact: true }), `category ${theme}`);
         const coffee = page.locator('article').filter({ hasText: 'Kopi fixture' });
-        if (await coffee.getByRole('button', { name: '+', exact: true }).count()) await coffee.getByRole('button', { name: '+', exact: true }).click();
+        if (await coffee.getByRole('button', { name: 'Tambah Kopi fixture', exact: true }).count()) await coffee.getByRole('button', { name: 'Tambah Kopi fixture', exact: true }).click();
         const increase = coffee.getByRole('button', { name: 'Tambah', exact: true });
         await increase.click();
         assert(await increase.evaluate(el => {
@@ -149,7 +149,7 @@ async function contrast(locator, label) {
         }), 'Quantity controls must remain inside their product card');
         await coffee.getByRole('button', { name: 'Kurangi', exact: true }).click();
         const tea = page.locator('article').filter({ hasText: 'Teh fixture' });
-        await tea.getByRole('button', { name: 'Pilih', exact: true }).click();
+        await tea.getByRole('button', { name: 'Pilih Teh fixture', exact: true }).click();
         await page.getByRole('dialog').waitFor();
         await checkLayout(page, `variants ${theme} ${width}`);
         await page.keyboard.press('Escape');

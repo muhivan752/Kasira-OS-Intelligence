@@ -26,7 +26,7 @@ export function SefrekuensiCard({ outletId }: { outletId?: string }) {
   if (st.connected) {
     return (
       <div className="flex items-start gap-3 rounded-xl border border-[var(--border-subtle)] bg-white p-4 shadow-sm">
-        <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full" style={{ background: 'color-mix(in srgb, var(--success) 14%, white)', color: 'var(--success)' }}>
+        <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg" style={{ background: 'var(--surface-card)', color: 'var(--success)' }}>
           <CircleCheck className="h-[18px] w-[18px]" />
         </span>
         <div className="min-w-0 flex-1">
@@ -46,9 +46,9 @@ export function SefrekuensiCard({ outletId }: { outletId?: string }) {
         <BellRing className="h-5 w-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-gray-900">Pesanan masuk saat app kasir ditutup? Kabarnya bisa langsung ke HP.</p>
+        <p className="text-sm font-semibold text-gray-900">Notifikasi toko melalui Sefrekuensi</p>
         <p className="mt-0.5 text-xs leading-relaxed text-gray-600">
-          Pasang {SEFREKUENSI_NAME} dengan nomor {st.phone_masked || 'toko'}. Pesanan online, reservasi, dan bukti bayar mendarat sebagai notifikasi, tanpa bergantung pada WhatsApp. Gratis.
+          Gunakan {SEFREKUENSI_NAME} dengan nomor {st.phone_masked || 'toko'} untuk menerima notifikasi pesanan online, reservasi, dan bukti pembayaran.
         </p>
       </div>
       <a href={st.play_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold" style={{ background: 'var(--brand-fill)', color: 'var(--brand-on-fill)' }}>

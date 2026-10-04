@@ -6,6 +6,7 @@ const calls = [];
 const id = '11111111-1111-4111-8111-111111111111';
 const session = { access_token: 'browser-fixture', tenant_id: id, outlet_id: id, stock_mode: 'simple', subscription_tier: 'starter' };
 let failProduct = true;
+let failReport = true;
 const fixture = http.createServer(async (req, res) => {
   let body = '';
   for await (const chunk of req) body += chunk;
@@ -27,6 +28,10 @@ const fixture = http.createServer(async (req, res) => {
   else if (path.endsWith('/outlets')) value = [{ id, brand_id: id, name: 'Toko fixture' }];
   else if (path.endsWith('/users/me')) value = { id, tenant_id: id, full_name: 'Pemilik fixture', subscription_tier: 'starter', subscription_status: 'active' };
   else if (path.endsWith('/categories')) value = [{ id, name: 'Minuman' }];
+  else if (path.endsWith('/reports/daily')) {
+    if (failReport) { status = 500; detail = 'Report fixture unavailable'; }
+    else value = { revenue_today: 125000, order_count: 7, active_shifts: 1, critical_stock_items: 2, top_products: [{ name: 'Kopi fixture', qty: 4, revenue: 72000 }] };
+  }
   else if (path.endsWith('/products') && req.method === 'POST') {
     if (failProduct) { status = 400; detail = 'Produk belum tersimpan.'; failProduct = false; }
     else value = { id, ...data };
@@ -152,7 +157,15 @@ async function layout(page, name) {
     }
     await page.getByRole('link', { name: 'Buka dashboard usaha' }).click();
     await page.waitForURL('**/dashboard');
+    await page.getByRole('alert').filter({ hasText: 'Ringkasan belum dapat dimuat' }).waitFor();
+    failReport = false;
+    await page.getByRole('button', { name: 'Muat kembali', exact: true }).click();
     await page.getByRole('heading', { name: 'Pendapatan 7 Hari Terakhir' }).waitFor();
+    await page.getByText(/Rp\s*125\.000/).first().waitFor();
+    await page.getByText('Kopi fixture', { exact: true }).waitFor();
+    await page.getByText('Lihat rincian harian', { exact: true }).click();
+    assert.equal(await page.getByRole('table').getByRole('row').count(), 8);
+    console.log('PASS dashboard report error/retry: actual API values, top products, chart and accessible seven-day table.');
     await page.getByRole('button', { name: 'Gunakan tema gelap' }).click();
     assert.equal(await page.locator('.merchant-shell').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(18, 18, 18)');
     await page.screenshot({ path: '/tmp/selaris-dashboard-dark.png', fullPage: true });

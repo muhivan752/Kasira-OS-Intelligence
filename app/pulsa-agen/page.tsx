@@ -163,7 +163,7 @@ const breadcrumbLd = {
 
 export default function PulsaAgenPage() {
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <div className="public-shell font-sans">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(serviceLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
@@ -171,17 +171,15 @@ export default function PulsaAgenPage() {
 
       {/* HERO */}
       <section className="relative pt-28 pb-16 lg:pt-40 lg:pb-24 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(16,185,129,0.12),transparent)]" />
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center">
-            <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm font-semibold px-4 py-1.5 rounded-full mb-6">
-              <Wallet className="w-4 h-4" />
+            <div className="public-label">
               KasiraPay · Agen Pulsa Digital
             </div>
 
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.1] mb-6">
               Jualan pulsa,{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-600">
+              <span className="text-[var(--brand-primary)]">
                 modal dari kami
               </span>
             </h1>
@@ -252,9 +250,9 @@ export default function PulsaAgenPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-4">
-              Cara Daftar, 3 Langkah
+              Pendaftaran agen
             </h2>
-            <p className="text-gray-500">Dari klik daftar sampai mulai jualan, max 1 hari.</p>
+            <p className="text-gray-500">Lengkapi pendaftaran dan ikuti proses verifikasi akun.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -263,7 +261,7 @@ export default function PulsaAgenPage() {
                 key={s.n}
                 className="relative bg-white rounded-2xl p-6 border border-gray-100"
               >
-                <div className="absolute -top-4 left-6 w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white text-lg font-bold flex items-center justify-center shadow-md">
+                <div className="text-[var(--brand-primary)] text-sm font-semibold mb-4">
                   {s.n}
                 </div>
                 <div className="pt-4">
@@ -363,11 +361,11 @@ export default function PulsaAgenPage() {
       </section>
 
       {/* CTA FINAL */}
-      <section className="py-16 lg:py-24 bg-gradient-to-br from-emerald-600 to-teal-700 text-white">
+      <section className="py-16 lg:py-24 bg-[var(--brand-tint)] text-[var(--text-body)]">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-4xl font-extrabold mb-4">Siap mulai jualan pulsa?</h2>
-          <p className="text-emerald-50 mb-8 text-lg leading-relaxed">
-            Daftar 3 menit, KTP review 1×24 jam, langsung jualan. Modal dari kami.
+          <p className="text-[var(--text-body)] mb-8 text-lg leading-relaxed">
+            Daftarkan akun agen dan ikuti proses verifikasi sebelum mulai berjualan.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <a
@@ -383,16 +381,16 @@ export default function PulsaAgenPage() {
               href={WA_ADMIN}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-white/10 backdrop-blur text-white text-base font-semibold rounded-xl border border-white/30 hover:bg-white/20 transition-all"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-[var(--text-strong)] text-base font-semibold rounded-xl border border-[var(--control-border)]"
             >
               <MessageCircle className="w-4 h-4" />
               Chat Admin di WA
             </a>
           </div>
-          <p className="mt-6 text-emerald-100 text-sm">
+          <p className="mt-6 text-[var(--text-body)] text-sm">
             Atau mau pakai{' '}
             <Link href="/" className="underline hover:text-white">
-              POS Kasira
+              POS Selaris
             </Link>{' '}
             untuk warung kamu juga? Bisa keduanya.
           </p>

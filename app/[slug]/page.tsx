@@ -125,7 +125,7 @@ export default function StorefrontPage() {
           )}
           {wa && (
             <a href={waLink(wa, `Halo ${outlet.name}, saya ingin bertanya tentang menu.`)} target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#137A53] px-3 py-1.5 rounded-full hover:opacity-90">
+              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 text-sm font-semibold text-white bg-[#137A53] px-3 py-1.5 rounded-xl hover:opacity-90">
               <MessageCircle className="w-4 h-4" /> <span className="hidden sm:inline">WhatsApp</span>
             </a>
           )}
@@ -183,7 +183,7 @@ export default function StorefrontPage() {
             </a>
           )}
           {closedReason && (
-            <div className="mt-4 rounded-2xl bg-[color-mix(in_srgb,var(--warning)_14%,white)] text-[var(--text-strong)] px-4 py-3 text-sm">
+            <div className="mt-4 rounded-2xl bg-[color-mix(in_srgb,var(--warning)_14%,var(--surface-card))] text-[var(--text-strong)] px-4 py-3 text-sm">
               {closedReason}
             </div>
           )}
@@ -206,13 +206,14 @@ export default function StorefrontPage() {
           <div className="flex gap-2 items-center">
             <label className="relative flex-1 max-w-xs">
               <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <span className="sr-only">Cari menu</span>
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari menu"
-                className="w-full pl-10 pr-4 py-2.5 rounded-full bg-[var(--surface-card)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--focus-ring)]" />
+                className="w-full min-h-11 pl-10 pr-4 py-2.5 rounded-xl bg-[var(--surface-card)] border border-[var(--control-border)] text-base outline-none focus:border-[var(--focus-ring)]" />
             </label>
             <div className="flex overflow-x-auto hide-scrollbar gap-2 flex-1">
               {[{ id: 'all', name: 'Semua' }, ...categories].map((cat: any) => (
                 <button key={cat.id} onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition ${selectedCategory === cat.id ? 'bg-[var(--surface-inverse)] text-[var(--text-inverse)]' : 'bg-[var(--surface-card)] border border-[var(--border-subtle)] text-[var(--text-body)] hover:bg-[var(--bg-subtle)]'}`}>
+                  className={`min-h-11 px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition ${selectedCategory === cat.id ? 'bg-[var(--surface-inverse)] text-[var(--text-inverse)]' : 'bg-[var(--surface-card)] border border-[var(--control-border)] text-[var(--text-body)] hover:bg-[var(--bg-subtle)]'}`}>
                   {cat.name}
                 </button>
               ))}
@@ -228,14 +229,14 @@ export default function StorefrontPage() {
             ) : grouped.map((group) => (
               <section key={group.id}>
                 {group.name && <h2 className="font-display font-extrabold text-xl text-[var(--text-strong)] mb-3 tracking-tight">{group.name}</h2>}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {group.items.map((product: any) => {
                     const qty = qtyOf(product);
                     const soldOut = !product.is_available;
                     const hasVariants = (product.variants?.length ?? 0) > 0;
                     return (
-                      <article key={product.id} className={`group bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-[22px] overflow-hidden flex flex-col shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-md)] transition ${soldOut ? 'opacity-70' : ''}`}>
-                        <div className="relative aspect-square bg-[var(--bg-subtle)] overflow-hidden">
+                      <article key={product.id} className={`group bg-[var(--surface-card)] border border-[var(--border-default)] rounded-2xl overflow-hidden flex flex-row sm:flex-col ${soldOut ? 'opacity-70' : ''}`}>
+                        <div className="relative w-20 shrink-0 sm:w-full aspect-square self-start bg-[var(--bg-subtle)] overflow-hidden">
                           {product.image_url
                             ? <img src={product.image_url} alt={product.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-[1.03] transition duration-500" />
                             : <div className="w-full h-full flex items-center justify-center text-4xl font-display font-extrabold text-[var(--border-default)]">{product.name.charAt(0)}</div>}
@@ -246,7 +247,7 @@ export default function StorefrontPage() {
                             <span className="absolute top-2 left-2 px-2.5 py-1 rounded-full bg-[var(--surface-card)] text-[var(--text-strong)] text-[11px] font-semibold">{product.variants.length} pilihan</span>
                           )}
                         </div>
-                        <div className="p-3 sm:p-3.5 flex-1 flex flex-col">
+                        <div className="p-3 sm:p-3.5 min-w-0 flex-1 flex flex-col">
                           <h3 className="text-[14px] font-bold text-[var(--text-strong)] leading-snug line-clamp-2">{product.name}</h3>
                           {product.description && <p className="text-xs text-[var(--text-muted)] line-clamp-2 mt-0.5">{product.description}</p>}
                           <div className="mt-auto pt-3 flex flex-wrap items-center justify-between gap-2">
@@ -257,7 +258,8 @@ export default function StorefrontPage() {
                                 onInc={() => updateQuantity(cartLineId(product.id), qty + 1)} />
                             ) : (
                               <button onClick={() => handleAdd(product)} disabled={soldOut || !accepting}
-                                className="relative h-9 min-w-9 px-3 rounded-full bg-[var(--surface-inverse)] text-[var(--text-inverse)] text-sm font-semibold flex items-center justify-center hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed">
+                                aria-label={hasVariants ? `Pilih ${product.name}` : `Tambah ${product.name}`}
+                                className="relative h-11 min-w-11 px-3 rounded-xl bg-[var(--surface-inverse)] text-[var(--text-inverse)] text-sm font-semibold flex items-center justify-center hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed">
                                 {hasVariants ? 'Pilih' : '+'}
                                 {qty > 0 && <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] text-[10px] font-bold flex items-center justify-center">{qty}</span>}
                               </button>

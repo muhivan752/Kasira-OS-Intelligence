@@ -9,7 +9,7 @@
  */
 
 import Link from 'next/link';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { Logo } from '@/components/ui/logo';
 
 export const rp = (n: number | string | null | undefined) =>
@@ -93,7 +93,7 @@ export function StatusPill({ tone, children }: { tone: 'open' | 'closed' | 'mute
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <section className={`bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-[var(--radius-xl)] shadow-[var(--shadow-xs)] ${className}`}>
+    <section className={`bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-xl)] ${className}`}>
       {children}
     </section>
   );
@@ -124,10 +124,10 @@ export const inputCls =
 
 export function Stepper({ qty, onDec, onInc, dark = false }: { qty: number; onDec: () => void; onInc: () => void; dark?: boolean }) {
   const btn = dark
-    ? 'w-8 h-8 rounded-full bg-[color-mix(in_srgb,var(--text-inverse)_15%,transparent)] text-[var(--text-inverse)] hover:bg-[color-mix(in_srgb,var(--text-inverse)_25%,transparent)]'
-    : 'w-8 h-8 rounded-full bg-[var(--surface-card)] text-[var(--text-strong)] shadow-[var(--shadow-xs)] hover:bg-[var(--bg-subtle)]';
+    ? 'w-11 h-11 rounded-lg bg-[color-mix(in_srgb,var(--text-inverse)_15%,transparent)] text-[var(--text-inverse)] hover:bg-[color-mix(in_srgb,var(--text-inverse)_25%,transparent)]'
+    : 'w-11 h-11 rounded-lg bg-[var(--surface-card)] text-[var(--text-strong)] hover:bg-[var(--bg-subtle)]';
   return (
-    <div className={`inline-flex items-center gap-1 rounded-full p-1 ${dark ? 'bg-[color-mix(in_srgb,var(--text-inverse)_10%,transparent)]' : 'bg-[var(--bg-subtle)]'}`}>
+    <div className={`inline-flex items-center gap-1 rounded-xl p-1 ${dark ? 'bg-[color-mix(in_srgb,var(--text-inverse)_10%,transparent)]' : 'bg-[var(--bg-subtle)]'}`}>
       <button type="button" onClick={onDec} aria-label="Kurangi" className={`${btn} flex items-center justify-center text-lg leading-none`}>−</button>
       <span className={`w-7 text-center text-sm font-bold ${dark ? 'text-[var(--text-inverse)]' : 'text-[var(--text-strong)]'}`}>{qty}</span>
       <button type="button" onClick={onInc} aria-label="Tambah" className={`${btn} flex items-center justify-center text-lg leading-none`}>+</button>
@@ -137,24 +137,45 @@ export function Stepper({ qty, onDec, onInc, dark = false }: { qty: number; onDe
 
 /** Lembar bawah (mobile) atau dialog tengah (desktop). Tutup lewat latar atau Escape. */
 export function Sheet({ open, onClose, children, title }: { open: boolean; onClose: () => void; children: ReactNode; title?: string }) {
+  const panel = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  const titleId = useId();
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    const focusable = () => Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]') ?? []).filter(element => element.getClientRects().length);
+    (focusable()[0] ?? panel.current)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close.current();
+      if (e.key === 'Tab') {
+        const items = focusable();
+        const first = items[0]; const last = items[items.length - 1];
+        if (!first) { e.preventDefault(); panel.current?.focus(); }
+        else if (e.shiftKey && (document.activeElement === first || document.activeElement === panel.current)) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
     window.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
-    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
-  }, [open, onClose]);
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = overflow; if (previous?.isConnected) previous.focus(); };
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px] p-0 sm:p-4" onClick={onClose}>
       <div
         role="dialog"
         aria-modal
+        ref={panel}
+        tabIndex={-1}
+        aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : 'Pilihan pesanan'}
         className="w-full sm:max-w-md bg-[var(--surface-card)] rounded-t-[28px] sm:rounded-[28px] p-5 pb-8 sm:pb-5 max-h-[85vh] overflow-y-auto shadow-[var(--shadow-xl)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-[var(--border-default)] sm:hidden" />
-        {title && <h3 className="font-display font-extrabold text-lg text-[var(--text-strong)] mb-3">{title}</h3>}
+        {title && <h3 id={titleId} className="font-display font-semibold text-lg text-[var(--text-strong)] mb-3">{title}</h3>}
         {children}
       </div>
     </div>
@@ -164,7 +185,7 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
 export function PoweredBy({ className = '' }: { className?: string }) {
   return (
     <div className={`flex flex-col items-center gap-1.5 py-8 ${className}`}>
-      <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">Pemesanan online oleh</p>
+      <p className="text-xs text-[var(--text-muted)]">Pemesanan online oleh</p>
       <Link href="/" className="opacity-80 hover:opacity-100 transition"><Logo size="xs" variant="light" /></Link>
       <p className="text-[11px] text-[var(--text-muted)]">Tanpa komisi untuk toko</p>
     </div>
@@ -176,7 +197,7 @@ export function TopBar({ back, title, right }: { back?: string; title: ReactNode
     <header className="sticky top-0 z-30 bg-[color-mix(in_srgb,var(--bg-base)_88%,transparent)] backdrop-blur-md border-b border-[var(--border-subtle)]">
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
         {back && (
-          <Link href={back} aria-label="Kembali" className="w-9 h-9 -ml-1 rounded-full flex items-center justify-center text-[var(--text-strong)] hover:bg-[var(--bg-subtle)]">
+          <Link href={back} aria-label="Kembali" className="w-11 h-11 -ml-1 rounded-xl flex items-center justify-center text-[var(--text-strong)] hover:bg-[var(--bg-subtle)]">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
           </Link>
         )}

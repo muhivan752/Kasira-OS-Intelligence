@@ -84,7 +84,7 @@ export default async function JelajahPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[var(--bg-base)] text-[var(--text-body)]">
+    <main className="public-shell">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd).replace(/</g, '\\u003c') }} />
       <Navbar />
 
@@ -93,10 +93,10 @@ export default async function JelajahPage() {
         <div className="relative mx-auto max-w-5xl">
           <p className="ks-eyebrow">Jelajah</p>
           <h1 className="ks-display mt-2 text-[34px] font-extrabold leading-tight text-[var(--text-strong)] sm:text-[48px]">
-            Toko di dekatmu yang bisa dipesan dari HP
+            Jelajah toko online.
           </h1>
           <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-[var(--text-muted)]">
-            Semua toko di sini memakai {BRAND}. Pesan langsung dari halaman toko, dikonfirmasi pemiliknya, statusnya bisa dilacak. Tanpa aplikasi tambahan, tanpa komisi buat toko.
+            Lihat menu dan produk dari toko yang terdaftar di {BRAND}. Pesan melalui halaman toko dan pantau status pesanan dari browser.
           </p>
         </div>
       </section>
@@ -131,7 +131,7 @@ export default async function JelajahPage() {
                       <span
                         className="absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold"
                         style={{
-                          background: o.accepting_orders ? 'color-mix(in srgb, var(--success) 18%, white)' : 'color-mix(in srgb, var(--text-muted) 18%, white)',
+                          background: 'var(--surface-card)',
                           color: o.accepting_orders ? 'var(--success)' : 'var(--text-muted)',
                         }}
                       >

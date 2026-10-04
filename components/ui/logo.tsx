@@ -8,7 +8,7 @@ interface LogoProps {
   /**
    * dark   → wordmark light (use on dark backgrounds)
    * light  → wordmark dark  (use on light backgrounds)
-   * brand  → gradient wordmark (aurora), mark stays gradient
+   * brand  → brand-colored wordmark
    * mono   → single-color mark + wordmark (inherits currentColor)
    */
   variant?: 'dark' | 'light' | 'brand' | 'mono';
@@ -16,12 +16,7 @@ interface LogoProps {
 }
 
 /**
- * Selaris brand mark — dua pil miring bergradien pink → ungu (logo Selaris
- * milik Ivan, sama dengan favicon selaris.id), wordmark Gabarito.
- *
- * Mark lama (kotak hijau bermotif struk) dibuang bareng rebrand 2026-09-02.
- * Gradien pakai token Aurora (pink-500 → violet-500) biar satu palet dengan
- * app POS dan dashboard, bukan hex terpisah.
+ * Geometri logo Selaris milik Ivan; warna mengikuti token tema web.
  */
 export function Logo({
   className,
@@ -62,15 +57,14 @@ export function Logo({
             <linearGradient id="selaris-b"><stop stopColor="var(--brand-primary)" /><stop offset="1" stopColor="var(--brand-primary)" /></linearGradient>
           </defs>
         )}
-        {/* Logo resmi Selaris (file dari Ivan, 2 Sep): dua pil naik ke kanan,
-            pil atas ungu→pink, pil bawah pink→ungu. Palet #FF3D63 / #8A16D6. */}
+        {/* Dua bentuk miring mengikuti logo resmi Selaris. */}
         <rect x="15.5" y="12" width="34" height="13.5" rx="6.75" transform="rotate(-32 32.5 18.75)" fill={mono ? 'currentColor' : 'url(#selaris-a)'} />
         <rect x="15" y="37.25" width="34" height="13.5" rx="6.75" transform="rotate(-32 32 44)" fill={mono ? 'currentColor' : 'url(#selaris-b)'} />
       </svg>
       {showWordmark && (
         <div
           className={cn(
-            'font-[family-name:var(--font-plus-jakarta)] font-extrabold leading-none tracking-[-0.03em]',
+            'font-sans font-semibold leading-none tracking-[-0.02em]',
             variant === 'brand' && 'ks-gradient-text',
             textColor,
             s.text
