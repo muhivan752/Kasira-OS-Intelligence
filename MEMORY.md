@@ -1,6 +1,14 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
+## STATUS TERKINI — 2026-10-04 setelah implementasi
+
+- Redesign sudah live di selaris.id: login, daftar, onboarding dan theme dashboard mengikuti Sefrekuensi. Backend sehat pada migration 111; seluruh container healthy.
+- Smoke test production memakai login demo yang sudah dikonfigurasi: dashboard autentikasi, tema terang/gelap, 320 px, menu/Escape dan onboarding toko existing lolos tanpa mengirim pesan OTP.
+- Login Google sudah diimplementasikan pada web + POS Flutter, tetapi empat konfigurasi Firebase Google belum diisi pemilik. UI menyatakan belum tersedia; OTP Sefrekuensi aktif. Detail setup dan fingerprint di `docs/GOOGLE_LOGIN.md`.
+- Source main sudah dipush: `cdf2c87` implementasi dan `420aea1` tes CI/catatan rilis per aplikasi. Rilis 1.6.30 sedang berjalan di workflow run 197, id 37195873280. Tes onboarding/login di CI sudah lolos; tunggu APK/AAB lalu sinkronkan public/apk dan image backend/version.json.
+- Semua toko adalah demo menurut instruksi Ivan; angka flag `is_demo` pada audit awal bukan batas otorisasi terbaru. Audit dan arah awal di bawah adalah catatan sebelum implementasi, bukan status deployment terkini.
+
 ## ARAH REDESIGN SELARIS × SEFREKUENSI — 2026-10-04
 
 - Permintaan Ivan: mulai dari onboarding, lalu UI/UX mengikuti theme, warna dan konsep desain Sefrekuensi di server; kedua produk direncanakan bergabung. Login mendatang memakai Google/Gmail dan OTP Sefrekuensi.
@@ -15,7 +23,7 @@
 - **Google login belum ditemukan di auth Selaris**: model `backend/models/user.py` masih berbasis nomor + tenant, tanpa provider UID; register mensyaratkan OTP nomor + nama usaha + owner + PIN. Perlu kontrak identitas dan tautan akun lama/toko yang sama sebelum mengaktifkan pintu Google.
 - **OTP Sefrekuensi sudah terhubung dan dikonfigurasi di backend produksi Selaris** (`enabled()` true). Service `backend/services/sefrekuensi.py` memakai partner OTP API + DM Yasmin/push. Kode tetap dibuat/diverifikasi Selaris: ini pengiriman OTP, belum login akun bersama. Tidak mengirim OTP atau login pengguna dalam pemeriksaan.
 - Usulan awal untuk desain berikutnya: Google sebagai pintu utama, OTP Sefrekuensi sebagai jalur alternatif; sesudah identitas dikenali, user lama kembali ke tokonya, user baru lanjut setup usaha. Hubungan alternatif vs verifikasi berurutan belum ditetapkan pengguna.
-- Hanya pemeriksaan referensi/source/konfigurasi; belum mengubah UI, auth, DB, rilis atau deployment. Screenshot auth September yang diperiksa adalah fixture lama, bukan bukti layout login terbaru.
+- Pada audit awal sebelum izin implementasi, hanya dilakukan pemeriksaan referensi/source/konfigurasi. Screenshot auth September yang diperiksa adalah fixture lama, bukan bukti layout login terbaru. Status implementasi kini ada di bagian STATUS TERKINI.
 
 ## STATUS AKTUAL TERVERIFIKASI — 2026-10-04
 
@@ -371,7 +379,8 @@ Production-ready. Fokus pivot ke **acquisition + monetisation**:
 - context/flutter-kasir.md → ⏳ Belum dibuat
 - context/connect.md     → ⏳ Belum dibuat
 - context/dapur.md       → ⏳ Belum dibuat
-# IMPLEMENTASI REDESIGN DAN GOOGLE LOGIN — 2026-10-04
+
+## IMPLEMENTASI REDESIGN DAN GOOGLE LOGIN — 2026-10-04
 
 - Ivan menegaskan semua toko di server adalah demo dan mengizinkan perubahan langsung, sekaligus meminta panduan pendaftaran login Google.
 - Web login/register/onboarding baru mengikuti token Sefrekuensi September 2026 (coral, warm white, charcoal, Plus Jakarta Sans). Theme toggle tersimpan, dashboard memakai palette yang sama. Onboarding usaha mengarah ke produk pertama; tidak membuat stok fiktif.

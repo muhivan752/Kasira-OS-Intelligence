@@ -11,6 +11,7 @@ Scope: web login, daftar, onboarding, tema shell dashboard, serta onboarding/log
 - Migrasi 111 lolos upgrade, downgrade ke 110, lalu upgrade ulang di salinan schema Postgres. Constraint unik juga menolak duplikasi identitas langsung di database.
 - Flutter: 8 widget tests; welcome 320/768 px, semua state login di 320 px, ready dan formulir Google dengan teks 160%. APK kasir release berhasil dikompilasi. Analyzer tidak menemukan error; empat warning lama berada di modul Dapur/orders/products.
 - Browser fixture memakai server actions asli dan Chromium. Tidak mengirim OTP ke nomor pengguna. Alur validasi nomor, Sef tidak ditemukan, fallback WA, OTP salah/benar, pilihan usaha, PIN tidak cocok, referral, produk gagal/retry, skip/back, theme, menu mobile dan tautan publik sudah diklik.
+- Smoke test live di `selaris.id` memakai akun demo existing: dashboard autentikasi, theme terang/gelap, 320 px, menu/Escape dan onboarding toko existing lolos tanpa page error. Tidak mengirim pesan OTP.
 - Popup Google sungguhan dan pengiriman OTP ke akun pengguna menunggu konfigurasi konsol dan pengujian pemilik. Tombol Google yang belum dikonfigurasi tampil nonaktif dengan penjelasan.
 
 ## Delivery gate
