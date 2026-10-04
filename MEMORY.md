@@ -1,7 +1,33 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## TERKINI — ALUR KATALOG DAN PINDAH MENU DIPERBAIKI, LIVE 2026-10-04
+## TERKINI — VERIFIKASI HPP WEB KE APK, READ-ONLY 2026-10-04
+
+- Ivan bertanya apakah HPP terbaru benar-benar terhubung ke APK. Latest approved
+  Kopi susu **6254.00** (18:15 UTC) dan Egg Tart **2178.33** (18:11 UTC), outlet
+  stock_mode=recipe. Keduanya ada dalam sync full dan delta beserta baris resep
+  dan referensi bahan. Query transaksi read-only; tidak memanggil LLM atau
+  mengubah resep, stok fisik, sesi merchant, maupun aplikasi/deployment.
+- Payload sync aktual diuji dengan SyncService/Drift in-memory native: dua total
+  cocok dengan approval/backend. APK tersedia **1.6.31+198**, kode native terkait
+  sama dengan release7740bd1. Versi APK/settings sync di HP Ivan belum diketahui;
+  bukti ini bukan observasi langsung HP. Endpoint default https://selaris.id/api/v1.
+- BUG NATIVE BELUM DIPERBAIKI: recipeDetailProvider FutureProvider menyimpan hasil
+  lama/null setelah sync; refresh dashboard/products tidak invalidasi provider ini.
+  Test membuktikan data masuk DB tetapi HPP baru tampil setelah invalidasi/restart.
+  Rumus native juga memakai quantity mentah tanpa konversi dan menghitung optional.
+  Fixture 0.1kg beras @17/gram + optional500 menghasilkan501.70, seharusnya1700.00.
+  Kedua resep terbaru tidak mengandung kondisi tersebut dan totalnya cocok.
+- Native cache tidak menyimpan is_estimated/needs_review. Prioritas bila diminta
+  perbaikan APK: refresh resep sesudah sync, unit/optional sesuai shared backend,
+  lalu provenance estimasi. Jangan mengklaim seluruh HPP native sudah konsisten.
+- Dua tes diagnostik PASS; source test sementara dihapus, salinan/log tetap lokal
+  `/tmp/selaris-hpp-connection-review-test.dart` dan
+  `/tmp/selaris-hpp-apk-flutter.log`. Fixture merchant lokal tidak boleh diekspor
+  ke provider. Script/fixture sementara di backend dibersihkan. Aplikasi dan APK
+  unchanged; deployment acuan di bagian berikut tetap berlaku.
+
+## LIVE — ALUR KATALOG DAN PINDAH MENU DIPERBAIKI, 2026-10-04
 
 - Ivan meminta memperbaiki temuan review chat Sushi→Egg Tart. Source **8ebc710**
   sudah live. Pertanyaan umum "cek resep HPP yang belum diisi" tanpa nama target

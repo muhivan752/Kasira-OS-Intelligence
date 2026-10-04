@@ -4,7 +4,27 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
-## HANDOFF TERAKHIR — perbaikan alur katalog/pindah menu, live 4 Oktober 2026
+## HANDOFF TERAKHIR — verifikasi HPP ke APK, read-only 4 Oktober 2026
+
+- Request Ivan: HPP terbaru sudah konek ke APK? Backend sync full/delta memuat
+  Kopi susu6254.00 dan Egg Tart2178.33 beserta bahan/resep; stock_mode=recipe.
+  Payload aktual dijalankan pada SyncService + Drift in-memory, kedua total cocok.
+  Dua tes diagnostik PASS; tidak menulis data merchant atau memanggil provider AI.
+- APK yang tersedia1.6.31+198, native source terkait sama dengan release7740bd1.
+  HP Ivan belum diverifikasi versi/API/settings-nya. Jangan menyamakan QA lokal
+  dengan konfirmasi data sudah tiba di HP. Pengaturan → Sinkronisasi Data Manual
+  → Sinkronisasi Sekarang, tunggu sukses, tutup penuh/buka APK untuk refresh cache.
+- Temuan BELUM FIXED: recipeDetailProvider cache hasil lama/null setelah sync;
+  post_payment_refresh tidak invalidasi HPP. Perhitungan native menghitung optional
+  dan tidak konversi unit. Synthetic0.1kg @17/gram + optional500 = native501.70,
+  backend wajib1700.00. HPP kedua resep terbaru cocok karena unit sama/no optional.
+  is_estimated/needs_review belum tersimpan di cache native. Lanjut hanya bila
+  user meminta perbaikan; request sekarang pemeriksaan, bukan rilis APK baru.
+- Test sementara repo dihapus; salinan/log lokal `/tmp/selaris-hpp-connection-review-test.dart`
+  dan `/tmp/selaris-hpp-apk-flutter.log`. Payload merchant hanya lokal, tidak ke AI.
+  Temp script/fixture backend dibersihkan. Source aplikasi/APK/deployment unchanged.
+
+## LIVE — perbaikan alur katalog/pindah menu, 4 Oktober 2026
 
 - Source **8ebc710** live, menyelesaikan request "oke beresin" setelah review chat.
   Request policy backend menjaga broad missing_recipes tanpa terikat draft lama;
