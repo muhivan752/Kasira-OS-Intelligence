@@ -11,6 +11,21 @@
 .hpp-control:disabled, .hpp-button:disabled { opacity: .6; cursor: default; }
 @media (min-width: 640px) { .hpp-panel { padding: 1.5rem; } }
 
+.inventory-dialog { width: calc(100% - 2rem); max-width: 36rem; max-height: calc(100dvh - 2rem); margin: auto; padding: 0; border: 1px solid var(--control-border); border-radius: 1rem; background: var(--surface-card); color: var(--text-strong); overflow-y: auto; }
+.inventory-dialog::backdrop { background: rgb(0 0 0 / .55); }
+.inventory-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--border-default); }
+.inventory-dialog-heading h2 { min-width: 0; overflow-wrap: anywhere; }
+.inventory-message { padding: 1rem; border-left: 3px solid var(--control-border); background: var(--surface-sunken); overflow-wrap: anywhere; }
+.inventory-tabs { border-bottom: 1px solid var(--border-default); }
+.inventory-tabs .hpp-button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; padding-inline: 0; }
+.inventory-tabs .hpp-button[aria-pressed="true"] { border-bottom-color: var(--brand-primary); }
+.inventory-list { background: var(--surface-card); border: 1px solid var(--border-default); border-radius: 1rem; }
+.inventory-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; }
+.inventory-row + .inventory-row { border-top: 1px solid var(--border-default); }
+.inventory-row > * { min-width: 0; overflow-wrap: anywhere; }
+@media (min-width: 390px) { .inventory-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } .inventory-row > :first-child, .inventory-actions { grid-column: 1 / -1; } }
+@media (min-width: 1024px) { .inventory-row { grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr) minmax(0, 1fr); padding: 1.5rem; } .inventory-row > :first-child { grid-column: auto; } }
+
 /* ============================================================
    SELARIS DESIGN SYSTEM — Sefrekuensi palette (2026-10)
    Single source of truth. Every web surface (login, register,

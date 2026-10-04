@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import type { HppIngredient, HppProduct, HppRecipe } from '@/lib/hpp';
+import type { InventoryIngredient } from '@/lib/ingredient-inventory';
 
 // Gunakan internal Docker URL untuk server actions (lebih cepat, bypass Nginx)
 const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -721,6 +722,66 @@ export async function saveHppRecipe(productId: string, ingredients: {
     if (!res.ok) return { success: false as const, message: res.status < 500 ? extractError(data, 'Resep belum tersimpan.') : 'Resep belum tersimpan. Coba lagi beberapa saat.' };
     return { success: true as const, recipe: data.data as HppRecipe };
   } catch (error) { return { success: false as const, message: hppError(error) }; }
+}
+
+export async function loadIngredientInventory() {
+  try {
+    const outlets = await readHppData('/outlets');
+    const outlet = outlets[0];
+    if (!outlet) return { success: false as const, message: 'Buat outlet terlebih dahulu di Pengaturan.' };
+    const ingredients = await readAllHppData(`/ingredients?brand_id=${encodeURIComponent(outlet.brand_id)}&outlet_id=${encodeURIComponent(outlet.id)}`);
+    return { success: true as const, ingredients: ingredients as InventoryIngredient[],
+      outletId: outlet.id as string, brandId: outlet.brand_id as string, stockMode: outlet.stock_mode as string };
+  } catch (error) {
+    const message = hppError(error);
+    return { success: false as const, message: message === 'Data HPP belum bisa dimuat. Coba lagi.'
+      ? 'Daftar bahan belum bisa dimuat. Coba lagi.' : message === 'HPP tersedia untuk paket Pro.'
+        ? 'Bahan Baku tersedia untuk paket Pro.' : message };
+  }
+}
+
+async function writeInventory(endpoint: string, options: RequestInit) {
+  try {
+    const res = await fetchWithAuth(endpoint, options);
+    const data = await res.json();
+    if (!res.ok) return { success: false as const, uncertain: res.status >= 500,
+      message: res.status < 500 ? extractError(data, 'Perubahan belum tersimpan.')
+        : 'Hasil penyimpanan belum dapat dipastikan. Muat ulang data sebelum mencoba lagi.' };
+    return { success: true as const, data: data.data as InventoryIngredient };
+  } catch (error) {
+    const expired = error instanceof Error && ['Unauthorized', 'SESSION_EXPIRED'].includes(error.message);
+    return { success: false as const, uncertain: !expired, message: expired ? hppError(error)
+      : 'Hasil penyimpanan belum dapat dipastikan. Muat ulang data sebelum mencoba lagi.' };
+  }
+}
+
+export async function saveInventoryIngredient(payload: {
+  brand_id: string; name: string; base_unit: string; unit_type: string; buy_price: number; buy_qty: number;
+  ingredient_type: 'recipe' | 'overhead'; overhead_cost_per_day?: number;
+}, existing?: { id: string; row_version: number }) {
+  const validPrice = payload.ingredient_type === 'overhead'
+    ? Number.isFinite(payload.overhead_cost_per_day) && payload.overhead_cost_per_day! >= 0
+    : Number.isFinite(payload.buy_price) && payload.buy_price >= 0 && Number.isFinite(payload.buy_qty) && payload.buy_qty > 0 && Number.isFinite(payload.buy_price / payload.buy_qty);
+  if (!payload.name.trim() || !validPrice) return { success: false as const, uncertain: false,
+    message: 'Isi nama dan harga yang valid. Jumlah pembelian harus lebih dari nol.' };
+  const values = existing ? { name: payload.name.trim(), row_version: existing.row_version,
+    ...(payload.ingredient_type === 'overhead' ? { overhead_cost_per_day: payload.overhead_cost_per_day }
+      : { buy_price: payload.buy_price, buy_qty: payload.buy_qty }) }
+    : { ...payload, name: payload.name.trim(), tracking_mode: 'simple' };
+  return writeInventory(existing ? `/ingredients/${existing.id}/` : '/ingredients/', {
+    method: existing ? 'PUT' : 'POST', body: JSON.stringify(values),
+  });
+}
+
+export async function addInventoryStock(ingredientId: string, outletId: string, quantity: number, notes?: string) {
+  if (!Number.isFinite(quantity) || quantity <= 0) return { success: false as const, uncertain: false, message: 'Jumlah tambahan stok harus lebih dari nol.' };
+  return writeInventory(`/ingredients/${ingredientId}/restock/`, {
+    method: 'POST', body: JSON.stringify({ outlet_id: outletId, quantity, notes: notes?.trim() || undefined }),
+  });
+}
+
+export async function removeInventoryIngredient(id: string) {
+  return writeInventory(`/ingredients/${id}/`, { method: 'DELETE' });
 }
 
 export async function updateStockMode(outletId: string, stockMode: string) {

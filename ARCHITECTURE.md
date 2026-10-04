@@ -52,6 +52,16 @@ Setiap sesi coding ketemu bug baru karena:
 Persiapan web (2026-10-04): menu **Bahan Baku** tersedia untuk Pro juga saat mode
 `simple`, sehingga bahan dan tab Resep di Menu bisa diisi sebelum beralih.
 
+Web **Bahan Baku** memisahkan bahan resep dari estimasi biaya operasional.
+Tambah bahan/harga tidak restok; Tambah stok menambah quantity canonical dalam
+base_unit existing melalui API restock. Harga membawa row_version, tidak mengubah
+base_unit/unit_type, dan response harga yang tanpa join outlet stock tidak boleh
+menghapus stok/pemakaian yang sedang ditampilkan. Null stock berarti belum
+dicatat, bukan habis. List memakai cost_per_base_unit server (bisa berbeda dari
+harga pembelian terakhir). Hasil write 500/network tidak pasti dimuat ulang tanpa
+auto-retry, terutama karena restock belum mempunyai idempotency key. UI melarang
+hapus bahan yang masih dipakai di resep. Backend stock/HPP/audit/CRDT unchanged.
+
 ### Web: persiapan HPP (4 Oktober 2026)
 
 `/dashboard/hpp` mulai dari produk, harga pembelian bahan, dan takaran untuk satu

@@ -1,838 +1,194 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Package, Plus, RefreshCw, Pencil, Trash2, AlertTriangle, Droplet, Scale, Boxes, ArrowLeft, CheckCircle2, Sparkles, Search, X } from 'lucide-react';
-import { getIngredients, createIngredient, updateIngredient, deleteIngredient, restockIngredient, getOutlets, getCurrentUser } from '@/app/actions/api';
+import { loadIngredientInventory, saveInventoryIngredient, addInventoryStock, removeInventoryIngredient } from '@/app/actions/api';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
+import { InventoryDialog } from '@/components/inventory-dialog';
+import { InventoryIngredientForm, InventoryStockForm } from '@/components/inventory-forms';
+import { hasLowStock, hasRecordedStock, type InventoryIngredient } from '@/lib/ingredient-inventory';
+import { hppMoney, hppNumber } from '@/lib/hpp';
 
-interface UsedIn {
-  product_name: string;
-  qty_per_serving: number;
-  unit: string;
-}
-
-interface Ingredient {
-  id: string;
-  brand_id: string;
-  name: string;
-  tracking_mode: string;
-  base_unit: string;
-  unit_type: string;
-  buy_price: number;
-  buy_qty: number;
-  cost_per_base_unit: number;
-  ingredient_type: string;
-  overhead_cost_per_day?: number;
-  ai_setup_complete?: boolean;
-  needs_review?: boolean;
-  row_version: number;
-  current_stock?: number;
-  min_stock?: number;
-  used_in?: UsedIn[];
-  created_at: string;
-}
-
-type FilterKey = 'all' | 'restock' | 'ai-new' | 'review' | 'orphan';
-
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: 'Semua' },
-  { key: 'restock', label: 'Perlu Restock' },
-  { key: 'ai-new', label: '✨ Baru (AI)' },
-  { key: 'review', label: '⚠ Perlu Review' },
-  { key: 'orphan', label: 'Belum Terhubung' },
+type Modal = { kind: 'ingredient' | 'stock' | 'usage' | 'delete'; item?: InventoryIngredient; overhead?: boolean };
+type Filter = 'all' | 'low' | 'unknown' | 'review' | 'unused';
+const filters: { value: Filter; label: string }[] = [
+  { value: 'all', label: 'Semua bahan' }, { value: 'low', label: 'Stok menipis atau habis' },
+  { value: 'unknown', label: 'Stok belum dicatat' }, { value: 'review', label: 'Harga perlu diperiksa' },
+  { value: 'unused', label: 'Belum dipakai di resep' },
 ];
+type WriteResult = Awaited<ReturnType<typeof addInventoryStock>>;
 
-function isAiNew(ing: Ingredient): boolean {
-  if (!ing.ai_setup_complete || !ing.created_at) return false;
-  const createdMs = new Date(ing.created_at).getTime();
-  return Date.now() - createdMs < 24 * 60 * 60 * 1000;
-}
+export default function IngredientsPage() {
+  const allowed = useProGuard('Bahan Baku');
+  const [inventory, setInventory] = useState<{ ingredients: InventoryIngredient[]; outletId: string; brandId: string; stockMode: string }>();
+  const [loading, setLoading] = useState(true), [loadError, setLoadError] = useState('');
+  const [view, setView] = useState<'recipe' | 'overhead'>('recipe');
+  const [filter, setFilter] = useState<Filter>('all'), [query, setQuery] = useState('');
+  const [modal, setModal] = useState<Modal>(), [dirty, setDirty] = useState(false);
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [uncertain, setUncertain] = useState(false);
+  const [notice, setNotice] = useState(''), [created, setCreated] = useState<InventoryIngredient>();
+  const lock = useRef(false), mounted = useRef(true), loadSequence = useRef(0);
 
-function isLowStock(ing: Ingredient): boolean {
-  return ing.current_stock !== undefined && ing.min_stock !== undefined && ing.current_stock <= ing.min_stock;
-}
-
-const UNIT_OPTIONS = [
-  { value: 'gram', label: 'Gram (g)', type: 'WEIGHT', example: 'Kopi, Gula, Tepung' },
-  { value: 'kg', label: 'Kilogram (kg)', type: 'WEIGHT', example: 'Beras, Ayam, Sayur' },
-  { value: 'ml', label: 'Mililiter (ml)', type: 'VOLUME', example: 'Susu, Kecap, Minyak' },
-  { value: 'liter', label: 'Liter (L)', type: 'VOLUME', example: 'Air, Minyak Goreng' },
-  { value: 'pcs', label: 'Butir atau Pcs', type: 'COUNT', example: 'Telur, Teh Celup, Roti' },
-  { value: 'bungkus', label: 'Bungkus', type: 'COUNT', example: 'Bumbu, Mie Instan' },
-];
-
-type UnitType = 'WEIGHT' | 'VOLUME' | 'COUNT';
-
-const UNIT_CATEGORIES: { id: UnitType; label: string; desc: string; icon: any; units: { value: string; label: string }[] }[] = [
-  {
-    id: 'VOLUME',
-    label: 'Cairan',
-    desc: 'susu, sirup, minyak, air',
-    icon: Droplet,
-    units: [
-      { value: 'ml', label: 'ml' },
-      { value: 'liter', label: 'Liter' },
-    ],
-  },
-  {
-    id: 'WEIGHT',
-    label: 'Ditimbang',
-    desc: 'kopi, gula, tepung, coklat',
-    icon: Scale,
-    units: [
-      { value: 'gram', label: 'gram' },
-      { value: 'kg', label: 'kg' },
-    ],
-  },
-  {
-    id: 'COUNT',
-    label: 'Hitungan',
-    desc: 'telur, roti, teh celup',
-    icon: Boxes,
-    units: [
-      { value: 'pcs', label: 'pcs/butir' },
-      { value: 'bungkus', label: 'bungkus' },
-    ],
-  },
-];
-
-interface Preset {
-  id: string;
-  name: string;
-  emoji: string;
-  base_unit: string;
-  unit_type: UnitType;
-  hint?: string;
-  buy_price_hint?: number;
-  buy_qty_hint?: number;
-}
-
-const PRESETS: Preset[] = [
-  { id: 'kopi', name: 'Kopi', emoji: '☕', base_unit: 'gram', unit_type: 'WEIGHT', hint: '1 kg ~Rp120rb', buy_price_hint: 120000, buy_qty_hint: 1000 },
-  { id: 'susu-uht', name: 'Susu UHT', emoji: '🥛', base_unit: 'ml', unit_type: 'VOLUME', hint: '1 liter ~Rp18rb', buy_price_hint: 18000, buy_qty_hint: 1000 },
-  { id: 'gula', name: 'Gula Pasir', emoji: '🍯', base_unit: 'gram', unit_type: 'WEIGHT', hint: '1 kg ~Rp14rb', buy_price_hint: 14000, buy_qty_hint: 1000 },
-  { id: 'teh', name: 'Teh Celup', emoji: '🫖', base_unit: 'pcs', unit_type: 'COUNT', hint: '1 pak 25pcs ~Rp12rb', buy_price_hint: 12000, buy_qty_hint: 25 },
-  { id: 'es', name: 'Es Batu', emoji: '🧊', base_unit: 'kg', unit_type: 'WEIGHT', hint: '1 kg ~Rp5rb', buy_price_hint: 5000, buy_qty_hint: 1 },
-  { id: 'sirup', name: 'Sirup', emoji: '🍹', base_unit: 'ml', unit_type: 'VOLUME', hint: '1 botol 1L ~Rp35rb', buy_price_hint: 35000, buy_qty_hint: 1000 },
-  { id: 'telur', name: 'Telur', emoji: '🥚', base_unit: 'pcs', unit_type: 'COUNT', hint: '1 tray 30pcs ~Rp55rb', buy_price_hint: 55000, buy_qty_hint: 30 },
-  { id: 'tepung', name: 'Tepung Terigu', emoji: '🌾', base_unit: 'gram', unit_type: 'WEIGHT', hint: '1 kg ~Rp13rb', buy_price_hint: 13000, buy_qty_hint: 1000 },
-  { id: 'coklat', name: 'Bubuk Coklat', emoji: '🍫', base_unit: 'gram', unit_type: 'WEIGHT', hint: '500g ~Rp45rb', buy_price_hint: 45000, buy_qty_hint: 500 },
-  { id: 'keju', name: 'Keju', emoji: '🧀', base_unit: 'gram', unit_type: 'WEIGHT', hint: '170g ~Rp30rb', buy_price_hint: 30000, buy_qty_hint: 170 },
-  { id: 'butter', name: 'Butter', emoji: '🧈', base_unit: 'gram', unit_type: 'WEIGHT', hint: '500g ~Rp35rb', buy_price_hint: 35000, buy_qty_hint: 500 },
-  { id: 'minyak', name: 'Minyak Goreng', emoji: '🫒', base_unit: 'ml', unit_type: 'VOLUME', hint: '1 liter ~Rp25rb', buy_price_hint: 25000, buy_qty_hint: 1000 },
-  { id: 'roti', name: 'Roti Tawar', emoji: '🍞', base_unit: 'pcs', unit_type: 'COUNT', hint: '1 pak 10pcs ~Rp15rb', buy_price_hint: 15000, buy_qty_hint: 10 },
-  { id: 'air', name: 'Air Mineral', emoji: '💧', base_unit: 'ml', unit_type: 'VOLUME', hint: '600ml ~Rp3rb', buy_price_hint: 3000, buy_qty_hint: 600 },
-];
-
-export default function BahanBakuPage() {
-  const allowed = useProGuard('Bahan Baku & HPP');
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [brandId, setBrandId] = useState('');
-  const [outletId, setOutletId] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [showRestockModal, setShowRestockModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [restockTarget, setRestockTarget] = useState<Ingredient | null>(null);
-  const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-  const [modalStep, setModalStep] = useState<'preset' | 'form'>('preset');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
-  const [form, setForm] = useState({
-    name: '', base_unit: '', unit_type: 'WEIGHT', buy_price: '', buy_qty: '',
-    ingredient_type: 'recipe', overhead_cost_per_day: '', row_version: 0,
-    initial_stock: '', needs_review: false,
-  });
-  const [restockForm, setRestockForm] = useState({ quantity: '', notes: '' });
-
+  async function load() {
+    const sequence = ++loadSequence.current;
+    setLoading(true); setLoadError('');
+    try {
+      const result = await loadIngredientInventory();
+      if (!mounted.current || sequence !== loadSequence.current) return;
+      if (result.success) setInventory(result);
+      else setLoadError(result.message);
+    } catch {
+      if (mounted.current && sequence === loadSequence.current) setLoadError('Daftar bahan belum bisa dimuat. Coba lagi.');
+    } finally {
+      if (mounted.current && sequence === loadSequence.current) setLoading(false);
+    }
+  }
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { if (allowed) void load(); }, [allowed]);
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!dirty) return;
+    const prevent = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', prevent);
+    return () => window.removeEventListener('beforeunload', prevent);
+  }, [dirty]);
 
-  async function loadData() {
-    setLoading(true);
+  function open(next: Modal) { setError(''); setUncertain(false); setDirty(false); setModal(next); }
+  function close() {
+    if (lock.current || (dirty && !window.confirm('Tutup form dan buang perubahan yang belum disimpan?'))) return;
+    if (uncertain) { void reconcile(); return; }
+    setModal(undefined); setDirty(false); setError('');
+  }
+  async function write(action: () => Promise<WriteResult>, success: (data: InventoryIngredient) => void) {
+    if (lock.current || uncertain) return;
+    lock.current = true; setBusy(true); setError('');
     try {
-      const outlets = await getOutlets();
-      if (outlets?.length > 0) {
-        setOutletId(outlets[0].id);
-        setBrandId(outlets[0].brand_id);
-        const data = await getIngredients(outlets[0].brand_id, outlets[0].id);
-        setIngredients(data || []);
-      }
-    } catch { /* */ }
-    setLoading(false);
+      const result = await action();
+      if (!mounted.current) return;
+      if (!result.success) { setError(result.message); setUncertain(result.uncertain); return; }
+      success(result.data); setModal(undefined); setDirty(false);
+    } catch {
+      setError('Hasil penyimpanan belum dapat dipastikan. Muat ulang data sebelum mencoba lagi.'); setUncertain(true);
+    } finally { lock.current = false; if (mounted.current) setBusy(false); }
+  }
+  function merge(data: InventoryIngredient, old?: InventoryIngredient) {
+    // Price responses omit outlet stock and recipe usage. Preserve the loaded values.
+    const updated = { ...old, ...data, current_stock: data.current_stock ?? old?.current_stock,
+      min_stock: data.min_stock ?? old?.min_stock, used_in: data.used_in ?? old?.used_in };
+    setInventory(current => current && ({ ...current, ingredients: old
+      ? current.ingredients.map(item => item.id === old.id ? updated : item)
+      : [...current.ingredients, updated].sort((a, b) => a.name.localeCompare(b.name, 'id')) }));
+    return updated;
+  }
+  async function reconcile() {
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setCreated(undefined);
+    setNotice('Periksa data terbaru sebelum mengulang perubahan.');
+    await load();
+    lock.current = false;
+    if (mounted.current) { setModal(undefined); setDirty(false); setError(''); setUncertain(false); setBusy(false); }
   }
 
-  async function handleSave() {
-    setError('');
-    if (!form.name.trim()) {
-      setError('Nama bahan harus diisi');
-      return;
-    }
-    if (!form.base_unit) {
-      setError('Pilih bentuk & satuan bahan');
-      return;
-    }
-    if (form.ingredient_type !== 'overhead') {
-      if (!form.buy_price || parseFloat(form.buy_price) <= 0) {
-        setError('Harga beli harus diisi dan lebih dari 0');
-        return;
-      }
-      if (!form.buy_qty || parseFloat(form.buy_qty) <= 0) {
-        setError('Isi per beli harus diisi dan lebih dari 0');
-        return;
-      }
-    }
-    try {
-      if (editingId) {
-        await updateIngredient(editingId, {
-          name: form.name, base_unit: form.base_unit, unit_type: form.unit_type,
-          buy_price: parseFloat(form.buy_price) || 0,
-          buy_qty: parseFloat(form.buy_qty) || 1,
-          ingredient_type: form.ingredient_type,
-          overhead_cost_per_day: form.overhead_cost_per_day ? parseFloat(form.overhead_cost_per_day) : null,
-          row_version: form.row_version,
-        });
-      } else {
-        const created = await createIngredient({
-          brand_id: brandId, name: form.name, base_unit: form.base_unit,
-          unit_type: form.unit_type, tracking_mode: 'simple',
-          buy_price: parseFloat(form.buy_price) || 0,
-          buy_qty: parseFloat(form.buy_qty) || 1,
-          ingredient_type: form.ingredient_type,
-          overhead_cost_per_day: form.overhead_cost_per_day ? parseFloat(form.overhead_cost_per_day) : null,
-        });
-        // Auto-restock with initial stock if provided
-        const initQty = parseFloat(form.initial_stock);
-        let stockAdded = false;
-        if (created?.id && !isNaN(initQty) && initQty > 0 && outletId) {
-          try {
-            await restockIngredient(created.id, {
-              outlet_id: outletId,
-              quantity: initQty,
-              notes: 'Stok awal',
-            });
-            stockAdded = true;
-          } catch { /* Ingredient is already saved; retry stock from Restok. */ }
-        }
-        setSuccessMsg(`${form.name} berhasil ditambah${stockAdded ? ` (stok: ${initQty} ${form.base_unit})` : initQty > 0 ? '. Stok awal belum tersimpan. Tambahkan stok melalui Restok.' : ''}`);
-        setTimeout(() => setSuccessMsg(''), 4000);
-      }
-      setShowModal(false);
-      resetForm();
-      await loadData();
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
+  const ingredients = inventory?.ingredients ?? [];
+  const recipe = ingredients.filter(item => item.ingredient_type !== 'overhead');
+  const overhead = ingredients.filter(item => item.ingredient_type === 'overhead');
+  const matches = (item: InventoryIngredient) => filter === 'all' || filter === 'low' && hasLowStock(item)
+    || filter === 'unknown' && !hasRecordedStock(item) || filter === 'review' && item.needs_review
+    || filter === 'unused' && !item.used_in?.length;
+  const visible = (view === 'recipe' ? recipe.filter(matches) : overhead)
+    .filter(item => item.name.toLocaleLowerCase('id').includes(query.trim().toLocaleLowerCase('id')));
+  const heading = modal?.kind === 'stock' ? 'Tambah stok' : modal?.kind === 'usage' ? 'Pemakaian bahan'
+    : modal?.kind === 'delete' ? 'Hapus bahan' : modal?.overhead ? modal.item ? 'Ubah biaya operasional' : 'Tambah biaya operasional'
+      : modal?.item ? 'Ubah harga bahan' : 'Tambah bahan';
 
-  async function handleDelete(id: string) {
-    if (!confirm('Hapus bahan baku ini?')) return;
-    await deleteIngredient(id);
-    await loadData();
-  }
+  return <div className="hpp-workspace inventory-workspace mx-auto max-w-6xl space-y-6 pb-12">
+    <header className="flex flex-wrap items-start justify-between gap-4">
+      <div className="max-w-xl"><h1 className="text-3xl font-semibold tracking-tight">Bahan Baku</h1>
+        <p className="mt-2 text-muted">Kelola stok dan harga bahan di sini. Susun takaran per produk melalui Atur HPP.</p></div>
+      <div className="flex flex-wrap gap-2"><Link href="/dashboard/hpp" className="hpp-button">Atur HPP</Link>
+        <button data-inventory-add className="hpp-button hpp-primary" disabled={!inventory || loading || !!loadError}
+          onClick={() => open({ kind: 'ingredient', overhead: view === 'overhead' })}>{view === 'recipe' ? 'Tambah bahan' : 'Tambah biaya'}</button></div>
+    </header>
 
-  async function handleRestock() {
-    if (!restockTarget) return;
-    setError('');
-    try {
-      await restockIngredient(restockTarget.id, {
-        outlet_id: outletId,
-        quantity: parseFloat(restockForm.quantity),
-        notes: restockForm.notes || undefined,
-      });
-      setShowRestockModal(false);
-      setRestockForm({ quantity: '', notes: '' });
-      await loadData();
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
-
-  function openEdit(ing: Ingredient) {
-    setEditingId(ing.id);
-    setForm({
-      name: ing.name, base_unit: ing.base_unit, unit_type: ing.unit_type,
-      buy_price: ing.buy_price > 0 ? String(ing.buy_price) : '',
-      buy_qty: ing.buy_qty > 0 ? String(ing.buy_qty) : '',
-      ingredient_type: ing.ingredient_type,
-      overhead_cost_per_day: ing.overhead_cost_per_day ? String(ing.overhead_cost_per_day) : '',
-      row_version: ing.row_version,
-      initial_stock: '',
-      needs_review: !!ing.needs_review,
-    });
-    setModalStep('form');
-    setShowModal(true);
-  }
-
-  async function handleConfirmPrice() {
-    if (!editingId) return;
-    setError('');
-    try {
-      await updateIngredient(editingId, { row_version: form.row_version });
-      setShowModal(false);
-      resetForm();
-      setSuccessMsg('✅ Harga dikonfirmasi, badge perkiraan AI dihapus');
-      setTimeout(() => setSuccessMsg(''), 4000);
-      await loadData();
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
-
-  function openCreate(type: 'recipe' | 'overhead' = 'recipe') {
-    resetForm();
-    setForm(f => ({ ...f, ingredient_type: type }));
-    setModalStep(type === 'recipe' ? 'preset' : 'form');
-    setShowModal(true);
-  }
-
-  function pickPreset(preset: Preset) {
-    setForm(f => ({
-      ...f,
-      name: preset.name,
-      base_unit: preset.base_unit,
-      unit_type: preset.unit_type,
-      buy_price: '',
-      buy_qty: '',
-      ingredient_type: 'recipe',
-    }));
-    setModalStep('form');
-  }
-
-  function pickCustom() {
-    setModalStep('form');
-  }
-
-  function openRestock(ing: Ingredient) {
-    setRestockTarget(ing);
-    setRestockForm({ quantity: '', notes: '' });
-    setShowRestockModal(true);
-  }
-
-  function resetForm() {
-    setEditingId(null);
-    setForm({ name: '', base_unit: '', unit_type: 'WEIGHT', buy_price: '', buy_qty: '', ingredient_type: 'recipe', overhead_cost_per_day: '', row_version: 0, initial_stock: '', needs_review: false });
-    setError('');
-    setModalStep('preset');
-  }
-
-  const formatCurrency = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
-
-  // Compute counts for filter chips (from unfiltered list)
-  const counts = {
-    all: ingredients.length,
-    restock: ingredients.filter(isLowStock).length,
-    'ai-new': ingredients.filter(isAiNew).length,
-    review: ingredients.filter(i => i.needs_review).length,
-    orphan: ingredients.filter(i => !i.used_in || i.used_in.length === 0).length,
-  };
-
-  // Filter + sort
-  const q = searchQuery.trim().toLowerCase();
-  const filteredIngredients = ingredients
-    .filter(i => !q || i.name.toLowerCase().includes(q))
-    .filter(i => {
-      if (activeFilter === 'all') return true;
-      if (activeFilter === 'restock') return isLowStock(i);
-      if (activeFilter === 'ai-new') return isAiNew(i);
-      if (activeFilter === 'review') return !!i.needs_review;
-      if (activeFilter === 'orphan') return !i.used_in || i.used_in.length === 0;
-      return true;
-    })
-    .sort((a, b) => {
-      // Low stock first (most urgent), then alphabetical
-      const aLow = isLowStock(a) ? 0 : 1;
-      const bLow = isLowStock(b) ? 0 : 1;
-      if (aLow !== bLow) return aLow - bLow;
-      return a.name.localeCompare(b.name, 'id');
-    });
-
-  if (!allowed || loading) return <div className="flex items-center justify-center h-64">Memuat...</div>;
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Bahan Baku</h1>
-          <p className="text-gray-500">Catat harga pembelian dan stok fisik bahan di outlet Anda.</p>
-          <Link className="hpp-button mt-3" href="/dashboard/hpp">Hitung HPP dari resep produk</Link>
-        </div>
-        <button
-          onClick={() => openCreate('recipe')}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-        >
-          <Plus className="w-4 h-4" /> Tambah Bahan
-        </button>
-      </div>
-
-      {/* Success toast */}
-      {successMsg && (
-        <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-800 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      {/* Search + Filter */}
-      {ingredients.length > 0 && (
-        <div className="space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Cari bahan..."
-              className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-lg text-base focus:border-blue-400 focus:ring-2 focus:ring-blue-100 focus:outline-none"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded text-gray-400">
-                <X className="w-4 h-4" />
-              </button>
-            )}
+    <nav aria-label="Jenis bahan" className="inventory-tabs flex flex-wrap gap-x-6">
+      <button className="hpp-button" aria-pressed={view === 'recipe'} onClick={() => { setView('recipe'); setQuery(''); }}>
+        Bahan resep{inventory ? ` (${recipe.length})` : ''}</button>
+      <button className="hpp-button" aria-pressed={view === 'overhead'} onClick={() => { setView('overhead'); setQuery(''); }}>
+        Biaya operasional{inventory ? ` (${overhead.length})` : ''}</button>
+    </nav>
+    {notice && <div className="hpp-panel space-y-3" role="status"><p>{notice}</p>
+      {created && <button className="hpp-button" onClick={() => open({ kind: 'stock', item: created })}>Catat stok {created.name}</button>}</div>}
+    {!allowed || loading ? <p role="status" className="py-8 text-muted">Memuat daftar bahan…</p>
+      : loadError ? <div className="hpp-panel space-y-3" role="alert"><p>{loadError}</p>
+        <button data-inventory-retry className="hpp-button" onClick={() => void load()}>Muat ulang</button>
+        {loadError.includes('Sesi') && <Link href="/login" className="hpp-button ml-2">Masuk kembali</Link>}</div>
+        : <>
+          <div className="flex flex-wrap items-end gap-4">
+            <label className="flex min-w-0 flex-1 flex-col gap-2"><span className="font-semibold">Cari {view === 'recipe' ? 'bahan' : 'biaya'}</span>
+              <input className="hpp-control w-full" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={view === 'recipe' ? 'Nama bahan' : 'Nama biaya'} /></label>
+            {view === 'recipe' && <label className="flex w-full flex-col gap-2 sm:w-auto"><span id="inventory-filter-label" className="font-semibold">Tampilkan</span>
+              <select aria-labelledby="inventory-filter-label" className="hpp-control" value={filter} onChange={event => setFilter(event.target.value as Filter)}>
+                {filters.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
           </div>
-
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            {FILTERS.map(f => {
-              const count = counts[f.key];
-              const isActive = activeFilter === f.key;
-              const disabled = f.key !== 'all' && count === 0;
-              return (
-                <button
-                  key={f.key}
-                  onClick={() => !disabled && setActiveFilter(f.key)}
-                  disabled={disabled}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition ${
-                    isActive
-                      ? 'bg-blue-600 text-white'
-                      : disabled
-                        ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
-                        : 'bg-white border border-gray-200 text-gray-700 hover:border-blue-300'
-                  }`}
-                >
-                  {f.label} <span className={isActive ? 'opacity-80' : 'text-gray-400'}>({count})</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Ingredient Cards */}
-      {ingredients.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 sm:p-8">
-          <div className="max-w-lg mx-auto">
-            <div className="text-center mb-6">
-              <Package className="w-12 h-12 mx-auto mb-3 text-blue-400" />
-              <h2 className="text-lg font-bold text-gray-900">Mulai Kelola Bahan Baku</h2>
-              <p className="text-sm text-gray-500 mt-1">Dengan bahan baku, sistem otomatis hitung HPP dan kurangi stok saat ada pesanan.</p>
+          {view === 'overhead' && <p className="text-muted">Catat estimasi pengeluaran harian seperti gas atau sewa. Biaya ini belum termasuk dalam HPP bahan per porsi.</p>}
+          {view === 'recipe' && inventory?.stockMode !== 'hpp' && recipe.length > 0 && <p className="text-muted">Stok bahan baru berkurang mengikuti resep saat mode HPP aktif di Pengaturan.</p>}
+          {visible.length === 0 ? <div className="hpp-panel space-y-3">
+            <h2 className="text-lg font-semibold">{query || view === 'recipe' && filter !== 'all' ? 'Tidak ada hasil yang sesuai' : view === 'recipe' ? 'Belum ada bahan' : 'Belum ada biaya operasional'}</h2>
+            <p className="text-muted">{query || view === 'recipe' && filter !== 'all' ? 'Coba nama lain atau tampilkan semua bahan.'
+              : view === 'recipe' ? 'Tambahkan bahan dan harga pembeliannya. Setelah itu, catat stok yang tersedia.' : 'Tambahkan pengeluaran yang ingin dicatat sebagai estimasi harian.'}</p>
+            {query || view === 'recipe' && filter !== 'all' ? <button className="hpp-button" onClick={() => { setQuery(''); setFilter('all'); }}>Reset pencarian</button>
+              : <button className="hpp-button" onClick={() => open({ kind: 'ingredient', overhead: view === 'overhead' })}>{view === 'recipe' ? 'Tambah bahan pertama' : 'Tambah biaya pertama'}</button>}
+          </div> : <div className="inventory-list">{visible.map(item => <article key={item.id} data-ingredient={item.id} className="inventory-row">
+            <div className="min-w-0"><h2 className="text-lg font-semibold break-words">{item.name}</h2>
+              {view === 'recipe' && <p className="mt-1 text-muted">{item.used_in?.length ? `Dipakai di ${item.used_in.length} resep` : 'Belum dipakai di resep'}</p>}
+              {item.needs_review && <p className="mt-1 font-semibold">Harga perlu diperiksa</p>}</div>
+            {view === 'recipe' ? <>
+              <div><p className="text-sm text-muted">Stok tersedia</p><p className="mt-1 text-xl font-semibold tabular-nums">
+                {hasRecordedStock(item) ? `${hppNumber(Number(item.current_stock))} ${item.base_unit}` : 'Belum dicatat'}</p>
+                {hasLowStock(item) && <p className="mt-1 font-semibold">{Number(item.current_stock) <= 0 ? 'Stok habis' : 'Stok menipis'}</p>}
+                {item.min_stock != null && <p className="mt-1 text-sm text-muted">Batas minimum {hppNumber(Number(item.min_stock))} {item.base_unit}</p>}</div>
+              <div><p className="text-sm text-muted">Biaya HPP per {item.base_unit}</p><p className="mt-1 text-lg font-semibold tabular-nums">{hppMoney(Number(item.cost_per_base_unit))}</p>
+                <p className="mt-1 text-sm text-muted">Pembelian terakhir {hppMoney(Number(item.buy_price))} untuk {hppNumber(Number(item.buy_qty))} {item.base_unit}</p></div>
+            </> : <div><p className="text-sm text-muted">Estimasi per hari</p><p className="mt-1 text-xl font-semibold tabular-nums">{hppMoney(Number(item.overhead_cost_per_day ?? 0))}</p></div>}
+            <div className="inventory-actions flex flex-wrap gap-2">
+              {view === 'recipe' && <button className="hpp-button" onClick={() => open({ kind: 'stock', item })}>Tambah stok</button>}
+              <button className="hpp-button" onClick={() => open({ kind: 'ingredient', item, overhead: view === 'overhead' })}>{view === 'recipe' ? 'Ubah harga' : 'Ubah biaya'}</button>
+              {view === 'recipe' && <button className="hpp-button hpp-text-button" onClick={() => open({ kind: 'usage', item })}>Lihat pemakaian</button>}
+              <button className="hpp-button hpp-text-button" aria-label={`Hapus ${item.name}`} onClick={() => open({ kind: 'delete', item })}>Hapus</button>
             </div>
-            <div className="space-y-4 mb-6">
-              <div className="flex gap-3 items-start">
-                <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold shrink-0">1</div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Tambah bahan baku</p>
-                  <p className="text-xs text-gray-500">Klik "Tambah Bahan" di atas. Pilih dari daftar bahan umum atau isi manual.</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Contoh: Kopi Arabica, Rp120.000 per 1 kg</p>
-                </div>
-              </div>
-              <div className="flex gap-3 items-start">
-                <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold shrink-0">2</div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Isi stok awal</p>
-                  <p className="text-xs text-gray-500">Di form yang sama, isi "Stok Awal" sesuai jumlah bahan yang lo punya sekarang. Langsung siap pake.</p>
-                </div>
-              </div>
-              <div className="flex gap-3 items-start">
-                <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold shrink-0">3</div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Hubungkan ke menu (Resep)</p>
-                  <p className="text-xs text-gray-500">Buka halaman <a href="/dashboard/menu" className="text-blue-600 underline font-medium">Menu</a> → edit produk → tab Resep → pilih bahan dan isi jumlah per porsi.</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Contoh: Kopi Hitam butuh 15g Kopi Arabica + 10g Gula per porsi</p>
-                </div>
-              </div>
-              <div className="flex gap-3 items-start">
-                <div className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-sm font-bold shrink-0">4</div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Otomatis!</p>
-                  <p className="text-xs text-gray-500">Setiap pesanan masuk, stok bahan baku berkurang otomatis sesuai resep. Anda tinggal pantau dan restock.</p>
-                </div>
-              </div>
-            </div>
-            <div className="text-center">
-              <button
-                onClick={() => openCreate('recipe')}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
-              >
-                <Plus className="w-4 h-4" /> Tambah Bahan Pertama
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : filteredIngredients.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-          <Search className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">Gak ada bahan yang cocok.</p>
-          <button onClick={() => { setSearchQuery(''); setActiveFilter('all'); }} className="mt-3 text-sm text-blue-600 hover:underline">Reset filter</button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredIngredients.map((ing) => {
-            const isLow = isLowStock(ing);
-            const isNew = isAiNew(ing);
-            const needsReview = !!ing.needs_review;
-            // Visual border based on priority: low stock (red) > ai-new (blue) > default
-            const borderAccent = isLow ? 'border-l-4 border-l-red-400' : isNew ? 'border-l-4 border-l-blue-400' : '';
-            return (
-              <div key={ing.id} className={`bg-white rounded-xl border border-gray-200 ${borderAccent} p-4 space-y-3`}>
-                {/* Header: name + badges + Edit/Delete */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-gray-900">{ing.name}</h3>
-                      {ing.ingredient_type === 'overhead' && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Overhead</span>
-                      )}
-                      {isNew && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                          <Sparkles className="w-3 h-3" /> Baru
-                        </span>
-                      )}
-                      {needsReview && (
-                        <button
-                          onClick={() => openEdit(ing)}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 transition cursor-pointer"
-                          title="Klik untuk cek & konfirmasi harga"
-                        >
-                          <AlertTriangle className="w-3 h-3" /> Harga perkiraan AI, klik buat cek
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => openEdit(ing)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit">
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => handleDelete(ing.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Hapus">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+          </article>)}</div>}
+        </>}
 
-                {/* Info grid: stok + harga */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                  <div>
-                    <p className="text-xs text-gray-400">Stok</p>
-                    <p className={`font-semibold ${isLow ? 'text-red-600' : 'text-gray-900'}`}>
-                      {ing.current_stock !== undefined ? `${ing.current_stock} ${ing.base_unit}` : '-'}
-                      {isLow && <span className="ml-1 text-[10px] font-medium text-red-500">RENDAH</span>}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Cost/Unit</p>
-                    <p className="font-medium text-gray-900">{formatCurrency(ing.cost_per_base_unit)}/{ing.base_unit}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Harga Beli</p>
-                    <p className="text-gray-600">
-                      {ing.buy_price > 0 ? `${formatCurrency(ing.buy_price)} / ${ing.buy_qty}${ing.base_unit}` : <span className="text-amber-500">Belum diisi</span>}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Satuan</p>
-                    <p className="text-gray-600">{ing.base_unit}</p>
-                  </div>
-                </div>
-
-                {/* Pemakaian per menu */}
-                {ing.ingredient_type !== 'overhead' && (
-                  <div className="border-t border-gray-100 pt-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Pemakaian per Porsi</p>
-                    {ing.used_in && ing.used_in.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {ing.used_in.map((u, idx) => (
-                          <a key={idx} href="/dashboard/menu" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition">
-                            <span className="font-medium">{u.product_name}</span>
-                            <span className="text-blue-500">{u.qty_per_serving} {u.unit}</span>
-                          </a>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
-                        <AlertTriangle className="w-4 h-4 shrink-0" />
-                        <span>Belum terhubung ke menu. <a href="/dashboard/menu" className="underline font-medium">Buat resep di halaman Menu</a></span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Hero CTA: Restock */}
-                {ing.ingredient_type !== 'overhead' && (
-                  <button
-                    onClick={() => openRestock(ing)}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium transition ${
-                      isLow
-                        ? 'bg-red-600 text-white hover:bg-red-700'
-                        : 'bg-green-600 text-white hover:bg-green-700'
-                    }`}
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    {isLow ? 'Restock Sekarang' : 'Restock'}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-          {/* Secondary: add overhead */}
-          <div className="pt-2 text-center">
-            <button
-              onClick={() => openCreate('overhead')}
-              className="text-xs text-gray-500 hover:text-gray-700 underline"
-            >
-              + Tambah Biaya Operasional (es, gas, listrik)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Create/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            {/* Header — different for preset vs form step */}
-            {modalStep === 'preset' ? (
-              <div>
-                <h2 className="text-lg font-bold">Mau nambah bahan apa?</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Pilih dari daftar di bawah untuk mengisi cepat, atau klik "Lainnya" jika tidak tersedia.</p>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                {!editingId && form.ingredient_type === 'recipe' && (
-                  <button onClick={() => setModalStep('preset')} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500" title="Kembali">
-                    <ArrowLeft className="w-4 h-4" />
-                  </button>
-                )}
-                <h2 className="text-lg font-bold">
-                  {editingId ? 'Edit Bahan Baku' : form.ingredient_type === 'overhead' ? 'Tambah Biaya Operasional' : 'Detail Bahan'}
-                </h2>
-              </div>
-            )}
-            {error && <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-
-            {/* STEP: Preset selection */}
-            {modalStep === 'preset' && !editingId && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                  {PRESETS.map(p => (
-                    <button
-                      key={p.id}
-                      onClick={() => pickPreset(p)}
-                      className="flex flex-col items-center justify-center p-3 rounded-xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition text-center"
-                    >
-                      <span className="text-2xl mb-1">{p.emoji}</span>
-                      <span className="text-xs font-medium text-gray-900 leading-tight">{p.name}</span>
-                    </button>
-                  ))}
-                  <button
-                    onClick={pickCustom}
-                    className="flex flex-col items-center justify-center p-3 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition text-center"
-                  >
-                    <Plus className="w-6 h-6 text-gray-400 mb-1" />
-                    <span className="text-xs font-medium text-gray-700">Lainnya</span>
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400 text-center">Nanti lo masih bisa edit nama & harga sesuai pembelian asli.</p>
-              </div>
-            )}
-
-            {/* STEP: Form */}
-            {modalStep === 'form' && (
-              <div className="space-y-4">
-                {/* AI price review banner */}
-                {editingId && form.needs_review && (
-                  <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-3 space-y-2">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-amber-900">Harga ini dari AI (perkiraan)</p>
-                        <p className="text-xs text-amber-700 mt-0.5">
-                          Cek sesuai <strong>nota belanja asli</strong> lo. Kalau sama, klik <strong>"Harga sudah benar"</strong> di bawah.
-                          Kalau beda, edit angka "Total Harga" + "Dapat" terus klik <strong>Simpan</strong>.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={handleConfirmPrice}
-                      className="w-full flex items-center justify-center gap-2 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition text-sm font-medium"
-                    >
-                      <CheckCircle2 className="w-4 h-4" /> Harga sudah benar, konfirmasi
-                    </button>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Bahan *</label>
-                  <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-                    className="w-full px-3 py-2.5 border rounded-lg text-base" placeholder="Contoh: Kopi Arabica" />
-                </div>
-
-                {/* Overhead-specific section */}
-                {form.ingredient_type === 'overhead' ? (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
-                    <p className="text-xs text-amber-800 leading-relaxed">
-                      <strong>Biaya operasional tetap</strong> (es batu, gas, listrik, air) yang susah dihitung per porsi.
-                      Selaris <strong>tidak mengurangi stok</strong> bahan ini per pesanan, cuma dicatat sebagai biaya tetap harian.
-                    </p>
-                    <div>
-                      <label className="block text-xs font-medium text-amber-700 mb-1">Estimasi Biaya per Hari (Rp)</label>
-                      <input type="number" value={form.overhead_cost_per_day} onChange={e => setForm({ ...form, overhead_cost_per_day: e.target.value })}
-                        className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm" placeholder="50000" />
-                      <p className="text-xs text-amber-600 mt-1">
-                        💡 Contoh: gas Rp50.000/hari. Kalau rata-rata 100 porsi/hari, alokasi ~Rp500/porsi.
-                      </p>
-                    </div>
-                  </div>
-                ) : null}
-
-                {/* Bentuk bahan — 3 categories */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Bentuk Bahan *</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {UNIT_CATEGORIES.map(cat => {
-                      const Icon = cat.icon;
-                      const isActive = form.unit_type === cat.id;
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => setForm({ ...form, unit_type: cat.id, base_unit: cat.units[0].value })}
-                          className={`flex flex-col items-center p-3 cursor-pointer rounded-lg border-2 transition-all ${
-                            isActive ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
-                          }`}
-                        >
-                          <Icon className={`w-5 h-5 mb-1 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
-                          <span className={`text-sm font-medium ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>{cat.label}</span>
-                          <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">{cat.desc}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Satuan sub-selector */}
-                {form.unit_type && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Satuan Detail *</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(UNIT_CATEGORIES.find(c => c.id === form.unit_type)?.units || []).map(u => (
-                        <label key={u.value} className={`flex items-center justify-center p-2.5 cursor-pointer rounded-lg border-2 transition-all ${
-                          form.base_unit === u.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
-                        }`}>
-                          <input type="radio" name="unit" value={u.value} checked={form.base_unit === u.value}
-                            onChange={() => setForm({ ...form, base_unit: u.value })} className="sr-only" />
-                          <span className={`text-sm font-medium ${form.base_unit === u.value ? 'text-blue-700' : 'text-gray-900'}`}>{u.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Harga Beli */}
-                {form.ingredient_type !== 'overhead' && (
-                  <div className={`rounded-lg p-4 space-y-3 ${
-                    editingId && form.needs_review ? 'bg-amber-50 border-2 border-amber-200' : 'bg-gray-50'
-                  }`}>
-                    <p className="text-sm font-medium text-gray-700">Harga pembelian {editingId && form.needs_review && <span className="text-xs text-amber-700 ml-1">(periksa sesuai nota)</span>}</p>
-                    <p className="text-sm text-gray-500">Isi harga dan jumlah dari pembelian yang sama. Angka ini menjadi dasar HPP, bukan penambahan stok.</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Total Harga (Rp) *</label>
-                        <input type="number" value={form.buy_price} onChange={e => setForm({ ...form, buy_price: e.target.value })}
-                          className="w-full px-3 py-2.5 border rounded-lg text-base" placeholder="14000" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Jumlah dibeli ({form.base_unit || '...'}) *</label>
-                        <input type="number" step="any" value={form.buy_qty} onChange={e => setForm({ ...form, buy_qty: e.target.value })}
-                          className="w-full px-3 py-2.5 border rounded-lg text-base" placeholder="1000" />
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-500">{form.base_unit === 'kg' ? 'Jika membeli 1 kg, isi jumlah 1.' : form.base_unit === 'liter' ? 'Jika membeli 1 liter, isi jumlah 1.' : form.base_unit === 'gram' ? 'Jika membeli 1 kg, isi jumlah 1000 gram.' : form.base_unit === 'ml' ? 'Jika membeli 1 liter, isi jumlah 1000 ml.' : 'Isi jumlah dalam satuan bahan yang dipilih.'}</p>
-                    {(parseFloat(form.buy_price) > 0 && parseFloat(form.buy_qty) > 0) && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                        <p className="text-sm text-green-800 font-medium">
-                          Harga per {form.base_unit || 'unit'}: {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 2 }).format(parseFloat(form.buy_price) / parseFloat(form.buy_qty))}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Init stock — create mode only, recipe only */}
-                {!editingId && form.ingredient_type !== 'overhead' && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-blue-600" />
-                      <p className="text-sm font-medium text-blue-900">Stok Awal</p>
-                      <span className="text-xs text-blue-600">(opsional)</span>
-                    </div>
-                    <p className="text-xs text-blue-700">Berapa jumlahnya di outlet sekarang? Diisi sekarang agar langsung siap dipakai, tanpa perlu restok manual.</p>
-                    <div className="flex items-center gap-2">
-                      <input type="number" step="any" value={form.initial_stock} onChange={e => setForm({ ...form, initial_stock: e.target.value })}
-                        className="flex-1 px-3 py-2.5 border border-blue-300 rounded-lg text-base" placeholder="0" />
-                      <span className="text-sm font-medium text-blue-700 shrink-0">{form.base_unit || 'unit'}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Action buttons — only in form step */}
-            {modalStep === 'form' && (
-              <div className="flex justify-end gap-3 pt-2">
-                <button onClick={() => { setShowModal(false); resetForm(); }} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Batal</button>
-                <button onClick={handleSave}
-                  disabled={!form.name || !form.base_unit || (form.ingredient_type !== 'overhead' && (!form.buy_price || !form.buy_qty))}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                  {editingId ? 'Simpan' : 'Tambah Bahan'}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Restock Modal */}
-      {showRestockModal && restockTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4">
-            <h2 className="text-lg font-bold">Restock: {restockTarget.name}</h2>
-            <p className="text-sm text-gray-500">
-              Stok saat ini: {restockTarget.current_stock ?? 0} {restockTarget.base_unit}
-            </p>
-            {error && <p className="text-red-600 text-sm">{error}</p>}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Jumlah Restock ({restockTarget.base_unit}) *</label>
-              <input type="number" value={restockForm.quantity} onChange={e => setRestockForm({ ...restockForm, quantity: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg" placeholder="1000" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
-              <input value={restockForm.notes} onChange={e => setRestockForm({ ...restockForm, notes: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg" placeholder="Beli dari supplier X" />
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => setShowRestockModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Batal</button>
-              <button onClick={handleRestock} disabled={!restockForm.quantity || parseFloat(restockForm.quantity) <= 0}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
-                Restock
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    {modal && inventory && <InventoryDialog title={heading} busy={busy} onClose={close}>
+      {busy && <p role="status" className="mb-4 text-muted">Menyimpan perubahan…</p>}
+      {error && <div role="alert" className="inventory-message mb-4 space-y-3"><p>{error}</p>
+        {uncertain && <button className="hpp-button" disabled={busy} onClick={() => void reconcile()}>Periksa data terbaru</button>}
+        {error.includes('Sesi') && <Link href="/login" className="hpp-button">Masuk kembali</Link>}
+        {!uncertain && error.includes('refresh') && <button className="hpp-button" disabled={busy} onClick={() => void reconcile()}>Muat ulang data</button>}</div>}
+      {modal.kind === 'ingredient' && <InventoryIngredientForm item={modal.item} overhead={!!modal.overhead} brandId={inventory.brandId}
+        names={ingredients.filter(item => item.id !== modal.item?.id).map(item => item.name)} disabled={busy || uncertain} onDirty={() => setDirty(true)}
+        onSave={payload => write(() => saveInventoryIngredient(payload, modal.item), data => {
+          const saved = merge(data, modal.item); setCreated(!modal.item && !modal.overhead ? saved : undefined);
+          setNotice(modal.item ? `${saved.name} diperbarui. ${modal.overhead ? 'Estimasi biaya tersimpan.' : 'Harga ini berlaku pada semua resep yang memakai bahan tersebut. Stok tetap sama.'}`
+            : modal.overhead ? `${saved.name} ditambahkan.` : `${saved.name} ditambahkan. Stok belum dicatat.`);
+        })} />}
+      {modal.kind === 'stock' && modal.item && <InventoryStockForm item={modal.item} disabled={busy || uncertain} onDirty={() => setDirty(true)}
+        onSave={(quantity, notes) => write(() => addInventoryStock(modal.item!.id, inventory.outletId, quantity, notes), data => {
+          const saved = merge(data, modal.item); setCreated(undefined); setNotice(`Stok ${saved.name} berhasil ditambahkan.`);
+        })} />}
+      {modal.kind === 'usage' && modal.item && <div className="space-y-4"><p className="font-semibold">{modal.item.name}</p>
+        {modal.item.used_in?.length ? <ul className="space-y-3">{modal.item.used_in.map((usage, index) => <li key={index} className="inventory-message">
+          <p className="font-semibold">{usage.product_name}</p><p className="text-muted">{hppNumber(usage.qty_per_serving)} {usage.unit} per porsi</p></li>)}</ul>
+          : <p className="text-muted">Bahan ini belum dipakai di resep. Pilih produknya di Atur HPP untuk menambahkan takaran.</p>}
+        <Link href="/dashboard/hpp" className="hpp-button hpp-primary">Buka Atur HPP</Link></div>}
+      {modal.kind === 'delete' && modal.item && <div className="space-y-4"><p className="font-semibold">{modal.item.name}</p>
+        {modal.item.used_in?.length ? <><p>Bahan masih dipakai di resep. Lepaskan bahan dari resep tersebut sebelum menghapusnya.</p>
+          <Link href="/dashboard/hpp" className="hpp-button">Buka Atur HPP</Link></>
+          : <><p>Hapus bahan ini dari daftar? Bahan tidak akan tersedia untuk resep atau penambahan stok berikutnya.</p>
+            <button className="hpp-button" disabled={busy || uncertain} onClick={() => void write(() => removeInventoryIngredient(modal.item!.id), () => {
+              setInventory(current => current && ({ ...current, ingredients: current.ingredients.filter(item => item.id !== modal.item!.id) }));
+              setCreated(undefined); setNotice(`${modal.item!.name} dihapus dari daftar.`);
+            })}>{busy ? 'Menghapus…' : 'Hapus bahan'}</button></>}
+      </div>}
+    </InventoryDialog>}
+  </div>;
 }
