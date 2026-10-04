@@ -12,6 +12,7 @@ Scope: web login, daftar, onboarding, tema shell dashboard, serta onboarding/log
 - Flutter: 8 widget tests; welcome 320/768 px, semua state login di 320 px, ready dan formulir Google dengan teks 160%. APK kasir release berhasil dikompilasi. Analyzer tidak menemukan error; empat warning lama berada di modul Dapur/orders/products.
 - Browser fixture memakai server actions asli dan Chromium. Tidak mengirim OTP ke nomor pengguna. Alur validasi nomor, Sef tidak ditemukan, fallback WA, OTP salah/benar, pilihan usaha, PIN tidak cocok, referral, produk gagal/retry, skip/back, theme, menu mobile dan tautan publik sudah diklik.
 - Smoke test live di `selaris.id` memakai akun demo existing: dashboard autentikasi, theme terang/gelap, 320 px, menu/Escape dan onboarding toko existing lolos tanpa page error. Tidak mengirim pesan OTP.
+- CI run 197 sukses: APK dan AAB POS/Dapur v1.6.30. APK publik ditandatangani sertifikat Selaris; SHA-256 file cocok dengan digest GitHub, package com.selaris.pos/com.selaris.dapur, versionCode 197, resource Firebase push ada. Backend/version.json produksi sudah 1.6.30 dan semua container healthy.
 - Popup Google sungguhan dan pengiriman OTP ke akun pengguna menunggu konfigurasi konsol dan pengujian pemilik. Tombol Google yang belum dikonfigurasi tampil nonaktif dengan penjelasan.
 
 ## Delivery gate
