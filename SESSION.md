@@ -6,6 +6,40 @@ merupakan arsip, bukan pekerjaan yang sedang aktif.
 
 ## HANDOFF TERAKHIR — redesign, sync, Mode Stok dan storefront
 
+### Update terbaru: alur HPP web, 4 Oktober 2026
+
+- Ivan bingung mengisi HPP dan mengonfirmasi cakupan **web dashboard**. Source
+  terbaru `4f7934c` sudah dipasang; code+tests dipush main. Image frontend final
+  `sha256:73c25119aa34589be27584400504aed915ffc071792bf35690108a016d3fa0f6`.
+- Buka `/dashboard/hpp` atau nav **Atur HPP**. Pilih produk, tambah/pilih bahan,
+  harga + jumlah pembelian nyata, takaran satu porsi, review biaya, simpan resep,
+  lalu pilih **Atur produk lain**. Pintu masuk tersedia dari Menu, Bahan Baku,
+  Settings dan Laporan HPP. Tab Resep Menu memakai komponen yang sama.
+- Harga pembelian bukan stok fisik. Recipe setup tidak restok dan tidak mengganti
+  mode outlet. Setelah semua resep siap, pemilik mencatat stok nyata di Bahan Baku
+  lalu beralih melalui Settings; backend guard tetap berlaku. Jangan mengarang
+  data toko untuk melengkapi resep yang masih kurang.
+- `lib/hpp.ts` mengikuti preview legacy backend `unit_utils.py`, sedangkan input
+  baru disimpan dalam ingredient.base_unit. Stock deduct/display masih quantity
+  mentah, maka quantity+unit harus canonical sebelum save. Resep lama berbeda unit
+  perlu konfirmasi. Optional/catatan dipertahankan. Total server setelah save,
+  refresh harga bahan, error aman/retry, guard draft dan row_version harga tersedia.
+- UI menyatakan modal bahan belum termasuk biaya operasional. Preset bahan tidak
+  mengisi harga/jumlah perkiraan. Bila restok awal gagal, pesan menyatakan bahan
+  berhasil dibuat tetapi stok belum tersimpan, bukan mengaku stok sudah ada.
+- Production build, TypeScript, unit oracle Python dan browser HPP lolos: lima
+  lebar, kedua tema, AA/44 px/fokus/Escape, 200% teks, viewport pendek, optional,
+  catatan, legacy review, harga 409, 400/422/500/401, retry, pagination dan entry.
+  Regresi auth/onboarding, stok/storefront dan publik juga lolos. Smoke baca data
+  demo aktual memeriksa 13 produk pada 320/768/1440 dalam kedua tema tanpa write.
+  Laporan/gate `docs/HPP_FLOW_REVIEW.md`, log dan screenshot `/tmp/selaris-hpp-*`.
+- Setelah deploy, smoke HTTPS HPP 13 produk × tiga lebar × dua tema dan menu/cart
+  storefront aktual kedua tema 320 px lolos. Image frontend cocok dengan final;
+  frontend/backend/Postgres/Redis healthy. Tidak ada write stok/resep/mode/pesanan.
+- Backend tetap migration 111, APK POS/Dapur 1.6.31+198. Backlog HPP native masih
+  memakai raw quantity dan menjumlah optional; jangan menyatakan sudah diperbaiki.
+  Login Google masih menunggu empat konfigurasi Firebase pemilik.
+
 ### Update terbaru: revisi web premium, 4 Oktober 2026
 
 - Source terbaru `2ca827f` pada main. Web sudah dipasang ke selaris.id memakai
@@ -80,8 +114,9 @@ merupakan arsip, bukan pekerjaan yang sedang aktif.
 ## NEXT ACTION — mulai dari sini sesuai permintaan Ivan berikutnya
 
 - Jika melanjutkan aktivasi mode HPP: Egg Tart dan Kopi susu perlu resep lengkap.
-  Alur pemilik: refresh → Bahan Baku → Menu → pilih produk → tab Resep →
-  Pengaturan → beralih ke Resep & HPP. Validasi backend tetap berlaku. Belum ada
+  Alur pemilik kini: Dashboard → Atur HPP → pilih produk → bahan/harga/takaran
+  satu porsi → simpan → atur produk lain → stok fisik Bahan Baku → Pengaturan
+  → beralih ke Resep & HPP. Validasi backend tetap berlaku. Belum ada
   perubahan otomatis pada mode outlet/resep; jangan mengarang resep atau stok.
 - Jika melanjutkan Google: gunakan `docs/GOOGLE_LOGIN.md`. Empat nilai
   `GOOGLE_FIREBASE_PROJECT_ID`, `GOOGLE_FIREBASE_WEB_API_KEY`,

@@ -65,6 +65,10 @@ susunan satu kolom di HP. Tidak ada animasi atau ilustrasi dekoratif baru.
 - Batas kontrol light/dark memenuhi 3:1; ring fokus light/dark memenuhi 3:1.
   Teks tombol utama memakai brand-on-fill terhadap brand-fill, memenuhi 4.5:1.
 - Image final: `sha256:73c25119aa34589be27584400504aed915ffc071792bf35690108a016d3fa0f6`.
+- Source `4f7934c` dipasang ke selaris.id; frontend aktif memakai image yang sama
+  dengan preview final. Frontend/backend/Postgres/Redis healthy. Smoke HTTPS HPP
+  13 produk × tiga lebar × dua tema dan storefront aktual menu/cart kedua tema
+  pada 320 px lolos. Tidak menulis bahan/resep/stok/mode atau submit pesanan nyata.
 
 ## Delivery gate antislop
 

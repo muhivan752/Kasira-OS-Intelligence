@@ -3,6 +3,40 @@
 
 ## STATUS TERKINI — 2026-10-04 setelah implementasi
 
+- Alur HPP **web dashboard** disederhanakan sesuai keluhan Ivan, source `4f7934c`.
+  Dashboard punya **Atur HPP** (`/dashboard/hpp`): pilih produk, pilih/buat bahan di
+  tempat, isi harga + jumlah pembelian, takaran **satu porsi**, lihat biaya, simpan,
+  lalu **Atur produk lain**. Entry dari Menu, Bahan Baku, Settings dan Laporan HPP.
+  Tab Resep Menu memakai editor yang sama. Harga bahan berlaku untuk semua resep
+  yang memakai bahan itu; stok fisik dan aktivasi mode tetap langkah tersendiri.
+- Preview web mengikuti HPP backend: optional dikecualikan, gram/ml dikonversi ke
+  base_unit bahan sebelum menyimpan quantity + quantity_unit. **Jangan mengubah
+  base_unit ingredient existing atau helper deduct stock** untuk mempermudah UI.
+  Resep lama berbeda unit perlu konfirmasi; catatan dan flag optional dipertahankan.
+  Setelah save pakai total server dan refresh harga. Input harga/jumlah nyata kosong,
+  preset Bahan Baku tidak lagi mengisi perkiraan harga seolah data pembelian nyata.
+  Error save menjadi hasil Server Action aman, draft/retry tersedia, harga pakai
+  row_version. Pesan stok awal tidak mengaku berhasil bila restok gagal.
+- HPP yang ditampilkan adalah **modal bahan per porsi**, belum gas/gaji/sewa/biaya
+  operasional. Selisih harga jual bukan laba bersih. Simpan resep tidak mengganti
+  mode dan tidak menambah stok. Backend tetap memvalidasi resep produk stock-enabled
+  (termasuk produk nonaktif yang stock_enabled) saat peralihan. Jangan membuat
+  resep/harga/stok otomatis untuk Egg Tart, Kopi susu atau produk lain.
+- Build produksi, TypeScript, tes unit dengan oracle helper Python backend,
+  `tests/hpp-browser.cjs`, regresi auth, stok/storefront dan publik lolos. HPP
+  diperiksa lima lebar/dua tema, AA, 44 px, fokus/Escape, teks 200%, viewport pendek,
+  legacy units, optional/notes, pagination >100, 400/422/409/500/401 dan retry.
+  Smoke baca demo aktual 13 produk, tiga lebar/dua tema lolos tanpa write toko.
+  Review/gate lengkap di `docs/HPP_FLOW_REVIEW.md`.
+- Frontend HPP terpasang dengan image final yang diuji
+  `sha256:73c25119aa34589be27584400504aed915ffc071792bf35690108a016d3fa0f6`.
+  Backend tetap migration 111, native/APK tetap 1.6.31+198. Temuan HPP native
+  raw quantity/optional di bawah masih backlog, belum diubah dalam pekerjaan web.
+- Setelah deploy source `4f7934c`, HPP HTTPS aktual (13 produk × tiga lebar × dua
+  tema), link Settings dan storefront menu/cart aktual kedua tema 320 px lolos.
+  Tidak membuat pesanan atau menulis bahan/resep/stok/mode toko. Seluruh layanan
+  healthy, image frontend aktif sama dengan image final yang diuji.
+
 - Revisi web profesional/premium sudah live, source `2ca827f`. Arahan terbaru Ivan menggantikan pilihan tipografi web sebelumnya: **Source Sans 3** untuk UI/form/angka, **Source Serif 4** untuk judul publik/auth, bobot merchant 600. Palet hangat/coral Sefrekuensi tetap; native dan APK tidak diubah oleh revisi ini. Antislop `during` tetap pilihan sesi, bukan preferensi global.
 - Kalimat "Anda hanya memfoto notanya. Empat baris di atas tidak ada yang diketik manual" dihapus. Copy sekarang "Unggah nota, periksa hasilnya, lalu simpan pembelian." Landing memakai capture web terbaru dari data toko demo berlabel, bukan nota/angka buatan. Modul berupa daftar, paket tanpa badge populer, header/footer/download konsisten, dashboard menonjolkan pendapatan dan angka operasional, storefront HP memakai daftar produk dan kontrol 44 px. Chat bantuan memiliki error/retry serta Escape/fokus.
 - Bug token Tailwind ikut ditemukan dan diperbaiki: `--color-base` membuat `.text-base` mengubah tinta menjadi warna latar. Ganti menjadi `--color-canvas`; jangan memperkenalkan alias warna yang berbenturan dengan nama ukuran font. Form merchant dijembatani ke surface/ink/control-border tema; success dark lebih terang.
