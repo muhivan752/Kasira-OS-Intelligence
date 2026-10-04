@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Package, Plus, RefreshCw, Pencil, Trash2, AlertTriangle, Droplet, Scale, Boxes, ArrowLeft, CheckCircle2, Sparkles, Search, X } from 'lucide-react';
 import { getIngredients, createIngredient, updateIngredient, deleteIngredient, restockIngredient, getOutlets, getCurrentUser } from '@/app/actions/api';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
@@ -205,6 +206,7 @@ export default function BahanBakuPage() {
         });
         // Auto-restock with initial stock if provided
         const initQty = parseFloat(form.initial_stock);
+        let stockAdded = false;
         if (created?.id && !isNaN(initQty) && initQty > 0 && outletId) {
           try {
             await restockIngredient(created.id, {
@@ -212,9 +214,10 @@ export default function BahanBakuPage() {
               quantity: initQty,
               notes: 'Stok awal',
             });
-          } catch { /* non-fatal */ }
+            stockAdded = true;
+          } catch { /* Ingredient is already saved; retry stock from Restok. */ }
         }
-        setSuccessMsg(`✅ ${form.name} berhasil ditambah${initQty > 0 ? ` (stok: ${initQty} ${form.base_unit})` : ''}`);
+        setSuccessMsg(`${form.name} berhasil ditambah${stockAdded ? ` (stok: ${initQty} ${form.base_unit})` : initQty > 0 ? '. Stok awal belum tersimpan. Tambahkan stok melalui Restok.' : ''}`);
         setTimeout(() => setSuccessMsg(''), 4000);
       }
       setShowModal(false);
@@ -292,8 +295,8 @@ export default function BahanBakuPage() {
       name: preset.name,
       base_unit: preset.base_unit,
       unit_type: preset.unit_type,
-      buy_price: preset.buy_price_hint ? String(preset.buy_price_hint) : '',
-      buy_qty: preset.buy_qty_hint ? String(preset.buy_qty_hint) : '',
+      buy_price: '',
+      buy_qty: '',
       ingredient_type: 'recipe',
     }));
     setModalStep('form');
@@ -351,10 +354,11 @@ export default function BahanBakuPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Bahan Baku</h1>
-          <p className="text-gray-500">Kelola ingredient dan stok bahan baku outlet Anda</p>
+          <p className="text-gray-500">Catat harga pembelian dan stok fisik bahan di outlet Anda.</p>
+          <Link className="hpp-button mt-3" href="/dashboard/hpp">Hitung HPP dari resep produk</Link>
         </div>
         <button
           onClick={() => openCreate('recipe')}
@@ -741,8 +745,8 @@ export default function BahanBakuPage() {
                   <div className={`rounded-lg p-4 space-y-3 ${
                     editingId && form.needs_review ? 'bg-amber-50 border-2 border-amber-200' : 'bg-gray-50'
                   }`}>
-                    <p className="text-sm font-medium text-gray-700">💰 Harga Beli {editingId && form.needs_review && <span className="text-xs text-amber-700 ml-1">(cek dulu, ini perkiraan AI)</span>}</p>
-                    <p className="text-xs text-gray-500">Isi sesuai nota belanja. Contoh: beli 1 kg gula seharga Rp14.000.</p>
+                    <p className="text-sm font-medium text-gray-700">Harga pembelian {editingId && form.needs_review && <span className="text-xs text-amber-700 ml-1">(periksa sesuai nota)</span>}</p>
+                    <p className="text-sm text-gray-500">Isi harga dan jumlah dari pembelian yang sama. Angka ini menjadi dasar HPP, bukan penambahan stok.</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Total Harga (Rp) *</label>
@@ -750,11 +754,12 @@ export default function BahanBakuPage() {
                           className="w-full px-3 py-2.5 border rounded-lg text-base" placeholder="14000" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Dapat ({form.base_unit || '...'}) *</label>
+                        <label className="block text-xs text-gray-500 mb-1">Jumlah dibeli ({form.base_unit || '...'}) *</label>
                         <input type="number" step="any" value={form.buy_qty} onChange={e => setForm({ ...form, buy_qty: e.target.value })}
                           className="w-full px-3 py-2.5 border rounded-lg text-base" placeholder="1000" />
                       </div>
                     </div>
+                    <p className="text-sm text-gray-500">{form.base_unit === 'kg' ? 'Jika membeli 1 kg, isi jumlah 1.' : form.base_unit === 'liter' ? 'Jika membeli 1 liter, isi jumlah 1.' : form.base_unit === 'gram' ? 'Jika membeli 1 kg, isi jumlah 1000 gram.' : form.base_unit === 'ml' ? 'Jika membeli 1 liter, isi jumlah 1000 ml.' : 'Isi jumlah dalam satuan bahan yang dipilih.'}</p>
                     {(parseFloat(form.buy_price) > 0 && parseFloat(form.buy_qty) > 0) && (
                       <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                         <p className="text-sm text-green-800 font-medium">

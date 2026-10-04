@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { TrendingUp, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { getHPPReport, getOutlets } from '@/app/actions/api';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
@@ -67,6 +68,7 @@ export default function HPPReportPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Laporan HPP</h1>
         <p className="text-gray-500">Harga Pokok Penjualan, analisis modal dibanding harga jual per produk</p>
+        <Link className="hpp-button mt-3" href="/dashboard/hpp">Atur resep dan HPP produk</Link>
       </div>
 
       {/* Summary Cards */}
@@ -88,7 +90,7 @@ export default function HPPReportPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>

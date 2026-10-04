@@ -51,6 +51,22 @@ Setiap sesi coding ketemu bug baru karena:
 
 Persiapan web (2026-10-04): menu **Bahan Baku** tersedia untuk Pro juga saat mode
 `simple`, sehingga bahan dan tab Resep di Menu bisa diisi sebelum beralih.
+
+### Web: persiapan HPP (4 Oktober 2026)
+
+`/dashboard/hpp` mulai dari produk, harga pembelian bahan, dan takaran untuk satu
+porsi. `HppRecipeEditor` dipakai juga oleh tab Resep di Menu. Setup hanya menyimpan
+bahan/harga dan versi resep melalui API existing; tidak restok atau mengganti mode
+outlet. Harga pembelian bukan jumlah stok fisik. Tier Pro dan validasi pergantian
+mode tetap dijaga backend.
+
+`lib/hpp.ts` mengonversi input ramah gram/ml ke `ingredient.base_unit` sebelum
+menyimpan **quantity dan quantity_unit** resep. Stock deduct/display backend masih
+memakai quantity mentah; helper `unit_utils.py` khusus untuk HPP. Preview resep
+lama mengikuti helper itu dan satuan berbeda perlu dikonfirmasi sebelum disimpan,
+agar tidak mengubah quantity stock diam-diam. Bahan opsional tidak masuk total HPP.
+Setelah simpan, total dari server dipakai dan harga bahan dimuat ulang. Catatan resep,
+catatan bahan, flag opsional, dan row_version harga dipertahankan.
 `PUT /outlets/{id}/stock-mode` tetap memvalidasi resep aktif/lengkap untuk produk
 yang memakai stok. Server Action `updateStockMode` mengembalikan hasil
 `success: false` beserta pesan validasi sebagai data, karena Next.js production

@@ -887,13 +887,18 @@ export default function SettingsPage() {
                 <p className="text-sm text-gray-600">
                   Pilih cara mengelola stok produk Anda.
                 </p>
+                <div className="space-y-2 rounded-lg bg-[var(--surface-sunken)] p-4">
+                  <p className="text-sm text-[var(--text-body)]">Untuk mode Resep &amp; HPP, siapkan bahan dan takaran per porsi terlebih dahulu. Mulai dari produk di halaman Atur HPP.</p>
+                  <Link className="hpp-button" href="/dashboard/hpp">Siapkan resep dan HPP</Link>
+                </div>
                 {stockModeError && (
                   <div role="alert" className="space-y-2 text-sm text-[var(--danger)]">
                     <p>{stockModeError}</p>
                     {needsRecipeSetup && (
                       <p className="text-[var(--text-body)]">
                         Siapkan bahan di <Link href="/dashboard/bahan-baku" className="underline font-semibold">Bahan Baku</Link>,
-                        {' '}lalu buka produk di <Link href="/dashboard/menu" className="underline font-semibold">Menu</Link> dan isi tab Resep.
+                        {' '}atau pilih produk dari <Link href="/dashboard/hpp" className="underline font-semibold">Atur HPP</Link>.
+                        Resep juga bisa dibuka dari <Link href="/dashboard/menu" className="underline font-semibold">Menu</Link>.
                         Setelah semua resep lengkap, coba beralih lagi.
                       </p>
                     )}
@@ -941,7 +946,7 @@ export default function SettingsPage() {
                             <li>Stok sederhana (per produk) <strong>tidak akan ditampilkan</strong></li>
                           </ul>
                           <p className="mt-3 text-amber-700 bg-amber-50 rounded-lg p-3">
-                            Setelah beralih, buka <strong>Bahan Baku</strong> untuk menambahkan bahan, lalu hubungkan resep di menu produk.
+                            Siapkan resep setiap produk terlebih dahulu melalui Atur HPP. Peralihan akan ditolak bila resep belum lengkap. Pastikan stok fisik bahan sudah dicatat sebelum mulai berjualan dalam mode ini.
                           </p>
                         </div>
                       ) : (

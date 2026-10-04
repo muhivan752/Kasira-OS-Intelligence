@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+.hpp-workspace, .hpp-editor { color: var(--text-strong); }
+.hpp-panel { padding: 1rem; border: 1px solid var(--border-default); border-radius: 1.25rem; background: var(--surface-card); }
+.hpp-control { min-height: 44px; padding: .625rem .75rem; border: 1px solid var(--control-border); border-radius: .75rem; background: var(--surface-card); color: var(--text-strong); font: inherit; }
+.hpp-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: .625rem .875rem; border: 1px solid var(--control-border); border-radius: .75rem; color: var(--text-strong); background: var(--surface-card); font-weight: 600; text-align: center; cursor: pointer; }
+.hpp-primary { background: var(--brand-fill); color: var(--brand-on-fill); border-color: var(--brand-primary); }
+.hpp-text-button { border-color: transparent; color: var(--brand-primary); padding-inline: .25rem; }
+.hpp-button:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 3px; }
+.hpp-control:focus-visible, .hpp-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.hpp-control:disabled, .hpp-button:disabled { opacity: .6; cursor: default; }
+@media (min-width: 640px) { .hpp-panel { padding: 1.5rem; } }
+
 /* ============================================================
    SELARIS DESIGN SYSTEM — Sefrekuensi palette (2026-10)
    Single source of truth. Every web surface (login, register,

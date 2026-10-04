@@ -1,6 +1,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import type { HppIngredient, HppProduct, HppRecipe } from '@/lib/hpp';
 
 // Gunakan internal Docker URL untuk server actions (lebih cepat, bypass Nginx)
 const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -639,6 +640,88 @@ export async function getHPPReport(brandId: string) {
 }
 
 // ===================== Stock Mode =====================
+
+async function readHppData(endpoint: string) {
+  const res = await fetchWithAuth(endpoint, { cache: 'no-store' });
+  if (!res.ok) throw new Error(res.status === 403 ? 'HPP tersedia untuk paket Pro.' : 'Data HPP belum bisa dimuat. Coba lagi.');
+  const data = await res.json();
+  if (!Array.isArray(data.data)) throw new Error('Data HPP belum bisa dimuat. Coba lagi.');
+  return data.data;
+}
+
+async function readAllHppData(endpoint: string) {
+  const items: any[] = [];
+  for (let skip = 0; ; skip += 100) {
+    const page = await readHppData(`${endpoint}&skip=${skip}&limit=100`);
+    items.push(...page);
+    if (page.length < 100) return items;
+  }
+}
+
+function hppError(error: unknown) {
+  const message = error instanceof Error ? error.message : '';
+  if (['SESSION_EXPIRED', 'Unauthorized'].includes(message)) return 'Sesi login sudah berakhir. Login kembali untuk melanjutkan.';
+  if (message === 'HPP tersedia untuk paket Pro.' || message === 'Data HPP belum bisa dimuat. Coba lagi.') return message;
+  return 'Belum berhasil. Periksa koneksi lalu coba lagi.';
+}
+
+export async function loadHppProducts() {
+  try {
+    const outlets = await readHppData('/outlets');
+    const outlet = outlets[0];
+    if (!outlet) return { success: false as const, message: 'Buat outlet terlebih dahulu di Pengaturan.' };
+    const brand = encodeURIComponent(outlet.brand_id);
+    const [products, recipes] = await Promise.all([
+      readAllHppData(`/products?brand_id=${brand}`), readHppData(`/recipes?brand_id=${brand}`),
+    ]);
+    return { success: true as const, brandId: outlet.brand_id as string, stockMode: outlet.stock_mode as string,
+      products: products as HppProduct[], recipes: recipes as HppRecipe[] };
+  } catch (error) { return { success: false as const, message: hppError(error) }; }
+}
+
+export async function loadHppRecipe(brandId: string, productId: string) {
+  try {
+    const [ingredients, recipes] = await Promise.all([
+      readAllHppData(`/ingredients?brand_id=${encodeURIComponent(brandId)}`),
+      readHppData(`/recipes?product_id=${encodeURIComponent(productId)}`),
+    ]);
+    return { success: true as const, ingredients: ingredients as HppIngredient[], recipe: (recipes[0] || null) as HppRecipe | null };
+  } catch (error) { return { success: false as const, message: hppError(error) }; }
+}
+
+export async function saveHppIngredient(payload: {
+  brand_id: string; name: string; base_unit: string; unit_type: string; buy_price: number; buy_qty: number;
+}, existing?: { id: string; row_version: number }) {
+  try {
+    if (!payload.name.trim() || !Number.isFinite(payload.buy_price) || payload.buy_price < 0 || !Number.isFinite(payload.buy_qty) || payload.buy_qty <= 0) {
+      return { success: false as const, message: 'Isi nama bahan, harga beli, dan jumlah pembelian yang valid.' };
+    }
+    const res = await fetchWithAuth(existing ? `/ingredients/${existing.id}/` : '/ingredients/', {
+      method: existing ? 'PUT' : 'POST', body: JSON.stringify(existing
+        ? { name: payload.name.trim(), buy_price: payload.buy_price, buy_qty: payload.buy_qty, row_version: existing.row_version }
+        : { ...payload, name: payload.name.trim(), tracking_mode: 'simple', ingredient_type: 'recipe' }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false as const, message: res.status < 500 ? extractError(data, 'Bahan belum tersimpan.') : 'Bahan belum tersimpan. Coba lagi beberapa saat.' };
+    return { success: true as const, ingredient: data.data as HppIngredient };
+  } catch (error) { return { success: false as const, message: hppError(error) }; }
+}
+
+export async function saveHppRecipe(productId: string, ingredients: {
+  ingredient_id: string; quantity: number; quantity_unit: string; is_optional: boolean; notes?: string | null;
+}[], recipeId?: string, notes?: string | null) {
+  try {
+    if (!ingredients.length || !ingredients.some(i => !i.is_optional) || ingredients.some(i => !Number.isFinite(i.quantity) || i.quantity <= 0)) {
+      return { success: false as const, message: 'Isi takaran lebih dari nol untuk setiap bahan, dengan minimal satu bahan utama.' };
+    }
+    const res = await fetchWithAuth(recipeId ? `/recipes/${recipeId}/` : '/recipes/', {
+      method: recipeId ? 'PUT' : 'POST', body: JSON.stringify({ product_id: productId, ingredients, notes }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false as const, message: res.status < 500 ? extractError(data, 'Resep belum tersimpan.') : 'Resep belum tersimpan. Coba lagi beberapa saat.' };
+    return { success: true as const, recipe: data.data as HppRecipe };
+  } catch (error) { return { success: false as const, message: hppError(error) }; }
+}
 
 export async function updateStockMode(outletId: string, stockMode: string) {
   try {

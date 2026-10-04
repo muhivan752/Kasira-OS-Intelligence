@@ -5,42 +5,14 @@ import {
   getOutlets, getProducts, getCategories,
   toggleProductActive, createProduct, updateProduct, deleteProduct,
   createCategory, updateCategory, deleteCategory,
-  getIngredients, getRecipes, createRecipe, updateRecipe, getCurrentUser,
+  getRecipes, getCurrentUser,
   setProductVariants,
 } from '@/app/actions/api';
-import { Plus, Search, Edit2, Loader2, X, Trash2, Tag, Upload, ImageOff, Package, FlaskConical, Sparkles } from 'lucide-react';
+import { Plus, Search, Edit2, Loader2, X, Trash2, Tag, Upload, ImageOff, FlaskConical, Sparkles } from 'lucide-react';
 import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-
-// Deteksi kemungkinan user salah unit saat input qty per porsi.
-// Scenario: bahan di-track dalam kg/liter (unit besar) tapi qty resep < 1 →
-// kemungkinan user mikir dalam gram/ml. Sebaliknya juga.
-function detectUnitWarning(unit: string, qty: number): string | null {
-  if (!qty || qty <= 0) return null;
-  const u = (unit || '').toLowerCase().trim();
-
-  // kg / liter — unit besar, qty < 1 biasanya dianggap aneh untuk cafe (kecuali bahan mahal seperti biji kopi 0.02 kg)
-  if ((u === 'kg' || u === 'l' || u === 'liter' || u === 'lt') && qty < 0.05) {
-    const inSmaller = qty * 1000;
-    const smallerUnit = u === 'kg' ? 'gram' : 'ml';
-    return `${qty} ${u} = ${inSmaller.toFixed(0)} ${smallerUnit}. Biar gampang, ganti bahan ini ke unit ${smallerUnit} di halaman Bahan Baku.`;
-  }
-
-  // gram / ml — unit kecil, qty > 1000 biasanya salah (kecuali misal 1500ml untuk pitcher, rare)
-  if ((u === 'g' || u === 'gr' || u === 'gram' || u === 'ml') && qty >= 1000) {
-    const inLarger = qty / 1000;
-    const largerUnit = (u === 'ml') ? 'liter' : 'kg';
-    return `${qty} ${u} = ${inLarger.toFixed(1)} ${largerUnit}. Pastikan angkanya benar, takaran per porsi biasanya lebih kecil.`;
-  }
-
-  // pcs / buah / butir — qty > 50 untuk 1 porsi biasanya salah
-  if ((u === 'pcs' || u === 'buah' || u === 'butir' || u === 'piece') && qty > 50) {
-    return `${qty} ${u} untuk 1 porsi terlihat banyak. Pastiin benar.`;
-  }
-
-  return null;
-}
+import { HppRecipeEditor } from '@/components/hpp-recipe-editor';
 
 export default function MenuPage() {
   const router = useRouter();
@@ -76,11 +48,6 @@ export default function MenuPage() {
 
   // Recipe state (inside product modal)
   const [modalTab, setModalTab] = useState<'info' | 'resep'>('info');
-  const [allIngredients, setAllIngredients] = useState<any[]>([]);
-  const [recipeIngredients, setRecipeIngredients] = useState<any[]>([]);
-  const [existingRecipeId, setExistingRecipeId] = useState<string | null>(null);
-  const [savingRecipe, setSavingRecipe] = useState(false);
-  const [recipeError, setRecipeError] = useState('');
 
   // Category modal
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
@@ -158,9 +125,6 @@ export default function MenuPage() {
 
   const openProductModal = async (product: any = null) => {
     setModalTab('info');
-    setRecipeIngredients([]);
-    setExistingRecipeId(null);
-    setRecipeError('');
 
     if (product) {
       setEditingProduct(product);
@@ -184,28 +148,6 @@ export default function MenuPage() {
         image_url: product.image_url || '',
         is_active: product.is_active,
       });
-      // Load recipe & ingredients for Pro
-      if (isPro) {
-        const [ings, recipes] = await Promise.all([
-          getIngredients(brandId),
-          getRecipes({ product_id: product.id }),
-        ]);
-        setAllIngredients(ings || []);
-        if (recipes?.length > 0) {
-          const recipe = recipes[0];
-          setExistingRecipeId(recipe.id);
-          setRecipeIngredients(
-            recipe.ingredients.map((ri: any) => ({
-              ingredient_id: ri.ingredient_id,
-              name: ri.ingredient_name || '',
-              quantity: ri.quantity,
-              quantity_unit: ri.quantity_unit,
-              is_optional: ri.is_optional,
-              cost: ri.ingredient_cost || 0,
-            }))
-          );
-        }
-      }
     } else {
       setEditingProduct(null);
       setVariants([]);
@@ -214,10 +156,6 @@ export default function MenuPage() {
         category_id: categories.length > 0 ? categories[0].id : '',
         image_url: '', is_active: true,
       });
-      if (isPro) {
-        const ings = await getIngredients(brandId);
-        setAllIngredients(ings || []);
-      }
     }
     setIsProductModalOpen(true);
   };
@@ -418,6 +356,7 @@ export default function MenuPage() {
               ? 'Stok otomatis dari bahan baku. Field Stok di form produk disembunyikan.'
               : 'Kelola produk, stok, dan kategori outlet Anda.'}
           </p>
+          {isPro && <Link className="hpp-button mt-3" href="/dashboard/hpp">Atur HPP produk</Link>}
         </div>
         {activeTab === 'produk' ? (
           <button onClick={() => openProductModal()}
@@ -664,9 +603,6 @@ export default function MenuPage() {
                   }`}>
                   <FlaskConical className="w-3.5 h-3.5" />
                   Resep
-                  {recipeIngredients.length > 0 && (
-                    <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">{recipeIngredients.length}</span>
-                  )}
                 </button>
               </div>
             )}
@@ -914,160 +850,11 @@ export default function MenuPage() {
               </form>
             )}
 
-            {/* Tab: Resep / Recipe Builder */}
+            {/* Resep uses the same editor as the HPP setup page. */}
             {modalTab === 'resep' && editingProduct && (
-              <div className="p-5 space-y-4">
-                {recipeError && <p className="text-sm text-red-600">{recipeError}</p>}
-
-                {allIngredients.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400">
-                    <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">Belum ada bahan baku. <Link href="/dashboard/bahan-baku" className="underline font-semibold text-[var(--text-strong)]">Tambahkan bahan baku</Link> lalu isi resep produk ini.</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Add ingredient row */}
-                    <div className="flex gap-2">
-                      <select id="add-ingredient" className="flex-1 px-3 py-2 border rounded-lg text-sm bg-white">
-                        <option value="">Pilih bahan baku...</option>
-                        {allIngredients
-                          .filter(ing => !recipeIngredients.some(ri => ri.ingredient_id === ing.id))
-                          .map(ing => (
-                            <option key={ing.id} value={ing.id}>{ing.name} ({ing.base_unit})</option>
-                          ))}
-                      </select>
-                      <button type="button" onClick={() => {
-                        const sel = document.getElementById('add-ingredient') as HTMLSelectElement;
-                        const ingId = sel.value;
-                        if (!ingId) return;
-                        const ing = allIngredients.find(i => i.id === ingId);
-                        if (!ing) return;
-                        setRecipeIngredients([...recipeIngredients, {
-                          ingredient_id: ing.id, name: ing.name,
-                          quantity: 0, quantity_unit: ing.base_unit,
-                          is_optional: false, cost: ing.cost_per_base_unit || 0,
-                          buy_price: ing.buy_price || 0, buy_qty: ing.buy_qty || 1,
-                        }]);
-                        sel.value = '';
-                      }}
-                        className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Ingredient list */}
-                    {recipeIngredients.length === 0 ? (
-                      <p className="text-sm text-gray-400 text-center py-4">Belum ada bahan. Pilih dari dropdown di atas.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {recipeIngredients.map((ri, idx) => {
-                          const lineCost = ri.quantity * ri.cost;
-                          const unitWarning = detectUnitWarning(ri.quantity_unit, ri.quantity);
-                          return (
-                            <div key={ri.ingredient_id} className="space-y-1">
-                              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-gray-900 truncate">{ri.name}</p>
-                                  <p className="text-xs text-gray-400">
-                                    {ri.buy_price > 0 && `${fmt(ri.buy_price)}/${ri.buy_qty}${ri.quantity_unit} → `}
-                                    {fmt(ri.cost)}/{ri.quantity_unit}
-                                    {ri.quantity > 0 && ` = ${fmt(lineCost)}`}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <input type="number" step="any" min="0" placeholder="Qty"
-                                    value={ri.quantity || ''}
-                                    onChange={e => {
-                                      const updated = [...recipeIngredients];
-                                      updated[idx] = { ...updated[idx], quantity: parseFloat(e.target.value) || 0 };
-                                      setRecipeIngredients(updated);
-                                    }}
-                                    className="w-20 px-2 py-1.5 border rounded-lg text-sm text-right" />
-                                  <span className="text-sm font-semibold text-gray-700 w-10">{ri.quantity_unit}</span>
-                                </div>
-                                <button type="button" onClick={() => {
-                                  setRecipeIngredients(recipeIngredients.filter((_, i) => i !== idx));
-                                }} className="p-1 text-red-400 hover:text-red-600">
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                              {unitWarning && (
-                                <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                                  <span className="text-amber-600 flex-shrink-0">⚠</span>
-                                  <span>{unitWarning}</span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* HPP Summary */}
-                    {recipeIngredients.length > 0 && (
-                      <div className="bg-blue-50 rounded-lg p-4 space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">HPP (Harga Pokok)</span>
-                          <span className="font-bold text-gray-900">
-                            {fmt(recipeIngredients.reduce((s, ri) => s + ri.quantity * ri.cost, 0))}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Harga Jual</span>
-                          <span className="font-medium text-gray-900">{fmt(parseFloat(productForm.base_price) || 0)}</span>
-                        </div>
-                        {(() => {
-                          const hpp = recipeIngredients.reduce((s, ri) => s + ri.quantity * ri.cost, 0);
-                          const price = parseFloat(productForm.base_price) || 0;
-                          const margin = price - hpp;
-                          const pct = price > 0 ? (margin / price * 100) : 0;
-                          return (
-                            <div className="flex justify-between text-sm pt-2 border-t border-blue-200">
-                              <span className="text-gray-600">Margin</span>
-                              <span className={`font-bold ${pct < 20 ? 'text-red-600' : pct < 40 ? 'text-amber-600' : 'text-green-600'}`}>
-                                {fmt(margin)} ({pct.toFixed(1)}%)
-                              </span>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <button type="button" onClick={() => setIsProductModalOpen(false)}
-                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Batal</button>
-                  <button type="button" disabled={savingRecipe || recipeIngredients.length === 0}
-                    onClick={async () => {
-                      setSavingRecipe(true);
-                      setRecipeError('');
-                      try {
-                        const payload = {
-                          product_id: editingProduct.id,
-                          ingredients: recipeIngredients.map(ri => ({
-                            ingredient_id: ri.ingredient_id,
-                            quantity: ri.quantity,
-                            quantity_unit: ri.quantity_unit,
-                            is_optional: ri.is_optional,
-                          })),
-                        };
-                        if (existingRecipeId) {
-                          await updateRecipe(existingRecipeId, { ingredients: payload.ingredients });
-                        } else {
-                          await createRecipe(payload);
-                        }
-                        setIsProductModalOpen(false);
-                      } catch (e: any) {
-                        setRecipeError(e.message);
-                      }
-                      setSavingRecipe(false);
-                    }}
-                    className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                    {savingRecipe && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                    Simpan Resep
-                  </button>
-                </div>
+              <div className="p-4">
+                <Link className="hpp-button mb-4 w-full" href={`/dashboard/hpp?product=${editingProduct.id}`}>Buka halaman Atur HPP</Link>
+                <HppRecipeEditor brandId={brandId} product={editingProduct} onSaved={() => setProductsWithRecipe(current => new Set([...current, editingProduct.id]))} />
               </div>
             )}
           </div>

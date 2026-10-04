@@ -21,6 +21,7 @@ import {
   ShoppingCart,
   Wallet,
   MessageCircle,
+  Calculator,
 } from 'lucide-react';
 import { logout } from '@/app/actions/auth';
 import { getCurrentUser, getOutlets } from '@/app/actions/api';
@@ -104,6 +105,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
 
   const proNav = [
+    { name: 'Atur HPP', href: '/dashboard/hpp', icon: Calculator },
     { name: 'Bahan Baku', href: '/dashboard/bahan-baku', icon: Package },
     { name: 'Reservasi', href: '/dashboard/reservasi', icon: CalendarDays },
     { name: 'AI Asisten', href: '/dashboard/ai', icon: MessageCircle },
