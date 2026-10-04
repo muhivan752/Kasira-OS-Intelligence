@@ -49,6 +49,10 @@ during mengikuti pilihan sesi pengguna.
 - Regresi form HPP, Bahan Baku, auth dan mode stok/storefront memakai image final.
   Bukti deployment dan smoke HTTPS aktual dicatat di SESSION.md. Log/screenshot
   `/tmp/selaris-hpp-modern-*` tidak berisi perubahan harga/stok merchant.
+- Source `cdcc2ec` live; empat layanan healthy dan mount APK tetap. HTTPS actual
+  320/768/1440 kedua tema, riwayat/refresh/form/entry lolos tanpa write merchant.
+  Smoke pertama pernah mencatat React418; diagnostic ulang selesai tanpa error,
+  penyebab belum teridentifikasi dan tidak diklaim telah diperbaiki.
 
 ## Delivery gate antislop
 

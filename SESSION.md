@@ -4,7 +4,54 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
-## HANDOFF TERAKHIR — setup HPP percakapan live, 4 Oktober 2026
+## HANDOFF TERAKHIR — revisi chat biasa, live 4 Oktober 2026
+
+- Permintaan Ivan: percakapan jangan textbook, seperti chat biasa. Source
+  **cdcc2ec** live, satu kolom dengan user bubble kanan, asisten kiri dan composer
+  di bawah. Riwayat via dialog tombol; kartu HPP kecil, Lihat resep membuka review
+  dan approval. Tidak mengembalikan dropdown/permanent side preview lama.
+- Textarea auto-grow 56–160px; Enter kirim, Shift+Enter newline, IME guard.
+  Boleh mengetik koreksi saat pending; kirim disabled. Retry lama tidak menghapus
+  koreksi baru. Preview/error/unsent/pending dan replacement confirmation tetap
+  mengunci approval. Dialog native Tab/Shift+Tab/Escape/focus return teruji.
+- Prompt aku/kamu, singkat, satu pertanyaan, tanpa daftar langkah, istilah form
+  berulang atau HPP hasil model. Gunakan nama menu dari cerita, tidak meminta
+  istilah nama produk formal. Balasan historis tidak diubah. Tidak ada streaming
+  token; async POST202/poll GET seperti sebelumnya.
+- Backend hanya SYSTEM prompt di hpp_setup_service.py. Rumus/worker/schema/API/
+  RLS/stock tidak diubah. Migration112, APK1.6.31+198 tetap. Docker cp satu file
+  + restart existing setelah active_hpp_jobs=0; jangan recreate backend.
+  Backup `/tmp/selaris-hpp-modern-backup`. Frontend compose up --no-deps.
+- Image tested/aktif
+  `sha256:42f83214fedffb4ca5451374022b47ac36922131903c23e22ce7da050aa4f4de`,
+  frontend Created2026-10-04T16:44:12Z, kedua mount APK tetap. Keempat layanan
+  running/healthy setelah deploy.
+- QA build/TypeScript, chat browser five widths/two themes AA/44px/200%/short
+  viewport/keyboard/dialog, long50k input, sources/precision/resume/history,
+  approval/replacement/unsent/409/500/pending GET/retry-preserves-correction PASS.
+  Screenshot setelah transisi sidebar settle; sebelumnya foto sempat menangkap
+  sidebar di tengah transisi, bukan menu benar-benar terbuka. Source UI unchanged
+  setelah build final; perubahan test menunggu transform selesai.
+- Math15/500 oracle/protocol PASS; configured provider manual batch1500,
+  pack2x10→2000, per-kg75k→1500 dan labeled estimates PASS. Dua turn nyata:
+  tanya pelengkap nasi ayam penyet, tawarkan Estimasi saat bingung, Manual tetap
+  incomplete tanpa data nyata. Awal provider sempat meminta nama Nasi ulang;
+  prompt pengenalan nama diperjelas lalu uji ulang lolos.
+- Regresi form HPP, Bahan Baku, auth dan stock/storefront PASS. Runner storefront
+  memakai CHROMIUM_PATH (bukan CHROMIUM_EXECUTABLE); salah env awal meninggalkan
+  fixture8185, hanya proses tes tersebut dihentikan lalu rerun benar PASS.
+- HTTPS actual: endpoint200, single-column/manual/estimate, riwayat/refresh/form
+  navigation, entry HPP dan Bahan Baku, 320/768/1440 kedua tema PASS. Tidak write
+  setup/bahan/resep/harga/stok/mode/pesanan merchant. First smoke mencatat sekali
+  React418 hydration tanpa lokasi; rerun diagnostic menangkap URL+stack jika error
+  tetapi semua alur selesai bersih. Penyebab tidak teridentifikasi, tidak mengubah
+  source secara spekulatif. Bila berulang, telusuri HTML/chunks/theme di navigasi
+  aktual sebelum mengaitkan ke chat. Semua fixture browser bersih tanpa pageerror.
+- Review/gate `docs/HPP_CONVERSATION_REVIEW.md`, log/screens `/tmp/selaris-hpp-modern-*`.
+  Simpan guard URL idle + href berbeda; jangan no-op replaceState atau update di
+  tengah create→send. Catatan backend implementation awal di bawah masih berlaku.
+
+## ARSIP — setup HPP percakapan awal, 4 Oktober 2026
 
 - Ivan mengizinkan implementasi langsung dan mewajibkan rumus backend; source
   `a94dd85` + fix `360b049` dipush main dan dipasang. Web Atur HPP → Atur lewat percakapan,

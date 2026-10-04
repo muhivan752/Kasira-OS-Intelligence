@@ -1,7 +1,41 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## TERKINI — SETUP HPP CHAT SUDAH LIVE, 2026-10-04
+## TERKINI — HPP SEPERTI CHAT BIASA, LIVE 2026-10-04
+
+- Ivan melihat flow awal terlalu textbook dan meminta chat biasa yang modern.
+  Revisi source **cdcc2ec** sudah live. UI satu kolom: pesan pengguna kanan,
+  jawaban kiri, composer di bawah; textarea 56–160px, Enter kirim/Shift+Enter
+  baris baru/IME guard. Source Sans 3 dan palet Sefrekuensi tetap.
+- Riwayat dibuka lewat tombol/dialog, bukan dropdown. HPP backend satu kartu
+  ringkas; **Lihat resep** membuka rincian bahan, sumber/kutipan, formula dan
+  approval. Tidak ada panel form/review permanen di samping chat. Form manual
+  tersedia dari riwayat. Fokus dialog, Escape dan kembali ke pemicu diuji.
+- Prompt reply aku/kamu, singkat, satu pertanyaan berikutnya, tanpa daftar
+  langkah atau mengulang form. Nama menu mengikuti cerita biasa. Saat bingung
+  Manual, tawarkan Estimasi; jangan menebak angka nyata. Reply tidak menyebut
+  hasil HPP; angka hanya dari backend. Balasan lama tidak ditulis ulang.
+- Boleh mengetik koreksi saat jawaban pending; tombol kirim menunggu. Retry UUID
+  sama tidak menghapus koreksi baru. Approval blocked untuk pesan belum dikirim,
+  pending, incomplete dan error yang perlu reconcile GET. Revision/fingerprint,
+  konfirmasi manusia dan replacement tetap. Hindari no-op history.replaceState
+  dan update URL di tengah Server Action create→send.
+- Rumus, transaksi, worker, API/RLS, migration **112** dan APK **1.6.31+198**
+  tidak berubah. Backend hanya SYSTEM prompt, docker cp file terarah + restart
+  container existing sesudah active_hpp_jobs=0. Jangan recreate backend; hotfix
+  lain belum seluruhnya berada di image. Backup `/tmp/selaris-hpp-modern-backup`.
+- Frontend tested/live
+  `sha256:42f83214fedffb4ca5451374022b47ac36922131903c23e22ce7da050aa4f4de`,
+  Created 2026-10-04T16:44:12Z. Compose frontend --no-deps, kedua mount APK tetap.
+  Empat layanan healthy. Tidak seed/write resep/bahan/harga/stok merchant untuk QA.
+- Build/TypeScript, chat browser lima lebar dua tema AA/44px/keyboard/200%/short
+  viewport/long story/retry/409/500, math15/500 oracle, provider nyata batch/pack/
+  per-kg/estimate + dua balasan natural, regresi HPP/inventory/auth/stock-storefront
+  lolos. Smoke HTTPS actual tiga lebar kedua tema/riwayat/refresh/form/entry lolos.
+  Detail transient hydration pada smoke awal ada di SESSION.md; jangan klaim
+  penyebabnya telah diperbaiki. Review/gate `docs/HPP_CONVERSATION_REVIEW.md`.
+
+## ARSIP — IMPLEMENTASI AWAL SETUP HPP CHAT, 2026-10-04
 
 - Ivan menyuruh implementasi dan menegaskan **seluruh rumus langsung backend,
   jangan bergantung ke LLM**. Source `a94dd85` + fix `360b049`, dipush main. Semua
