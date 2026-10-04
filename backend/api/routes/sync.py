@@ -16,7 +16,7 @@ from backend.models.order import Order, OrderItem
 from backend.models.payment import Payment
 from backend.models.outlet import Outlet
 from backend.models.shift import Shift, CashActivity
-from backend.services.sync import process_table_sync, process_stock_sync, get_table_changes, utc_now
+from backend.services.sync import process_table_sync, process_stock_sync, get_table_changes, utc_now, apply_pull_cursor, pull_order_columns, next_page_cursor
 from backend.services.crdt import HLC
 from backend.services.stock_service import deduct_stock as svc_deduct_stock
 from backend.services.ingredient_stock_service import deduct_ingredients_for_product as svc_deduct_ingredients
@@ -441,6 +441,7 @@ async def sync_data(
         except ValueError:
             pass  # Invalid HLC → pull dari awal
 
+    pull_watermark = HLC.generate(node_id=server_node_id)
     page_limit = request.limit  # validated by schema (10-2000)
     cursor_last_id = request.cursor_last_id  # tie-break untuk duplicate tuples
 
@@ -450,7 +451,9 @@ async def sync_data(
     cat_records, cat_more = await get_table_changes(db, Category, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
     prod_records, prod_more = await get_table_changes(db, Product, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
     ord_records, ord_more = await get_table_changes(db, Order, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
-    pay_records, pay_more = await get_table_changes(db, Payment, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
+    # Drift caches order payments; reservation deposits remain in the server
+    # reservation flow until they are attached to an order.
+    pay_records, pay_more = await get_table_changes(db, Payment, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id, required_fields=("order_id",))
     shift_records, shift_more = await get_table_changes(db, Shift, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
     ing_records, ing_more = await get_table_changes(db, Ingredient, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
 
@@ -503,41 +506,13 @@ async def sync_data(
         return d
 
     def _apply_delta_filter(stmt_in, model_class):
-        """Apply (updated_at, row_version, id) > cursor — identical semantic
-        dgn get_table_changes helper. Range boundary utk HLC ms vs DB µs
-        precision + id tie-break utk duplicate (ts, rv) rows."""
-        if not (client_last_sync_hlc and client_last_sync_hlc.timestamp > 0):
-            return stmt_in
-        from datetime import timedelta
-        last_sync_dt = datetime.fromtimestamp(client_last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
-        ms_end = last_sync_dt + timedelta(microseconds=999)
-        last_counter = client_last_sync_hlc.counter
-        if hasattr(model_class, "row_version"):
-            conds = [
-                model_class.updated_at > ms_end,
-                and_(
-                    model_class.updated_at >= last_sync_dt,
-                    model_class.updated_at <= ms_end,
-                    model_class.row_version > last_counter,
-                ),
-            ]
-            if cursor_last_id and hasattr(model_class, "id"):
-                conds.append(
-                    and_(
-                        model_class.updated_at >= last_sync_dt,
-                        model_class.updated_at <= ms_end,
-                        model_class.row_version == last_counter,
-                        model_class.id > uuid.UUID(cursor_last_id),
-                    )
-                )
-            return stmt_in.filter(or_(*conds))
-        return stmt_in.filter(model_class.updated_at >= last_sync_dt)
+        return apply_pull_cursor(stmt_in, model_class, client_last_sync_hlc, cursor_last_id)
 
     # Custom pull for order_items — JOIN Order untuk outlet scoping.
     # Pagination: ORDER BY + LIMIT+1 pattern.
     stmt = select(OrderItem).join(Order).filter(Order.outlet_id == outlet_id)
     stmt = _apply_delta_filter(stmt, OrderItem)
-    stmt = stmt.order_by(OrderItem.updated_at.asc(), OrderItem.row_version.asc(), OrderItem.id.asc()).limit(page_limit + 1)
+    stmt = stmt.order_by(*pull_order_columns(OrderItem)).limit(page_limit + 1)
     order_items_records = (await db.execute(stmt)).scalars().all()
     oi_more = len(order_items_records) > page_limit
     if oi_more:
@@ -549,7 +524,7 @@ async def sync_data(
     from backend.models.product import OutletStock
     stmt = select(OutletStock).filter(OutletStock.outlet_id == outlet_id)
     stmt = _apply_delta_filter(stmt, OutletStock)
-    stmt = stmt.order_by(OutletStock.updated_at.asc(), OutletStock.row_version.asc(), OutletStock.id.asc()).limit(page_limit + 1)
+    stmt = stmt.order_by(*pull_order_columns(OutletStock)).limit(page_limit + 1)
     stock_records = (await db.execute(stmt)).scalars().all()
     stock_more = len(stock_records) > page_limit
     if stock_more:
@@ -559,10 +534,8 @@ async def sync_data(
     
     # Custom pull for recipes (no row_version — filter via product.brand_id)
     stmt_recipe = select(Recipe).join(Product).filter(Product.brand_id == brand_id)
-    if client_last_sync_hlc and client_last_sync_hlc.timestamp > 0:
-        last_sync_dt = datetime.fromtimestamp(client_last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
-        stmt_recipe = stmt_recipe.filter(Recipe.updated_at >= last_sync_dt)
-    stmt_recipe = stmt_recipe.order_by(Recipe.updated_at.asc()).limit(page_limit + 1)
+    stmt_recipe = _apply_delta_filter(stmt_recipe, Recipe)
+    stmt_recipe = stmt_recipe.order_by(*pull_order_columns(Recipe)).limit(page_limit + 1)
     recipe_records = (await db.execute(stmt_recipe)).scalars().all()
     recipe_more = len(recipe_records) > page_limit
     if recipe_more:
@@ -572,10 +545,8 @@ async def sync_data(
 
     # Custom pull for recipe_ingredients (join via recipe→product.brand_id)
     stmt_ri = select(RecipeIngredient).join(Recipe).join(Product).filter(Product.brand_id == brand_id)
-    if client_last_sync_hlc and client_last_sync_hlc.timestamp > 0:
-        last_sync_dt = datetime.fromtimestamp(client_last_sync_hlc.timestamp / 1000.0, tz=timezone.utc)
-        stmt_ri = stmt_ri.filter(RecipeIngredient.updated_at >= last_sync_dt)
-    stmt_ri = stmt_ri.order_by(RecipeIngredient.updated_at.asc()).limit(page_limit + 1)
+    stmt_ri = _apply_delta_filter(stmt_ri, RecipeIngredient)
+    stmt_ri = stmt_ri.order_by(*pull_order_columns(RecipeIngredient)).limit(page_limit + 1)
     ri_records = (await db.execute(stmt_ri)).scalars().all()
     ri_more = len(ri_records) > page_limit
     if ri_more:
@@ -596,7 +567,7 @@ async def sync_data(
     ).filter(Product.brand_id == brand_id)
     stmt_pv = _apply_delta_filter(stmt_pv, ProductVariant)
     stmt_pv = stmt_pv.order_by(
-        ProductVariant.updated_at.asc(), ProductVariant.row_version.asc(), ProductVariant.id.asc()
+        *pull_order_columns(ProductVariant)
     ).limit(page_limit + 1)
     pv_records = (await db.execute(stmt_pv)).scalars().all()
     pv_more = len(pv_records) > page_limit
@@ -608,7 +579,7 @@ async def sync_data(
     # Custom pull for cash_activities (join Shift untuk outlet scoping)
     stmt = select(CashActivity).join(Shift).filter(Shift.outlet_id == outlet_id)
     stmt = _apply_delta_filter(stmt, CashActivity)
-    stmt = stmt.order_by(CashActivity.updated_at.asc(), CashActivity.row_version.asc(), CashActivity.id.asc()).limit(page_limit + 1)
+    stmt = stmt.order_by(*pull_order_columns(CashActivity)).limit(page_limit + 1)
     ca_records = (await db.execute(stmt)).scalars().all()
     ca_more = len(ca_records) > page_limit
     if ca_more:
@@ -628,34 +599,14 @@ async def sync_data(
         st = getattr(sync_tenant, 'subscription_tier', 'starter')
         sub_tier = st.value if hasattr(st, 'value') else str(st or 'starter')
 
-    # Compute next_cursor_hlc + next_cursor_last_id = record dgn HLC tertinggi
-    # di batch. Client kirim balik duanya untuk next page (unique tie-break).
-    next_cursor_hlc_str: Optional[str] = None
-    next_cursor_last_id_str: Optional[str] = None
-    if has_more_any:
-        best_record = None  # (hlc_tuple, id, hlc_str)
-        for records_list in (
-            pull_changes.categories, pull_changes.products, pull_changes.orders,
-            pull_changes.order_items, pull_changes.payments, pull_changes.shifts,
-            pull_changes.cash_activities, pull_changes.outlet_stock,
-            pull_changes.ingredients, pull_changes.recipes,
-            pull_changes.recipe_ingredients,
-        ):
-            for rec in records_list:
-                hlc_v = rec.get("hlc")
-                rec_id = rec.get("id")
-                if not hlc_v:
-                    continue
-                try:
-                    h = HLC.from_string(hlc_v)
-                except Exception:
-                    continue
-                key = (h.timestamp, h.counter, rec_id or "")
-                if best_record is None or key > best_record[0]:
-                    best_record = (key, rec_id, hlc_v)
-        if best_record is not None:
-            next_cursor_hlc_str = best_record[2]
-            next_cursor_last_id_str = best_record[1]
+    next_cursor_hlc_str, next_cursor_last_id_str = next_page_cursor((
+        (pull_changes.categories, cat_more), (pull_changes.products, prod_more),
+        (pull_changes.orders, ord_more), (pull_changes.order_items, oi_more),
+        (pull_changes.payments, pay_more), (pull_changes.shifts, shift_more),
+        (pull_changes.cash_activities, ca_more), (pull_changes.outlet_stock, stock_more),
+        (pull_changes.ingredients, ing_more), (pull_changes.recipes, recipe_more),
+        (pull_changes.recipe_ingredients, ri_more), (pull_changes.product_variants, pv_more),
+    ))
 
     # Observability #10: emit sync volume metrics per-table.
     try:
@@ -693,7 +644,7 @@ async def sync_data(
         pass
 
     return SyncResponse(
-        last_sync_hlc=server_hlc.to_string(),
+        last_sync_hlc=pull_watermark.to_string(),
         changes=pull_changes,
         stock_mode=sm_str,
         subscription_tier=sub_tier,

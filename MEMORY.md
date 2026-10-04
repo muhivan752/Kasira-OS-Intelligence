@@ -3,6 +3,9 @@
 
 ## STATUS TERKINI — 2026-10-04 setelah implementasi
 
+- Hotfix sync: akar error dibuktikan pada respons outlet aktual fbc68df5…: payments.order_id NULL (DP reservasi) masuk ke PaymentLocal.orderId String non-null → TypeError, rollback seluruh apply walaupun HTTP 200. Backend sekarang hanya mengirim pembayaran berpesanan untuk cache Drift; Flutter juga mengabaikan DP standalone. DP tetap berada di DB dan alur reservasi server. Backend fix sudah live sehat; APK 1.6.31 disiapkan untuk pagination penuh.
+- Bug pagination ikut diperbaiki: Flutter dulu mengabaikan has_more; cursor server memakai record paling baru lintas tabel dan bisa melewati sisa tabel yang capped. Cursor sekarang tail paling awal dari tabel yang masih punya halaman, urutan SQL sama dengan tuple HLC ms/version/id termasuk recipe dan varian. Client melanjutkan pull tanpa push ulang, menyimpan watermark server halaman pertama setelah semua halaman selesai, backfill sekali untuk APK lama. Tes actual 68 halaman (limit 10) mencakup seluruh ID dibanding full pull, 522 order_items; seluruh halaman sukses diaplikasikan ke SQLite lokal. 6 unit backend + 6 sync Flutter, dengan regression error/retry. Tidak menghapus data merchant/offline.
+
 - Redesign sudah live di selaris.id: login, daftar, onboarding dan theme dashboard mengikuti Sefrekuensi. Backend sehat pada migration 111; seluruh container healthy.
 - Smoke test production memakai login demo yang sudah dikonfigurasi: dashboard autentikasi, tema terang/gelap, 320 px, menu/Escape dan onboarding toko existing lolos tanpa mengirim pesan OTP.
 - Login Google sudah diimplementasikan pada web + POS Flutter, tetapi empat konfigurasi Firebase Google belum diisi pemilik. UI menyatakan belum tersedia; OTP Sefrekuensi aktif. Detail setup dan fingerprint di `docs/GOOGLE_LOGIN.md`.

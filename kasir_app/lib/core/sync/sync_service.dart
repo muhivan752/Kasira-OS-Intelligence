@@ -35,6 +35,8 @@ class SyncService {
   final SharedPreferences prefs;
 
   static const String _lastSyncKey = 'last_sync_hlc';
+  static const String _localClockKey = 'sync_local_hlc';
+  static const String _paginationBackfilledKey = 'sync_pagination_backfilled_v1';
   /// Penanda backfill varian produk (v1.6.0) sudah jalan sekali di device ini.
   static const String _variantsBackfilledKey = 'variants_backfilled_v1';
   // Raw device installation ID — UUID random di-generate sekali saat first
@@ -203,7 +205,10 @@ class SyncService {
         await prefs.setBool(_variantsBackfilledKey, true);
       }
 
-      final lastSyncHlc = prefs.getString(_lastSyncKey);
+      final needsPaginationBackfill =
+          !(prefs.getBool(_paginationBackfilledKey) ?? false);
+      final lastSyncHlc =
+          needsPaginationBackfill ? null : prefs.getString(_lastSyncKey);
 
       // Multi-outlet tenant WAJIB kirim outlet_id — backend reject (400) kalau
       // tenant punya >1 outlet dan outlet_id kosong. Single-outlet backward
@@ -243,6 +248,34 @@ class SyncService {
 
         // 3. Apply server changes to local DB
         await _applyServerChanges(serverChanges);
+        var page = data;
+        final seenCursors = <String>{};
+        while (page['has_more'] == true) {
+          final cursor = page['next_cursor_hlc'];
+          final lastId = page['next_cursor_last_id'];
+          if (cursor is! String ||
+              cursor.isEmpty ||
+              lastId is! String ||
+              lastId.isEmpty ||
+              !seenCursors.add('$cursor|$lastId')) {
+            throw StateError('Kursor sinkronisasi tidak valid');
+          }
+          final continuation = await dio.post('/sync/',
+              data: {
+                'node_id': nodeId,
+                'outlet_id': currentOutletId,
+                'last_sync_hlc': lastSyncHlc,
+                'cursor_hlc': cursor,
+                'cursor_last_id': lastId,
+                'changes': <String, dynamic>{},
+              },
+              cancelToken: _syncCancelToken);
+          if (continuation.statusCode != 200) {
+            throw StateError('Halaman sinkronisasi gagal dimuat');
+          }
+          page = continuation.data;
+          await _applyServerChanges(page['changes']);
+        }
 
         // 3b. Persist stock_mode + subscription_tier via SessionCache
         final cache = SessionCache.instance;
@@ -269,31 +302,22 @@ class SyncService {
           cashActivities: unsyncedCashActivities,
         );
 
-        // 5. Update last sync HLC — merge server HLC dengan local via
-        // HLC.receive() daripada naïve string-write (Batch #23 fix). Ini
-        // guarantee monotonic increase + handle clock drift device↔server.
-        // Sebelumnya naïve write bisa regress HLC kalau device clock mundur
-        // → offline order HLC < previous → gagal menang di CRDT merge.
-        if (serverHlc is String && serverHlc.isNotEmpty) {
-          HLC localHlc;
-          try {
-            localHlc = (lastSyncHlc != null && lastSyncHlc.isNotEmpty)
-                ? HLC.parse(lastSyncHlc)
-                : HLC.now(nodeId);
-          } catch (_) {
-            // Prefs corrupt (malformed HLC dari version lama atau manual edit)
-            // — fallback ke fresh HLC, gak crash.
-            localHlc = HLC.now(nodeId);
-          }
-          try {
-            final merged = HLC.fromServer(localHlc, serverHlc);
-            await prefs.setString(_lastSyncKey, merged.toString());
-          } on FormatException catch (e) {
-            // Server HLC malformed — skip save, sync berikutnya retry.
-            // Prefs gak ter-corrupt.
-            debugPrint('sync() server HLC malformed, skip save: $e');
-          }
+        // Keep the server pull watermark separate from the device's write clock.
+        // Advancing it to device time would skip updates made during this pull.
+        if (serverHlc is! String || serverHlc.isEmpty) {
+          throw StateError('Penanda sinkronisasi tidak valid');
         }
+        final serverClock = HLC.parse(serverHlc);
+        HLC localClock;
+        try {
+          localClock = HLC.parse(prefs.getString(_localClockKey) ?? serverHlc);
+        } on FormatException {
+          localClock = HLC.now(nodeId);
+        }
+        await prefs.setString(
+            _localClockKey, HLC.fromServer(localClock, serverHlc).toString());
+        await prefs.setString(_lastSyncKey, serverClock.toString());
+        await prefs.setBool(_paginationBackfilledKey, true);
 
         // 6. Hapus pending idempotency_key — sync selesai end-to-end, next
         // sync() generate fresh. Timing: SETELAH HLC update + markAsSynced
@@ -499,6 +523,8 @@ class SyncService {
       // Apply Payments
       if (changes['payments'] != null) {
         for (var p in changes['payments']) {
+          // Older servers also return standalone reservation deposits.
+          if (p['order_id'] == null) continue;
           await db.into(db.payments).insertOnConflictUpdate(
             PaymentLocal(
               id: p['id'],
@@ -509,7 +535,7 @@ class SyncService {
               amountPaid: _toDouble(p['amount_paid']),
               paymentMethod: p['payment_method'],
               status: p['status'],
-              referenceNumber: p['reference_number'],
+              referenceNumber: p['reference_id'] ?? p['reference_number'],
               paidAt: p['paid_at'] != null ? DateTime.parse(p['paid_at']) : null,
               rowVersion: p['row_version'] ?? 0,
               isDeleted: p['is_deleted'] ?? false,
