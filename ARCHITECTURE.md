@@ -89,6 +89,11 @@ setelah API sukses; error 500 tidak diteruskan mentah ke browser.
 Revisi UI 4 Oktober: satu kolom pesan dengan composer di bawah; riwayat dan
 review/approval melalui dialog. Kartu HPP berasal dari preview backend, bukan
 angka dalam reply model. Balasan singkat mengikuti cerita, satu pertanyaan berikutnya.
+Chat web baru default Estimasi. Permintaan estimasi langsung di pesan mengubah
+mode efektif session; turn mempertahankan mode request asli untuk replay UUID.
+Backend memeriksa draft dan dapat meminta satu kali pelengkapan dalam dua call
+provider yang tersedia. Reply tidak mengaku siap ketika preview incomplete;
+angka finansial reply model disaring. Tombol Lengkapi estimasi membantu draft lama.
 Postgres menyimpan sesi, semua turn, draft, preview, revisi, lease dan hasil approved
 dengan RLS serta scope tenant/user/outlet. POST pesan membalas 202; background
 worker membuka AsyncSession sendiri, SET LOCAL tenant, melepas transaksi saat

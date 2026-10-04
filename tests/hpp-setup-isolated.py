@@ -271,6 +271,18 @@ async def main():
         assert fetched["pending"]
         assert (await client.post(f'/ai/hpp-setup/sessions/{pending["id"]}/messages', json={**payload, "request_id": str(uuid4())})).status_code == 409
         gate.set(); assert (await task).status_code == 202; gate = None
+        implicit = await create('manual')
+        implicit, request = await send(implicit, draft('Mie Bangladesh fixture', 'Mie fixture', True),
+            content='Kasi estimasi lah', mode='manual')
+        assert implicit['mode'] == 'estimate' and implicit['preview']['ready']
+        assert implicit['turns'][0]['mode'] == 'manual', 'Original mode must preserve request replay identity'
+        replay = await client.post(f'/ai/hpp-setup/sessions/{implicit["id"]}/messages', json=request)
+        assert replay.status_code == 202 and len(replay.json()['data']['turns']) == 1
+        implicit, _ = await send(implicit, draft('Mie Bangladesh fixture', 'Mie fixture', True),
+            content='pakai manual saja', mode='estimate')
+        assert implicit['mode'] == 'manual' and not implicit['preview']['ready']
+        assert 'bantu estimasikan' in implicit['turns'][-1]['reply']
+        print('PASS: explicit chat estimation changes effective mode; original request replay stays idempotent; Manual still blocks estimates')
         print("PASS: durable long chat, source labels, RLS/Pro/owner scope, replay, exact approval, conflict reconciliation, atomic rollback, concurrent approval/name reuse, and pending lease")
 
     # A real HTTP client must receive 202 while generation is still blocked.

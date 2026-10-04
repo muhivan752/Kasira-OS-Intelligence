@@ -64,6 +64,26 @@ Jika pengguna bingung di Manual, tawarkan Estimasi dengan bahasa wajar:
 Jika data sudah cukup, ajak cek resep lewat tombol Lihat resep; jangan meminta
 review draft/sumber pada setiap balasan. Jangan tulis angka HPP/total hasil
 hitungan di reply; kartu UI menampilkan hasil backend yang bisa diperiksa.
+Harga, takaran dan biaya cukup ditampilkan dalam rincian resep; jangan menulis
+angka uang atau biaya per porsi di reply. Balasan cukup menjelaskan yang sudah
+kamu bantu isi/koreksi dan mengajak membuka Lihat resep saat sudah lengkap.
+ESTIMATE adalah permintaan untuk kamu mengisi resep, bukan mewawancarai pengguna.
+Begitu nama menu diketahui, langsung susun bahan utama, takaran bahan mentah,
+jumlah porsi dan harga/jumlah pembelian lengkap. Jika porsi belum disebut, susun
+satu porsi dengan servings_source=estimate. Isi harga dan jumlah beli bahan baru
+yang belum diketahui dengan perkiraan berlabel estimate; jangan membiarkannya
+null sambil meminta pengguna mencari harga. Sampaikan singkat bahwa ini perkiraan
+dan pengguna bisa koreksi. Jangan minta konfirmasi untuk setiap bahan lebih dulu.
+Patuhi bahan yang dilarang/dipilih pengguna; jangan menambah kembali bahan yang
+sudah mereka hapus. Pertahankan angka nyata dan kutipan persis yang sudah ada.
+Untuk bahan toko, pakai nama persis dan satuan yang kompatibel dengan base_unit
+toko; cost toko selalu dihitung backend. Jika takaran masih kamu perkirakan,
+boleh langsung usulkan berat dalam gram/kg untuk minyak toko yang dibeli kg,
+atau volume ml/liter jika toko memakai volume. Jangan mengklaim konversi massa
+ke volume atau sebaliknya. Takaran nyata pengguna yang berbeda keluarga satuan
+tetap butuh ukuran nyata atau persetujuan menggantinya dengan estimasi berlabel.
+Untuk kemasan bahan baru, usulkan harga/jumlah beli dalam satuan yang sama dengan
+takaran atau isi kemasan eksplisit, bukan berat per bungkus yang tidak diketahui.
 Schema draft: product_name, servings (jumlah porsi batch; 1 jika satu porsi),
 servings_source (user/estimate/existing/unknown), servings_evidence (kutipan persis pengguna),
 notes, ingredients[]. Tiap bahan: name, quantity, quantity_unit, basis (portion/batch),
@@ -311,6 +331,38 @@ def prepare(draft: Draft, ctx, messages: list[str], mode: str):
     return preview
 
 
+def conversation_mode(message: str, selected: str) -> str:
+    # Only direct requests change mode. Mentions, questions and negations do not.
+    plain = re.sub(r'"[^"\n]*"|“[^”\n]*”', '', message.casefold())
+    clauses = re.split(r'[.!?;\n]', plain)
+    resolved = selected
+    for clause in clauses:
+        if re.search(r'\b(?:jangan|tanpa|bukan|gak|nggak|tidak|ga)\s+(?:mau\s+|pakai\s+|pake\s+)?(?:estimasi|perkiraan)\b', clause):
+            resolved = 'manual'
+            continue
+        if re.search(r'\b(?:jangan|tanpa|bukan|gak|nggak|tidak|ga)\s+(?:mau\s+|pakai\s+|pake\s+)?manual\b', clause):
+            continue
+        if re.search(r'\b(?:pakai|pake|pilih|gunakan|balik|kembali(?: ke)?)\s+(?:mode\s+)?manual\b|^\s*mode\s+manual\b', clause):
+            resolved = 'manual'
+        elif re.search(r'\b(?:kasi|kasih|beri|berikan|pakai|pake|pilih|gunakan|mau|ikut)\s+(?:(?:aku|saya|mode)\s+)?(?:estimasi|perkiraan)\b|\b(?:tolong|bantu)\s+(?:aku\s+|saya\s+)?(?:estimasi(?:kan)?|perkirakan)\b|\blengkapi\s+estimasi\b|^\s*mode\s+estimasi\b|^\s*(?:oke\s+|iya\s+)?estimasi\s*(?:aja|saja|dong|lah|dulu|ya)?\s*$', clause):
+            resolved = 'estimate'
+    return resolved
+
+
+def reply_for_preview(reply: str, preview, mode: str) -> str:
+    if preview['ready']:
+        if re.search(r'\b(?:rp|idr|rupiah|hpp|harga|biaya|modal|total)\b', reply.casefold()):
+            return 'Resepnya sudah lengkap. Cek bahan, takaran, dan harga lewat Lihat resep; kalau ada yang beda, bilang aja.'
+        if 'lihat resep' not in reply.casefold():
+            return reply.rstrip() + ' Cek lewat Lihat resep ya.'
+        return reply
+    if not preview['product_name']:
+        return 'Mau bikin menu apa? Sebutkan namanya dulu.'
+    if mode == 'estimate':
+        return 'Perkiraannya belum lengkap, jadi HPP belum bisa dihitung. Tekan Lengkapi estimasi untuk aku rapikan, atau ceritakan koreksinya.'
+    return 'Resepnya masih butuh takaran atau harga nyata. Kalau belum tahu, bilang “bantu estimasikan” dan aku bantu isi perkiraannya.'
+
+
 async def generate(draft, turns, ctx, mode, references=""):
     if not chat_configured():
         raise RuntimeError("AI belum dikonfigurasi")
@@ -342,16 +394,29 @@ async def generate(draft, turns, ctx, mode, references=""):
     history.append({"role": "user", "content": "Konteks terstruktur untuk pesan terakhir:\n" + envelope})
     client = get_llm_client(timeout=150)
     system = SYSTEM + "\nSchema JSON wajib:\n" + json.dumps(ModelReply.model_json_schema())
+    usage_input, usage_output = 0, 0
     for budget in (8192, 16384):
         response = await client.messages.create(model="claude-haiku-4-5-20251001", max_tokens=budget,
             system=system, messages=history)
+        usage_input += response.usage.input_tokens
+        usage_output += response.usage.output_tokens
         output = "".join(block.text for block in response.content if getattr(block, "type", "text") == "text").strip()
         if output.startswith("```"):
             output = output.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         try:
             parsed = ModelReply.model_validate_json(output)
-            return parsed, {"input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens, "model": response.model,
+            preview = prepare(parsed.draft, ctx, [t.message for t in turns], mode)
+            if mode == 'estimate' and parsed.draft.product_name and not preview['ready'] and budget == 8192:
+                history.append({"role": "assistant", "content": output})
+                history.append({"role": "user", "content": 'Pemeriksaan backend: ' + json.dumps(preview['missing'], ensure_ascii=False) +
+                    '. Lengkapi hanya data perkiraan yang kosong dan perbaiki satuan takaran estimasi agar kompatibel dengan bahan toko. '
+                    'Jangan menghapus bahan untuk lolos pemeriksaan, jangan mengubah angka nyata/kutipan pengguna atau harga toko. '
+                    'Isi jumlah beli, satuan beli, harga beli dan takaran bahan baru dengan sumber estimate. '
+                    'Balas JSON lengkap; jangan menghitung HPP sendiri.'})
+                continue
+            parsed.reply = reply_for_preview(parsed.reply, preview, mode)
+            return parsed, {"input_tokens": usage_input,
+                "output_tokens": usage_output, "model": response.model,
                 "history_compacted": compacted, "stored_turns": len(turns)}
         except ValidationError as exc:
             errors = exc.errors(include_input=False, include_url=False)

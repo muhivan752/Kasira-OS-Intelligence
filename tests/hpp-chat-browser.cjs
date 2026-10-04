@@ -113,7 +113,8 @@ async function closePanel(page) {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(base + '/dashboard/hpp/chat', { waitUntil: 'networkidle' });
     await page.getByLabel('Tulis pesan', { exact: true }).waitFor();
-    assert.equal(await page.getByLabel('Manual', { exact: true }).isChecked(), true);
+    assert.equal(await page.getByLabel('Estimasi', { exact: true }).isChecked(), true);
+    await page.getByLabel('Manual', { exact: true }).check();
     assert.equal(await page.locator('.hpp-chat aside').count(), 0);
     assert.equal(await page.getByTestId('hpp-chat-total').count(), 0);
     await page.getByRole('button', { name: 'Riwayat obrolan' }).click();
@@ -123,6 +124,7 @@ async function closePanel(page) {
     await page.getByRole('heading', { name: 'Atur HPP', exact: true }).waitFor();
     await page.getByRole('link', { name: 'Atur lewat percakapan', exact: true }).click();
     await page.getByLabel('Tulis pesan', { exact: true }).waitFor();
+    await page.getByLabel('Manual', { exact: true }).check();
     assert.equal(calls.filter(c => c.method === 'POST').length, 0);
     const story = 'Resep 10 porsi ayam 1,5 kg untuk 10 porsi beli 1 kg 40000. ' + 'Cerita dapur panjang. '.repeat(2400);
     await page.getByLabel('Tulis pesan', { exact: true }).fill(story);
@@ -221,16 +223,24 @@ async function closePanel(page) {
     await page.getByLabel('Tulis pesan', { exact: true }).fill('Aku bingung jumlah pembelian.');
     await page.getByLabel('Tulis pesan', { exact: true }).press('Enter');
     await page.getByTestId('hpp-chat-total').filter({ hasText: 'Belum lengkap' }).waitFor();
+    for (const theme of ['light', 'dark']) {
+      await page.setViewportSize({ width: 320, height: 900 });
+      await page.evaluate(t => { document.documentElement.classList.toggle('dark', t === 'dark'); }, theme);
+      await appearance(page, 'incomplete assistance/' + theme + '/320');
+    }
     panel = await openRecipe(page);
     await panel.getByText('Masih perlu dilengkapi', { exact: true }).waitFor();
     assert(await panel.getByLabel(/Bahan, harga, takaran/).isDisabled());
     await closePanel(page);
+    await page.getByLabel('Tulis pesan', { exact: true }).fill('Koreksi belum terkirim');
+    assert(await page.getByRole('button', { name: 'Lengkapi estimasi', exact: true }).isDisabled());
+    await page.getByLabel('Tulis pesan', { exact: true }).fill('');
     incomplete = false; processing = true;
-    await page.getByLabel('Tulis pesan', { exact: true }).fill('Bantu estimasikan.');
-    await page.getByLabel('Tulis pesan', { exact: true }).press('Enter');
+    await page.getByRole('button', { name: 'Lengkapi estimasi', exact: true }).click();
     await page.getByText('Menyiapkan jawaban...', { exact: true }).waitFor();
     await page.waitForFunction(() => !document.querySelector('#hpp-chat-message').disabled);
     const pending = chats.at(-1);
+    assert.equal(calls.filter(c => c.path.endsWith('/messages')).at(-1).body.mode, 'estimate');
     await page.getByLabel('Tulis pesan', { exact: true }).fill('Koreksi berikutnya belum dikirim');
     assert(await page.getByRole('button', { name: 'Kirim pesan' }).isDisabled());
     pending.retry_allowed = true; processing = false;

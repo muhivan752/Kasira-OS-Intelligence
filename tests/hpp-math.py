@@ -11,6 +11,28 @@ from backend.services import hpp_setup_service as setup
 
 
 class HppMathTests(unittest.TestCase):
+    def test_explicit_estimate_request_and_negations(self):
+        for story in ('Kasi estimasi lah', 'Oke aku ikut estimasi mu', 'bantu estimasikan',
+                      'tolong perkirakan', 'estimasi aja', 'mode estimasi'):
+            self.assertEqual(setup.conversation_mode(story, 'manual'), 'estimate', story)
+        for story in ('apa itu estimasi?', 'apa itu mode estimasi?', 'jangan pakai estimasi',
+                      'aku gak mau estimasi', 'harga estimasi kemarin keliru',
+                      'dia bilang "pakai estimasi"', 'jangan pakai manual'):
+            self.assertEqual(setup.conversation_mode(story, 'manual'), 'manual', story)
+        self.assertEqual(setup.conversation_mode('pakai manual saja', 'estimate'), 'manual')
+        self.assertEqual(setup.conversation_mode('bantu estimasikan. sekarang pakai manual', 'manual'), 'manual')
+        self.assertEqual(setup.conversation_mode('telurnya 2 butir', 'estimate'), 'estimate')
+        self.assertEqual(setup.conversation_mode('jangan pakai estimasi', 'estimate'), 'manual')
+
+    def test_incomplete_preview_never_promises_approval(self):
+        preview = {'ready': False, 'product_name': 'Mie Bangladesh'}
+        reply = setup.reply_for_preview('Semua siap, langsung approve ya!', preview, 'estimate')
+        self.assertIn('belum bisa dihitung', reply)
+        self.assertNotIn('approve', reply)
+        self.assertEqual(setup.reply_for_preview('Cek lewat Lihat resep ya.', {'ready': True}, 'estimate'), 'Cek lewat Lihat resep ya.')
+        self.assertNotIn('999', setup.reply_for_preview('HPP Rp999 per porsi.', {'ready': True}, 'estimate'))
+        self.assertIn('Lihat resep', setup.reply_for_preview('Takarannya sudah aku koreksi.', {'ready': True}, 'manual'))
+
     def test_purchase_and_portion(self):
         bought, cost = math.purchase_cost(15000, 1, "kg", "gram")
         self.assertEqual(bought, 1000)
@@ -183,7 +205,30 @@ class HppProviderProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([call["max_tokens"] for call in calls], [8192, 16384])
         self.assertEqual([m["content"] for m in calls[0]["messages"] if m["role"] == "user"][:12], [t.message for t in stories])
         self.assertNotIn("total_cost", output.draft.model_dump())
-        self.assertEqual(usage["output_tokens"], 234)
+        self.assertEqual(usage["output_tokens"], 468)
+
+    async def test_estimate_completion_uses_backend_feedback(self):
+        calls = []
+        first = {'reply': 'Semua sudah siap!', 'draft': {'product_name': 'Mie Bangladesh',
+            'servings': 1, 'servings_source': 'estimate', 'ingredients': [
+                {'name': 'Mie telur', 'quantity': 150, 'quantity_unit': 'gram',
+                 'quantity_source': 'estimate', 'price_source': 'estimate'}]}}
+        second = json.loads(json.dumps(first))
+        second['draft']['ingredients'][0].update(buy_price=20000, buy_qty=1, buy_unit='kg')
+        outputs = [json.dumps(first), json.dumps(second)]
+        async def create(**kwargs):
+            calls.append(json.loads(json.dumps(kwargs)))
+            return SimpleNamespace(content=[SimpleNamespace(type='text', text=outputs.pop(0))],
+                usage=SimpleNamespace(input_tokens=10, output_tokens=20), model='fixture')
+        with patch.object(setup, 'chat_configured', return_value=True), patch.object(setup, 'get_llm_client',
+                return_value=SimpleNamespace(messages=SimpleNamespace(create=create))):
+            output, usage = await setup.generate(None, [SimpleNamespace(message='mie Bangladesh', reply=None)], ([], [], []), 'estimate')
+        checked = setup.prepare(output.draft, ([], [], []), ['mie Bangladesh'], 'estimate')
+        self.assertTrue(checked['ready'], checked['missing'])
+        self.assertEqual(checked['total_cost'], '3000.00')
+        self.assertIn('Pemeriksaan backend', calls[1]['messages'][-1]['content'])
+        self.assertEqual(usage['output_tokens'], 40)
+        self.assertEqual(len(calls), 2)
 
     async def test_compaction_preserves_latest_story_and_exact_draft(self):
         calls = []

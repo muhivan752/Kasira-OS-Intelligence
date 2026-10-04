@@ -8,7 +8,41 @@ Design Read sebelum perubahan: satu kolom percakapan untuk pemilik usaha,
 Source Sans 3 dan palet Sefrekuensi. ENERGY 2 / RHYTHM 2 / MOTION 1. Antislop
 during mengikuti pilihan sesi pengguna.
 
-## Perubahan
+## Revisi estimasi setelah tes pengguna
+
+Percakapan terbaru menunjukkan pengguna meminta estimasi lewat pesan, tetapi
+pilihan UI masih Manual. Model mengatakan resep siap meski pembelian bahan baru
+kosong dan takaran minyak berbeda keluarga satuan dengan bahan toko.
+
+- Chat web baru mulai di Estimasi. Manual tetap dapat dipilih. Permintaan
+  langsung seperti "bantu estimasikan" mengubah mode efektif server; pertanyaan,
+  kutipan dan penolakan diperiksa. Mode asli request tetap disimpan pada turn
+  agar retry UUID dari request awal tidak berubah identitas.
+- Estimasi mengisi bahan, takaran dan harga/jumlah pembelian dari nama menu,
+  memakai satu porsi perkiraan bila pengguna belum menyebut jumlah. Data nyata,
+  kutipan, bahan terlarang dan harga toko dipertahankan. Tidak membuat konversi
+  massa-volume; takaran estimasi dapat diusulkan dalam satuan toko.
+- Draft estimasi yang belum lengkap diperiksa backend dan mendapat satu upaya
+  pelengkapan dengan daftar kesalahan aktual, memakai budget output kedua yang
+  sudah tersedia. Pemanggilan model maksimal dua, termasuk schema repair;
+  input/output usage kedua panggilan dijumlahkan.
+- Balasan tidak mengatakan siap jika preview backend incomplete. Angka uang
+  dan pembahasan hitungan finansial model pada reply diganti ajakan review;
+  angka HPP berasal dari kartu backend. Lengkapi estimasi di draft incomplete
+  memberi pesan bantuan satu klik; disabled saat pending/busy atau ada koreksi
+  belum terkirim. Approval tetap tindakan terpisah.
+- Build/TypeScript dan chat browser final lolos, termasuk bantuan pada HP kedua
+  tema. Math/protocol18 kasus dan 500 oracle; Postgres QA RLS, permintaan estimasi
+  dari Manual, replay asli, kembali Manual, atomic approval/rollback/POS/stok,
+  serta real HTTP202 worker lolos. Provider empat kasus asli fixture dan replay
+  sintetis harga kosong/minyak kg-kebutuhan ml/koreksi nyata/single-menu lolos.
+  Tidak menjalankan ulang provider dengan percakapan merchant: auto-review menolak
+  ekspor payload asli; alternatif memakai fixture tanpa akses DB.
+- Image frontend final revisi estimasi:
+  `sha256:cd6bd24f7fdf016663fd97de6e17aa42808a2a4ad9880e05865ef676f4dc1017`.
+  Catatan deployment/latest source ada di MEMORY.md dan SESSION.md.
+
+## Perubahan UI awal
 
 - Pesan pengguna di kanan, jawaban asisten di kiri; composer di bawah dengan
   textarea yang tumbuh sampai 160 px. Enter mengirim, Shift+Enter membuat baris
@@ -81,7 +115,7 @@ during mengikuti pilihan sesi pengguna.
 - R-23 PASS: identitas existing dipertahankan; tidak membuat aset baru.
 - R-24 PASS: riwayat, form, resep tersimpan, Menu dan Bahan Baku menuju fungsi nyata.
 - R-25 PASS: teks AA kedua tema diperiksa browser pada chat dan dialog.
-- R-26 PASS: mode/kirim/riwayat/rincian/sumber/rumus/approve/retry/recovery diuji.
+- R-26 PASS: mode/kirim/riwayat/rincian/sumber/rumus/approve/retry/recovery dan Lengkapi estimasi diuji.
 - R-27 PASS: kosong/loading/pending/incomplete/error/applied tersedia dengan recovery.
 - R-28 PASS: bantuan lokal muncul di sumber dan approval, tanpa FAQ generik.
 - R-29 PASS: warm neutral/charcoal/coral sesuai token Sefrekuensi.
@@ -91,7 +125,7 @@ during mengikuti pilihan sesi pengguna.
 - R-33 PASS: source dan CSS diedit dengan apply_patch.
 - R-34 PASS: kedua tema dan regresi dashboard theme persistence lolos.
 - R-35 PASS: build, browser fixture, provider nyata, math dan smoke deployment diverifikasi.
-- R-36 PASS: estimasi tetap berlabel, biaya operasional disebut belum termasuk HPP bahan.
+- R-36 PASS: estimasi tetap berlabel, biaya operasional belum termasuk; balasan incomplete tidak mengaku siap.
 - R-37 PASS: Design Read dan ENERGY 2 / RHYTHM 2 / MOTION 1 dinyatakan sebelum edit.
 - R-38 PASS: tidak mengisi harga/resep/stok merchant untuk QA; semua usulan berlabel sumber.
 - Liveliness dials PASS: ENERGY 2 / RHYTHM 2 / MOTION 1 diterapkan.

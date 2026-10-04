@@ -174,7 +174,7 @@ async def message(session_id: UUID, body: Message, background: BackgroundTasks, 
         raise HTTPException(409, "Dua percakapan Anda masih diproses. Tunggu salah satunya selesai")
     session.pending_request = body.request_id
     session.pending_until = utc_now() + timedelta(minutes=8)
-    session.mode = body.mode
+    session.mode = service.conversation_mode(body.message, body.mode)
     session.error = None
     if not previous:
         db.add(HppSetupTurn(tenant_id=user.tenant_id, session_id=session.id,
@@ -202,6 +202,7 @@ async def process_message(session_id, body, user_id, tenant_id):
 
 async def generate_and_save(db, session, outlet, session_id, body, user):
     try:
+        mode = session.mode
         await scope(db, user)
         ctx = await service.context(db, outlet.brand_id)
         history = await turns(db, session)
@@ -227,20 +228,20 @@ async def generate_and_save(db, session, outlet, session_id, body, user):
         except Exception:
             logger.info("HPP retrieval unavailable")
         await db.commit()
-        answer, usage = await service.generate(session.draft, history, ctx, body.mode, reference)
+        answer, usage = await service.generate(session.draft, history, ctx, mode, reference)
         session, outlet = await owned(db, session_id, user, lock=True)
         if session.pending_request != body.request_id or session.revision != body.revision:
             raise HTTPException(409, "Pesan sudah digantikan proses lain. Muat percakapan terbaru")
         # Re-read prices after the network call; the draft shows current data.
         ctx = await service.context(db, outlet.brand_id)
         session.draft = answer.draft.model_dump(mode="json")
-        session.preview = service.prepare(answer.draft, ctx, [t.message for t in history], body.mode)
+        session.preview = service.prepare(answer.draft, ctx, [t.message for t in history], mode)
         session.revision += 1
         session.pending_request = None
         session.pending_until = None
         turn = (await db.execute(select(HppSetupTurn).where(
             HppSetupTurn.session_id == session.id, HppSetupTurn.request_id == body.request_id))).scalar_one()
-        turn.reply = answer.reply
+        turn.reply = service.reply_for_preview(answer.reply, session.preview, mode)
         turn.usage = usage
         db.add(AuditLog(tenant_id=user.tenant_id, user_id=user.id, action="HPP_DRAFT_UPDATED",
             entity="hpp_setup_session", entity_id=session.id, request_id=str(body.request_id),

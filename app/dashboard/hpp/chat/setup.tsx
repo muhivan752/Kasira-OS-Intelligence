@@ -13,7 +13,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
   const allowed = useProGuard('Setup HPP lewat percakapan');
   const [list, setList] = useState<HppChatListItem[]>([]);
   const [session, setSession] = useState<HppChatSession | null>(null);
-  const [mode, setMode] = useState<HppChatMode>('manual');
+  const [mode, setMode] = useState<HppChatMode>('estimate');
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -172,7 +172,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
     await run(async () => {
       nearEnd.current = true;
       if (!id) {
-        setSession(null); setText(''); setConfirmed(false); setReplacing(false);
+        setSession(null); setMode('estimate'); setText(''); setConfirmed(false); setReplacing(false);
         startingProduct.current = ''; setPanel(null);
         return;
       }
@@ -180,15 +180,17 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
       if (result.success) { receive(result.data); setPanel(null); } else setError(result.message);
     });
   }
-  async function send(retry = false) {
+  async function send(retry = false, assistance = false) {
     const unanswered = session?.turns.slice().reverse().find(turn => !turn.reply);
-    const content = retry ? unanswered?.message : text;
+    const content = retry ? unanswered?.message : assistance ? 'Bantu lengkapi estimasi resep ini. Isi perkiraan takaran dan harga yang masih kosong, lalu betulkan satuan estimasi yang belum cocok. Pertahankan data nyata, pilihan bahan, dan koreksi yang sudah aku ceritakan.' : text;
+    const selectedMode = assistance ? 'estimate' : mode;
+    if (assistance && text.trim()) return;
     if (!content?.trim() || lock.current || (waiting && !retry)) return;
     await run(async () => {
       nearEnd.current = true; setSendingText(retry ? '' : content);
       let chat = session;
       if (!chat) {
-        const created = await createHppChat(mode, startingProduct.current);
+        const created = await createHppChat(selectedMode, startingProduct.current);
         if (!created.success) { setError(created.message); return; }
         chat = created.data; receive(chat);
         try { localStorage.setItem('hpp-chat-input:' + chat.id, content); } catch {}
@@ -198,12 +200,12 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
       if (!requestId) {
         try {
           const cached = JSON.parse(localStorage.getItem(key) || 'null');
-          if (cached?.message === content && cached?.mode === mode && cached?.revision === chat.revision) requestId = cached.request_id;
+          if (cached?.message === content && cached?.mode === selectedMode && cached?.revision === chat.revision) requestId = cached.request_id;
         } catch {}
       }
       requestId ||= crypto.randomUUID();
       const payload = { request_id: requestId, revision: chat.revision,
-        mode: retry && unanswered ? unanswered.mode : mode, message: content };
+        mode: retry && unanswered ? unanswered.mode : selectedMode, message: content };
       try { localStorage.setItem(key, JSON.stringify(payload)); } catch {}
       const result = await sendHppChat(chat.id, payload);
       if (!result.success) { setError(result.message); return; }
@@ -247,7 +249,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
         onScroll={event => { const el = event.currentTarget; nearEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
         <div className="hpp-chat-messages">
           {!session?.turns.length && !sendingText && <div className="hpp-chat-welcome">
-            <h2>Mau bikin menu apa?</h2><p>Ceritain bahan yang kamu tahu dulu. Kita lengkapi takaran dan harganya sambil ngobrol.</p>
+            <h2>Mau bikin menu apa?</h2><p>{mode === 'estimate' ? 'Sebutkan menunya dulu. Aku bantu isi perkiraan bahan, takaran, dan harganya.' : 'Ceritakan bahan, takaran, dan harga yang kamu pakai.'}</p>
           </div>}
           {session?.turns.map(turn => <div key={turn.id} className="hpp-chat-turn">
             <article className="hpp-chat-message hpp-chat-user" aria-label="Pesan Anda"><p>{turn.message}</p></article>
@@ -262,6 +264,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
             <p className="hpp-chat-price" data-testid="hpp-chat-total">{preview.total_cost !== null ? hppMoney(Number(preview.total_cost)) : 'Belum lengkap'}</p>
             <p className="hpp-chat-recipe-meta">{preview.lines.filter(line => !line.is_optional).length} bahan utama · {preview.servings || '?'} porsi{waiting && ' · Draft sebelumnya'}</p>
             <button className="hpp-button" onClick={() => openPanel('recipe')}>Lihat resep</button>
+            {!preview.ready && session?.status !== 'applied' && <button className="hpp-button hpp-primary ml-2" disabled={busy || waiting || !!text.trim()} onClick={() => void send(false, true)}>Lengkapi estimasi</button>}
           </section>}
           {session?.status === 'applied' && <div className="hpp-chat-saved" role="status">
             <p>Bahan dan resep sudah tersimpan.</p>
