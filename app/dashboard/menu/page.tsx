@@ -11,6 +11,7 @@ import {
 import { Plus, Search, Edit2, Loader2, X, Trash2, Tag, Upload, ImageOff, Package, FlaskConical, Sparkles } from 'lucide-react';
 import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 // Deteksi kemungkinan user salah unit saat input qty per porsi.
 // Scenario: bahan di-track dalam kg/liter (unit besar) tapi qty resep < 1 →
@@ -921,7 +922,7 @@ export default function MenuPage() {
                 {allIngredients.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">
                     <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">Belum ada bahan baku. Tambahkan di halaman Bahan Baku.</p>
+                    <p className="text-sm">Belum ada bahan baku. <Link href="/dashboard/bahan-baku" className="underline font-semibold text-[var(--text-strong)]">Tambahkan bahan baku</Link> lalu isi resep produk ini.</p>
                   </div>
                 ) : (
                   <>

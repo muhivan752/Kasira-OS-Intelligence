@@ -160,13 +160,13 @@ export default function CourierTaskPage() {
             </div>
           </Card>
         ) : (
-          <Card className={`p-5 ${task.cod_pending ? 'bg-[var(--surface-inverse)] text-white' : ''}`}>
-            <p className={`text-xs uppercase tracking-wide ${task.cod_pending ? 'text-white/70' : 'text-[var(--text-muted)]'}`}>
+          <Card className={`p-5 ${task.cod_pending ? '!bg-[var(--surface-inverse)] text-[var(--text-inverse)]' : ''}`}>
+            <p className={`text-xs uppercase tracking-wide ${task.cod_pending ? 'text-[var(--text-inverse)]' : 'text-[var(--text-muted)]'}`}>
               {task.cod_pending ? 'Tagih tunai ke pelanggan' : 'Sudah dibayar, tidak perlu tagih'}
             </p>
             <p className="mt-1 font-display text-3xl font-extrabold">{task.cod_pending ? rp(task.grand_total) : rp(0)}</p>
             {task.cod_pending && task.delivery_fee > 0 && (
-              <p className="mt-1 text-xs text-white/70">Pesanan {rp(task.total_amount)} + ongkir {rp(task.delivery_fee)}</p>
+              <p className="mt-1 text-xs text-[var(--text-inverse)]">Pesanan {rp(task.total_amount)} + ongkir {rp(task.delivery_fee)}</p>
             )}
           </Card>
         )}
@@ -181,7 +181,7 @@ export default function CourierTaskPage() {
             </div>
           </div>
           {task.notes && (
-            <p className="rounded-xl bg-[color-mix(in_srgb,var(--warning)_14%,white)] px-3 py-2 text-sm text-[var(--text-strong)]">Catatan: {task.notes}</p>
+            <p className="rounded-xl bg-[color-mix(in_srgb,var(--warning)_14%,var(--surface-card))] px-3 py-2 text-sm text-[var(--text-strong)]">Catatan: {task.notes}</p>
           )}
           <div className="grid grid-cols-2 gap-2">
             {mapsHref && (
@@ -255,7 +255,7 @@ export default function CourierTaskPage() {
                 <p className="text-sm text-[var(--text-muted)]">Pesanan tidak dibatalkan. Kasir yang memutuskan kirim ulang atau batal.</p>
                 <div className="flex flex-wrap gap-2">
                   {FAIL_PRESETS.map((p) => (
-                    <button key={p} onClick={() => setFailReason(p)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${failReason === p ? 'bg-[var(--surface-inverse)] text-white' : 'bg-[var(--bg-subtle)] text-[var(--text-strong)]'}`}>{p}</button>
+                    <button key={p} onClick={() => setFailReason(p)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${failReason === p ? 'bg-[var(--surface-inverse)] text-[var(--text-inverse)]' : 'bg-[var(--bg-subtle)] text-[var(--text-strong)]'}`}>{p}</button>
                   ))}
                 </div>
                 <input className={inputCls} placeholder="Atau tulis alasan lain" value={failReason} onChange={(e) => setFailReason(e.target.value)} maxLength={120} />

@@ -125,7 +125,7 @@ export default function StorefrontPage() {
           )}
           {wa && (
             <a href={waLink(wa, `Halo ${outlet.name}, saya ingin bertanya tentang menu.`)} target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#25D366] px-3 py-1.5 rounded-full hover:opacity-90">
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#137A53] px-3 py-1.5 rounded-full hover:opacity-90">
               <MessageCircle className="w-4 h-4" /> <span className="hidden sm:inline">WhatsApp</span>
             </a>
           )}
@@ -188,7 +188,7 @@ export default function StorefrontPage() {
             </div>
           )}
           {tableId && (
-            <div className="mt-4 rounded-2xl bg-[var(--surface-inverse)] text-white px-4 py-3 text-sm flex items-center gap-3">
+            <div className="mt-4 rounded-2xl bg-[var(--surface-inverse)] text-[var(--text-inverse)] px-4 py-3 text-sm flex items-center gap-3">
               <Utensils className="w-4 h-4 shrink-0" />
               <span><b>{tableName || 'Meja Anda'}</b>. Pesanan diantar ke meja dan dibayar di kasir.</span>
             </div>
@@ -212,7 +212,7 @@ export default function StorefrontPage() {
             <div className="flex overflow-x-auto hide-scrollbar gap-2 flex-1">
               {[{ id: 'all', name: 'Semua' }, ...categories].map((cat: any) => (
                 <button key={cat.id} onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition ${selectedCategory === cat.id ? 'bg-[var(--surface-inverse)] text-white' : 'bg-[var(--surface-card)] border border-[var(--border-subtle)] text-[var(--text-body)] hover:bg-[var(--bg-subtle)]'}`}>
+                  className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition ${selectedCategory === cat.id ? 'bg-[var(--surface-inverse)] text-[var(--text-inverse)]' : 'bg-[var(--surface-card)] border border-[var(--border-subtle)] text-[var(--text-body)] hover:bg-[var(--bg-subtle)]'}`}>
                   {cat.name}
                 </button>
               ))}
@@ -240,16 +240,16 @@ export default function StorefrontPage() {
                             ? <img src={product.image_url} alt={product.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-[1.03] transition duration-500" />
                             : <div className="w-full h-full flex items-center justify-center text-4xl font-display font-extrabold text-[var(--border-default)]">{product.name.charAt(0)}</div>}
                           {soldOut && (
-                            <span className="absolute top-2 left-2 px-2.5 py-1 rounded-full bg-[var(--surface-inverse)] text-white text-[11px] font-bold">Habis</span>
+                            <span className="absolute top-2 left-2 px-2.5 py-1 rounded-full bg-[var(--surface-inverse)] text-[var(--text-inverse)] text-[11px] font-bold">Habis</span>
                           )}
                           {hasVariants && !soldOut && (
-                            <span className="absolute top-2 left-2 px-2.5 py-1 rounded-full bg-white/90 text-[var(--text-strong)] text-[11px] font-semibold">{product.variants.length} pilihan</span>
+                            <span className="absolute top-2 left-2 px-2.5 py-1 rounded-full bg-[var(--surface-card)] text-[var(--text-strong)] text-[11px] font-semibold">{product.variants.length} pilihan</span>
                           )}
                         </div>
                         <div className="p-3 sm:p-3.5 flex-1 flex flex-col">
                           <h3 className="text-[14px] font-bold text-[var(--text-strong)] leading-snug line-clamp-2">{product.name}</h3>
                           {product.description && <p className="text-xs text-[var(--text-muted)] line-clamp-2 mt-0.5">{product.description}</p>}
-                          <div className="mt-auto pt-3 flex items-center justify-between gap-2">
+                          <div className="mt-auto pt-3 flex flex-wrap items-center justify-between gap-2">
                             <span className="text-[14px] font-extrabold text-[var(--text-strong)]">{hasVariants && 'dari '}{rp(product.price)}</span>
                             {qty > 0 && !hasVariants ? (
                               <Stepper qty={qty}
@@ -257,9 +257,9 @@ export default function StorefrontPage() {
                                 onInc={() => updateQuantity(cartLineId(product.id), qty + 1)} />
                             ) : (
                               <button onClick={() => handleAdd(product)} disabled={soldOut || !accepting}
-                                className="relative h-9 min-w-9 px-3 rounded-full bg-[var(--surface-inverse)] text-white text-sm font-semibold flex items-center justify-center hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed">
+                                className="relative h-9 min-w-9 px-3 rounded-full bg-[var(--surface-inverse)] text-[var(--text-inverse)] text-sm font-semibold flex items-center justify-center hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed">
                                 {hasVariants ? 'Pilih' : '+'}
-                                {qty > 0 && <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--brand-primary)] text-[10px] font-bold flex items-center justify-center">{qty}</span>}
+                                {qty > 0 && <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] text-[10px] font-bold flex items-center justify-center">{qty}</span>}
                               </button>
                             )}
                           </div>
@@ -319,10 +319,10 @@ export default function StorefrontPage() {
       {totalItems > 0 && (
         <div className="md:hidden fixed bottom-4 left-4 right-4 z-40">
           <button onClick={() => router.push(cartHref)} disabled={!accepting}
-            className="w-full rounded-full bg-[var(--surface-inverse)] text-white shadow-[var(--shadow-lg)] p-1.5 pl-2 flex items-center gap-3 disabled:opacity-60">
-            <span className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center font-bold text-sm">{totalItems}</span>
+            className="w-full rounded-full bg-[var(--surface-inverse)] text-[var(--text-inverse)] shadow-[var(--shadow-lg)] p-1.5 pl-2 flex items-center gap-3 disabled:opacity-60">
+            <span className="w-10 h-10 rounded-full bg-[color-mix(in_srgb,var(--text-inverse)_15%,transparent)] flex items-center justify-center font-bold text-sm">{totalItems}</span>
             <span className="flex-1 text-left">
-              <span className="block text-[11px] text-white/70 leading-none mb-0.5">Total pesanan</span>
+              <span className="block text-[11px] text-[var(--text-inverse)] leading-none mb-0.5">Total pesanan</span>
               <span className="block text-[15px] font-extrabold leading-none">{rp(totalPrice)}</span>
             </span>
             <span className="pr-4 text-sm font-semibold inline-flex items-center gap-1">Lihat pesanan <ChevronRight className="w-4 h-4" /></span>

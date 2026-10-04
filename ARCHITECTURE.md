@@ -49,6 +49,14 @@ Setiap sesi coding ketemu bug baru karena:
 | Display stock | products.stock_qty langsung | `min(ingredient_stock / recipe_qty)` per product |
 | Restock | `POST /products/{id}/restock` | `POST /ingredients/{id}/restock` |
 
+Persiapan web (2026-10-04): menu **Bahan Baku** tersedia untuk Pro juga saat mode
+`simple`, sehingga bahan dan tab Resep di Menu bisa diisi sebelum beralih.
+`PUT /outlets/{id}/stock-mode` tetap memvalidasi resep aktif/lengkap untuk produk
+yang memakai stok. Server Action `updateStockMode` mengembalikan hasil
+`success: false` beserta pesan validasi sebagai data, karena Next.js production
+menyamarkan pesan exception yang dilempar ke client. Pilihan mode hanya berubah
+setelah API sukses; error 500 tidak diteruskan mentah ke browser.
+
 ### SEMUA Code Path yang Modify Stock
 
 Kalau lo edit salah satu, **cek semua yang lain**.

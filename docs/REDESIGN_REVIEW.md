@@ -2,10 +2,13 @@
 
 Direction: onboarding merchant memakai identitas visual Sefrekuensi yang ada di server, dengan logo Selaris. ENERGY 2 / RHYTHM 2 / MOTION 1. Warm white `#F7F5F2`, coral `#E5A08C`, charcoal `#121212`, Plus Jakarta Sans; Space Mono hanya untuk kode. Rujukan utama: Sefrekuensi `DESIGN.md` September 2026 dan theme native terkini.
 
-Scope: web login, daftar, onboarding, tema shell dashboard, serta onboarding/login dan token POS Flutter. Google tersedia setelah konfigurasi Firebase; database usaha tetap di Selaris.
+Scope: web login, daftar, onboarding, tema shell dashboard, serta onboarding/login dan token POS Flutter. Hotfix 4 Oktober meliputi Mode Stok dan warna storefront/menu/checkout/booking/status/kurir. Google tersedia setelah konfigurasi Firebase; database usaha tetap di Selaris.
 
 ## Evidence
 
+- Hotfix web 4 Oktober: production Docker build termasuk validasi TypeScript lolos. Browser memakai image production yang sama dengan deployment, API fixture dan Server Actions asli pada `tests/stock-storefront-browser.cjs`.
+- Error Mode Stok dibuktikan di log produksi: digest `1800943633`, validasi resep Egg Tart dan Kopi susu. Regresi memeriksa pesan 400/422, error 500 yang aman, sesi 401, retry, perubahan dua arah dan pilihan yang tetap saat gagal.
+- Storefront light/dark diuji pada 320/768/1440 px: tambah/kurangi jumlah, varian/Escape, meja, input fokus, tujuh fase order, tiga fase reservasi, booking wizard/status, dan COD/alasan gagal kurir. Tes mengukur AA pada pasangan warna yang diperbaiki dan memeriksa overflow serta batas tombol di kartu. Screenshot menu 320 px dan konfirmasi booking diperiksa langsung. Fixture tidak mengirim pesanan/WA nyata.
 - Web production build berhasil; TypeScript lolos. Image memakai `npm ci` dari lockfile.
 - Backend: 8 unit tests memeriksa tanda tangan/claim token, provider, expiry, proof nomor, replay dan rate limit; tes integrasi Postgres membuktikan tautan akun lama dan pendaftaran baru tanpa toko ganda.
 - Migrasi 111 lolos upgrade, downgrade ke 110, lalu upgrade ulang di salinan schema Postgres. Constraint unik juga menolak duplikasi identitas langsung di database.
@@ -18,19 +21,19 @@ Scope: web login, daftar, onboarding, tema shell dashboard, serta onboarding/log
 ## Delivery gate
 
 - R-02 PASS: teks layar yang diubah memakai kalimat biasa tanpa em dash.
-- R-03 PASS: browser 320/375/768/1440 px tanpa overflow; Flutter 320/768 dengan teks 160% lolos.
+- R-03 PASS: browser auth 320/375/768/1440 dan storefront 320/768/1440 tanpa overflow; tombol jumlah tetap berada di kartu 320 px. Flutter 320/768 dengan teks 160% lolos.
 - R-17 PASS: tidak menambahkan statistik pemasaran; ringkasan dashboard memakai API yang sudah ada.
 - R-18 PASS: tidak menambahkan testimoni atau identitas pelanggan.
 - R-23 PASS: geometri logo dan foto onboarding memakai aset existing; font dari referensi Sefrekuensi disertai lisensi OFL.
 - R-24 PASS: login/register/home/terms/privacy/dashboard/payment/download menuju route existing; link Play memakai package Sefrekuensi existing.
-- R-25 PASS: tes browser mengukur teks aktif terhadap WCAG AA; heading 13.71:1 terang dan 16.33:1 gelap. Error light memakai `#B63530`; border kontrol memakai `#8B8178`.
+- R-25 PASS: tes browser mengukur pasangan teks aktif yang diubah terhadap AA, termasuk input fokus, kategori/meja terpilih, status order/reservasi, COD dan alasan kurir, dalam kedua tema. Heading auth 13.71:1 terang dan 16.33:1 gelap. Error light memakai `#B63530`; QR tetap memakai latar putih untuk pemindaian.
 - R-26 PASS: setiap kontrol memiliki handler/link; Google nonaktif saat konfigurasi kosong dengan label yang terlihat.
-- R-27 PASS: pilihan login memuat status; form menampilkan error/retry; Google batal, nomor invalid, OTP invalid, PIN mismatch dan produk gagal ditangani.
+- R-27 PASS: auth error/retry diuji; Mode Stok menampilkan validasi, gagal server dan sesi habis tanpa mengubah mode; storefront mempertahankan loading/empty/error, produk habis dan status pembayaran yang diuji.
 - R-28 PASS: tidak menambahkan FAQ.
 - R-32 PASS: focus browser 3 px; field memakai label, OTP autofill; menu mobile mendukung Escape dan mengembalikan fokus. Sidebar tertutup memakai inert.
 - R-33 PASS: perubahan antarmuka ditulis lewat source patches; fixture eksternal hanya untuk pengujian.
-- R-34 PASS: tema terang/gelap diuji lewat toggle, reload dan dashboard; pilihan tema disimpan.
-- R-35 PASS: production web dan APK dibangun; click-through aktif direkam pada `tests/auth-browser.cjs`, `kasir_app/test/onboarding_test.dart`, dan `kasir_app/test/login_test.dart`. Konfigurasi Google kosong ditangani sebagai keadaan produk, bukan tombol palsu.
+- R-34 PASS: tema terang/gelap diuji lewat toggle, reload dan dashboard; storefront diuji pada kedua tema dengan kontrol yang terpilih, input fokus, booking dan status transaksi. Pilihan tema disimpan.
+- R-35 PASS: production web dan APK dibangun; click-through direkam pada `tests/auth-browser.cjs`, `tests/stock-storefront-browser.cjs`, `kasir_app/test/onboarding_test.dart`, dan `kasir_app/test/login_test.dart`. Fixture stok/storefront dijalankan terhadap build production. Konfigurasi Google kosong ditangani sebagai keadaan produk, bukan tombol palsu.
 - R-36 PASS: klaim pembacaan otomatis kode WA yang tidak didukung dihapus; tidak menambahkan janji security/compliance/performance.
 - R-37 PASS: direction berasal dari permintaan Ivan dan source Sefrekuensi; dials dipakai pada iterasi final.
 - R-38 PASS: copy menyebut fitur existing; data fixture hanya dipakai pada lingkungan tes.
@@ -55,7 +58,7 @@ Scope: web login, daftar, onboarding, tema shell dashboard, serta onboarding/log
 - C-1 PASS: warna/font/radius mengikuti token referensi; layout mengikuti tugas merchant.
 - C-2 PASS: handler/link dan state nonaktif diperiksa melalui click-through.
 - C-3 PASS: hanya account, verifikasi nomor, usaha, menu dan persiapan kasir; tidak ada bagian pemasaran tambahan.
-- C-4 PASS: breakpoint, theme, focus, error, retry dan teks besar diuji.
+- C-4 PASS: breakpoint, theme, focus, error, retry dan teks besar diuji; hotfix web menambah regresi mode stok, varian/Escape, kartu HP kecil, booking, order/reservasi dan COD.
 - C-5 PASS: tidak menambah testimoni, statistik atau klaim fiktif.
 - R-05 PASS: urutan layar mengikuti langkah akun/usaha; dashboard mengikuti kebutuhan laporan existing.
 - R-11 PASS: input/button 14 px, card 20 px, sheet 28 px; tidak semuanya pill.

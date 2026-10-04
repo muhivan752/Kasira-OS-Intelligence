@@ -79,8 +79,8 @@ export function StoreAvatar({ name, size = 44 }: { name: string; size?: number }
 
 export function StatusPill({ tone, children }: { tone: 'open' | 'closed' | 'muted'; children: ReactNode }) {
   const cls = {
-    open: 'bg-[color-mix(in_srgb,var(--success)_14%,white)] text-[var(--success)]',
-    closed: 'bg-[color-mix(in_srgb,var(--danger)_12%,white)] text-[var(--danger)]',
+    open: 'bg-[color-mix(in_srgb,var(--success)_14%,var(--surface-card))] text-[var(--success)]',
+    closed: 'bg-[color-mix(in_srgb,var(--danger)_12%,var(--surface-card))] text-[var(--danger)]',
     muted: 'bg-[var(--surface-sunken)] text-[var(--text-muted)]',
   }[tone];
   return (
@@ -103,7 +103,7 @@ export function SectionTitle({ step, title, hint }: { step?: number; title: stri
   return (
     <div className="flex items-start gap-3 mb-4">
       {step !== undefined && (
-        <span className="w-7 h-7 rounded-full bg-[var(--surface-inverse)] text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+        <span className="w-7 h-7 rounded-full bg-[var(--surface-inverse)] text-[var(--text-inverse)] text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
           {step}
         </span>
       )}
@@ -116,20 +116,20 @@ export function SectionTitle({ step, title, hint }: { step?: number; title: stri
 }
 
 export const btnPrimary =
-  'inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--surface-inverse)] text-white font-semibold px-5 py-3.5 transition hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed';
+  'inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--surface-inverse)] text-[var(--text-inverse)] font-semibold px-5 py-3.5 transition hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed';
 export const btnSecondary =
   'inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--surface-card)] border border-[var(--border-default)] text-[var(--text-strong)] font-semibold px-5 py-3.5 transition hover:bg-[var(--bg-subtle)] disabled:opacity-40';
 export const inputCls =
-  'w-full px-4 py-3.5 bg-[var(--bg-subtle)] border border-transparent rounded-2xl text-[15px] text-[var(--text-strong)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--focus-ring)] focus:bg-white transition';
+  'w-full px-4 py-3.5 bg-[var(--bg-subtle)] border border-[var(--control-border)] rounded-2xl text-[15px] text-[var(--text-strong)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--focus-ring)] focus:bg-[var(--surface-card)] transition';
 
 export function Stepper({ qty, onDec, onInc, dark = false }: { qty: number; onDec: () => void; onInc: () => void; dark?: boolean }) {
   const btn = dark
-    ? 'w-8 h-8 rounded-full bg-white/15 text-white hover:bg-white/25'
+    ? 'w-8 h-8 rounded-full bg-[color-mix(in_srgb,var(--text-inverse)_15%,transparent)] text-[var(--text-inverse)] hover:bg-[color-mix(in_srgb,var(--text-inverse)_25%,transparent)]'
     : 'w-8 h-8 rounded-full bg-[var(--surface-card)] text-[var(--text-strong)] shadow-[var(--shadow-xs)] hover:bg-[var(--bg-subtle)]';
   return (
-    <div className={`inline-flex items-center gap-1 rounded-full p-1 ${dark ? 'bg-white/10' : 'bg-[var(--bg-subtle)]'}`}>
+    <div className={`inline-flex items-center gap-1 rounded-full p-1 ${dark ? 'bg-[color-mix(in_srgb,var(--text-inverse)_10%,transparent)]' : 'bg-[var(--bg-subtle)]'}`}>
       <button type="button" onClick={onDec} aria-label="Kurangi" className={`${btn} flex items-center justify-center text-lg leading-none`}>−</button>
-      <span className={`w-7 text-center text-sm font-bold ${dark ? 'text-white' : 'text-[var(--text-strong)]'}`}>{qty}</span>
+      <span className={`w-7 text-center text-sm font-bold ${dark ? 'text-[var(--text-inverse)]' : 'text-[var(--text-strong)]'}`}>{qty}</span>
       <button type="button" onClick={onInc} aria-label="Tambah" className={`${btn} flex items-center justify-center text-lg leading-none`}>+</button>
     </div>
   );

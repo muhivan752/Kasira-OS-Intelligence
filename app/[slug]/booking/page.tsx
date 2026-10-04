@@ -129,7 +129,7 @@ export default function BookingPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
@@ -150,9 +150,9 @@ export default function BookingPage() {
   const dates = generateDates();
 
   return (
-    <div className="min-h-screen min-w-full bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen min-w-full bg-[var(--bg-base)]">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-xl border-b border-gray-100">
+      <div className="sticky top-0 z-20 bg-[var(--surface-card)] border-b border-gray-100">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => {
@@ -451,14 +451,14 @@ export default function BookingPage() {
 
             <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
               {/* Outlet info */}
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-4">
+              <div className="bg-[var(--surface-inverse)] text-[var(--text-inverse)] px-5 py-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                    <MapPin className="w-5 h-5 text-white" />
+                  <div className="w-10 h-10 bg-[color-mix(in_srgb,var(--text-inverse)_15%,transparent)] rounded-xl flex items-center justify-center">
+                    <MapPin className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-white font-bold">{outlet.name}</p>
-                    <p className="text-blue-200 text-xs">{outlet.address || 'Alamat outlet'}</p>
+                    <p className="font-bold">{outlet.name}</p>
+                    <p className="text-xs">{outlet.address || 'Alamat outlet'}</p>
                   </div>
                 </div>
               </div>

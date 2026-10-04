@@ -299,9 +299,9 @@ export default function CheckoutPage() {
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-1">
                   {tables.filter((t: any) => t.status === 'available' || t.status === 'occupied').map((t: any) => (
                     <button key={t.id} type="button" onClick={() => setTable(t.id, `Meja ${t.name}`)}
-                      className={`p-3 rounded-xl border text-center text-sm transition ${tableId === t.id ? 'border-[var(--text-strong)] bg-[var(--surface-inverse)] text-white font-bold' : 'border-[var(--border-subtle)] text-[var(--text-body)] hover:border-[var(--border-default)]'}`}>
+                      className={`p-3 rounded-xl border text-center text-sm transition ${tableId === t.id ? 'border-[var(--text-strong)] bg-[var(--surface-inverse)] text-[var(--text-inverse)] font-bold' : 'border-[var(--border-subtle)] text-[var(--text-body)] hover:border-[var(--border-default)]'}`}>
                       Meja {t.name}
-                      <span className={`block text-[11px] ${tableId === t.id ? 'text-white/70' : 'text-[var(--text-muted)]'}`}>{t.capacity} kursi</span>
+                      <span className={`block text-[11px] ${tableId === t.id ? 'text-[var(--text-inverse)]' : 'text-[var(--text-muted)]'}`}>{t.capacity} kursi</span>
                     </button>
                   ))}
                 </div>

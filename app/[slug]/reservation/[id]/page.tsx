@@ -100,7 +100,7 @@ export default function ReservationTrackPage() {
     awaiting_deposit: {
       title: 'Bayar DP untuk mengamankan meja',
       body: `Toko meminta DP ${dep ? rp(dep.amount) : ''}. Bayar lewat cara di bawah, lalu unggah buktinya. Reservasi dibatalkan otomatis bila DP belum diterima dalam ${resv.deposit_timeout_minutes ?? 60} menit.`,
-      tone: 'bg-[var(--surface-inverse)] text-white', icon: Clock,
+      tone: 'bg-[var(--surface-inverse)] text-[var(--text-inverse)]', icon: Clock,
     },
     proof_sent: {
       title: 'Bukti bayar sudah terkirim',
@@ -115,27 +115,27 @@ export default function ReservationTrackPage() {
     confirmed: {
       title: 'Reservasi dikonfirmasi',
       body: `Meja Anda siap pada ${dateLabel} pukul ${resv.start_time}. Datang tepat waktu, sebutkan nama ${resv.customer_name || ''} di kasir.`,
-      tone: 'bg-[color-mix(in_srgb,var(--success)_16%,white)] text-[var(--text-strong)]', icon: CheckCircle2,
+      tone: 'bg-[color-mix(in_srgb,var(--success)_16%,var(--surface-card))] text-[var(--text-strong)]', icon: CheckCircle2,
     },
     seated: {
       title: 'Selamat menikmati',
       body: dep?.status === 'paid' ? `DP ${rp(dep.amount)} sudah dipotong dari tagihan meja Anda.` : 'Anda sudah duduk. Tagihan dibayar di kasir saat selesai.',
-      tone: 'bg-[color-mix(in_srgb,var(--success)_16%,white)] text-[var(--text-strong)]', icon: Armchair,
+      tone: 'bg-[color-mix(in_srgb,var(--success)_16%,var(--surface-card))] text-[var(--text-strong)]', icon: Armchair,
     },
     completed: {
       title: 'Reservasi selesai',
       body: `Terima kasih sudah berkunjung ke ${outlet.name}.`,
-      tone: 'bg-[color-mix(in_srgb,var(--success)_16%,white)] text-[var(--text-strong)]', icon: CheckCircle2,
+      tone: 'bg-[color-mix(in_srgb,var(--success)_16%,var(--surface-card))] text-[var(--text-strong)]', icon: CheckCircle2,
     },
     cancelled: {
       title: 'Reservasi dibatalkan',
       body: dep?.status === 'paid' ? 'Hubungi toko untuk pengembalian DP.' : 'Reservasi ini dibatalkan. Anda bisa membuat reservasi baru kapan saja.',
-      tone: 'bg-[color-mix(in_srgb,var(--danger)_10%,white)] text-[var(--text-strong)]', icon: XCircle,
+      tone: 'bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface-card))] text-[var(--text-strong)]', icon: XCircle,
     },
     no_show: {
       title: 'Reservasi hangus',
       body: 'Anda tidak hadir pada waktu reservasi. DP, bila ada, tidak dikembalikan sesuai ketentuan toko.',
-      tone: 'bg-[color-mix(in_srgb,var(--danger)_10%,white)] text-[var(--text-strong)]', icon: XCircle,
+      tone: 'bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface-card))] text-[var(--text-strong)]', icon: XCircle,
     },
   };
   const h = hero[phase];
@@ -149,12 +149,12 @@ export default function ReservationTrackPage() {
       <main className="max-w-xl mx-auto px-4 mt-4 space-y-4">
         <section className={`rounded-[24px] p-5 ${h.tone}`} style={gradientHero ? { background: 'var(--gradient-aurora)' } : undefined}>
           <div className="flex gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${gradientHero || phase === 'awaiting_deposit' ? 'bg-white/15' : 'bg-white'}`}>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${gradientHero ? 'bg-white/15' : phase === 'awaiting_deposit' ? 'bg-[color-mix(in_srgb,var(--text-inverse)_15%,transparent)]' : 'bg-[var(--surface-card)]'}`}>
               <HeroIcon className={`w-6 h-6 ${gradientHero ? 'animate-spin' : ''}`} />
             </div>
             <div className="min-w-0">
               <h1 className="font-display font-extrabold text-xl leading-tight">{h.title}</h1>
-              <p className={`mt-1.5 text-sm leading-relaxed ${gradientHero || phase === 'awaiting_deposit' ? 'text-white/85' : 'text-[var(--text-body)]'}`}>{h.body}</p>
+              <p className={`mt-1.5 text-sm leading-relaxed ${gradientHero ? 'text-white/85' : phase === 'awaiting_deposit' ? 'text-[var(--text-inverse)]' : 'text-[var(--text-body)]'}`}>{h.body}</p>
             </div>
           </div>
         </section>

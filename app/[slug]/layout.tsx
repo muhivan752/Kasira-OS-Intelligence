@@ -117,7 +117,7 @@ export default async function StorefrontLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
         />
       )}
-      <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-body)]">
+      <div className="storefront-shell min-h-screen bg-[var(--bg-base)] text-[var(--text-body)]">
         {children}
       </div>
     </CartProvider>

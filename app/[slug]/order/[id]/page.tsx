@@ -134,12 +134,12 @@ export default function OrderStatusPage() {
     awaiting_payment: {
       title: 'Selesaikan pembayaran',
       body: 'Pindai kode QR di bawah dengan aplikasi e-wallet atau m-banking. Setelah lunas, pesanan diteruskan ke toko.',
-      tone: 'bg-[var(--surface-inverse)] text-white', icon: Clock,
+      tone: 'bg-[var(--surface-inverse)] text-[var(--text-inverse)]', icon: Clock,
     },
     payment_failed: {
       title: 'Pembayaran belum berhasil',
       body: 'Kode QR tidak tersedia atau sudah kedaluwarsa. Pesan ulang dengan pilihan bayar di kasir, atau hubungi toko.',
-      tone: 'bg-[color-mix(in_srgb,var(--danger)_10%,white)] text-[var(--text-strong)]', icon: XCircle,
+      tone: 'bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface-card))] text-[var(--text-strong)]', icon: XCircle,
     },
     awaiting_confirm: {
       title: manualQrisUnpaid ? (proofSent ? 'Bukti bayar terkirim' : (isTransfer ? 'Transfer lalu unggah bukti' : 'Bayar lalu unggah bukti')) : 'Menunggu konfirmasi toko',
@@ -164,17 +164,17 @@ export default function OrderStatusPage() {
       body: typeKey === 'delivery'
         ? (order.courier_name ? `${order.courier_name} sedang menuju alamat Anda.` : 'Kurir toko sedang menuju alamat Anda.')
         : typeKey === 'dine_in' ? 'Selamat menikmati.' : `Silakan ambil di ${outlet.name}. Sebutkan nomor pesanan #${order.display_number}.`,
-      tone: 'bg-[color-mix(in_srgb,var(--success)_16%,white)] text-[var(--text-strong)]', icon: PackageCheck,
+      tone: 'bg-[color-mix(in_srgb,var(--success)_16%,var(--surface-card))] text-[var(--text-strong)]', icon: PackageCheck,
     },
     completed: {
       title: 'Pesanan selesai',
       body: `Terima kasih sudah memesan di ${outlet.name}.`,
-      tone: 'bg-[color-mix(in_srgb,var(--success)_16%,white)] text-[var(--text-strong)]', icon: CheckCircle2,
+      tone: 'bg-[color-mix(in_srgb,var(--success)_16%,var(--surface-card))] text-[var(--text-strong)]', icon: CheckCircle2,
     },
     cancelled: {
       title: 'Pesanan dibatalkan',
       body: order.cancel_reason ? `Alasan: ${order.cancel_reason}.` : 'Pesanan ini dibatalkan.',
-      tone: 'bg-[color-mix(in_srgb,var(--danger)_10%,white)] text-[var(--text-strong)]', icon: XCircle,
+      tone: 'bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface-card))] text-[var(--text-strong)]', icon: XCircle,
     },
   };
   const h = hero[phase];
@@ -215,14 +215,14 @@ export default function OrderStatusPage() {
         {/* Status utama */}
         <section className={`rounded-[28px] p-6 ${h.tone} relative overflow-hidden`} style={gradientHero ? { background: 'var(--gradient-aurora)' } : undefined}>
           <div className="flex items-start gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${gradientHero || phase === 'awaiting_payment' ? 'bg-white/15' : 'bg-white'}`}>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${gradientHero ? 'bg-white/15' : phase === 'awaiting_payment' ? 'bg-[color-mix(in_srgb,var(--text-inverse)_15%,transparent)]' : 'bg-[var(--surface-card)]'}`}>
               <HeroIcon className={`w-6 h-6 ${phase === 'awaiting_confirm' ? 'animate-spin' : ''}`} />
             </div>
             <div className="min-w-0">
               <h1 className="font-display font-extrabold text-2xl tracking-tight leading-tight">{h.title}</h1>
-              <p className={`mt-1.5 text-sm leading-relaxed ${gradientHero || phase === 'awaiting_payment' ? 'text-white/85' : 'text-[var(--text-body)]'}`}>{h.body}</p>
+              <p className={`mt-1.5 text-sm leading-relaxed ${gradientHero ? 'text-white/85' : phase === 'awaiting_payment' ? 'text-[var(--text-inverse)]' : 'text-[var(--text-body)]'}`}>{h.body}</p>
               {phase === 'awaiting_confirm' && order.confirm_deadline && (
-                <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold bg-white/15 px-3 py-1.5 rounded-full">
+                <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold bg-[color-mix(in_srgb,var(--text-inverse)_15%,transparent)] px-3 py-1.5 rounded-full">
                   <Clock className="w-4 h-4" /> {mmss(secondsLeft(order.confirm_deadline))} tersisa
                 </p>
               )}
@@ -341,7 +341,7 @@ export default function OrderStatusPage() {
                 <a
                   href={waLink(waNumber(order.courier_phone)!, `Halo, saya pemesan #${order.display_number} di ${outlet.name}.`)}
                   target="_blank" rel="noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[var(--success)] px-3.5 py-2 text-[13px] font-semibold text-white"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[var(--surface-inverse)] px-3.5 py-2 text-[13px] font-semibold text-[var(--text-inverse)]"
                 >
                   <MessageCircle className="h-4 w-4" /> Chat kurir
                 </a>
@@ -375,9 +375,9 @@ export default function OrderStatusPage() {
                 return (
                   <li key={s.label} className="flex gap-4 relative pb-6 last:pb-0">
                     {i < steps.length - 1 && <span className={`absolute left-[11px] top-6 bottom-0 w-0.5 ${i < currentStep ? 'bg-[var(--text-strong)]' : 'bg-[var(--border-subtle)]'}`} />}
-                    <span className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${done ? 'bg-[var(--text-strong)] text-white' : 'bg-[var(--bg-subtle)] border border-[var(--border-default)]'}`}>
+                    <span className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${done ? 'bg-[var(--surface-inverse)] text-[var(--text-inverse)]' : 'bg-[var(--bg-subtle)] border border-[var(--border-default)]'}`}>
                       {done && !current && <CheckCircle2 className="w-4 h-4" />}
-                      {current && <span className="w-2 h-2 rounded-full bg-white animate-pulse" />}
+                      {current && <span className="w-2 h-2 rounded-full bg-[var(--text-inverse)] animate-pulse" />}
                     </span>
                     <div className="flex-1 flex items-baseline justify-between gap-3 -mt-0.5">
                       <span className={`text-sm font-semibold ${done ? 'text-[var(--text-strong)]' : 'text-[var(--text-muted)]'}`}>{s.label}</span>

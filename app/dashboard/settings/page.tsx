@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [shiftModeMsg, setShiftModeMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [savingStockMode, setSavingStockMode] = useState(false);
   const [stockModeError, setStockModeError] = useState('');
+  const [needsRecipeSetup, setNeedsRecipeSetup] = useState(false);
   const [isPro, setIsPro] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -266,20 +267,27 @@ export default function SettingsPage() {
     setShowStockModeConfirm(null);
     setSavingStockMode(true);
     setStockModeError('');
+    setNeedsRecipeSetup(false);
     setStockModeSuccess('');
     try {
-      await updateStockMode(outlet.id, mode);
+      const result = await updateStockMode(outlet.id, mode);
+      if (!result.success) {
+        setStockModeError(result.message);
+        setNeedsRecipeSetup(result.needsRecipeSetup);
+        return;
+      }
       setStockMode(mode);
       if (mode === 'recipe') {
-        setStockModeSuccess('Mode Resep & HPP aktif! Langkah selanjutnya: buka menu Bahan Baku untuk menambahkan bahan, lalu hubungkan resep di setiap produk.');
+        setStockModeSuccess('Mode Resep & HPP aktif! Stok kini dihitung dari bahan baku sesuai resep produk.');
       } else {
         setStockModeSuccess('Mode Stok Sederhana aktif. Stok kembali dihitung per produk.');
       }
       setTimeout(() => setStockModeSuccess(''), 8000);
-    } catch (e: any) {
-      setStockModeError(e.message);
+    } catch {
+      setStockModeError('Mode stok belum tersimpan. Muat ulang halaman lalu coba lagi.');
+    } finally {
+      setSavingStockMode(false);
     }
-    setSavingStockMode(false);
   }
 
   async function handleTaxSave() {
@@ -879,7 +887,18 @@ export default function SettingsPage() {
                 <p className="text-sm text-gray-600">
                   Pilih cara mengelola stok produk Anda.
                 </p>
-                {stockModeError && <p className="text-sm text-red-600">{stockModeError}</p>}
+                {stockModeError && (
+                  <div role="alert" className="space-y-2 text-sm text-[var(--danger)]">
+                    <p>{stockModeError}</p>
+                    {needsRecipeSetup && (
+                      <p className="text-[var(--text-body)]">
+                        Siapkan bahan di <Link href="/dashboard/bahan-baku" className="underline font-semibold">Bahan Baku</Link>,
+                        {' '}lalu buka produk di <Link href="/dashboard/menu" className="underline font-semibold">Menu</Link> dan isi tab Resep.
+                        Setelah semua resep lengkap, coba beralih lagi.
+                      </p>
+                    )}
+                  </div>
+                )}
                 {stockModeSuccess && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                     <p className="text-sm text-green-800 font-medium">{stockModeSuccess}</p>
@@ -887,15 +906,15 @@ export default function SettingsPage() {
                 )}
                 <div className="space-y-3">
                   <label className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${stockMode === 'simple' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                    <input type="radio" name="stock_mode" value="simple" checked={stockMode === 'simple'}
+                    <input type="radio" name="stock_mode" value="simple" checked={stockMode === 'simple'} disabled={savingStockMode}
                       onChange={() => handleStockModeClick('simple')} className="mt-0.5" />
                     <div>
                       <p className="font-medium text-gray-900">Stok Sederhana</p>
-                      <p className="text-sm text-gray-500">Stok per produk, berkurang otomatis setiap transaksi. Menu Bahan Baku & HPP tidak aktif.</p>
+                      <p className="text-sm text-gray-500">Stok per produk, berkurang otomatis setiap transaksi. Bahan dan resep bisa disiapkan sebelum beralih mode.</p>
                     </div>
                   </label>
                   <label className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${stockMode === 'recipe' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                    <input type="radio" name="stock_mode" value="recipe" checked={stockMode === 'recipe'}
+                    <input type="radio" name="stock_mode" value="recipe" checked={stockMode === 'recipe'} disabled={savingStockMode}
                       onChange={() => handleStockModeClick('recipe')} className="mt-0.5" />
                     <div>
                       <p className="font-medium text-gray-900">Resep & HPP</p>
@@ -930,7 +949,7 @@ export default function SettingsPage() {
                           <p>Kembali ke stok sederhana:</p>
                           <ul className="list-disc ml-5 space-y-1">
                             <li>Stok kembali dihitung <strong>per produk</strong></li>
-                            <li>Menu Bahan Baku & HPP <strong>tidak aktif</strong></li>
+                            <li>Resep <strong>tidak dipakai untuk pengurangan stok</strong></li>
                             <li>Data resep & bahan baku tetap tersimpan</li>
                           </ul>
                         </div>

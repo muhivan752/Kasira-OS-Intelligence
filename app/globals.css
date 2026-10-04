@@ -447,3 +447,32 @@ body {
 .merchant-shell .hover\:bg-red-50:hover { background-color: var(--surface-sunken); }
 .merchant-shell :is(.text-yellow-600, .text-yellow-700) { color: var(--brand-primary); }
 .merchant-shell :is(.bg-yellow-50, .hover\:bg-yellow-50:hover) { background-color: var(--brand-tint); }
+
+/* Booking still uses legacy utilities; keep them paired with theme-aware ink. */
+.storefront-booking .bg-white { background-color: var(--surface-card); }
+.storefront-booking :is(.bg-gray-50, .bg-gray-100, .bg-gray-200) { background-color: var(--bg-subtle); }
+.storefront-booking :is(.text-gray-900, .text-gray-800) { color: var(--text-strong); }
+.storefront-booking .text-gray-700 { color: var(--text-body); }
+.storefront-booking :is(.text-gray-600, .text-gray-500, .text-gray-400) { color: var(--text-muted); }
+.storefront-booking :is(.border-gray-100, .border-gray-200, .border-gray-300) { border-color: var(--border-default); }
+.storefront-booking :is(input, textarea, select) { color: var(--text-strong); border-color: var(--control-border); }
+.storefront-booking .focus\:bg-white:focus { background-color: var(--surface-card); }
+.storefront-booking .focus\:ring-blue-500:focus { --tw-ring-color: var(--focus-ring); }
+.storefront-booking :is(.hover\:bg-gray-100, .hover\:bg-gray-200):hover { background-color: var(--surface-raised); }
+.storefront-booking :is(.bg-blue-50, .bg-blue-100, .bg-purple-50, .bg-amber-50) { background-color: var(--brand-tint); }
+.storefront-booking :is(.text-blue-500, .text-blue-600, .text-blue-700, .text-purple-600, .text-amber-600) { color: var(--brand-primary); }
+.storefront-booking :is(.bg-blue-600, .bg-blue-700) { background-color: var(--brand-fill); color: var(--brand-on-fill); box-shadow: none; }
+.storefront-booking .bg-blue-600 :is(.text-white, .text-blue-100, .text-blue-200, .text-gray-900, .text-gray-500) { color: var(--brand-on-fill); }
+.storefront-booking .hover\:bg-blue-700:hover { background-color: var(--brand-fill); opacity: .9; }
+.storefront-booking .hover\:bg-blue-50:hover { background-color: var(--brand-tint); }
+.storefront-booking .hover\:text-blue-700:hover { color: var(--brand-primary); }
+.storefront-booking :is(.border-blue-500, .border-blue-600, .border-blue-200, .border-amber-200) { border-color: var(--brand-primary); }
+.storefront-booking .bg-gray-900 { background-color: var(--surface-inverse); color: var(--text-inverse); }
+.storefront-booking :is(.bg-green-50, .bg-green-100) { background-color: color-mix(in srgb, var(--success) 12%, var(--surface-card)); }
+.storefront-booking :is(.text-green-500, .text-green-600, .text-green-700) { color: var(--success); }
+.storefront-booking :is(.bg-red-50, .bg-red-100) { background-color: color-mix(in srgb, var(--danger) 10%, var(--surface-card)); }
+.storefront-booking :is(.text-red-500, .text-red-600, .text-red-700) { color: var(--danger); }
+.storefront-booking .bg-yellow-100 { background-color: var(--brand-tint); }
+.storefront-booking :is(.text-yellow-600, .text-yellow-700) { color: var(--brand-primary); }
+.storefront-booking :is(.bg-green-500, .bg-green-600, .hover\:bg-green-600:hover) { background-color: #137A53; color: #FFFFFF; }
+.dark .storefront-shell, [data-theme="dark"] .storefront-shell { --success: #65C99A; }

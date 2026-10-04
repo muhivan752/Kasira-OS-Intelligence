@@ -641,13 +641,34 @@ export async function getHPPReport(brandId: string) {
 // ===================== Stock Mode =====================
 
 export async function updateStockMode(outletId: string, stockMode: string) {
-  const res = await fetchWithAuth(`/outlets/${outletId}/stock-mode/`, {
-    method: 'PUT',
-    body: JSON.stringify({ stock_mode: stockMode }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'Gagal mengubah mode stok');
-  return data.data;
+  try {
+    const res = await fetchWithAuth(`/outlets/${outletId}/stock-mode/`, {
+      method: 'PUT',
+      body: JSON.stringify({ stock_mode: stockMode }),
+    });
+    const data = await res.json();
+    // Expected API rejections must cross the Server Action boundary as data.
+    // Production Next.js deliberately redacts thrown error messages.
+    if (!res.ok) {
+      return {
+        success: false as const,
+        needsRecipeSetup: res.status === 400 && stockMode === 'recipe',
+        message: res.status < 500
+          ? extractError(data, 'Gagal mengubah mode stok')
+          : 'Mode stok belum tersimpan. Coba lagi beberapa saat.',
+      };
+    }
+    return { success: true as const, data: data.data };
+  } catch (error) {
+    const expired = error instanceof Error && ['SESSION_EXPIRED', 'Unauthorized'].includes(error.message);
+    return {
+      success: false as const,
+      needsRecipeSetup: false,
+      message: expired
+        ? 'Sesi login sudah berakhir. Login kembali sebelum mengubah mode stok.'
+        : 'Mode stok belum tersimpan. Periksa koneksi lalu coba lagi.',
+    };
+  }
 }
 
 // ── Sesi kas (shift otomatis, gelombang 2) ──
