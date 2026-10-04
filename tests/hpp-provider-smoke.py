@@ -15,6 +15,7 @@ def load(name, path):
 
 load("backend.services.unit_utils", "/tmp/hpp_unit_qa.py")
 load("backend.services.hpp_math", "/tmp/hpp_math_qa.py")
+load("backend.services.hpp_catalog", "/tmp/hpp_catalog_qa.py")
 setup = load("backend.services.hpp_setup_service", "/tmp/hpp_setup_qa.py")
 
 

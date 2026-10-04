@@ -8,6 +8,39 @@ Design Read sebelum perubahan: satu kolom percakapan untuk pemilik usaha,
 Source Sans 3 dan palet Sefrekuensi. ENERGY 2 / RHYTHM 2 / MOTION 1. Antislop
 during mengikuti pilihan sesi pengguna.
 
+## Revisi asisten bahan dan resep
+
+Balasan pertanyaan sebelumnya selalu masuk pemeriksaan draft. Pertanyaan katalog
+tanpa nama menu tertimpa "Mau bikin menu apa?", meskipun context toko sudah dikirim.
+
+- Model membedakan jawaban/lookup dengan membuat atau mengoreksi resep. Lookup
+  membaca katalog terbaru melalui backend: bahan, resep aktif, menu tanpa resep,
+  takaran resep dan penggunaan bahan. Nama dan hitungan bukan dari reply model.
+  Menu terdaftar dibedakan dari resep tersimpan; draft bukan resep operasional.
+- Ringkasan jumlah tetap lengkap ketika input katalog dipadatkan. Hasil lookup
+  membaca seluruh context tenant/brand, termasuk item di luar input model. HPP
+  memakai Decimal dan helper biaya resep existing; optional, archived dan takaran
+  nonpositif dikecualikan. Satuan invalid tidak dijadikan angka HPP tebakan.
+- Pertanyaan menjaga draft, preview, revision, fingerprint dan mode sebelumnya.
+  Mode sebelum pesan disimpan dalam turn.usage agar retry/worker tetap konsisten.
+  Setelah approve composer tetap tersedia untuk bertanya. Mengubah resep yang
+  telah disimpan diarahkan lewat Resep baru, dengan approval manusia tetap berlaku.
+- Welcome menyebut cek bahan dan membuat resep. Arah visual tetap Source Sans 3,
+  palet Sefrekuensi dan ENERGY 2 / RHYTHM 2 / MOTION 1; tanpa aset/CSS baru.
+- Build/TypeScript PASS. Chat browser final PASS pada lima lebar dan kedua tema,
+  AA/44px/fokus/200% serta pertanyaan setelah approve tanpa revision/total berubah.
+  Math/protocol18/500 oracle PASS; katalog empat kasus PASS termasuk 700 item
+  dipadatkan tanpa kehilangan hasil lookup atau mengubah draft.
+- PG QA non-superuser RLS PASS: toko lain kosong tidak melihat bahan tenant pertama,
+  pertanyaan di tengah draft/applied/replay, lanjut estimasi, repeat approval,
+  rollback, POS/cancel/stok dan real HTTP202. Pertanyaan tidak menulis produk,
+  bahan, resep, stok fisik atau event operasional.
+- Provider nyata PASS pada enam pertanyaan katalog dan bantuan umum dengan fixture
+  sintetis; empat regresi input HPP serta pelengkapan estimasi/koreksi juga PASS.
+  Tidak membuka database atau mengekspor cerita/katalog merchant untuk QA provider.
+- Image yang diuji: `sha256:7fa2f9a2d721a8230038fd894bda2bdc6105379ae1a9f554073b26e1d6da17fe`.
+  Handoff/deployment aktual dicatat di MEMORY.md dan SESSION.md. Migration112/APK tetap.
+
 ## Revisi estimasi setelah tes pengguna
 
 Percakapan terbaru menunjukkan pengguna meminta estimasi lewat pesan, tetapi
@@ -112,7 +145,7 @@ kosong dan takaran minyak berbeda keluarga satuan dengan bahan toko.
 - R-14 PASS: bubble pengguna, jawaban plain dan ringkasan angka punya hierarki berbeda.
 - R-15 PASS: Tulis pesan, Lihat resep dan persetujuan menyebut tindakan yang dilakukan.
 - R-16 PASS: prompt dan copy memakai bahasa dapur biasa, tanpa buzzword pemasaran.
-- R-17 PASS: harga/jumlah porsi/status hanya dari preview server.
+- R-17 PASS: harga/HPP/jumlah porsi/status berasal dari preview atau lookup backend.
 - R-18 PASS: tanpa testimoni atau avatar pelanggan buatan.
 - R-19 PASS: hanya scroll terbaru saat pengguna dekat akhir, tanpa animasi dekoratif.
 - R-20 PASS: rincian pembelian, takaran/porsi, biaya toko dan sumber spesifik tugas HPP.
@@ -121,7 +154,7 @@ kosong dan takaran minyak berbeda keluarga satuan dengan bahan toko.
 - R-23 PASS: identitas existing dipertahankan; tidak membuat aset baru.
 - R-24 PASS: riwayat, form, resep tersimpan, Menu dan Bahan Baku menuju fungsi nyata.
 - R-25 PASS: teks AA kedua tema diperiksa browser pada chat dan dialog.
-- R-26 PASS: mode/kirim/riwayat/rincian/sumber/rumus/approve/retry/recovery dan Lengkapi estimasi diuji.
+- R-26 PASS: mode/kirim/riwayat/rincian/sumber/rumus/approve/retry/recovery, Lengkapi estimasi dan tanya katalog setelah approve diuji.
 - R-27 PASS: kosong/loading/pending/incomplete/error/applied tersedia dengan recovery.
 - R-28 PASS: bantuan lokal muncul di sumber dan approval, tanpa FAQ generik.
 - R-29 PASS: warm neutral/charcoal/coral sesuai token Sefrekuensi.
@@ -131,7 +164,7 @@ kosong dan takaran minyak berbeda keluarga satuan dengan bahan toko.
 - R-33 PASS: source dan CSS diedit dengan apply_patch.
 - R-34 PASS: kedua tema dan regresi dashboard theme persistence lolos.
 - R-35 PASS: build, browser fixture, provider nyata, math dan smoke deployment diverifikasi.
-- R-36 PASS: estimasi tetap berlabel, biaya operasional belum termasuk; balasan incomplete tidak mengaku siap.
+- R-36 PASS: estimasi tetap berlabel, biaya operasional belum termasuk; incomplete tidak mengaku siap, katalog kosong tidak membuat bahan/resep fiktif.
 - R-37 PASS: Design Read dan ENERGY 2 / RHYTHM 2 / MOTION 1 dinyatakan sebelum edit.
 - R-38 PASS: tidak mengisi harga/resep/stok merchant untuk QA; semua usulan berlabel sumber.
 - Liveliness dials PASS: ENERGY 2 / RHYTHM 2 / MOTION 1 diterapkan.

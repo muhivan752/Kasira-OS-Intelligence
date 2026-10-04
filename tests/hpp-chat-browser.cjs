@@ -45,7 +45,9 @@ const fixture = http.createServer(async (req, res) => {
         let turn = data.turns.find(turn => turn.id === body.request_id);
         if (!turn) { turn = { id: body.request_id, mode: body.mode, message: body.message, reply: null }; data.turns.push(turn); }
         data.mode = body.mode; data.error = null; data.pending = processing; data.retry_allowed = false;
-        if (!processing) {
+        if (/bahan apa yang sudah tersimpan/i.test(body.message)) {
+          turn.reply = 'Bahan yang sudah tersimpan: Ayam fixture, Bahan toko fixture.';
+        } else if (!processing) {
           turn.reply = incomplete ? 'Ayamnya biasa beli berapa kilo?' : 'Oke, takarannya sudah aku sesuaikan. Ada bahan lain yang mau ditambah?';
           data.revision++; data.preview = preview(body.mode, data.revision);
         }
@@ -217,6 +219,13 @@ async function closePanel(page) {
     await page.getByText('Bahan dan resep sudah tersimpan.', { exact: true }).waitFor();
     assert.equal(calls.filter(c => c.path.endsWith('/approve')).length, approvals + 1);
     assert((await page.locator('body').innerText()).includes('Menu baru masih nonaktif'));
+    const savedRevision = chats[0].revision, savedTotal = chats[0].preview.total_cost;
+    await page.getByLabel('Tulis pesan', { exact: true }).fill('Bahan apa yang sudah tersimpan?');
+    await page.getByLabel('Tulis pesan', { exact: true }).press('Enter');
+    await page.getByText('Bahan yang sudah tersimpan: Ayam fixture, Bahan toko fixture.', { exact: true }).waitFor();
+    assert.equal(chats[0].revision, savedRevision);
+    assert.equal(chats[0].preview.total_cost, savedTotal);
+    assert.equal(chats[0].status, 'applied');
 
     await page.getByRole('button', { name: 'Resep baru', exact: true }).first().click();
     incomplete = true;

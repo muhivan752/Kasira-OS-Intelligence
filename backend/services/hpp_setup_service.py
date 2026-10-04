@@ -14,6 +14,7 @@ from backend.models.ingredient import Ingredient
 from backend.models.product import Product
 from backend.models.recipe import Recipe, RecipeIngredient
 from backend.services import hpp_math as math
+from backend.services import hpp_catalog as catalog
 from backend.services.llm_client import chat_configured, get_llm_client
 
 
@@ -48,15 +49,35 @@ class Draft(BaseModel):
 
 class ModelReply(BaseModel):
     reply: str = Field(min_length=1, max_length=24000)
-    draft: Draft
+    action: Literal['edit_recipe', 'answer'] = 'edit_recipe'
+    lookup: catalog.CatalogQuery | None = None
+    draft: Draft | None = None
 
 
-SYSTEM = """Bantu pemilik usaha Indonesia menyiapkan SATU resep lewat percakapan.
-Balas JSON murni {"reply": "jawaban singkat dan pertanyaan berikutnya", "draft": {...}}.
+SYSTEM = """Kamu asisten resep dan bahan untuk pemilik usaha Indonesia.
+Bisa membantu menyiapkan resep, menanyakan data toko, dan menjelaskan alur bahan/HPP.
+Balas JSON murni {"reply": "jawaban", "action": "answer atau edit_recipe", "lookup": null atau {...}, "draft": null atau {...}}.
+Tentukan kebutuhan pesan terbaru sebelum bertindak. Pertanyaan, cek data, daftar,
+dan penjelasan memakai action=answer; draft=null dan jangan membuat/mengubah resep.
+Untuk pertanyaan DATA TOKO, wajib pilih lookup. Backend mengambil jawaban aktual:
+kind=overview untuk apakah sudah ada bahan/resep/menu atau ringkasan semuanya;
+ingredients untuk daftar/cari bahan atau biaya satuan, name kosong berarti semua;
+recipes untuk daftar resep aktif beserta HPP; missing_recipes untuk menu tanpa resep;
+recipe_details untuk bahan/takaran/HPP resep tertentu, name=nama menu;
+ingredient_usage untuk bahan dipakai pada menu apa, name=nama bahan.
+Jangan mengarang item toko atau menganggap draft chat sudah tersimpan. Jika kosong,
+bilang belum ada. Jika shop context diringkas, lookup tetap membaca katalog lengkap
+di backend. Jangan menyamakan menu terdaftar dengan menu yang sudah punya resep.
+Pertanyaan umum seperti cara kerja bahan/resep atau boleh mulai tanpa bahan
+memakai action=answer, lookup=null, jawab langsung; jangan menanyakan nama menu.
+Hanya permintaan membuat/melengkapi/koreksi resep memakai action=edit_recipe dan
+draft lengkap. Dalam obrolan bisa bertanya di tengah setup lalu melanjutkan;
+pertanyaan tidak boleh mengganti nama atau isi rancangan sebelumnya.
 Gaya reply seperti chat sehari-hari: pakai aku/kamu, hangat dan langsung.
 Umumnya cukup 1–3 kalimat, lalu SATU pertanyaan yang paling membantu.
 Ikuti informasi yang sudah diceritakan; jangan mengulang pertanyaan yang terjawab.
 Jangan menumpuk daftar pertanyaan, langkah bernomor, tabel, atau penjelasan form.
+Daftar bahan/resep boleh diberikan saat pengguna memang meminta daftar.
 Reply teks biasa, tanpa judul/markdown/istilah field schema/revisi/fingerprint.
 Contoh saat baru mulai: "Seporsinya mau pakai apa aja selain nasi dan ayam?"
 Jika pengguna bingung di Manual, tawarkan Estimasi dengan bahasa wajar:
@@ -157,13 +178,15 @@ async def context(db, brand_id):
 
 def context_json(ctx):
     ingredients, products, recipes = ctx
+    by_product = {p.id: p.name for p in products}
+    by_ingredient = {i.id: i.name for i in ingredients}
     return {"ingredients": [{"id": str(i.id), "name": i.name, "base_unit": i.base_unit,
         "cost_per_base_unit": str(i.cost_per_base_unit), "buy_price": str(i.buy_price),
         "buy_qty": i.buy_qty, "needs_review": i.needs_review} for i in ingredients],
         "products": [{"name": p.name, "id": str(p.id)} for p in products],
-        "recipes": [{"product_id": str(r.product_id), "notes": r.notes,
+        "recipes": [{"product_id": str(r.product_id), "product_name": by_product.get(r.product_id, ''), "notes": r.notes,
             "is_estimated": r.is_estimated, "ingredients": [
-            {"ingredient_id": str(i.ingredient_id), "quantity": i.quantity,
+            {"ingredient_id": str(i.ingredient_id), "name": by_ingredient.get(i.ingredient_id, ''), "quantity": i.quantity,
              "unit": i.quantity_unit, "optional": i.is_optional, "notes": i.notes}
             for i in r.ingredients if i.deleted_at is None]} for r in recipes]}
 
@@ -363,6 +386,14 @@ def reply_for_preview(reply: str, preview, mode: str) -> str:
     return 'Resepnya masih butuh takaran atau harga nyata. Kalau belum tahu, bilang “bantu estimasikan” dan aku bantu isi perkiraannya.'
 
 
+def assistant_answer(answer: ModelReply, ctx):
+    if answer.lookup:
+        return catalog.answer(answer.lookup, ctx)
+    if re.search(r'\b(?:rp|idr|rupiah)\s*\d|\bhpp\s*[:=]?\s*\d', answer.reply.casefold()):
+        return 'Aku bisa cek angka bahan atau HPP dari data toko. Sebutkan bahan atau menu yang mau dicek ya.'
+    return answer.reply
+
+
 async def generate(draft, turns, ctx, mode, references=""):
     if not chat_configured():
         raise RuntimeError("AI belum dikonfigurasi")
@@ -371,6 +402,7 @@ async def generate(draft, turns, ctx, mode, references=""):
     history = [{"role": role, "content": content} for t in turns for role, content in
         (("user", t.message), ("assistant", t.reply)) if content]
     shop = context_json(ctx)
+    catalog_summary = catalog.summary(ctx)
     recent = turns[-1].message.casefold() if turns else ""
     wanted = {i.get("name", "").casefold() for i in (draft or {}).get("ingredients", [])}
     for key in ("ingredients", "products"):
@@ -378,7 +410,9 @@ async def generate(draft, turns, ctx, mode, references=""):
             or item["name"] == (draft or {}).get("product_name") else 1)
     def envelope_json():
         return json.dumps({"mode": mode, "current_draft": draft,
-            "shop": shop, "references_only": references[:12000]}, ensure_ascii=False)
+            "shop": shop, "catalog_summary": catalog_summary,
+            "included_catalog_counts": {key: len(shop[key]) for key in ('ingredients', 'products', 'recipes')},
+            "references_only": references[:12000]}, ensure_ascii=False)
     envelope = envelope_json()
     while len(envelope) > 100000 and any(shop[key] for key in ("recipes", "products", "ingredients")):
         key = max(("recipes", "products", "ingredients"), key=lambda k: len(json.dumps(shop[k])))
@@ -405,6 +439,16 @@ async def generate(draft, turns, ctx, mode, references=""):
             output = output.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         try:
             parsed = ModelReply.model_validate_json(output)
+            if parsed.action == 'answer' or parsed.lookup is not None:
+                parsed.action = 'answer'
+                parsed.draft = None
+                parsed.reply = assistant_answer(parsed, ctx)
+                return parsed, {"input_tokens": usage_input, "output_tokens": usage_output,
+                    "model": response.model, "history_compacted": compacted, "stored_turns": len(turns)}
+            if parsed.draft is None:
+                history.append({"role": "assistant", "content": output})
+                history.append({"role": "user", "content": 'action=edit_recipe perlu draft lengkap. Jika hanya menjawab pertanyaan, pakai action=answer dan draft=null. Balas JSON lengkap sesuai kebutuhan pesan terbaru.'})
+                continue
             preview = prepare(parsed.draft, ctx, [t.message for t in turns], mode)
             if mode == 'estimate' and parsed.draft.product_name and not preview['ready'] and budget == 8192:
                 history.append({"role": "assistant", "content": output})

@@ -159,8 +159,6 @@ async def message(session_id: UUID, body: Message, background: BackgroundTasks, 
         raise HTTPException(409, "ID pesan sudah digunakan untuk isi yang berbeda")
     if previous and previous.reply:
         return {"data": await view(db, session)}
-    if session.status != "draft":
-        raise HTTPException(409, "Resep sudah disetujui. Mulai percakapan baru untuk mengubahnya")
     if session.pending_until and session.pending_until > utc_now():
         raise HTTPException(409, "Pesan masih diproses. Muat percakapan terbaru dahulu")
     if session.revision != body.revision:
@@ -172,13 +170,15 @@ async def message(session_id: UUID, body: Message, background: BackgroundTasks, 
         .limit(2))).scalars().all()
     if len(running) >= 2:
         raise HTTPException(409, "Dua percakapan Anda masih diproses. Tunggu salah satunya selesai")
+    previous_mode = session.mode
     session.pending_request = body.request_id
     session.pending_until = utc_now() + timedelta(minutes=8)
     session.mode = service.conversation_mode(body.message, body.mode)
     session.error = None
     if not previous:
         db.add(HppSetupTurn(tenant_id=user.tenant_id, session_id=session.id,
-            request_id=body.request_id, mode=body.mode, message=body.message))
+            request_id=body.request_id, mode=body.mode, message=body.message,
+            usage={"previous_mode": previous_mode}))
     await db.commit()
     background.add_task(process_message, session_id, body, user.id, user.tenant_id)
     await scope(db, user)
@@ -234,18 +234,31 @@ async def generate_and_save(db, session, outlet, session_id, body, user):
             raise HTTPException(409, "Pesan sudah digantikan proses lain. Muat percakapan terbaru")
         # Re-read prices after the network call; the draft shows current data.
         ctx = await service.context(db, outlet.brand_id)
-        session.draft = answer.draft.model_dump(mode="json")
-        session.preview = service.prepare(answer.draft, ctx, [t.message for t in history], mode)
-        session.revision += 1
-        session.pending_request = None
-        session.pending_until = None
         turn = (await db.execute(select(HppSetupTurn).where(
             HppSetupTurn.session_id == session.id, HppSetupTurn.request_id == body.request_id))).scalar_one()
-        turn.reply = service.reply_for_preview(answer.reply, session.preview, mode)
-        turn.usage = usage
-        db.add(AuditLog(tenant_id=user.tenant_id, user_id=user.id, action="HPP_DRAFT_UPDATED",
+        previous_mode = (turn.usage or {}).get('previous_mode', mode)
+        read_only = answer.action == 'answer' or answer.lookup is not None or session.status == 'applied'
+        if read_only:
+            session.mode = previous_mode
+            if answer.action != 'answer' and answer.lookup is None:
+                turn.reply = 'Resep ini sudah tersimpan. Aku tetap bisa bantu cek bahan dan resep toko di sini. Untuk mengubah resep, mulai lewat Resep baru ya.'
+            else:
+                turn.reply = service.assistant_answer(answer, ctx)
+                if answer.lookup and session.draft and session.status != 'applied':
+                    turn.reply += '\n\nRancangan di obrolan ini masih draft sampai kamu approve.'
+        else:
+            if answer.draft is None:
+                raise ValueError('Draft resep belum disertakan')
+            session.draft = answer.draft.model_dump(mode="json")
+            session.preview = service.prepare(answer.draft, ctx, [t.message for t in history], mode)
+            session.revision += 1
+            turn.reply = service.reply_for_preview(answer.reply, session.preview, mode)
+        session.pending_request = None
+        session.pending_until = None
+        turn.usage = {**usage, 'previous_mode': previous_mode, 'action': 'answer' if read_only else 'edit_recipe'}
+        db.add(AuditLog(tenant_id=user.tenant_id, user_id=user.id, action="HPP_ASSISTANT_ANSWERED" if read_only else "HPP_DRAFT_UPDATED",
             entity="hpp_setup_session", entity_id=session.id, request_id=str(body.request_id),
-            after_state={"revision": session.revision, "is_estimated": session.preview["is_estimated"], "usage": usage}))
+            after_state={"revision": session.revision, "is_estimated": bool(session.preview and session.preview["is_estimated"]), "usage": usage}))
         await db.commit()
         await scope(db, user)
         return {"data": await view(db, session)}

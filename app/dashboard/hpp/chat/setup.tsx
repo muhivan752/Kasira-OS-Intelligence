@@ -249,7 +249,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
         onScroll={event => { const el = event.currentTarget; nearEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
         <div className="hpp-chat-messages">
           {!session?.turns.length && !sendingText && <div className="hpp-chat-welcome">
-            <h2>Mau bikin menu apa?</h2><p>{mode === 'estimate' ? 'Sebutkan menunya dulu. Aku bantu isi perkiraan bahan, takaran, dan harganya.' : 'Ceritakan bahan, takaran, dan harga yang kamu pakai.'}</p>
+            <h2>Mau cek bahan atau bikin resep?</h2><p>{mode === 'estimate' ? 'Tanya bahan dan resep yang ada di toko, atau sebutkan menu yang mau diestimasikan.' : 'Tanya isi toko, atau ceritakan bahan, takaran, dan harga yang kamu pakai.'}</p>
           </div>}
           {session?.turns.map(turn => <div key={turn.id} className="hpp-chat-turn">
             <article className="hpp-chat-message hpp-chat-user" aria-label="Pesan Anda"><p>{turn.message}</p></article>
@@ -280,9 +280,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
             <button className="hpp-button" disabled={busy} onClick={() => void send(true)}>Proses ulang pesan terakhir</button>}
         </div>
       </div>
-      {session?.status === 'applied' ? <div className="hpp-chat-complete">
-        <p>Mau lanjut menu berikutnya?</p><button className="hpp-button hpp-primary" disabled={busy} onClick={() => void choose('')}>Resep baru</button>
-      </div> : <form className="hpp-chat-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
+      <form className="hpp-chat-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
         <label className="sr-only" htmlFor="hpp-chat-message">Tulis pesan</label>
         <textarea ref={input} id="hpp-chat-message" className="hpp-control" rows={1} disabled={busy}
           value={text} onChange={event => changeText(event.target.value)} placeholder="Tulis pesan..."
@@ -299,7 +297,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
           <button className="hpp-button hpp-primary hpp-chat-send" aria-label="Kirim pesan" type="submit" disabled={busy || waiting || !text.trim()}><ArrowUp size={21} /></button>
         </div>
         <p className="sr-only" id="hpp-chat-keyboard">Enter untuk kirim. Shift+Enter untuk baris baru.</p>
-      </form>}
+      </form>
     </>}
     <dialog ref={dialog} className={'hpp-chat-dialog' + (panel === 'history' ? ' hpp-chat-dialog-history' : '')}
       aria-labelledby="hpp-chat-panel-title" onCancel={() => setPanel(null)} onClose={() => setPanel(null)} onKeyDown={trapFocus}>

@@ -62,6 +62,8 @@ async def fake_generate(draft, turns, ctx, mode, references=""):
     output = responses.pop(0)
     if isinstance(output, Exception):
         raise output
+    if isinstance(output, service.ModelReply):
+        return output, {"input_tokens": 100, "output_tokens": 300, "model": "isolated-fixture"}
     return service.ModelReply(reply="Periksa sumber dan takaran pada draft.", draft=output), {"input_tokens": 100, "output_tokens": 300, "model": "isolated-fixture"}
 
 
@@ -283,6 +285,47 @@ async def main():
         assert implicit['mode'] == 'manual' and not implicit['preview']['ready']
         assert 'bantu estimasikan' in implicit['turns'][-1]['reply']
         print('PASS: explicit chat estimation changes effective mode; original request replay stays idempotent; Manual still blocks estimates')
+        before = await counts()
+        question = service.ModelReply(reply='Ada bahan yang dikarang model', action='answer',
+            lookup=service.catalog.CatalogQuery(kind='overview'), draft=draft('Unwanted draft'))
+        fresh = await create('manual')
+        fresh, request = await send(fresh, question, content='Bahan dan resep apa yang sudah ada di toko?', mode='estimate')
+        assert fresh['revision'] == 0 and fresh['preview'] is None and fresh['mode'] == 'manual'
+        assert 'Di toko sekarang' in fresh['turns'][-1]['reply'] and 'dikarang' not in fresh['turns'][-1]['reply']
+        replay = await client.post(f'/ai/hpp-setup/sessions/{fresh["id"]}/messages', json=request)
+        assert replay.status_code == 202 and len(replay.json()['data']['turns']) == 1
+        snapshot = (implicit['revision'], implicit['preview'], implicit['mode'])
+        implicit, _ = await send(implicit, question, content='Apa saja bahan yang ada?', mode='estimate')
+        assert (implicit['revision'], implicit['preview'], implicit['mode']) == snapshot
+        assert 'masih draft' in implicit['turns'][-1]['reply']
+        saved_snapshot = (atomic['revision'], atomic['preview'], atomic['result'], atomic['mode'])
+        atomic, _ = await send(atomic, question, content='Lihat bahan dan resep yang sudah tersimpan', mode='manual')
+        assert (atomic['revision'], atomic['preview'], atomic['result'], atomic['mode']) == saved_snapshot
+        assert (await apply(atomic)).status_code == 200
+        atomic, _ = await send(atomic, draft('Must not overwrite approved', 'Unwanted ingredient', True), content='ubah resep ini', mode='estimate')
+        assert atomic['status'] == 'applied' and (atomic['revision'], atomic['preview'], atomic['result'], atomic['mode']) == saved_snapshot
+        assert 'Resep baru' in atomic['turns'][-1]['reply']
+        other = await client.post('/ai/hpp-setup/sessions', headers={'X-Test-User': str(users[1].id)},
+            json={'outlet_id': str(outlets[1].id), 'mode': 'estimate'})
+        assert other.status_code == 200
+        other = other.json()['data']
+        responses.append(question)
+        queried = await client.post(f'/ai/hpp-setup/sessions/{other["id"]}/messages',
+            headers={'X-Test-User': str(users[1].id)}, json={'outlet_id': str(outlets[1].id),
+                'request_id': str(uuid4()), 'revision': 0, 'mode': 'estimate', 'message': 'Lihat semua bahan dan resep'})
+        assert queried.status_code == 202
+        other = (await client.get(f'/ai/hpp-setup/sessions/{other["id"]}',
+            headers={'X-Test-User': str(users[1].id)})).json()['data']
+        assert '0 bahan, 0 resep aktif, dan 0 menu' in other['turns'][-1]['reply']
+        assert 'Beras fixture' not in other['turns'][-1]['reply']
+        implicit, _ = await send(implicit, draft('Mie Bangladesh fixture', 'Mie fixture', True),
+            content='lanjut lengkapi estimasi resep sebelumnya', mode='estimate')
+        assert implicit['revision'] == snapshot[0] + 1 and implicit['preview']['ready']
+        assert implicit['preview']['product_name'] == 'Mie Bangladesh fixture'
+        after = await counts()
+        for table in ('products', 'ingredients', 'recipes', 'outlet_stock', 'events'):
+            assert before[table] == after[table], (table, before, after)
+        print('PASS: catalog questions preserve empty/current/approved drafts, modes and fingerprints; replay and repeat approval safe; no operational writes')
         print("PASS: durable long chat, source labels, RLS/Pro/owner scope, replay, exact approval, conflict reconciliation, atomic rollback, concurrent approval/name reuse, and pending lease")
 
     # A real HTTP client must receive 202 while generation is still blocked.
