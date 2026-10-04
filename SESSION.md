@@ -1,6 +1,101 @@
-# SESSION — 2026-04-03
-# Claude update file ini otomatis tiap task selesai
-# Kalau reconnect: baca CLAUDE.md → MEMORY.md → SESSION.md ini, lalu lanjut dari "## NEXT ACTION"
+# SESSION — 2026-10-04
+
+Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Oktober
+di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
+merupakan arsip, bukan pekerjaan yang sedang aktif.
+
+## HANDOFF TERAKHIR — redesign, sync, Mode Stok dan storefront
+
+- Workspace `/var/www/kasira`, branch `main`, domain `https://selaris.id`.
+  Kode terakhir dipush pada commit `20f79cc` (Mode Stok + storefront). Checkpoint
+  memory sesudahnya hanya mengubah dokumentasi. Cek status Git sebelum edit.
+- Ivan menyatakan semua toko demo dan mengizinkan perubahan/deploy langsung.
+  Arah desain mengikuti source Sefrekuensi 2.0 di `/var/www/sefrekuensi` karena
+  kedua produk direncanakan bergabung. Referensi warna/font ada di MEMORY.
+  Penyatuan database kedua produk belum diimplementasikan.
+- Login/register/onboarding web dan welcome/login POS sudah mengikuti palet
+  Sefrekuensi. OTP Sefrekuensi terhubung. Google sudah ada di kode, tetapi belum
+  aktif karena konfigurasi Firebase belum diisi; jangan menyatakan sudah live.
+- Backend migration `111`; backend/frontend/Postgres/Redis healthy pada
+  pemeriksaan setelah deploy 4 Oktober. Frontend produksi identik dengan image
+  yang diuji: `sha256:29457819bac7594368c2cf368aabe1d9bc0e2e1ea57a94687b544555fbd9ba7a`.
+  Ini snapshot terakhir; verifikasi keadaan aktual lagi pada pekerjaan berikut.
+- APK/AAB POS dan Dapur terbaru `1.6.31+198`, CI run `37199747458`, source fix
+  `7740bd1`. APK publik sudah dipasang dan signing Selaris + Firebase push
+  diverifikasi. URL unduhan `/api/download/pos` dan `/api/download/dapur`.
+  Update dari 1.6.30 langsung ditimpa tanpa uninstall atau reset data offline.
+
+## PERBAIKAN YANG SUDAH SELESAI
+
+1. CRDT sync: DP reservasi tanpa `order_id` menyebabkan TypeError pada cache
+   PaymentLocal lalu rollback seluruh apply meski API HTTP 200. Backend pull
+   mengecualikan DP standalone; Flutter juga mengabaikannya. DP tetap di server.
+   Pagination client/server juga diperbaiki, termasuk watermark server setelah
+   semua halaman berhasil dan backfill satu kali untuk instalasi lama.
+2. Mode Stok web: error produksi digest `1800943633` berasal dari validasi
+   "Belum punya resep: Egg Tart, Kopi susu" yang dilempar Server Action.
+   `app/actions/api.ts:updateStockMode` sekarang mengembalikan success/error
+   sebagai data. Settings menampilkan pesan + link persiapan, menjaga mode lama
+   saat gagal, dan mengunci input selama menyimpan. Bahan Baku tersedia untuk
+   Pro saat mode simple agar resep bisa disiapkan sebelum beralih.
+3. Storefront dark: tombol/teks inverse memakai pasangan token, input fokus
+   memakai surface-card, warna booking lama dijembatani dalam scope khusus,
+   status order/reservasi/COD tidak lagi putih di atas putih. Baris harga dan
+   kontrol jumlah membungkus agar tombol tidak terpotong pada layar 320 px.
+   Hotfix ini hanya web; tidak memerlukan rilis APK baru.
+
+## NEXT ACTION — mulai dari sini sesuai permintaan Ivan berikutnya
+
+- Jika melanjutkan aktivasi mode HPP: Egg Tart dan Kopi susu perlu resep lengkap.
+  Alur pemilik: refresh → Bahan Baku → Menu → pilih produk → tab Resep →
+  Pengaturan → beralih ke Resep & HPP. Validasi backend tetap berlaku. Belum ada
+  perubahan otomatis pada mode outlet/resep; jangan mengarang resep atau stok.
+- Jika melanjutkan Google: gunakan `docs/GOOGLE_LOGIN.md`. Empat nilai
+  `GOOGLE_FIREBASE_PROJECT_ID`, `GOOGLE_FIREBASE_WEB_API_KEY`,
+  `GOOGLE_FIREBASE_AUTH_DOMAIN`, `GOOGLE_FIREBASE_WEB_APP_ID` belum diisi pemilik.
+  Daftarkan `com.selaris.pos` dan `com.selaris.dapur` beserta fingerprint yang
+  tercatat di dokumen, perbarui google-services.json/secret CI, lalu build APK
+  baru. Pertahankan project/kredensial FCM yang cocok untuk notifikasi.
+- Temuan terpisah, belum diperbaiki: HPP native di
+  `kasir_app/lib/features/products/providers/recipe_provider.dart` masih
+  memakai quantity mentah × costPerBaseUnit dan menghitung bahan optional.
+  Backend memakai `backend/services/unit_utils.py`, mengecualikan kontribusi
+  optional/satuan tidak cocok. Periksa dan samakan kontrak bila pekerjaan
+  berikutnya menyentuh HPP native. Ini terpisah dari error perpindahan mode.
+- Redesign tahap berikutnya mengikuti arah Sefrekuensi dan scope baru dari Ivan;
+  integrasi Google sungguhan/penyatuan database belum diuji atau selesai.
+
+## BUKTI DAN CATATAN OPERASIONAL
+
+- `tests/stock-storefront-browser.cjs`: lolos terhadap image production dengan
+  API fixture, validasi 400/422, 500 aman, sesi 401, retry/pindah dua arah;
+  light/dark 320/768/1440, varian/Escape, meja, input fokus, tujuh fase order,
+  tiga fase reservasi, booking dan COD kurir. Tidak mengirim transaksi/WA nyata.
+- Smoke HTTPS toko aktual `kasira-coffee` light/dark 320 px lolos: menu/cart,
+  persistensi tema, kategori terpilih dan input fokus; tanpa page error.
+  Log sesi: `/tmp/selaris-stock-storefront-test-final.log` dan
+  `/tmp/selaris-storefront-live-check.log`. Container fixture sudah dibersihkan.
+- Sync: 14 unit backend dan 14 tes Flutter lolos; fixture aktual 68 halaman
+  mencakup seluruh ID full pull, termasuk 522 order_items. Detail ada di MEMORY
+  dan ARCHITECTURE. Fixture `/tmp/selaris-sync-pages.json` bersifat sementara.
+- Laporan desain: `docs/REDESIGN_REVIEW.md`. Pilihan antislop sesi ini `during`;
+  ini catatan pilihan sesi, bukan preferensi global.
+- Baca ARCHITECTURE penuh sebelum mengubah stock/recipe/sync. Konversi satuan
+  HPP tidak boleh langsung diterapkan ke pengurangan/display stok raw quantity.
+  Query audit standalone perlu `SET LOCAL app.current_tenant_id = ''` untuk RLS.
+- Deploy layanan sendiri dengan build image lalu `compose up -d --no-deps`.
+  Backend source tidak bind-mounted. VPS dibagi dengan Sefrekuensi; jangan
+  restart daemon Docker atau layanan produk lain untuk deploy Selaris.
+- Update APK membaca version.json dari Git main: jangan mengumumkan versi baru
+  sebelum artifact signed tersedia. Cocokkan source CI, signing/package/FCM,
+  lalu pasang APK publik dan metadata produksi. Backup APK 1.6.30 ada di
+  `/tmp/selaris-apk-before-1.6.31`; backup DB sebelum redesign ada di
+  `/tmp/selaris-before-redesign-20261004.dump`. Jangan tulis token/PIN ke memory.
+
+## ARSIP APRIL 2026
+
+Catatan berikut dipertahankan sebagai riwayat. Versi aplikasi, alamat, status
+deploy, akun contoh dan NEXT ACTION lama di bawah tidak menjadi acuan terkini.
 
 ## ✅ SELESAI SESI INI (update terakhir)
 - [x] Fix upload gambar: pipe raw body (jangan parse FormData), gunakan BACKEND_INTERNAL_URL=http://backend:8000
