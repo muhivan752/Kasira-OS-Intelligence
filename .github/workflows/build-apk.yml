@@ -307,6 +307,10 @@ jobs:
         run: flutter analyze
         working-directory: kasir_app
 
+      - name: Test onboarding and login
+        run: flutter test test/onboarding_test.dart test/login_test.dart
+        working-directory: kasir_app
+
       # POS dan Dapur sekarang DUA app terpisah di Play (`com.selaris.pos`
       # dan `com.selaris.dapur`). Dulu keduanya keluar dengan applicationId
       # yang sama, jadi nggak bisa dipasang barengan di satu HP, nggak bisa
@@ -384,6 +388,7 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
           IS_MANDATORY="${{ github.event.inputs.is_mandatory }}"
           NOTES="${{ github.event.inputs.release_notes }}"
+          EXPLICIT_NOTES="$NOTES"
           REPO="muhivan752/Kasira-OS-Intelligence"
           BASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}"
 
@@ -399,10 +404,12 @@ jobs:
             EXISTING_VERSION=$(jq -r '.pos.version // ""' version.json)
             EXISTING_MANDATORY=$(jq -r '.pos.is_mandatory // false' version.json)
             EXISTING_NOTES=$(jq -r '.pos.release_notes // ""' version.json)
+            EXISTING_DAPUR_NOTES=$(jq -r '.dapur.release_notes // ""' version.json)
           else
             EXISTING_VERSION=""
             EXISTING_MANDATORY="false"
             EXISTING_NOTES=""
+            EXISTING_DAPUR_NOTES=""
           fi
 
           if [ "$IS_MANDATORY" = "auto" ]; then
@@ -425,22 +432,17 @@ jobs:
             fi
           fi
 
-          cat > version.json <<EOF
-          {
-            "pos": {
-              "version": "${VERSION}",
-              "is_mandatory": ${IS_MANDATORY},
-              "download_url": "${BASE_URL}/selaris-pos-v${VERSION}.apk",
-              "release_notes": "${NOTES}"
-            },
-            "dapur": {
-              "version": "${VERSION}",
-              "is_mandatory": ${IS_MANDATORY},
-              "download_url": "${BASE_URL}/selaris-dapur-v${VERSION}.apk",
-              "release_notes": "${NOTES}"
-            }
-          }
-          EOF
+          DAPUR_NOTES="$NOTES"
+          if [ -z "$EXPLICIT_NOTES" ] && [ "$EXISTING_VERSION" = "$VERSION" ] && [ -n "$EXISTING_DAPUR_NOTES" ]; then
+            DAPUR_NOTES="$EXISTING_DAPUR_NOTES"
+          fi
+          jq -n --arg version "$VERSION" --arg base "$BASE_URL" \
+            --arg pos_notes "$NOTES" --arg dapur_notes "$DAPUR_NOTES" \
+            --argjson mandatory "$IS_MANDATORY" \
+            '{pos: {version: $version, is_mandatory: $mandatory,
+                    download_url: ($base + "/selaris-pos-v" + $version + ".apk"), release_notes: $pos_notes},
+              dapur: {version: $version, is_mandatory: $mandatory,
+                      download_url: ($base + "/selaris-dapur-v" + $version + ".apk"), release_notes: $dapur_notes}}' > version.json
 
           git add version.json
           git commit -m "chore: update version.json → v${VERSION}" || echo "No changes to commit"
