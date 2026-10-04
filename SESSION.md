@@ -51,6 +51,9 @@ merupakan arsip, bukan pekerjaan yang sedang aktif.
   mengklaim hydration sudah diperbaiki. Source chat baru/fill ditest fixture
   seluruhnya tanpa pageerror. Bila berulang di penggunaan nyata, simpan fase
   document/theme/history/form-return untuk melokalisasi, bukan menonaktifkan guard.
+- Pembandingan origin memakai image final dan API production read-only juga
+  enam kombinasi tema/ukuran + navigasi PASS tanpa pageerror. Semua preview,
+  DB/Redis/network QA task ini dan modul /tmp di container aktif dibersihkan.
 
 ## ARSIP — revisi chat biasa, live 4 Oktober 2026
 
