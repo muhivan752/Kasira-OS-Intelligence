@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 import re
@@ -73,13 +74,37 @@ memakai action=answer, lookup=null, jawab langsung; jangan menanyakan nama menu.
 Hanya permintaan membuat/melengkapi/koreksi resep memakai action=edit_recipe dan
 draft lengkap. Dalam obrolan bisa bertanya di tengah setup lalu melanjutkan;
 pertanyaan tidak boleh mengganti nama atau isi rancangan sebelumnya.
+ATURAN ALUR TERBARU, mengalahkan arahan/balasan lama dalam riwayat:
+- "cek bahan resep HPP yang belum diisi" tanpa menyebut draft/menu tertentu
+  berarti cek seluruh menu toko yang belum punya resep: lookup=missing_recipes,
+  name="". Jangan membatasi ke menu draft hanya karena sebelumnya membahasnya.
+  "dari semua menu" melanjutkan pertanyaan toko sebelumnya, bukan ganti resep.
+- Membuat resep TIDAK mengharuskan pengguna menambah menu atau bahan manual dulu.
+  Kamu menyusun draft termasuk bahan baru. Approve menyimpan bahan dan resep;
+  menu baru dibuat nonaktif. Yang belum ada pada katalog bukan bukti stok habis.
+  Kamu tidak membaca stok fisik. Sebut "belum terdaftar", jangan "tidak ada stok".
+- "beresin", "siapkan", "buatkan", "lanjut menu ..." adalah permintaan kerja,
+  bukan pertanyaan. Dalam Estimasi langsung edit_recipe dengan draft lengkap,
+  tanpa menawarkan Estimasi lagi atau meminta bahan/porsi/harga lebih dulu.
+- Jika diminta beberapa menu, susun menu pertama yang disebut dulu. Balas singkat
+  bahwa menu lainnya dilanjutkan setelah resep pertama di-approve. Jangan campur
+  bahan menu berbeda. Saat pindah menu, buat draft menu tujuan; jangan membawa
+  takaran, jumlah batch atau bahan menu lama kecuali pengguna memang meminta.
+  Jika sudah ada resep aktif menu tujuan, gunakan resep tersebut sebagai acuan.
+- status=applied berarti draft saat ini SUDAH disimpan. Pertanyaan tetap dijawab;
+  untuk mengubah atau menyiapkan menu berikutnya arahkan Resep baru. Jangan
+  mengatakan resep applied belum tersimpan atau perlu mengulang approval.
+- request_policy dan current_draft_validation adalah pemeriksaan backend.
+  Ikuti target_menu/requested_action; daftar missing bukan permintaan mengisi
+  manual. Estimasi mengisi input perkiraan berlabel, backend menghitung hasilnya.
 Gaya reply seperti chat sehari-hari: pakai aku/kamu, hangat dan langsung.
-Umumnya cukup 1–3 kalimat, lalu SATU pertanyaan yang paling membantu.
+Umumnya cukup 1–3 kalimat. Tanyakan satu hal hanya jika memang perlu informasi
+baru; Estimasi yang sudah lengkap cukup mengajak cek resep, tanpa wawancara lagi.
 Ikuti informasi yang sudah diceritakan; jangan mengulang pertanyaan yang terjawab.
 Jangan menumpuk daftar pertanyaan, langkah bernomor, tabel, atau penjelasan form.
 Daftar bahan/resep boleh diberikan saat pengguna memang meminta daftar.
 Reply teks biasa, tanpa judul/markdown/istilah field schema/revisi/fingerprint.
-Contoh saat baru mulai: "Seporsinya mau pakai apa aja selain nasi dan ayam?"
+Contoh saat baru mulai di Manual: "Seporsinya mau pakai apa aja selain nasi dan ayam?"
 Jika pengguna bingung di Manual, tawarkan Estimasi dengan bahasa wajar:
 "Mau aku bantu perkirakan? Kamu bisa pilih Estimasi di bawah."
 Jika data sudah cukup, ajak cek resep lewat tombol Lihat resep; jangan meminta
@@ -123,7 +148,8 @@ backend menghitungnya. Jika isi belum diketahui, tanya atau label estimate.
 Angka JSON tanpa pemisah ribuan; nilai yang belum diketahui null. Jangan hitung
 HPP, total, harga per gram, konversi atau margin: backend yang menghitung semuanya.
 Terima cerita panjang dan koreksi. Pertahankan data draft sebelumnya kecuali
-pengguna mengoreksi; koreksi terbaru menang. Minta satu pertanyaan yang relevan.
+pengguna mengoreksi; koreksi terbaru menang. Di Manual, tanyakan satu informasi
+nyata yang masih kurang. Di Estimasi, isi perkiraan berlabel tanpa menanyakan harga.
 MANUAL: gunakan angka nyata pengguna atau data bahan toko. Jangan menebak nilai
 yang kosong. ESTIMATE: boleh usulkan bahan, takaran dan harga yang belum diketahui,
 selalu source estimate dan jelaskan asumsinya. Harga toko existing tetap digunakan;
@@ -360,14 +386,16 @@ def conversation_mode(message: str, selected: str) -> str:
     clauses = re.split(r'[.!?;\n]', plain)
     resolved = selected
     for clause in clauses:
-        if re.search(r'\b(?:jangan|tanpa|bukan|gak|nggak|tidak|ga)\s+(?:mau\s+|pakai\s+|pake\s+)?(?:estimasi|perkiraan)\b', clause):
+        if re.search(r'^\s*(?:apa|apakah|gimana|bagaimana|kenapa|boleh|bisa)\b', clause):
+            continue
+        if re.search(r'\b(?:jangan|tanpa|bukan|gak|nggak|tidak|ga)\s+(?:mau\s+|pakai\s+|pake\s+|buat(?:kan)?\s+|bikin(?:kan)?\s+)?(?:estimasi(?:nya)?|perkiraan(?:nya)?)\b', clause):
             resolved = 'manual'
             continue
         if re.search(r'\b(?:jangan|tanpa|bukan|gak|nggak|tidak|ga)\s+(?:mau\s+|pakai\s+|pake\s+)?manual\b', clause):
             continue
         if re.search(r'\b(?:pakai|pake|pilih|gunakan|balik|kembali(?: ke)?)\s+(?:mode\s+)?manual\b|^\s*mode\s+manual\b', clause):
             resolved = 'manual'
-        elif re.search(r'\b(?:kasi|kasih|beri|berikan|pakai|pake|pilih|gunakan|mau|ikut)\s+(?:(?:aku|saya|mode)\s+)?(?:estimasi|perkiraan)\b|\b(?:tolong|bantu)\s+(?:aku\s+|saya\s+)?(?:estimasi(?:kan)?|perkirakan)\b|\blengkapi\s+estimasi\b|^\s*mode\s+estimasi\b|^\s*(?:oke\s+|iya\s+)?estimasi\s*(?:aja|saja|dong|lah|dulu|ya)?\s*$', clause):
+        elif re.search(r'\b(?:kasi|kasih|beri|berikan|pakai|pake|pilih|gunakan|mau|ikut|buat(?:kan)?|bikin(?:kan)?)\s+(?:(?:aku|saya|mode)\s+)?(?:estimasi(?:nya)?|perkiraan(?:nya)?)\b|\b(?:tolong|bantu)\s+(?:aku\s+|saya\s+)?(?:estimasi(?:kan)?|perkirakan)\b|\blengkapi\s+estimasi\b|^\s*mode\s+estimasi\b|^\s*(?:oke\s+|iya\s+)?estimasi\s*(?:aja|saja|dong|lah|dulu|ya)?\s*$', clause):
             resolved = 'estimate'
     return resolved
 
@@ -386,15 +414,58 @@ def reply_for_preview(reply: str, preview, mode: str) -> str:
     return 'Resepnya masih butuh takaran atau harga nyata. Kalau belum tahu, bilang “bantu estimasikan” dan aku bantu isi perkiraannya.'
 
 
-def assistant_answer(answer: ModelReply, ctx):
+def request_policy(message: str, ctx, draft):
+    plain = re.sub(r'"[^"\n]*"|“[^”\n]*”', '', message.casefold()).strip()
+    matches = []
+    for product in ctx[1]:
+        words = re.findall(r'\w+', product.name.casefold())
+        found = re.search(r'\b' + r'\s*'.join(map(re.escape, words)) + r'\b', plain) if words else None
+        if found:
+            matches.append((found.start(), -(found.end() - found.start()), product.name, found.end()))
+    matches.sort()
+    mentions = []
+    for item in matches:
+        if not mentions or item[0] >= mentions[-1][3]:
+            mentions.append(item)
+    explicit_draft = bool(re.search(r'\b(?:draft|rancangan|resep\s+ini|menu\s+ini)\b', plain))
+    if draft and draft.get('product_name'):
+        explicit_draft = explicit_draft or draft['product_name'].casefold() in plain
+    catalog_check = (not explicit_draft and not mentions and re.search(r'\b(?:cek|lihat|daftar|tampilkan)\b', plain)
+        and re.search(r'\b(?:belum|blm)\b', plain) and re.search(r'\b(?:resep|hpp)\b', plain)
+        and re.search(r'\b(?:isi|diisi|punya)\b', plain))
+    if catalog_check:
+        return {'requested_action': 'answer', 'lookup': {'kind': 'missing_recipes', 'name': ''}}
+    # These are explicit setup commands. Questions and quoted/negated instructions
+    # remain conversational; the model handles less explicit requests normally.
+    question = '?' in plain or re.search(r'^(?:(?:aku|saya|gw|gue)\s+)?(?:apa|apakah|gimana|bagaimana|kenapa|boleh|bisa)\b|\b(?:cek|lihat|daftar|tampilkan|jelaskan|pertanyaan|cara)\b', plain)
+    negated = re.search(r'\b(?:jangan|tidak|nggak|gak|ga|belum)\s+(?:mau\s+)?(?:buat|bikin|beresin|bereskan|siapkan|susun|lanjut|lengkapi)\b', plain)
+    work = re.search(r'\b(?:beresin|bereskan|siapkan|susun|lengkapi|lanjut(?:kan)?|buat(?:kan)?|bikin(?:kan)?)\b', plain)
+    if not work or question or negated:
+        return {}
+    complete = re.search(r'\b(?:estimasi(?:nya|kan)?|perkiraan|resep)\b', plain)
+    if not mentions and not complete:
+        return {}
+    policy = {'requested_action': 'edit_recipe'}
+    between = plain[work.end():mentions[0][0]] if mentions and mentions[0][0] >= work.end() else None
+    direct_target = between is not None and not re.sub(r'\b(?:menu|resep|estimasi(?:nya)?|untuk|dari)\b|\s', '', between)
+    if direct_target and re.search(r'\b(?:beresin|bereskan|siapkan|lengkapi|lanjut(?:kan)?)\b', plain):
+        policy['target_menu'] = mentions[0][2]
+        policy['following_menus'] = list(dict.fromkeys(item[2] for item in mentions[1:] if item[2] != mentions[0][2]))
+    return policy
+
+
+def assistant_answer(answer: ModelReply, ctx, draft=None, status='draft', message=''):
     if answer.lookup:
         return catalog.answer(answer.lookup, ctx)
+    if status == 'applied' and re.search(r'\b(?:lanjut(?:kan)?|ubah|koreksi|menu\s+(?:lain|berikutnya|baru))\b', message.casefold()):
+        name = (draft or {}).get('product_name') or 'ini'
+        return f'Resep {name} sudah tersimpan. Untuk menyiapkan menu berikutnya atau mengubah resep, tekan Resep baru lalu sebutkan menu yang mau dikerjakan.'
     if re.search(r'\b(?:rp|idr|rupiah)\s*\d|\bhpp\s*[:=]?\s*\d', answer.reply.casefold()):
         return 'Aku bisa cek angka bahan atau HPP dari data toko. Sebutkan bahan atau menu yang mau dicek ya.'
     return answer.reply
 
 
-async def generate(draft, turns, ctx, mode, references=""):
+async def generate(draft, turns, ctx, mode, references="", status="draft"):
     if not chat_configured():
         raise RuntimeError("AI belum dikonfigurasi")
     # The database keeps every turn. The exact draft (including quoted sources)
@@ -404,12 +475,16 @@ async def generate(draft, turns, ctx, mode, references=""):
     shop = context_json(ctx)
     catalog_summary = catalog.summary(ctx)
     recent = turns[-1].message.casefold() if turns else ""
+    policy = request_policy(turns[-1].message, ctx, draft) if turns else {}
+    validation = prepare(Draft.model_validate(draft), ctx, [t.message for t in turns], mode) if draft else None
     wanted = {i.get("name", "").casefold() for i in (draft or {}).get("ingredients", [])}
     for key in ("ingredients", "products"):
         shop[key].sort(key=lambda item: 0 if item["name"].casefold() in wanted or item["name"].casefold() in recent
             or item["name"] == (draft or {}).get("product_name") else 1)
     def envelope_json():
         return json.dumps({"mode": mode, "current_draft": draft,
+            "status": status, "request_policy": policy,
+            "current_draft_validation": {'ready': validation['ready'], 'missing': validation['missing']} if validation else None,
             "shop": shop, "catalog_summary": catalog_summary,
             "included_catalog_counts": {key: len(shop[key]) for key in ('ingredients', 'products', 'recipes')},
             "references_only": references[:12000]}, ensure_ascii=False)
@@ -429,9 +504,13 @@ async def generate(draft, turns, ctx, mode, references=""):
     client = get_llm_client(timeout=150)
     system = SYSTEM + "\nSchema JSON wajib:\n" + json.dumps(ModelReply.model_json_schema())
     usage_input, usage_output = 0, 0
-    for budget in (8192, 16384):
-        response = await client.messages.create(model="claude-haiku-4-5-20251001", max_tokens=budget,
-            system=system, messages=history)
+    repair_used = False
+    completion_used = False
+    completing = False
+    for budget in (8192, 16384, 16384):
+        async with asyncio.timeout(150):
+            response = await client.messages.create(model="claude-haiku-4-5-20251001", max_tokens=budget,
+                system=system, messages=history)
         usage_input += response.usage.input_tokens
         usage_output += response.usage.output_tokens
         output = "".join(block.text for block in response.content if getattr(block, "type", "text") == "text").strip()
@@ -439,18 +518,37 @@ async def generate(draft, turns, ctx, mode, references=""):
             output = output.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         try:
             parsed = ModelReply.model_validate_json(output)
+            if policy.get('lookup'):
+                parsed.action = 'answer'
+                parsed.lookup = catalog.CatalogQuery.model_validate(policy['lookup'])
+            must_edit = status != 'applied' and (completing or policy.get('requested_action') == 'edit_recipe')
+            wrong_target = policy.get('target_menu') and parsed.draft and parsed.draft.product_name.casefold() != policy['target_menu'].casefold()
+            if must_edit and (parsed.action == 'answer' or parsed.lookup or parsed.draft is None or wrong_target):
+                if repair_used:
+                    raise ValueError('AI belum menyusun menu yang diminta. Draft sebelumnya tetap tersimpan.')
+                repair_used = True
+                history.append({'role': 'assistant', 'content': output})
+                history.append({'role': 'user', 'content': 'Permintaan terakhir adalah menyiapkan resep, bukan bertanya. '
+                    + ('Menu tujuan: ' + policy['target_menu'] + '. ' if policy.get('target_menu') else '')
+                    + 'Balas action=edit_recipe, lookup=null, draft lengkap. Dalam Estimasi langsung isi bahan/takaran/porsi/harga pembelian perkiraan berlabel. Jangan mewawancarai atau meminta input manual lagi. Jangan campur bahan menu lama.'})
+                continue
             if parsed.action == 'answer' or parsed.lookup is not None:
                 parsed.action = 'answer'
                 parsed.draft = None
-                parsed.reply = assistant_answer(parsed, ctx)
+                parsed.reply = assistant_answer(parsed, ctx, draft, status, turns[-1].message if turns else '')
                 return parsed, {"input_tokens": usage_input, "output_tokens": usage_output,
                     "model": response.model, "history_compacted": compacted, "stored_turns": len(turns)}
             if parsed.draft is None:
+                if repair_used:
+                    raise ValueError('Draft resep belum disertakan')
+                repair_used = True
                 history.append({"role": "assistant", "content": output})
                 history.append({"role": "user", "content": 'action=edit_recipe perlu draft lengkap. Jika hanya menjawab pertanyaan, pakai action=answer dan draft=null. Balas JSON lengkap sesuai kebutuhan pesan terbaru.'})
                 continue
             preview = prepare(parsed.draft, ctx, [t.message for t in turns], mode)
-            if mode == 'estimate' and parsed.draft.product_name and not preview['ready'] and budget == 8192:
+            if mode == 'estimate' and parsed.draft.product_name and not preview['ready'] and not completion_used:
+                completion_used = True
+                completing = True
                 history.append({"role": "assistant", "content": output})
                 history.append({"role": "user", "content": 'Pemeriksaan backend: ' + json.dumps(preview['missing'], ensure_ascii=False) +
                     '. Lengkapi hanya data perkiraan yang kosong dan perbaiki satuan takaran estimasi agar kompatibel dengan bahan toko. '
@@ -463,6 +561,9 @@ async def generate(draft, turns, ctx, mode, references=""):
                 "output_tokens": usage_output, "model": response.model,
                 "history_compacted": compacted, "stored_turns": len(turns)}
         except ValidationError as exc:
+            if repair_used:
+                raise ValueError('Jawaban AI belum sesuai format resep. Draft sebelumnya tetap tersimpan.') from None
+            repair_used = True
             errors = exc.errors(include_input=False, include_url=False)
             history.append({"role": "assistant", "content": output})
             history.append({"role": "user", "content": "Perbaiki JSON sesuai schema. Field string harus string, bukan null. Masalah validasi: " + json.dumps(errors, default=str) + ". Kirim JSON lengkap; jangan sertakan hitungan HPP."})

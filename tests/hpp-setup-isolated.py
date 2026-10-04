@@ -55,7 +55,7 @@ responses, seen_history = [], []
 gate = None
 
 
-async def fake_generate(draft, turns, ctx, mode, references=""):
+async def fake_generate(draft, turns, ctx, mode, references="", status="draft"):
     seen_history.append([t.message for t in turns])
     if gate:
         await gate.wait()
@@ -302,6 +302,10 @@ async def main():
         atomic, _ = await send(atomic, question, content='Lihat bahan dan resep yang sudah tersimpan', mode='manual')
         assert (atomic['revision'], atomic['preview'], atomic['result'], atomic['mode']) == saved_snapshot
         assert (await apply(atomic)).status_code == 200
+        atomic, _ = await send(atomic, service.ModelReply(action='answer', reply='Bilang saja lalu aku otomatis lanjut'),
+            content='Bagaimana lanjut menu lainnya setelah approve?', mode='estimate')
+        assert 'Resep baru' in atomic['turns'][-1]['reply'] and 'sudah tersimpan' in atomic['turns'][-1]['reply']
+        assert (atomic['revision'], atomic['preview'], atomic['result'], atomic['mode']) == saved_snapshot
         atomic, _ = await send(atomic, draft('Must not overwrite approved', 'Unwanted ingredient', True), content='ubah resep ini', mode='estimate')
         assert atomic['status'] == 'applied' and (atomic['revision'], atomic['preview'], atomic['result'], atomic['mode']) == saved_snapshot
         assert 'Resep baru' in atomic['turns'][-1]['reply']

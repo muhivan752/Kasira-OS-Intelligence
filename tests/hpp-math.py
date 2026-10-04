@@ -13,11 +13,11 @@ from backend.services import hpp_setup_service as setup
 class HppMathTests(unittest.TestCase):
     def test_explicit_estimate_request_and_negations(self):
         for story in ('Kasi estimasi lah', 'Oke aku ikut estimasi mu', 'bantu estimasikan',
-                      'tolong perkirakan', 'estimasi aja', 'mode estimasi'):
+                      'tolong perkirakan', 'estimasi aja', 'mode estimasi', 'buat estimasinya', 'bikinkan perkiraan'):
             self.assertEqual(setup.conversation_mode(story, 'manual'), 'estimate', story)
         for story in ('apa itu estimasi?', 'apa itu mode estimasi?', 'jangan pakai estimasi',
                       'aku gak mau estimasi', 'harga estimasi kemarin keliru',
-                      'dia bilang "pakai estimasi"', 'jangan pakai manual'):
+                      'dia bilang "pakai estimasi"', 'jangan pakai manual', 'gimana buat estimasi?'):
             self.assertEqual(setup.conversation_mode(story, 'manual'), 'manual', story)
         self.assertEqual(setup.conversation_mode('pakai manual saja', 'estimate'), 'manual')
         self.assertEqual(setup.conversation_mode('bantu estimasikan. sekarang pakai manual', 'manual'), 'manual')
@@ -189,6 +189,63 @@ class HppMathTests(unittest.TestCase):
 
 
 class HppProviderProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_switch_menu_recovers_answer_then_completes_without_extra_user_message(self):
+        products = [SimpleNamespace(id='a', name='Puding QA', row_version=0), SimpleNamespace(id='b', name='Teh QA', row_version=0)]
+        ctx = ([], products, [])
+        message = 'Sekarang beresin pudingqa dan tehqa dulu'
+        policy = setup.request_policy(message, ctx, {'product_name': 'Nasi QA'})
+        self.assertEqual(policy['target_menu'], 'Puding QA')
+        self.assertEqual(policy['following_menus'], ['Teh QA'])
+        draft = {'product_name': 'Puding QA', 'servings': 1, 'servings_source': 'estimate',
+            'ingredients': [{'name': 'Bubuk puding', 'quantity': 10, 'quantity_unit': 'gram',
+                'quantity_source': 'estimate', 'price_source': 'estimate'}]}
+        finished = json.loads(json.dumps(draft))
+        finished['ingredients'][0].update(buy_price=10000, buy_qty=100, buy_unit='gram')
+        outputs = [json.dumps({'reply': 'Isi bahan di form dahulu', 'action': 'answer'}),
+            json.dumps({'reply': 'draft', 'draft': draft}), json.dumps({'reply': 'Sudah aku perkirakan.', 'draft': finished})]
+        calls = []
+        async def create(**kwargs):
+            calls.append(json.loads(json.dumps(kwargs)))
+            return SimpleNamespace(content=[SimpleNamespace(type='text', text=outputs.pop(0))],
+                usage=SimpleNamespace(input_tokens=10, output_tokens=20), model='fixture')
+        with patch.object(setup, 'chat_configured', return_value=True), patch.object(setup, 'get_llm_client',
+                return_value=SimpleNamespace(messages=SimpleNamespace(create=create))):
+            output, usage = await setup.generate({'product_name': 'Nasi QA'}, [SimpleNamespace(message=message, reply=None)], ctx, 'estimate')
+        self.assertEqual(output.action, 'edit_recipe')
+        preview = setup.prepare(output.draft, ctx, [message], 'estimate')
+        self.assertTrue(preview['ready'], preview['missing'])
+        self.assertEqual(preview['total_cost'], '1000.00')
+        self.assertEqual([c['max_tokens'] for c in calls], [8192, 16384, 16384])
+        self.assertEqual(usage['output_tokens'], 60)
+        self.assertIn('Menu tujuan: Puding QA', calls[1]['messages'][-1]['content'])
+        self.assertIn('Pemeriksaan backend', calls[2]['messages'][-1]['content'])
+        envelope = json.loads(calls[0]['messages'][-1]['content'].split('\n', 1)[1])
+        self.assertEqual(envelope['current_draft']['product_name'], 'Nasi QA')
+        self.assertEqual(envelope['status'], 'draft')
+
+    def test_catalog_scope_and_help_do_not_become_setup_commands(self):
+        ctx = ([], [SimpleNamespace(name='Puding QA')], [])
+        policy = setup.request_policy('Lihat bahan resep HPP yang belum diisi', ctx, {'product_name': 'Nasi QA'})
+        self.assertEqual(policy['lookup'], {'kind': 'missing_recipes', 'name': ''})
+        for message in ('Gimana buat resep Puding QA?', 'Jangan beresin Puding QA',
+                'lanjut cek resep Puding QA', 'Dia bilang "siapkan Puding QA"'):
+            self.assertNotEqual(setup.request_policy(message, ctx, {}).get('requested_action'), 'edit_recipe', message)
+        self.assertNotIn('lookup', setup.request_policy('Cek resep Puding QA yang belum diisi', ctx, {'product_name': 'Nasi QA'}))
+        self.assertNotIn('target_menu', setup.request_policy('Siapkan menu baru lalu Puding QA', ctx, {}))
+        overlapping = ([], [SimpleNamespace(name='Nasi'), SimpleNamespace(name='Nasi ayam'), SimpleNamespace(name='Teh')], [])
+        policy = setup.request_policy('Beresin nasi ayam dan teh', overlapping, {})
+        self.assertEqual(policy['target_menu'], 'Nasi ayam')
+        self.assertEqual(policy['following_menus'], ['Teh'])
+
+    def test_applied_next_step_matches_real_ui_and_catalog_still_works(self):
+        proposed = setup.ModelReply(action='answer', reply='Nanti aku otomatis lanjut membuat menu lainnya')
+        reply = setup.assistant_answer(proposed, ([], [], []), {'product_name': 'Puding QA'}, 'applied', 'Bagaimana lanjut menu lain?')
+        self.assertIn('Puding QA sudah tersimpan', reply)
+        self.assertIn('Resep baru', reply)
+        self.assertNotIn('otomatis', reply)
+        proposed.lookup = setup.catalog.CatalogQuery(kind='overview')
+        self.assertIn('0 bahan', setup.assistant_answer(proposed, ([], [], []), {}, 'applied', 'lanjut cek menu toko'))
+
     async def test_long_history_and_schema_repair(self):
         calls = []
         value = {"reply": "Periksa draft", "draft": {"product_name": "Nasi", "total_cost": 900000,

@@ -8,6 +8,41 @@ Design Read sebelum perubahan: satu kolom percakapan untuk pemilik usaha,
 Source Sans 3 dan palet Sefrekuensi. ENERGY 2 / RHYTHM 2 / MOTION 1. Antislop
 during mengikuti pilihan sesi pengguna.
 
+## Perbaikan alur setelah percakapan aktual
+
+Review read-only menemukan lookup yang baru menjawab semua menu setelah pengguna
+memperjelas cakupan. Permintaan bereskan menu lain masih menjadi wawancara, dan
+arahan lama mengatakan bahan/menu harus diinput manual terlebih dahulu.
+
+- Prompt membedakan cek katalog umum dengan draft tertentu; setup baru dapat
+  membuat bahan/menu pada approval tanpa input manual sebagai prasyarat. Katalog
+  bukan stok fisik. Arahan baru mengalahkan balasan lama dalam history.
+- Request policy backend menjaga pertanyaan "cek resep HPP yang belum diisi"
+  tanpa nama menu sebagai lookup missing_recipes lengkap. Penyebutan menu tertentu,
+  pertanyaan/negasi/kutipan dan cek lanjutan tidak dipaksa menjadi setup baru.
+- Permintaan langsung seperti beresin/siapkan menu dikenali sebagai setup. Nama
+  alias tanpa spasi mengikuti katalog, satu menu pertama disusun dahulu, tanpa
+  menggabungkan nama menu yang saling tumpang tindih atau mengira menu kedua yang
+  sudah ada sebagai menu pertama yang baru. Output answer atau salah target
+  mendapat satu perbaikan internal; draft lama tidak ditimpa jika tetap salah.
+- Envelope memuat status draft/applied dan missing dari prepare backend. Saat
+  menu berganti, prompt menyusun bahan/porsi menu tujuan; data menu lama tidak
+  diwariskan otomatis. Permintaan beberapa menu dikerjakan satu per approval;
+  menu selanjutnya lewat Resep baru. Backend menjaga petunjuk applied agar tidak
+  menjanjikan pergantian otomatis yang belum tersedia.
+- Budget tetap long-input100k/history220k/output8192,16384. Satu repair dan satu
+  completion mempunyai kesempatan terpisah, maksimal tiga call, usage dijumlahkan.
+  Completion tidak boleh berubah menjadi wawancara lagi. Batas wall time150s per
+  call termasuk SDK retry, lease10min memberi ruang retrieval/commit. Jika masih
+  incomplete, approval tetap diblokir; tidak menciptakan angka backend tebakan.
+- QA PASS math/protocol21/500 oracle, katalog5 termasuk broad lookup walau model
+  salah fokus, dan PG non-superuser RLS/atomic/POS/stok/HTTP202/applied next-step.
+  Provider sintetis PASS enam lookup+bantuan umum+old-history broad lookup+
+  multi-menu estimate ready+applied guidance, empat regresi perhitungan serta
+  estimate/correction. Tidak replay payload merchant ke provider atau menulis
+  resep merchant otomatis. Seluruh perubahan berada di backend; frontend tetap
+  image yang sudah diuji. Bukti/deployment di MEMORY.md dan SESSION.md.
+
 ## Revisi asisten bahan dan resep
 
 Balasan pertanyaan sebelumnya selalu masuk pemeriksaan draft. Pertanyaan katalog
@@ -159,7 +194,7 @@ kosong dan takaran minyak berbeda keluarga satuan dengan bahan toko.
 - R-23 PASS: identitas existing dipertahankan; tidak membuat aset baru.
 - R-24 PASS: riwayat, form, resep tersimpan, Menu dan Bahan Baku menuju fungsi nyata.
 - R-25 PASS: teks AA kedua tema diperiksa browser pada chat dan dialog.
-- R-26 PASS: mode/kirim/riwayat/rincian/sumber/rumus/approve/retry/recovery, Lengkapi estimasi dan tanya katalog setelah approve diuji.
+- R-26 PASS: mode/kirim/riwayat/rincian/sumber/rumus/approve/retry/recovery, Lengkapi estimasi, tanya katalog, pergantian target dan petunjuk setelah approve diuji.
 - R-27 PASS: kosong/loading/pending/incomplete/error/applied tersedia dengan recovery.
 - R-28 PASS: bantuan lokal muncul di sumber dan approval, tanpa FAQ generik.
 - R-29 PASS: warm neutral/charcoal/coral sesuai token Sefrekuensi.
@@ -169,7 +204,7 @@ kosong dan takaran minyak berbeda keluarga satuan dengan bahan toko.
 - R-33 PASS: source dan CSS diedit dengan apply_patch.
 - R-34 PASS: kedua tema dan regresi dashboard theme persistence lolos.
 - R-35 PASS: build, browser fixture, provider nyata, math dan smoke deployment diverifikasi.
-- R-36 PASS: estimasi tetap berlabel, biaya operasional belum termasuk; incomplete tidak mengaku siap, katalog kosong tidak membuat bahan/resep fiktif.
+- R-36 PASS: estimasi tetap berlabel, biaya operasional belum termasuk; incomplete tidak mengaku siap, katalog kosong tidak fiktif, applied tidak menjanjikan lanjut otomatis.
 - R-37 PASS: Design Read dan ENERGY 2 / RHYTHM 2 / MOTION 1 dinyatakan sebelum edit.
 - R-38 PASS: tidak mengisi harga/resep/stok merchant untuk QA; semua usulan berlabel sumber.
 - Liveliness dials PASS: ENERGY 2 / RHYTHM 2 / MOTION 1 diterapkan.

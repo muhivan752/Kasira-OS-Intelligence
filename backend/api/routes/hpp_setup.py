@@ -172,7 +172,7 @@ async def message(session_id: UUID, body: Message, background: BackgroundTasks, 
         raise HTTPException(409, "Dua percakapan Anda masih diproses. Tunggu salah satunya selesai")
     previous_mode = session.mode
     session.pending_request = body.request_id
-    session.pending_until = utc_now() + timedelta(minutes=8)
+    session.pending_until = utc_now() + timedelta(minutes=10)
     session.mode = service.conversation_mode(body.message, body.mode)
     session.error = None
     if not previous:
@@ -228,7 +228,7 @@ async def generate_and_save(db, session, outlet, session_id, body, user):
         except Exception:
             logger.info("HPP retrieval unavailable")
         await db.commit()
-        answer, usage = await service.generate(session.draft, history, ctx, mode, reference)
+        answer, usage = await service.generate(session.draft, history, ctx, mode, reference, status=session.status)
         session, outlet = await owned(db, session_id, user, lock=True)
         if session.pending_request != body.request_id or session.revision != body.revision:
             raise HTTPException(409, "Pesan sudah digantikan proses lain. Muat percakapan terbaru")
@@ -243,7 +243,7 @@ async def generate_and_save(db, session, outlet, session_id, body, user):
             if answer.action != 'answer' and answer.lookup is None:
                 turn.reply = 'Resep ini sudah tersimpan. Aku tetap bisa bantu cek bahan dan resep toko di sini. Untuk mengubah resep, mulai lewat Resep baru ya.'
             else:
-                turn.reply = service.assistant_answer(answer, ctx)
+                turn.reply = service.assistant_answer(answer, ctx, session.draft, session.status, body.message)
                 if answer.lookup and session.draft and session.status != 'applied':
                     turn.reply += '\n\nRancangan di obrolan ini masih draft sampai kamu approve.'
         else:

@@ -48,6 +48,22 @@ class CatalogTests(unittest.TestCase):
 
 
 class CatalogProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_broad_missing_recipe_question_ignores_model_focus_on_old_draft(self):
+        async def create(**kwargs):
+            return Obj(content=[Obj(type='text', text=json.dumps({'reply': 'Input menu lama manual dahulu',
+                'action': 'edit_recipe', 'draft': {'product_name': 'Menu lama', 'ingredients': []}}))],
+                usage=Obj(input_tokens=12, output_tokens=20), model='fixture')
+        ctx = ([], [Obj(id='new', name='Teh QA', row_version=0)], [])
+        existing = {'product_name': 'Menu lama', 'ingredients': []}
+        with patch.object(setup, 'chat_configured', return_value=True), patch.object(setup, 'get_llm_client',
+                return_value=Obj(messages=Obj(create=create))):
+            result, _ = await setup.generate(existing, [Obj(message='Lihat bahan resep HPP yang belum diisi', reply=None)], ctx, 'estimate')
+        self.assertEqual(result.action, 'answer')
+        self.assertIsNone(result.draft)
+        self.assertEqual(result.lookup.kind, 'missing_recipes')
+        self.assertIn('Teh QA', result.reply)
+        self.assertNotIn('manual', result.reply)
+
     async def test_question_never_enters_estimate_completion_or_changes_draft(self):
         value = {'reply': 'Model invented something', 'action': 'answer', 'lookup': {'kind': 'ingredients'},
             'draft': {'product_name': 'Wrong replacement', 'ingredients': []}}
