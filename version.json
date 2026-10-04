@@ -3,12 +3,12 @@
     "version": "1.6.31",
     "is_mandatory": false,
     "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.31/selaris-pos-v1.6.31.apk",
-    "release_notes": "Bug fixes and improvements"
+    "release_notes": "Perbaikan sinkronisasi: DP reservasi tanpa pesanan tidak lagi membatalkan sync, seluruh halaman data ditarik, dan checkpoint disimpan setelah proses selesai. Update dari 1.6.30 bisa dipasang langsung tanpa uninstall."
   },
   "dapur": {
     "version": "1.6.31",
     "is_mandatory": false,
     "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.31/selaris-dapur-v1.6.31.apk",
-    "release_notes": "Bug fixes and improvements"
+    "release_notes": "Build pendamping POS 1.6.31. Login PIN Dapur tetap tersedia. Update dari 1.6.30 bisa dipasang langsung tanpa uninstall."
   }
 }

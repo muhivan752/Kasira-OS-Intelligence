@@ -119,7 +119,11 @@ Bug yang pernah terjadi: ingredient dihapus tapi recipe masih reference → ghos
 ### Sync Endpoint: `POST /api/v1/sync/`
 
 Request: `{node_id, last_sync_hlc, changes: {categories, products, orders, ...}}`
-Response: `{last_sync_hlc, changes: {...}, stock_mode}`
+Response: `{last_sync_hlc, changes: {...}, stock_mode, has_more, next_cursor_hlc, next_cursor_last_id}`
+
+Client melanjutkan pull selama `has_more=true`, tanpa mengirim push ulang. Cursor bersama memakai tail paling awal dari tabel yang masih capped, bukan record paling baru dari tabel lain. SQL mengurutkan tuple `(updated_at dibulatkan ke ms, row_version, id)` agar sama dengan HLC; resep tanpa row_version memakai counter 0 dan ID tie-break.
+
+Cache `PaymentLocal` hanya menyimpan pembayaran dengan `order_id`; DP reservasi standalone tetap di server/alur reservasi. DP dengan order_id NULL tidak boleh diteruskan ke field Drift non-null (hotfix 2026-10-04).
 
 **`stock_mode` direturn di response** supaya Flutter selalu up-to-date kalau owner ganti mode di dashboard.
 
@@ -132,7 +136,8 @@ Response: `{last_sync_hlc, changes: {...}, stock_mode}`
 | `outlet_id` | SecureStorage | Login |
 | `stock_mode` | SecureStorage | Login + every sync |
 | `device_node_id` | SharedPreferences | First launch (format: `device_${timestamp}`) |
-| `last_sync_hlc` | SharedPreferences | Every successful sync |
+| `last_sync_hlc` | SharedPreferences | Watermark server halaman pertama, sesudah semua halaman berhasil |
+| `sync_local_hlc` | SharedPreferences | HLC hasil merge jam lokal + server, terpisah dari cursor pull |
 
 ### Drift DB Schema (v4)
 
@@ -288,9 +293,7 @@ else:
 **PULL (server → client) — `backend/services/sync.py:get_table_changes`:**
 ```
 1. Filter by tenant (brand_id, outlet_id)
-2. If last_sync_hlc provided:
-   WHERE updated_at > hlc.timestamp
-      OR (updated_at == hlc.timestamp AND row_version > hlc.counter)
+2. Normal delta: replay batas milidetik (`updated_at >= hlc.timestamp`). Pagination: tuple `(ms, row_version, id)` harus lebih besar dari cursor.
 3. Attach HLC to each record: HLC(updated_at_ms, row_version, server_node_id)
 4. Return records
 ```
