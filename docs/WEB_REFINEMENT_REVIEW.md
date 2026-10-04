@@ -21,6 +21,7 @@ Screenshot baru pada `public/app/web-*.png` diambil dari preview produksi memaka
 - Pemeriksaan visual screenshot desktop/HP kedua tema, dashboard demo, menu dan keranjang. Preview membaca data demo existing untuk dashboard/pembelian/keuangan tanpa page error atau overflow.
 - Smoke data aktual: 16 route dashboard/menu/toko/kasir/pelanggan/pembelian/keuangan/promo/laporan/bahan-baku/reservasi/AI/settings/onboarding/jelajah/storefront pada 320 dan 1440 px, kedua tema. Total 64 pembukaan route, HTTP 200, tema tersimpan dan tidak ada document overflow/page error. CTA demo membuka storefront sungguhan dan keranjang lokal tanpa submit order.
 - Image final yang diuji: `sha256:f2d69d2af62a12014564b871e16fc0a21c33eaa05a70b53db98fadc26c6e7b28`.
+- Deploy frontend selesai pada source `2ca827f`. Image container produksi cocok dengan image final; backend/frontend/Postgres/Redis healthy. Pemeriksaan HTTPS mengulang tes publik (termasuk direktori toko aktual), auth/dashboard/onboarding demo dan storefront/menu/keranjang kedua tema, seluruhnya lolos tanpa page error atau submit transaksi/pesan nyata.
 
 ## Delivery gate antislop
 

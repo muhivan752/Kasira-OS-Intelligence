@@ -6,6 +6,39 @@ merupakan arsip, bukan pekerjaan yang sedang aktif.
 
 ## HANDOFF TERAKHIR — redesign, sync, Mode Stok dan storefront
 
+### Update terbaru: revisi web premium, 4 Oktober 2026
+
+- Source terbaru `2ca827f` pada main. Web sudah dipasang ke selaris.id memakai
+  image `sha256:f2d69d2af62a12014564b871e16fc0a21c33eaa05a70b53db98fadc26c6e7b28`.
+  Ini menggantikan snapshot frontend hotfix di bawah. Backend tetap migration 111.
+- Arahan Ivan: web keseluruhan masih terlalu AI, khususnya tipografi dan copy
+  nota. Revisi memakai antislop during dan dials ENERGY 2 / RHYTHM 2 / MOTION 1.
+  Web kini Source Sans 3 + judul Source Serif 4; Space Mono hanya kode. Pilihan
+  baru ini disengaja sesuai feedback terakhir, bukan kembali ke PJS web lama.
+  Palet hangat/coral tetap mengikuti Sefrekuensi. Native tetap pada theme sendiri.
+- Landing memakai screenshot web aktual toko demo existing (`public/app/web-*.png`).
+  Nota dan angka pemasaran buatan serta screenshot palet lama dihapus dari
+  tampilan landing. Copy nota: "Unggah nota, periksa hasilnya, lalu simpan pembelian."
+  Header/menu/tema/footer/download seragam; auth/onboarding lebih tenang;
+  dashboard pendapatan menjadi fokus; storefront HP berupa daftar dengan tombol
+  44 px dan sheet Tab/Escape/fokus. Chat bantuan punya loading/error/retry.
+- Kontras mengungkap benturan `--color-base` dengan kelas font `text-base`:
+  kelas itu memberi warna latar pada teks. Token sekarang `--color-canvas`.
+  Hindari nama alias warna yang sama dengan ukuran font Tailwind.
+- Build produksi dan tiga browser regression lolos, termasuk laporan dashboard
+  gagal/retry, data dan tabel harian. Preview data demo 16 route, 320/1440 px,
+  light/dark (64 pembukaan route) HTTP 200, tanpa page error/overflow. Review dan
+  full PASS gate di `docs/WEB_REFINEMENT_REVIEW.md`; screenshot/log tes di /tmp.
+- Hanya frontend direcreate. Tidak membuat pesanan, mengirim OTP/WA, mengganti
+  stok/resep atau memproses pembayaran. APK tetap POS/Dapur 1.6.31+198.
+  Google masih belum aktif karena empat konfigurasi Firebase belum diisi.
+  Langkah Google dan HPP serta temuan native di bawah tetap berlaku.
+- Setelah deploy, tes publik lengkap lewat HTTPS, direktori data aktual,
+  auth/dashboard/onboarding demo dan menu/cart dua tema lolos tanpa page error.
+  Semua container healthy; image deployment sama dengan yang diuji.
+
+### Snapshot pekerjaan sebelumnya
+
 - Workspace `/var/www/kasira`, branch `main`, domain `https://selaris.id`.
   Kode terakhir dipush pada commit `20f79cc` (Mode Stok + storefront). Checkpoint
   memory sesudahnya hanya mengubah dokumentasi. Cek status Git sebelum edit.
