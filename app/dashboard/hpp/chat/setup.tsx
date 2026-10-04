@@ -1,16 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
+import { ArrowUp, History, Plus, X } from 'lucide-react';
 import { approveHppChat, createHppChat, getHppChat, listHppChats, sendHppChat } from '@/app/actions/api';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
 import type { HppChatMode, HppChatSession, HppChatListItem } from '@/lib/hpp-chat';
-import { hppMoney, hppNumber } from '@/lib/hpp';
-
-const labels: Record<string, string> = { user: 'Dari cerita Anda', estimate: 'Estimasi', existing: 'Data bahan toko', unknown: 'Belum diisi' };
-const actions = { create: 'Bahan baru', reuse: 'Pakai bahan toko', update_price: 'Ubah harga bahan toko' };
-const format = (value: string | null) => value === null ? 'Belum diisi' : hppNumber(Number(value));
-const formatCost = (value: string) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 8 }).format(Number(value));
+import { hppMoney } from '@/lib/hpp';
+import { HppReview } from './review';
 
 export function HppChat({ initialProduct }: { initialProduct: string }) {
   const allowed = useProGuard('Setup HPP lewat percakapan');
@@ -23,34 +20,70 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
   const [loading, setLoading] = useState(true);
   const [confirmed, setConfirmed] = useState(false);
   const [replacing, setReplacing] = useState(false);
+  const [sendingText, setSendingText] = useState('');
+  const [panel, setPanel] = useState<'history' | 'recipe' | null>(null);
   const lock = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
-  const end = useRef<HTMLDivElement>(null);
   const history = useRef<HTMLDivElement>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const nearEnd = useRef(true);
   const startingProduct = useRef(initialProduct);
   const preview = session?.preview;
+  const waiting = !!session?.pending;
 
-  useEffect(() => {
-    if (history.current) history.current.scrollTop = history.current.scrollHeight;
-  }, [session?.id, session?.revision, session?.turns.length]);
-
+  function scrollToLatest() {
+    if (history.current && nearEnd.current) history.current.scrollTop = history.current.scrollHeight;
+  }
+  useEffect(scrollToLatest, [session?.id, session?.revision, session?.turns.length, sendingText, waiting]);
   useEffect(() => {
     const element = history.current;
     if (!element) return;
-    const observer = new ResizeObserver(() => { element.scrollTop = element.scrollHeight; });
+    const observer = new ResizeObserver(scrollToLatest);
     observer.observe(element);
     return () => observer.disconnect();
   }, [loading, session?.id]);
 
+  useEffect(() => {
+    const element = input.current;
+    if (!element) return;
+    element.style.height = 'auto';
+    element.style.height = Math.min(element.scrollHeight, 160) + 'px';
+  }, [text, loading, session?.status]);
+
+  useEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+    if (panel && !element.open) element.showModal();
+    if (!panel && element.open) {
+      element.close();
+      returnFocus.current?.focus();
+    }
+  }, [panel]);
+
+  function openPanel(next: 'history' | 'recipe') {
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setPanel(next);
+  }
+  function trapFocus(event: KeyboardEvent<HTMLDialogElement>) {
+    if (event.key !== 'Tab') return;
+    const items = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), summary, select:not(:disabled), textarea:not(:disabled)')]
+      .filter(element => element.getClientRects().length > 0);
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+
   function receive(data: HppChatSession) {
     setSession(data); setMode(data.mode); setConfirmed(false); setReplacing(false);
     try {
-      const key = `hpp-chat-request:${data.id}`;
+      const key = 'hpp-chat-request:' + data.id;
       const pending = JSON.parse(localStorage.getItem(key) || 'null');
       const stored = pending && data.turns.find(turn => turn.id === pending.request_id);
       if (stored) {
-        if (localStorage.getItem(`hpp-chat-input:${data.id}`) === pending.message) {
-          localStorage.removeItem(`hpp-chat-input:${data.id}`); setText('');
+        if (localStorage.getItem('hpp-chat-input:' + data.id) === pending.message) {
+          localStorage.removeItem('hpp-chat-input:' + data.id); setText('');
         }
         if (stored.reply) localStorage.removeItem(key);
       }
@@ -69,7 +102,6 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
     const result = await listHppChats();
     if (result.success) setList(result.data); else setError(result.message);
   }
-
   useEffect(() => {
     if (!allowed) return;
     let active = true;
@@ -84,17 +116,16 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
           if (!active) return;
           if (chat.success) receive(chat.data); else setError(chat.message);
         }
-      } catch { if (active) setError('Percakapan belum bisa dimuat. Coba lagi.'); }
+      } catch { if (active) setError('Obrolan belum bisa dimuat. Coba lagi.'); }
       finally { if (active) setLoading(false); }
     })();
     return () => { active = false; };
   }, [allowed]);
-
   useEffect(() => {
+    nearEnd.current = true;
     if (!session) return;
-    try { setText(localStorage.getItem(`hpp-chat-input:${session.id}`) || ''); } catch {}
+    try { setText(localStorage.getItem('hpp-chat-input:' + session.id) || ''); } catch {}
   }, [session?.id]);
-
   useEffect(() => {
     if (!allowed || !session?.pending) return;
     let stopped = false;
@@ -108,7 +139,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
           if (stopped) return;
           if (result.success) { receive(result.data); if (!result.data.pending) return; }
           else setError(result.message);
-        } catch { if (!stopped) setError('Percakapan belum bisa diperiksa. Tekan Periksa percakapan untuk mencoba lagi.'); }
+        } catch { if (!stopped) setError('Jawaban belum bisa diperiksa. Coba muat ulang obrolan.'); }
       }
       if (!stopped) timer = setTimeout(poll, 2500);
     }
@@ -118,17 +149,15 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
 
   function changeText(value: string) {
     setText(value); setConfirmed(false);
-    if (session) try { localStorage.setItem(`hpp-chat-input:${session.id}`, value); } catch {}
+    if (session) try { localStorage.setItem('hpp-chat-input:' + session.id, value); } catch {}
   }
-
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError('');
     try { await work(); }
-    catch { setError('Koneksi terputus. Periksa percakapan terbaru sebelum mencoba lagi.'); }
-    finally { lock.current = false; setBusy(false); }
+    catch { setError('Koneksi terputus. Periksa obrolan terbaru sebelum mencoba lagi.'); }
+    finally { lock.current = false; setBusy(false); setSendingText(''); }
   }
-
   async function refresh() {
     await run(async () => {
       if (session) {
@@ -138,31 +167,33 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
       await reloadList();
     });
   }
-
   async function choose(id: string) {
-    if (text.trim() && !window.confirm('Teks yang belum dikirim tetap disimpan di percakapan ini. Buka percakapan lain?')) return;
+    if (text.trim() && !window.confirm('Masih ada pesan yang belum dikirim. Pindah obrolan?')) return;
     await run(async () => {
-      if (!id) { setSession(null); setText(''); setConfirmed(false); setReplacing(false);
-        startingProduct.current = '';
-        return; }
+      nearEnd.current = true;
+      if (!id) {
+        setSession(null); setText(''); setConfirmed(false); setReplacing(false);
+        startingProduct.current = ''; setPanel(null);
+        return;
+      }
       const result = await getHppChat(id);
-      if (result.success) receive(result.data); else setError(result.message);
+      if (result.success) { receive(result.data); setPanel(null); } else setError(result.message);
     });
   }
-
   async function send(retry = false) {
     const unanswered = session?.turns.slice().reverse().find(turn => !turn.reply);
     const content = retry ? unanswered?.message : text;
-    if (!content?.trim()) return;
+    if (!content?.trim() || lock.current || (waiting && !retry)) return;
     await run(async () => {
+      nearEnd.current = true; setSendingText(retry ? '' : content);
       let chat = session;
       if (!chat) {
         const created = await createHppChat(mode, startingProduct.current);
         if (!created.success) { setError(created.message); return; }
         chat = created.data; receive(chat);
-        try { localStorage.setItem(`hpp-chat-input:${chat.id}`, content); } catch {}
+        try { localStorage.setItem('hpp-chat-input:' + chat.id, content); } catch {}
       }
-      const key = `hpp-chat-request:${chat.id}`;
+      const key = 'hpp-chat-request:' + chat.id;
       let requestId = retry ? unanswered?.id : undefined;
       if (!requestId) {
         try {
@@ -178,100 +209,110 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
       if (!result.success) { setError(result.message); return; }
       receive(result.data);
       if (result.data.turns.some(turn => turn.id === requestId)) {
-        setText('');
+        if (!retry || text === content) setText('');
         try {
-          localStorage.removeItem(`hpp-chat-input:${chat.id}`);
+          if (!retry || text === content) localStorage.removeItem('hpp-chat-input:' + chat.id);
           if (result.data.turns.some(turn => turn.id === requestId && turn.reply)) localStorage.removeItem(key);
         } catch {}
       }
       await reloadList();
-      end.current?.scrollIntoView({ block: 'nearest' });
-      input.current?.focus();
     });
   }
-
   async function approve() {
     if (!session || !preview || !confirmed || text.trim() || (preview.replaces_recipe && !replacing)) return;
     await run(async () => {
       const result = await approveHppChat(session.id, session.revision, preview.fingerprint, replacing);
-      if (result.success) { receive(result.data); await reloadList(); }
+      if (result.success) { receive(result.data); setPanel(null); nearEnd.current = true; await reloadList(); }
       else setError(result.message);
     });
   }
 
-  return <div className="hpp-workspace hpp-chat space-y-6 max-w-6xl">
-    <header className="space-y-2"><h1 className="text-2xl sm:text-3xl font-semibold">Siapkan HPP lewat percakapan</h1>
-      <p className="max-w-2xl text-muted">Ceritakan menu, bahan, dan cara Anda membuatnya. Periksa draft sebelum menyimpan bahan dan resep.</p>
-      <Link className="hpp-button hpp-text-button" href="/dashboard/hpp">Isi resep dengan form</Link></header>
-    {!allowed || loading ? <p role="status">Memuat percakapan...</p> : <>
-      <div className="flex flex-wrap items-end gap-3"><div className="flex-1 min-w-0 max-w-xl"><label className="block mb-1 font-semibold" htmlFor="hpp-conversation">Percakapan tersimpan</label>
-        <select id="hpp-conversation" className="hpp-control w-full" disabled={busy} value={session?.id || ''} onChange={event => void choose(event.target.value)}>
-          <option value="">Resep baru</option>{session && !list.some(item => item.id === session.id) && <option value={session.id}>Percakapan ini</option>}
-          {list.map(item => <option key={item.id} value={item.id}>{item.name}{item.status === 'applied' ? ' · Sudah disetujui' : ' · Draft'}</option>)}</select></div>
-        <button className="hpp-button" disabled={busy} onClick={() => void refresh()}>Periksa percakapan</button>
-        {session && <button className="hpp-button" disabled={busy} onClick={() => void choose('')}>Resep baru</button>}</div>
-      {error && <div role="alert" className="hpp-panel space-y-2"><p>{error}</p>{error.includes('Sesi') && <Link className="hpp-button" href="/login">Masuk kembali</Link>}</div>}
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
-        <section className="min-w-0 space-y-5" aria-labelledby="hpp-chat-heading"><h2 id="hpp-chat-heading" className="font-semibold text-xl">Percakapan</h2>
-          <div ref={history} role="log" aria-label="Riwayat setup HPP" className="hpp-chat-history space-y-5">
-            {!session?.turns.length && <p className="text-muted">Mulai dari satu menu. Sebutkan bahan yang Anda tahu; harga dan takaran bisa dilengkapi sambil jalan.</p>}
-            {session?.turns.map(turn => <article key={turn.id} className="space-y-3"><div className="border-l-2 border-[var(--control-border)] pl-4"><p className="font-semibold mb-1">Anda</p><p className="whitespace-pre-wrap break-words">{turn.message}</p></div>
-              {turn.reply && <div className="pl-4"><p className="font-semibold mb-1">Asisten resep</p><p className="whitespace-pre-wrap break-words">{turn.reply}</p></div>}</article>)}
-            <div ref={end} /></div>
-          {session?.status === 'applied' ? <div className="hpp-panel space-y-3" role="status"><p className="font-semibold">Bahan dan resep sudah tersimpan.</p>
-            <p>Stok fisik dicatat melalui Bahan Baku. {session.result?.new_product && 'Menu baru masih nonaktif; atur harga jual dan aktifkan melalui Menu.'}</p>
-            <Link className="hpp-button" href={`/dashboard/hpp?product=${session.result?.product_id}`}>Lihat resep tersimpan</Link>
-            <Link className="hpp-button" href="/dashboard/bahan-baku">Catat stok bahan</Link>{session.result?.new_product && <Link className="hpp-button" href="/dashboard/menu">Atur menu baru</Link>}</div>
-            : <form className="space-y-4 border-t border-[var(--border-default)] pt-5" onSubmit={event => { event.preventDefault(); void send(); }}>
-              <fieldset disabled={busy || !!session?.pending} className="space-y-2"><legend className="font-semibold mb-2">Cara menyiapkan data</legend>
-                <label className="hpp-chat-choice"><input type="radio" name="hpp-mode" checked={mode === 'manual'} onChange={() => { setMode('manual'); setConfirmed(false); }} /><span><strong>Manual</strong><span className="block text-sm text-muted">Gunakan harga dan takaran nyata dari cerita Anda.</span></span></label>
-                <label className="hpp-chat-choice"><input type="radio" name="hpp-mode" checked={mode === 'estimate'} onChange={() => { setMode('estimate'); setConfirmed(false); }} /><span><strong>Estimasi</strong><span className="block text-sm text-muted">Minta usulan untuk data yang belum Anda tahu. Bisa dikoreksi sebelum approve.</span></span></label></fieldset>
-              <div><label className="block font-semibold mb-2" htmlFor="hpp-chat-message">Cerita atau koreksi Anda</label>
-                <textarea ref={input} id="hpp-chat-message" className="hpp-control w-full min-h-36" disabled={busy || !!session?.pending} value={text} onChange={event => changeText(event.target.value)}
-                  placeholder="Saya mau membuat nasi ayam penyet. Bahannya ayam, nasi, tempe, sambal..." />
-                <p className="mt-2 text-sm text-muted">Boleh bercerita panjang. Sebutkan apakah takaran untuk satu porsi atau satu batch.</p></div>
-              <button className="hpp-button hpp-primary" disabled={busy || !!session?.pending || !text.trim()} type="submit">{busy ? 'Menyiapkan draft...' : 'Kirim cerita'}</button>
-              {(busy || session?.pending) && <p role="status" className="text-sm">Pesan sedang diproses. Percakapan disimpan agar bisa dilanjutkan.</p>}
-              {session?.error && <p role="alert">{session.error}</p>}
-              {session?.retry_allowed && session.turns.some(turn => !turn.reply) && <button type="button" className="hpp-button" disabled={busy} onClick={() => void send(true)}>Proses ulang pesan terakhir</button>}
-            </form>}
-        </section>
-        <aside className="hpp-panel min-w-0 space-y-5 self-start lg:sticky lg:top-24" aria-labelledby="hpp-draft-heading">
-          <div><h2 id="hpp-draft-heading" className="text-xl font-semibold">{preview?.product_name || 'Draft resep'}</h2>
-            <p className="mt-1 text-sm text-muted">{session ? `Revisi ${session.revision}` : 'Belum ada draft'} · Perhitungan sistem</p>
-            <p className="mt-4 text-sm font-semibold">{preview?.is_estimated ? 'Estimasi HPP bahan per porsi' : 'HPP bahan per porsi'}</p>
-            <p className="mt-1 text-3xl font-semibold tabular-nums" data-testid="hpp-chat-total">{preview?.total_cost ? hppMoney(Number(preview.total_cost)) : 'Belum lengkap'}</p>
-            <p className="mt-2 text-sm text-muted">Belum termasuk gas, gaji, sewa, dan biaya operasional lainnya.</p></div>
-          {!preview ? <p className="text-muted">Bahan, takaran, dan sumber harga akan muncul setelah cerita Anda diproses.</p> : <>
-            <p className="text-sm">Resep untuk {format(preview.servings)} porsi. Jumlah porsi: {labels[preview.servings_source]}.</p>
-            {preview.notes && <p className="text-sm">Catatan resep: {preview.notes}</p>}
-            {preview.new_product && <p className="text-sm">Akan membuat menu baru dalam keadaan nonaktif. Atur harga jual melalui Menu setelah approve.</p>}
-            <ol className="divide-y divide-[var(--border-default)]">{preview.lines.map((line, index) => <li key={index} className="py-4 space-y-2">
-              <div className="flex justify-between gap-3 flex-wrap"><h3 className="font-semibold">{line.name}{line.is_optional && ' (opsional)'}</h3><span>{line.line_cost === null ? 'Belum lengkap' : hppMoney(Number(line.line_cost))}</span></div>
-              <p className="text-sm">{actions[line.action]} · {format(line.quantity)} {line.unit} per porsi</p>
-              {line.basis === 'batch' && <p className="text-sm text-muted">Dari {format(line.input_quantity)} {line.input_unit} per batch, dibagi {format(preview.servings)} porsi.</p>}
-              <p className="text-sm">Takaran: {labels[line.quantity_source]}. Harga: {labels[line.price_source]}.</p>
-              <p className="text-sm text-muted">Biaya satuan: {line.unit_cost === null ? 'Belum diisi' : `${formatCost(line.unit_cost)} Rp/${line.unit}`}.</p>
-              {line.old_unit_cost !== null && <p className="text-sm">Sebelumnya {formatCost(line.old_unit_cost)} Rp/{line.unit}.</p>}
-              {line.action !== 'reuse' && line.buy_price !== null && <p className="text-sm">Pembelian: {hppMoney(Number(line.buy_price))} untuk {format(line.buy_qty)} {line.unit}.</p>}
-              {line.purchase_description && <p className="text-sm text-muted">Dari {line.purchase_description}.</p>}
-              {line.affected_products.length > 0 && <p className="text-sm">Harga baru juga mengubah HPP: {line.affected_products.join(', ')}.</p>}
-              {line.notes && <p className="text-sm text-muted">{line.notes}</p>}
-              {(line.quantity_evidence || line.price_evidence) && <details className="text-sm"><summary className="hpp-chat-evidence">Lihat sumber dari cerita</summary><p className="whitespace-pre-wrap break-words mt-2">{[line.quantity_evidence, line.price_evidence].filter(Boolean).join('\n')}</p></details>}
-            </li>)}</ol>
-            {preview.missing.length > 0 && <div className="space-y-2"><h3 className="font-semibold">Masih perlu dilengkapi</h3><ul className="list-disc pl-5 text-sm space-y-2">{preview.missing.map((item, index) => <li key={index}>{item}</li>)}</ul><p className="text-sm text-muted">Jawab atau koreksi melalui percakapan.</p></div>}
-            <details className="text-sm"><summary className="hpp-chat-evidence">Lihat rumus HPP</summary><p className="mt-2">Biaya satuan = total harga beli ÷ jumlah beli dalam satuan bahan. Biaya bahan = takaran per porsi × biaya satuan. HPP = jumlah biaya bahan wajib. Takaran batch dibagi jumlah porsi. Biaya satuan disimpan hingga 8 desimal; total tampilan dibulatkan ke 2 desimal.</p></details>
-            {session?.status !== 'applied' && <div className="space-y-3 border-t border-[var(--border-default)] pt-4">
-              {preview.is_estimated && <p className="text-sm">Harga atau takaran estimasi perlu diperiksa. Setelah approve, resep tetap diberi label estimasi.</p>}
-              <label className="hpp-chat-choice"><input type="checkbox" checked={confirmed} disabled={busy || !preview.ready || !!session?.pending || !!session?.error || !!text.trim()} onChange={event => setConfirmed(event.target.checked)} /><span>Saya sudah memeriksa bahan, harga, takaran, dan jumlah porsi pada revisi ini.</span></label>
-              {preview.replaces_recipe && <label className="hpp-chat-choice"><input type="checkbox" checked={replacing} disabled={busy} onChange={event => setReplacing(event.target.checked)} /><span>Ganti resep aktif produk ini dengan draft di atas.</span></label>}
-              <button className="hpp-button hpp-primary w-full" disabled={busy || !preview.ready || !confirmed || !!session?.pending || !!session?.error || !!text.trim() || (preview.replaces_recipe && !replacing)} onClick={() => void approve()}>{busy ? 'Memproses...' : preview.replaces_recipe ? 'Approve dan ganti resep' : 'Approve dan simpan resep'}</button>
-              {!!text.trim() && <p className="text-sm">Kirim koreksi yang belum diproses sebelum approve.</p>}
-              <p className="text-sm text-muted">Persetujuan menyimpan bahan dan resep. Stok fisik dan mode stok diatur melalui halaman masing-masing.</p>
-            </div>}
-          </>}
-        </aside>
+  const problem = error || session?.error;
+  const recovery = <div className="hpp-chat-error" role="alert">
+    <p>{problem}</p>
+    {error.includes('Sesi') ? <Link className="hpp-button" href="/login">Masuk kembali</Link>
+      : <button className="hpp-button" disabled={busy} onClick={() => void refresh()}>Periksa percakapan</button>}
+  </div>;
+
+  return <div className="hpp-workspace hpp-chat">
+    <header className="hpp-chat-toolbar">
+      <div className="min-w-0"><h1>Resep &amp; HPP</h1><p>{preview?.product_name || 'Asisten resep'}</p></div>
+      <div className="hpp-chat-tools">
+        <button className="hpp-chat-tool" aria-label="Riwayat obrolan" disabled={busy || loading} onClick={() => openPanel('history')}><History size={19} /><span>Riwayat</span></button>
+        <button className="hpp-chat-tool" aria-label="Resep baru" disabled={busy || loading} onClick={() => void choose('')}><Plus size={21} /><span className="hpp-chat-new-label">Resep baru</span></button>
       </div>
+    </header>
+    {!allowed || loading ? <p className="hpp-chat-loading" role="status">Memuat obrolan...</p> : <>
+      <div ref={history} role="log" aria-label="Riwayat setup HPP" className="hpp-chat-history"
+        onScroll={event => { const el = event.currentTarget; nearEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
+        <div className="hpp-chat-messages">
+          {!session?.turns.length && !sendingText && <div className="hpp-chat-welcome">
+            <h2>Mau bikin menu apa?</h2><p>Ceritain bahan yang kamu tahu dulu. Kita lengkapi takaran dan harganya sambil ngobrol.</p>
+          </div>}
+          {session?.turns.map(turn => <div key={turn.id} className="hpp-chat-turn">
+            <article className="hpp-chat-message hpp-chat-user" aria-label="Pesan Anda"><p>{turn.message}</p></article>
+            {turn.reply && <article className="hpp-chat-message hpp-chat-assistant" aria-label="Jawaban asisten"><p>{turn.reply}</p></article>}
+          </div>)}
+          {sendingText && !session?.turns.some(turn => turn.message === sendingText && !turn.reply) &&
+            <article className="hpp-chat-message hpp-chat-user" aria-label="Pesan sedang dikirim"><p>{sendingText}</p></article>}
+          {(waiting || sendingText) && <p className="hpp-chat-processing" role="status">Menyiapkan jawaban...</p>}
+          {preview && <section className="hpp-chat-recipe" aria-label="Ringkasan resep">
+            <div><p className="hpp-chat-recipe-state">{session?.status === 'applied' ? 'Resep tersimpan' : preview.is_estimated ? 'Estimasi HPP per porsi' : 'HPP per porsi'}</p>
+              <h2>{preview.product_name}</h2></div>
+            <p className="hpp-chat-price" data-testid="hpp-chat-total">{preview.total_cost !== null ? hppMoney(Number(preview.total_cost)) : 'Belum lengkap'}</p>
+            <p className="hpp-chat-recipe-meta">{preview.lines.filter(line => !line.is_optional).length} bahan utama · {preview.servings || '?'} porsi{waiting && ' · Draft sebelumnya'}</p>
+            <button className="hpp-button" onClick={() => openPanel('recipe')}>Lihat resep</button>
+          </section>}
+          {session?.status === 'applied' && <div className="hpp-chat-saved" role="status">
+            <p>Bahan dan resep sudah tersimpan.</p>
+            {session.result?.new_product && <p>Menu baru masih nonaktif. Atur harga jualnya dulu di Menu.</p>}
+            <div className="hpp-chat-saved-links">
+              <Link className="hpp-button" href={'/dashboard/hpp?product=' + session.result?.product_id}>Lihat resep tersimpan</Link>
+              <Link className="hpp-button" href="/dashboard/bahan-baku">Catat stok bahan</Link>
+              {session.result?.new_product && <Link className="hpp-button" href="/dashboard/menu">Atur menu baru</Link>}
+            </div>
+          </div>}
+          {problem && !panel && recovery}
+          {session?.retry_allowed && session.turns.some(turn => !turn.reply) &&
+            <button className="hpp-button" disabled={busy} onClick={() => void send(true)}>Proses ulang pesan terakhir</button>}
+        </div>
+      </div>
+      {session?.status === 'applied' ? <div className="hpp-chat-complete">
+        <p>Mau lanjut menu berikutnya?</p><button className="hpp-button hpp-primary" disabled={busy} onClick={() => void choose('')}>Resep baru</button>
+      </div> : <form className="hpp-chat-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
+        <label className="sr-only" htmlFor="hpp-chat-message">Tulis pesan</label>
+        <textarea ref={input} id="hpp-chat-message" className="hpp-control" rows={1} disabled={busy}
+          value={text} onChange={event => changeText(event.target.value)} placeholder="Tulis pesan..."
+          aria-describedby="hpp-chat-keyboard" onKeyDown={event => {
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy && !waiting) {
+              event.preventDefault(); void send();
+            }
+          }} />
+        <div className="hpp-chat-composer-bottom">
+          <fieldset className="hpp-chat-modes" disabled={busy || waiting}><legend className="sr-only">Cara menyiapkan resep</legend>
+            <label className="hpp-chat-mode"><input type="radio" name="hpp-mode" checked={mode === 'manual'} onChange={() => { setMode('manual'); setConfirmed(false); }} /><span>Manual</span></label>
+            <label className="hpp-chat-mode"><input type="radio" name="hpp-mode" checked={mode === 'estimate'} onChange={() => { setMode('estimate'); setConfirmed(false); }} /><span>Estimasi</span></label>
+          </fieldset>
+          <button className="hpp-button hpp-primary hpp-chat-send" aria-label="Kirim pesan" type="submit" disabled={busy || waiting || !text.trim()}><ArrowUp size={21} /></button>
+        </div>
+        <p className="sr-only" id="hpp-chat-keyboard">Enter untuk kirim. Shift+Enter untuk baris baru.</p>
+      </form>}
     </>}
+    <dialog ref={dialog} className={'hpp-chat-dialog' + (panel === 'history' ? ' hpp-chat-dialog-history' : '')}
+      aria-labelledby="hpp-chat-panel-title" onCancel={() => setPanel(null)} onClose={() => setPanel(null)} onKeyDown={trapFocus}>
+      <header className="hpp-chat-dialog-header"><h2 id="hpp-chat-panel-title">{panel === 'history' ? 'Riwayat obrolan' : preview?.product_name || 'Resep'}</h2>
+        <button autoFocus className="hpp-chat-tool" aria-label="Tutup panel" onClick={() => setPanel(null)}><X size={21} /></button></header>
+      <div className="hpp-chat-dialog-body">
+        {problem && recovery}
+        {panel === 'history' ? <div className="hpp-chat-session-list">
+          <button className="hpp-button" disabled={busy} onClick={() => void refresh()}>Periksa percakapan</button>
+          {!list.length && <p>Belum ada obrolan tersimpan. Mulai dari satu menu.</p>}
+          {list.map(item => <button className="hpp-chat-session" key={item.id} disabled={busy} aria-current={session?.id === item.id ? 'true' : undefined}
+            onClick={() => void choose(item.id)}><span>{item.name}</span><small>{item.status === 'applied' ? 'Tersimpan' : 'Draft'}</small></button>)}
+          <Link className="hpp-button" href="/dashboard/hpp">Isi resep dengan form</Link>
+        </div> : preview && session && <HppReview session={session} preview={preview} busy={busy} hasUnsent={!!text.trim()} hasError={!!problem}
+          confirmed={confirmed} replacing={replacing} onConfirmed={setConfirmed} onReplacing={setReplacing} onApprove={() => void approve()} />}
+      </div>
+    </dialog>
   </div>;
 }

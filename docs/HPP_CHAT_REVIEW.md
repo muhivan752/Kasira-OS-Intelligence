@@ -1,5 +1,8 @@
 # Setup HPP lewat percakapan, 4 Oktober 2026
 
+Komposisi UI awal di bawah digantikan oleh [revisi percakapan](HPP_CONVERSATION_REVIEW.md).
+Rumus, API, transaksi dan batas backend tetap berlaku.
+
 Ivan meminta dua mode chat untuk mengurangi pekerjaan memasukkan bahan dan resep:
 Manual menggunakan data nyata, Estimasi menawarkan usulan ketika pengguna belum
 tahu. Pengguna dapat bercerita panjang, mengoreksi, lalu menyetujui revisi terakhir.

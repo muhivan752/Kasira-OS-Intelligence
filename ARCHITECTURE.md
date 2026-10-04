@@ -86,6 +86,9 @@ setelah API sukses; error 500 tidak diteruskan mentah ke browser.
 ### Web: setup HPP percakapan (migration 112, 4 Oktober 2026)
 
 `/dashboard/hpp/chat` dan `/ai/hpp-setup` menyediakan Manual/Estimasi lewat chat.
+Revisi UI 4 Oktober: satu kolom pesan dengan composer di bawah; riwayat dan
+review/approval melalui dialog. Kartu HPP berasal dari preview backend, bukan
+angka dalam reply model. Balasan singkat mengikuti cerita, satu pertanyaan berikutnya.
 Postgres menyimpan sesi, semua turn, draft, preview, revisi, lease dan hasil approved
 dengan RLS serta scope tenant/user/outlet. POST pesan membalas 202; background
 worker membuka AsyncSession sendiri, SET LOCAL tenant, melepas transaksi saat
