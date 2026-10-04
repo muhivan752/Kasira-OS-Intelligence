@@ -6,6 +6,37 @@ merupakan arsip, bukan pekerjaan yang sedang aktif.
 
 ## HANDOFF TERAKHIR — redesign, sync, Mode Stok dan storefront
 
+### Update terbaru: Bahan Baku web, 4 Oktober 2026
+
+- Ivan meminta Bahan Baku lebih user friendly. Source `6d91aac` sudah di main
+  dan live. Antislop during sesi tetap, ENERGY 2 / RHYTHM 2 / MOTION 1; Source
+  Sans 3 dan palet Sefrekuensi mengikuti Atur HPP.
+- Route `/dashboard/bahan-baku` stock-first, search/filter dan counts aktual.
+  Form Tambah bahan langsung kosong; input harga pembelian bukan stok. Save satu
+  write, lalu Catat stok lewat modal terpisah. Restok = tambahan, dengan konversi
+  dan projected stock. Ubah harga berlaku pada semua resep; pemakaian menampilkan
+  produk/takaran. Bahan masih dipakai tidak bisa dihapus dari UI sampai dilepas.
+- Bagian Biaya operasional terpisah: nama + estimasi harian, tanpa stok/pembelian.
+  Belum dialokasikan ke modal bahan per porsi, jangan klaim sudah masuk HPP.
+- Null stock bukan habis; cost desimal/server weighted cost bukan pembelian terakhir.
+  Harga tetap row_version dan base_unit/unit_type existing; merge response tanpa
+  stock/used_in harus menjaga nilai loaded. Unit baru kg/liter canonical gram/ml.
+- Backend restock belum idempotent. Guard double-click dan uncertain 500/network
+  wajib dipertahankan: reconcile dulu, tidak auto-replay write. Load transport
+  error browser ditangkap, draft 400/422/409 dipertahankan. Dialog native punya
+  manual Tab trap, Escape, dirty confirm dan focus return sesudah reconcile.
+- Production build/TypeScript, backend unit oracle, inventory/HPP/auth/stock-
+  storefront browser passed. Lima lebar dua tema AA/44px/placeholder, Tab/Shift+Tab,
+  return focus, 200% text dan compressed viewport; API 400/422/409/500/401,
+  browser network abort, pagination >100, simulated commit 500 tanpa stock ganda.
+- Demo aktual 0 bahan; tidak diisi data palsu. Smoke HTTPS inventory tiga lebar
+  dua tema dan HPP 13 produk × tiga lebar × dua tema serta storefront actual
+  menu/cart 320 px dua tema passed. Tidak write bahan/resep/stok/mode/pesanan.
+- Final/live image `sha256:c7b54e58aa043ab5633b1c6b7d183de764cdcc8e2a0f5f8b250b166c53daec9c`.
+  Empat layanan healthy. Deploy frontend-only, APK 1.6.31+198/backend migration111
+  unchanged. Review `docs/INGREDIENT_INVENTORY_REVIEW.md`; source tes baru
+  `tests/ingredient-inventory-browser.cjs`; bukti `/tmp/selaris-inventory-*`.
+
 ### Update terbaru: alur HPP web, 4 Oktober 2026
 
 - Ivan bingung mengisi HPP dan mengonfirmasi cakupan **web dashboard**. Source

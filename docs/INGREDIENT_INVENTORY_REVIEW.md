@@ -84,6 +84,11 @@ agar halaman demo tampak terisi.
   13.10:1. Teks browser diperiksa minimum 4.5:1, termasuk placeholder.
 - Log dan screenshot QA `/tmp/selaris-inventory-*`; bukan aset/konten toko.
 - Image final `sha256:c7b54e58aa043ab5633b1c6b7d183de764cdcc8e2a0f5f8b250b166c53daec9c`.
+- Source `6d91aac` dipush main dan dipasang frontend-only ke selaris.id. Image
+  aktif sama dengan image final yang diuji; frontend/backend/Postgres/Redis healthy.
+- Smoke HTTPS inventory tiga lebar kedua tema, HPP aktual 13 produk × tiga lebar
+  × dua tema dan storefront aktual menu/cart kedua tema 320 px lolos. Form kosong
+  dan dapat dibatalkan, tanpa write bahan/resep/stok/mode atau submit pesanan.
 
 ## Delivery gate antislop
 

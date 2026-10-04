@@ -3,6 +3,35 @@
 
 ## STATUS TERKINI — 2026-10-04 setelah implementasi
 
+- **Bahan Baku web** dibuat lebih mudah dipakai dan sudah live, source `6d91aac`.
+  `/dashboard/bahan-baku`: Tambah bahan langsung form kosong nama/harga/jumlah/
+  satuan pembelian. Simpan bahan tidak restok; setelah save ada Catat stok.
+  Tambah stok menyebut jumlah tambahan dan stok setelah simpan. Ubah harga dan
+  Lihat pemakaian terpisah. Biaya operasional punya bagian/form estimasi harian
+  sendiri, belum termasuk HPP bahan per porsi. Bahan yang masih dipakai di resep
+  diarahkan melepas resep sebelum delete. Filter/search dari data aktual.
+- Inventory null stock = belum dicatat, 0 = habis. Cost desimal dan
+  cost_per_base_unit server ditampilkan terpisah dari pembelian terakhir (weighted
+  average bisa berbeda). Kg/liter baru canonical gram/ml; edit existing tidak
+  mengubah base_unit/unit_type, tetap row_version. Response price yang tanpa stock
+  join harus mempertahankan loaded stock/minimum/used_in. Backend unchanged.
+- Stock write belum idempotent: klik save dikunci, 500/network ambigu wajib
+  reconcile/muat ulang tanpa replay otomatis. Draft validasi 400/422/409 tetap ada.
+  Browser-to-Server-Action load transport error ditangkap agar loading tidak macet.
+  Dialog native ditambah manual Tab/Shift+Tab trap; Escape/dirty confirm dan focus
+  return sesudah cancel/reconcile tersedia. Jangan menghapus guard ini.
+- Build/TypeScript, unit oracle backend, inventory/HPP/auth/stock-storefront
+  browser lolos. Inventory lima lebar kedua tema, AA/placeholder/44px, keyboard,
+  teks 200%, viewport pendek, pagination >100, network abort, 500 setelah simulated
+  commit tanpa duplikasi. Writes hanya fixture; demo aktual 0 bahan tidak di-seed.
+  HTTPS inventory dan HPP (13 produk, tiga lebar, dua tema), storefront actual
+  menu/cart 320 px kedua tema lolos tanpa write bahan/resep/stok/mode/pesanan.
+- Image inventory final/live
+  `sha256:c7b54e58aa043ab5633b1c6b7d183de764cdcc8e2a0f5f8b250b166c53daec9c`.
+  Frontend/backend/Postgres/Redis healthy. Frontend-only deploy; backend migration
+  111 dan APK 1.6.31+198 tetap. Review/gate `docs/INGREDIENT_INVENTORY_REVIEW.md`,
+  tes `tests/ingredient-inventory-browser.cjs`, log/screenshots `/tmp/selaris-inventory-*`.
+
 - Alur HPP **web dashboard** disederhanakan sesuai keluhan Ivan, source `4f7934c`.
   Dashboard punya **Atur HPP** (`/dashboard/hpp`): pilih produk, pilih/buat bahan di
   tempat, isi harga + jumlah pembelian, takaran **satu porsi**, lihat biaya, simpan,
