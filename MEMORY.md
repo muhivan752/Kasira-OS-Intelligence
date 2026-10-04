@@ -1,7 +1,44 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## TERKINI — ASISTEN RESEP/Bahan MEMBACA KATALOG, LIVE 2026-10-04
+## TERKINI — ALUR KATALOG DAN PINDAH MENU DIPERBAIKI, LIVE 2026-10-04
+
+- Ivan meminta memperbaiki temuan review chat Sushi→Egg Tart. Source **8ebc710**
+  sudah live. Pertanyaan umum "cek resep HPP yang belum diisi" tanpa nama target
+  diarahkan backend ke semua menu missing_recipes; nama target/draft tertentu
+  tetap dibedakan. Arahan lama dalam riwayat tidak menjadi prasyarat input manual.
+- Permintaan langsung beresin/siapkan/lanjut menu menjadi setup, bukan wawancara.
+  Request policy menjaga target menu pertama yang disebut (termasuk alias tanpa
+  spasi), menangani nama tumpang tindih, dan tidak memaksa menu kedua yang sudah
+  ada ketika menu pertama masih baru. Pertanyaan/negasi/kutipan tetap terlindungi.
+  Model output answer/salah target diberi satu repair internal; bila tetap salah,
+  draft lama tidak ditimpa. Pergantian menu menyusun bahan/porsi menu tujuan.
+- Envelope sekarang membawa status draft/applied dan missing dari prepare backend.
+  Draft baru dapat menyiapkan bahan/menu baru lalu disimpan saat Approve, bukan
+  harus ditambah manual dahulu. Katalog bukan stok fisik, jangan klaim stok habis.
+  Jika beberapa menu diminta, satu resep pertama disusun dan di-approve dahulu.
+  Sesudah applied, lanjut lewat **Resep baru**. Backend menjaga petunjuk itu agar
+  AI tidak menjanjikan pindah otomatis yang belum ada. Applied draft tidak diubah.
+- 'buat estimasinya' juga mengubah mode efektif; pertanyaan/negasi tetap dihormati.
+  Long-input100k/history220k/output8192/16384 unchanged. Repair dan completion
+  terpisah: maksimal **3 call**, masing-masing wall time150s termasuk SDK retries,
+  input/output usage dijumlahkan. Lease sekarang **10min**, bukan8min. Jika
+  masih incomplete, approval tetap diblokir. Rumus Decimal/harga nyata/provenance
+  dan stok physical unchanged, tidak membuat angka HPP dengan LLM.
+- QA PASS math/protocol21/500oracle, katalog5 termasuk model salah fokus+700-item
+  compaction; PG RLS/atomic/replay/applied-next/POS/stok/HTTP202. Provider sintetis
+  PASS6 lookup+general help+broad old-draft question+multi-menu estimate ready+
+  applied guidance, provider4 legacy dan estimate/correction. Tidak replay/export
+  payload merchant ke provider atau menulis resep merchant otomatis.
+- Backend service+route docker cp/restart existing setelah active_hpp_jobs=0.
+  Backup `/tmp/selaris-hpp-flow-backup`; Started2026-10-04T18:26:14.351267688Z.
+  Source hashes cocok, empat healthy. Frontend image tetap7fa2f9a2... (tidak ada
+  edit UI), migration112/APK1.6.31+198 unchanged. Jangan recreate backend.
+- HTTPS actual3lebar/dua tema/navigasi PASS tanpa pageerror/write merchant;
+  logs `/tmp/selaris-hpp-flow-*.log`. Review/gate `docs/HPP_CONVERSATION_REVIEW.md`.
+  Memory/SESSION/source pushed. Catatan React418 lama tetap belum teridentifikasi.
+
+## ARSIP — ASISTEN RESEP DAN BAHAN MEMBACA KATALOG, LIVE 2026-10-04
 
 - Review read-only setelah tes Ivan (18:09–18:11 UTC): lookup menu tanpa resep
   berhasil menjawab Egg Tart + Kopi susu. Pertanyaan menjaga revision3. Namun

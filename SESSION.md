@@ -4,7 +4,39 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
-## HANDOFF TERAKHIR — asisten bahan dan resep toko, live 4 Oktober 2026
+## HANDOFF TERAKHIR — perbaikan alur katalog/pindah menu, live 4 Oktober 2026
+
+- Source **8ebc710** live, menyelesaikan request "oke beresin" setelah review chat.
+  Request policy backend menjaga broad missing_recipes tanpa terikat draft lama;
+  setup eksplisit harus edit_recipe/target menu pertama. Question/quoted/negated,
+  named-scope, overlapping names dan new-first/known-second dilindungi. Alias
+  product tanpa spasi dikenali. Salah action/target diberi satu repair internal.
+- Prompt baru mengalahkan arahan lama: bahan/menu baru dapat dibuat saat Approve,
+  tidak mewajibkan input manual dulu. Katalog bukan stok fisik. Estimasi langsung
+  menyusun menu tujuan dan tidak membawa bahan/batch lama secara otomatis.
+- generate signature menambah status='draft'; worker mengirim session.status.
+  Envelope status+current_draft_validation ready/missing dari backend. Applied
+  tetap immutable; helper assistant_answer menjaga petunjuk next-step Resep baru.
+  Beberapa menu satu resep/approval dahulu, belum auto queue/switch antarmenu.
+- Permintaan 'buat estimasinya' dikenali effective mode. Budget input/history/
+  output unchanged, **maks3 call** karena satu repair dan satu completion terpisah;
+  completion tidak boleh kembali menjadi answer/wawancara. Usage akumulatif,
+  asyncio.timeout150s/call membatasi SDK retry, **lease10min** memberi ruang.
+  Incomplete tetap review-blocked, tidak memalsukan input/angka backend.
+- QA PASS math/protocol21/500oracle, catalog5 termasuk broad lookup salah model;
+  PG QA RLS/atomic/replay/applied step/POS/stok/HTTP202; provider synthetic6 lookup+
+  help+old-draft broad+multi-menu ready+applied guidance; provider4 legacy dan
+  estimate/correction. Provider QA tanpa DB/merchant export. Full gate diperbarui.
+- Backend dua file service+route docker cp/restart, active_hpp_jobs=0 sebelumnya;
+  backup `/tmp/selaris-hpp-flow-backup`. Started2026-10-04T18:26:14.351267688Z,
+  source hashes cocok. Jangan recreate backend. Frontend image7fa2f9a2... tetap,
+  migration112/APK1.6.31+198 unchanged, empat healthy.
+- HTTPS actual320/768/1440 kedua tema/endpoint200/navigasi PASS tanpa pageerror/
+  overflow/write merchant. `/tmp/selaris-hpp-flow-*.log` menyimpan bukti.
+  QA db/redis/network dan temp modules backend dibersihkan setelah smoke; source
+  dan memory pushed. React418 lama belum teridentifikasi, tidak muncul kali ini.
+
+## ARSIP — asisten bahan dan resep toko, live 4 Oktober 2026
 
 - Review read-only sesudah tes user: alur belum sepenuhnya mulus. Turn katalog
   ambigu masih fokus Sushi dan menyuruh input manual; klarifikasi "dari semua menu"

@@ -42,6 +42,10 @@ arahan lama mengatakan bahan/menu harus diinput manual terlebih dahulu.
   estimate/correction. Tidak replay payload merchant ke provider atau menulis
   resep merchant otomatis. Seluruh perubahan berada di backend; frontend tetap
   image yang sudah diuji. Bukti/deployment di MEMORY.md dan SESSION.md.
+- Source `8ebc710` live lewat docker cp/restart service+route existing, backend
+  Started2026-10-04T18:26:14.351267688Z. Active jobs0 sebelum restart, source hashes
+  cocok dan empat layanan healthy. HTTPS actual tiga lebar/dua tema/navigasi PASS
+  tanpa pageerror/write merchant. Migration112/APK unchanged, frontend tidak rebuild.
 
 ## Revisi asisten bahan dan resep
 
