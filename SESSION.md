@@ -6,6 +6,16 @@ merupakan arsip, bukan pekerjaan yang sedang aktif.
 
 ## HANDOFF TERAKHIR — asisten bahan dan resep toko, live 4 Oktober 2026
 
+- Review read-only sesudah tes user: alur belum sepenuhnya mulus. Turn katalog
+  ambigu masih fokus Sushi dan menyuruh input manual; klarifikasi "dari semua menu"
+  benar memakai missing_recipes (Egg Tart + Kopi susu). "beresin eggtart dan kopi
+  susu" di mode estimate masih answer+wawancara, draft tidak pindah sampai user
+  minta estimasi eksplisit. Hasil pertama incomplete, Lengkapi estimasi berhasil.
+  Egg Tart applied revision5, HPP backend preview/approval/stored semua2178.33;
+  satu resep aktif, Kopi susu belum punya resep. Tidak ada error/pending terakhir.
+  Belum ada fix tambahan karena request kali ini review log. Jangan mengklaim
+  alur sudah sepenuhnya benar; lanjut dari temuan ini bila diminta perbaikan.
+
 - Source **3909d09** live. Ivan menguji pertanyaan katalog, tetapi balasannya
   tertimpa normalizer draft kosong. Model sekarang answer/lookup/edit_recipe;
   `services/hpp_catalog.py` menjawab enam jenis pertanyaan dari data aktual.

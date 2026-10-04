@@ -3,6 +3,19 @@
 
 ## TERKINI — ASISTEN RESEP/Bahan MEMBACA KATALOG, LIVE 2026-10-04
 
+- Review read-only setelah tes Ivan (18:09–18:11 UTC): lookup menu tanpa resep
+  berhasil menjawab Egg Tart + Kopi susu. Pertanyaan menjaga revision3. Namun
+  pertanyaan awal "cek bahan resep hpp yang belum diisi" masih dijawab tentang
+  draft Sushi, tanpa lookup, dan menyuruh tambah menu/bahan manual padahal approval
+  chat dapat membuatnya. Permintaan bereskan Egg Tart + Kopi susu di mode estimate
+  masih dibalas wawancara; belum pindah draft sampai "buat estimasinya" dan perlu
+  Lengkapi estimasi satu kali lagi. Ini temuan alur yang BELUM diperbaiki.
+  Egg Tart akhirnya applied revision5: preview=approval=resep aktual **2178.33**,
+  satu resep aktif, bahan harga nyata existing direuse; Kopi susu masih tanpa resep.
+  User kali ini meminta cek log; tidak mengubah prompt/aplikasi atau replay provider.
+  Prioritas berikutnya: cakupan pertanyaan katalog vs draft, bantuan jujur tentang
+  otomatisasi lewat approval, transisi ke menu baru tanpa wawancara ulang Estimasi.
+
 - Ivan meminta chat lebih fleksibel: bisa bertanya bahan/resep yang sudah ada,
   termasuk toko kosong. Read-only sesi terakhir menunjukkan balasan pertanyaan
   tertimpa "Mau bikin menu apa?": semua output dipaksa melalui pemeriksaan draft.
