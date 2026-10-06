@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.6.32",
+    "version": "1.6.33",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.32/selaris-pos-v1.6.32.apk",
-    "release_notes": "POS: login username toko dan password, aktivasi akun karyawan, migrasi akun lama, pemulihan owner, dan pencabutan sesi perangkat. Tim mendukung absensi pribadi online; pengaturan akun dan jabatan melalui web. Perbaikan HPP APK memakai hasil server dan memperbarui rincian resep setelah sync tanpa menghapus antrean transaksi. Dapur: build pendamping dengan sesi login server yang dapat dicabut. GPS/foto absensi dan akses seluruh modul/AI belum termasuk."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.33/selaris-pos-v1.6.33.apk",
+    "release_notes": "POS: izin kasir, stok, sesi kas, catatan kas, refund dan dapur mengikuti akun serta outlet. Harga modal dan riwayat kasir lain dibatasi. Akun staf dengan izin baru bertransaksi online; sync hanya menarik data dan menjaga antrean lama saat akses berubah. Stok dan opname tersedia di web. Dapur pendamping tetap memakai login PIN existing. Masa izin offline baru, akses keuangan/HPP/AI dan GPS/foto absensi belum termasuk."
   },
   "dapur": {
-    "version": "1.6.32",
+    "version": "1.6.33",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.32/selaris-dapur-v1.6.32.apk",
-    "release_notes": "POS: login username toko dan password, aktivasi akun karyawan, migrasi akun lama, pemulihan owner, dan pencabutan sesi perangkat. Tim mendukung absensi pribadi online; pengaturan akun dan jabatan melalui web. Perbaikan HPP APK memakai hasil server dan memperbarui rincian resep setelah sync tanpa menghapus antrean transaksi. Dapur: build pendamping dengan sesi login server yang dapat dicabut. GPS/foto absensi dan akses seluruh modul/AI belum termasuk."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.33/selaris-dapur-v1.6.33.apk",
+    "release_notes": "POS: izin kasir, stok, sesi kas, catatan kas, refund dan dapur mengikuti akun serta outlet. Harga modal dan riwayat kasir lain dibatasi. Akun staf dengan izin baru bertransaksi online; sync hanya menarik data dan menjaga antrean lama saat akses berubah. Stok dan opname tersedia di web. Dapur pendamping tetap memakai login PIN existing. Masa izin offline baru, akses keuangan/HPP/AI dan GPS/foto absensi belum termasuk."
   }
 }

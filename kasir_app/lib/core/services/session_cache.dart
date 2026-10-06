@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
@@ -35,6 +36,62 @@ class SessionCache {
   String? phone;
   String? userId;
   String accessMode = 'legacy';
+  Set<String> permissions = {};
+  List<Map<String, dynamic>> allowedOutlets = [];
+  String? accessVersion;
+  bool allows(String permission) =>
+      accessToken != null &&
+      (accessMode != 'managed' || permissions.contains(permission));
+  bool get offlinePosAllowed => accessToken != null && accessMode != 'managed';
+
+  Future<void> applyAccess(Map<String, dynamic> manifest) async {
+    if (manifest['user_id'] != null && manifest['user_id'] != userId ||
+        manifest['tenant_id'] != null && manifest['tenant_id'] != tenantId) {
+      throw StateError('Identitas akses akun tidak sesuai');
+    }
+    final mode = manifest['enforcement_mode']?.toString();
+    accessMode =
+        ['owner', 'legacy', 'managed'].contains(mode) ? mode! : 'managed';
+    permissions = (manifest['permissions'] as List? ?? [])
+        .map((p) => p.toString())
+        .toSet();
+    allowedOutlets = (manifest['outlets'] as List? ?? [])
+        .map((o) => Map<String, dynamic>.from(o as Map))
+        .toList();
+    accessVersion = manifest['access_version']?.toString();
+    await const FlutterSecureStorage()
+        .write(key: 'access_mode', value: accessMode);
+    await const FlutterSecureStorage()
+        .write(key: 'access_manifest', value: jsonEncode(manifest));
+  }
+
+  Future<void> _loadAccess() async {
+    accessMode =
+        await const FlutterSecureStorage().read(key: 'access_mode') ?? 'legacy';
+    final value =
+        await const FlutterSecureStorage().read(key: 'access_manifest');
+    permissions = {};
+    allowedOutlets = [];
+    accessVersion = null;
+    if (value != null) {
+      try {
+        final manifest = jsonDecode(value) as Map<String, dynamic>;
+        if (manifest['user_id'] == userId &&
+            manifest['tenant_id'] == tenantId) {
+          permissions = (manifest['permissions'] as List? ?? [])
+              .map((p) => p.toString())
+              .toSet();
+          allowedOutlets = (manifest['outlets'] as List? ?? [])
+              .map((o) => Map<String, dynamic>.from(o as Map))
+              .toList();
+          accessVersion = manifest['access_version']?.toString();
+        }
+      } catch (_) {
+        accessMode = 'managed';
+      }
+    }
+  }
+
   // Business domain untuk Adaptive UI labels (Batch #26).
   // Values: 'fnb' (default) | 'retail' | 'service'. Null = belum di-detect,
   // treat as 'fnb' via BusinessLabels.getLabel fallback.
@@ -86,7 +143,7 @@ class SessionCache {
     shiftSessionId = results[5];
     phone = results[6];
     userId = results[7];
-    accessMode = await secure.read(key: 'access_mode') ?? 'legacy';
+    await _loadAccess();
 
     // Mirror non-sensitive to SharedPreferences for faster cold reads
     if (tenantId != null) prefs.setString('c_tenant_id', tenantId!);
@@ -133,6 +190,8 @@ class SessionCache {
     ]);
     accessToken = results[0];
     shiftSessionId = results[1];
+    userId = await secure.read(key: 'user_id');
+    await _loadAccess();
     _initialized = true;
   }
 
@@ -359,6 +418,9 @@ class SessionCache {
   // ── Logout / clear ─────────────────────────────────────────────────────────
   Future<void> clear() async {
     accessMode = 'legacy';
+    permissions = {};
+    allowedOutlets = [];
+    accessVersion = null;
     accessToken = null;
     tenantId = null;
     outletId = null;

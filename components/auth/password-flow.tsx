@@ -1,5 +1,7 @@
 'use client';
 
+import { POS_WORKSPACE_PERMISSIONS } from '@/lib/pos-access';
+
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -31,7 +33,7 @@ export function PasswordFlow({ mode }: { mode: 'login' | 'register' | 'activatio
       if (!result.success) { setError(result.message); return; }
       request.current = null;
       const requested = new URLSearchParams(window.location.search).get('redirect');
-      const destination = result.data.access?.enforcement_mode === 'managed' ? '/dashboard/hris' : mode === 'register' ? '/onboarding' : requested && /^\/dashboard(?:\/|$)/.test(requested) ? requested : '/dashboard';
+      const destination = result.data.access?.enforcement_mode === 'managed' ? result.data.access?.permissions?.some((p: string) => POS_WORKSPACE_PERMISSIONS.includes(p)) ? '/dashboard/operasional' : '/dashboard/hris' : mode === 'register' ? '/onboarding' : requested && /^\/dashboard(?:\/|$)/.test(requested) ? requested : '/dashboard';
       if (result.data.recovery_code) { setRecovery(result.data.recovery_code); setTarget(destination); }
       else { router.push(destination); router.refresh(); }
     } finally { setBusy(false); }

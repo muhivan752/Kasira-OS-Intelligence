@@ -120,6 +120,20 @@ class _TeamAccountPageState extends ConsumerState<TeamAccountPage> {
                           Text(_error!,
                               style: TextStyle(
                                   color: Theme.of(context).colorScheme.error)),
+                        if (SessionCache.instance.accessMode == 'managed' &&
+                            [
+                              'pos.sell',
+                              'stock.view',
+                              'sales.detail.view',
+                              'pos.shift.manage',
+                              'pos.cash.manage',
+                              'pos.refund',
+                              'pos.refund.approve',
+                              'pos.kitchen'
+                            ].any(SessionCache.instance.allows))
+                          FilledButton(
+                              onPressed: () => context.go('/dashboard'),
+                              child: const Text('Buka operasional toko')),
                         if (_setup == null) ...[
                           const Text('Memuat tim…'),
                           TextButton(

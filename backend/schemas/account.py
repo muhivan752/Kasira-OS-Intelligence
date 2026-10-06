@@ -59,6 +59,8 @@ class AccountRequest(AccountBody):
 
 
 HRIS_PERMISSIONS = frozenset({"hris.self", "hris.employees.manage", "hris.schedules.manage", "hris.attendance.manage"})
+from backend.schemas.access import POS_PERMISSIONS
+SUPPORTED_ROLE_PERMISSIONS = HRIS_PERMISSIONS | POS_PERMISSIONS
 
 
 class RoleSave(AccountRequest):
@@ -71,8 +73,8 @@ class RoleSave(AccountRequest):
     @field_validator("permissions")
     @classmethod
     def supported_permissions(cls, value):
-        if set(value) - HRIS_PERMISSIONS:
-            raise ValueError("Saat ini pengaturan jabatan mendukung izin Tim dan absensi")
+        if set(value) - SUPPORTED_ROLE_PERMISSIONS:
+            raise ValueError("Pengaturan jabatan mendukung izin Tim, POS dan stok")
         return value
 
     @field_validator("outlet_ids")

@@ -136,6 +136,7 @@ class AccessTests(unittest.TestCase):
         outlet = SimpleNamespace(id=uuid4(), name="QA", timezone="Asia/Jakarta")
         employee = SimpleNamespace(id=uuid4(), phone="PRIVATE", notes="PRIVATE")
         public = self.context(outlets=(outlet,), employee=employee).public()
-        self.assertEqual(public["enforced_modules"], ["hris"])
+        self.assertEqual(public["enforced_modules"], ["hris", "pos", "stock", "sync"])
+        self.assertFalse(public["offline_pos_allowed"])
         self.assertNotIn("PRIVATE", str(public))
         self.assertNotIn("access_policy", public)

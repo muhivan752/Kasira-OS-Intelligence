@@ -1,3 +1,4 @@
+from backend.services.pos_access import PosAccessRoute
 from typing import Any, List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,7 +13,7 @@ from backend.schemas.reservation import TableCreate, TableUpdate, TableResponse
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 
-router = APIRouter(dependencies=[Depends(deps.require_pro_tier)])
+router = APIRouter(route_class=PosAccessRoute, dependencies=[Depends(deps.require_pro_tier)])
 
 
 @router.get("/", response_model=StandardResponse[List[TableResponse]])

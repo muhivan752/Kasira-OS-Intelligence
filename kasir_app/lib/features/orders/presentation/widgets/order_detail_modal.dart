@@ -335,8 +335,8 @@ class _OrderDetailModalState extends ConsumerState<OrderDetailModal> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
+            if (SessionCache.instance.allows('pos.refund')) const SizedBox(width: 12),
+            if (SessionCache.instance.allows('pos.refund')) Expanded(
               child: OutlinedButton.icon(
                 onPressed: () => _showRefundDialog(order),
                 icon: const Icon(LucideIcons.rotateCcw, size: 18),

@@ -71,7 +71,7 @@ class CartPanel extends ConsumerWidget {
         _PosModeBadge(cart: cart),
 
         // Customer
-        Padding(
+        if (SessionCache.instance.allows('customers.lookup')) Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
           child: InkWell(
             onTap: () => showDialog(

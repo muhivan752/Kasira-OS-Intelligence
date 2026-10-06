@@ -7,7 +7,16 @@ import { AccountSettings } from '@/components/auth/account-settings';
 import '../../keuangan/finance.css';
 import '../hris.css';
 
-const labels: Record<string, string> = { 'hris.self': 'Lihat jadwal dan catat kehadiran sendiri', 'hris.employees.manage': 'Kelola profil karyawan', 'hris.schedules.manage': 'Kelola jadwal kerja', 'hris.attendance.manage': 'Kelola dan koreksi absensi' };
+const labels: Record<string, string> = {
+  'hris.self': 'Lihat jadwal dan catat kehadiran sendiri', 'hris.employees.manage': 'Kelola profil karyawan',
+  'hris.schedules.manage': 'Kelola jadwal kerja', 'hris.attendance.manage': 'Kelola dan koreksi absensi',
+  'pos.sell': 'Buat pesanan dan terima pembayaran', 'pos.refund': 'Ajukan refund',
+  'pos.refund.approve': 'Setujui atau tolak refund', 'pos.discount.override': 'Ubah harga transaksi dan diskon di atas 20%',
+  'pos.shift.manage': 'Buka, jeda dan hitung sesi kas', 'pos.cash.manage': 'Catat kas masuk dan keluar',
+  'pos.kitchen': 'Lihat pesanan dan ubah status dapur', 'sales.detail.view': 'Lihat riwayat seluruh kasir dan rincian penjualan',
+  'stock.view': 'Lihat stok', 'stock.receive': 'Terima barang dan tambah stok', 'stock.adjust': 'Catat hasil stok opname',
+  'customers.lookup': 'Cari pelanggan untuk transaksi (nama dan nomor tersamar)',
+};
 
 export default function TeamAccess() {
   const [setup, setSetup] = useState<any>(null), [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
@@ -46,7 +55,7 @@ export default function TeamAccess() {
     {error && <div className="f-notice f-error" role="alert"><p>{error}</p><button className="f-button" disabled={busy} onClick={() => { setError(''); void load(); }}>Muat ulang</button></div>}{notice && <p className="f-notice" role="status">{notice}</p>}
     {!setup ? <p role="status">{error ? 'Akses belum dapat dimuat.' : 'Memuat akun tim…'}</p> : <>
       <AccountSettings onSaved={() => { void load(); }} />
-      <section className="f-panel"><h2>Jabatan dengan pengaturan izin</h2><p>Jabatan baru mendukung Tim dan absensi. Akses kasir dan modul lain untuk akun lama tetap mengikuti jabatan lama sampai integrasinya tersedia.</p>
+      <section className="f-panel"><h2>Jabatan dengan pengaturan izin</h2><p>Pilih hak lihat dan tindakan secara terpisah. Akun staf dengan izin baru memakai POS saat online. Transaksi lama yang belum tersinkron tetap disimpan untuk diselesaikan pemilik. Harga modal, pengaturan menu, keuangan dan AI belum tersedia untuk jabatan ini.</p>
         <label className="finance-form">Pilih jabatan<select value={roleId} onChange={e => { setRoleId(e.target.value); roleUuid.current = ''; }}><option value="">Buat jabatan baru</option>{setup.roles.filter((r: any) => r.editable).map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
         <form key={roleId} className="finance-form" onSubmit={roleSubmit} aria-busy={busy}><label>Nama jabatan<input name="name" defaultValue={role?.name || ''} required minLength={2} maxLength={100} /></label>
           <fieldset><legend>Outlet yang diizinkan</legend>{setup.outlets.map((o: any) => <label className="account-option" key={o.id}><input type="checkbox" name="outlet_ids" value={o.id} defaultChecked={role?.policy.outlet_ids.includes(o.id)} />{o.name}</label>)}</fieldset>

@@ -1,7 +1,7 @@
 name: kasira_kasir
 description: Selaris POS Cashier Application
 publish_to: 'none'
-version: 1.6.32+199
+version: 1.6.33+200
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

@@ -1,3 +1,4 @@
+from backend.services.pos_access import PosAccessRoute
 from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timezone, date
@@ -38,7 +39,7 @@ from backend.services.ingredient_stock_service import deduct_ingredients_for_pro
 from backend.services.variant_utils import resolve_variant
 from backend.models.event import Event
 
-router = APIRouter()
+router = APIRouter(route_class=PosAccessRoute)
 
 @router.post("/", response_model=StandardResponse[OrderResponse])
 async def create_order(
@@ -52,6 +53,10 @@ async def create_order(
     """
     if not order_in.items:
         raise HTTPException(status_code=400, detail="Order harus memiliki minimal 1 item")
+    access = request.state.access
+    if access.mode == "managed":
+        from backend.services.pos_access import validate_order
+        await validate_order(db, order_in, access)
 
     # Validasi outlet milik tenant user
     outlet = (await db.execute(
@@ -73,6 +78,8 @@ async def create_order(
             .where(Order.id == order_in.id, Order.outlet_id == order_in.outlet_id)
         )).scalar_one_or_none()
         if existing:
+            if access.mode == "managed" and existing.user_id != current_user.id:
+                access.require("sales.detail.view")
             return StandardResponse(
                 success=True,
                 message="Order already exists (idempotent)",
@@ -153,7 +160,9 @@ async def create_order(
         if discount_pct > 20 and not current_user.is_superuser:
             from backend.models.role import Role
             role = await db.get(Role, current_user.role_id) if current_user.role_id else None
-            if not role or not role.can_discount_override:
+            if access.mode == "managed":
+                access.require("pos.discount.override")
+            elif not role or not role.can_discount_override:
                 raise HTTPException(
                     status_code=403,
                     detail=f"Diskon {discount_pct:.0f}% melebihi batas 20%. Perlu persetujuan supervisor."
@@ -390,6 +399,8 @@ async def read_orders(
 
     if status:
         query = query.where(Order.status == status)
+    if request.state.access.mode == "managed" and not request.state.access.allows("sales.detail.view"):
+        query = query.where((Order.user_id == current_user.id) | (Order.accepted_by == current_user.id))
     if table_id:
         query = query.where(Order.table_id == table_id)
     if start_date:
@@ -507,6 +518,8 @@ async def read_online_orders(
     q = select(Order).options(selectinload(Order.items).selectinload(OrderItem.product)).where(
         Order.outlet_id == outlet_id, Order.source == "storefront", Order.deleted_at.is_(None),
     )
+    if request.state.access.mode == "managed" and not request.state.access.allows("sales.detail.view"):
+        q = q.where(Order.status.in_(ONLINE_ACTIVE_STATUSES) | (Order.user_id == current_user.id) | (Order.accepted_by == current_user.id))
     if include_done:
         start_today = datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=24)
         q = q.where((Order.status.in_(ONLINE_ACTIVE_STATUSES)) | (Order.created_at >= start_today))
@@ -642,6 +655,7 @@ async def update_kitchen_status(
 
 @router.get("/stream")
 async def stream_orders(
+    request: Request,
     outlet_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -661,6 +675,23 @@ async def stream_orders(
             yield "event: hello\ndata: {}\n\n"
             while True:
                 msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=15.0)
+                if request.state.access.mode == "managed":
+                    from backend.core.database import AsyncSessionLocal
+                    from backend.services.access import resolve_access
+                    from backend.services.accounts import validate_session
+                    try:
+                        async with AsyncSessionLocal() as fresh:
+                            await fresh.execute(text("SELECT set_config('app.current_tenant_id', :tid, true)"), {"tid": str(current_user.tenant_id)})
+                            actor = await fresh.scalar(select(User).where(User.id == current_user.id))
+                            if actor is None:
+                                raise HTTPException(401, "Akun tidak tersedia")
+                            latest = await resolve_access(fresh, actor)
+                            await validate_session(fresh, actor, request.state.auth_claims, request.state.auth_token)
+                            latest.require("pos.sell")
+                            latest.require_outlet(outlet_id)
+                    except HTTPException:
+                        yield 'event: access_revoked\ndata: {"message":"Izin akun berubah. Muat ulang akses."}\n\n'
+                        return
                 if msg is None:
                     yield ": ping\n\n"
                     continue
@@ -668,8 +699,16 @@ async def stream_orders(
                 if isinstance(data, (bytes, bytearray)):
                     data = data.decode()
                 try:
-                    ev = json.loads(data).get("type", "message")
+                    payload = json.loads(data)
+                    ev = payload.get("type", "message")
+                    if request.state.access.mode == "managed":
+                        if ev not in {"order.created", "order.accepted", "order.ready", "order.cancelled", "delivery.dispatched", "delivery.delivered", "delivery.failed", "payment.proof"}:
+                            continue
+                        if not payload.get("order_id"):
+                            continue
                 except Exception:  # noqa: BLE001
+                    if request.state.access.mode == "managed":
+                        continue
                     ev = "message"
                 yield f"event: {ev}\ndata: {data}\n\n"
         except asyncio.CancelledError:

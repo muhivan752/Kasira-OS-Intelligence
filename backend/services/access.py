@@ -19,7 +19,7 @@ LEGACY_FLAGS = {
     "can_refund": "pos.refund", "can_approve_refund": "pos.refund.approve",
     "can_discount_override": "pos.discount.override",
 }
-ENFORCED_MODULES = ("hris",)
+ENFORCED_MODULES = ("hris", "pos", "stock", "sync")
 
 
 def denied(code, message):
@@ -59,6 +59,7 @@ class AccessContext:
             "outlets": [{"id": str(o.id), "name": o.name, "timezone": o.timezone} for o in self.outlets],
             "employee_id": str(self.employee.id) if self.employee else None,
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "offline_pos_allowed": self.mode != "managed",
         }
 
 
@@ -157,5 +158,6 @@ def enforce_route(request, context):
         ("GET", accounts.account_info), ("GET", accounts.sessions), ("POST", accounts.revoke_sessions),
     }
     # FastAPI has resolved endpoint identity before dependencies, even without scope['route'].
-    if (request.method, request.scope.get("endpoint")) not in allowed:
+    from backend.services.pos_access import supported_route
+    if (request.method, request.scope.get("endpoint")) not in allowed and not supported_route(request):
         denied("ACCESS_ROUTE_NOT_READY", "Fitur ini belum tersedia untuk akun dengan pengaturan akses baru")

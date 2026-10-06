@@ -1,3 +1,4 @@
+from backend.services.pos_access import PosAccessRoute
 import uuid
 from typing import Any, List, Optional
 from datetime import datetime, timezone
@@ -17,7 +18,7 @@ from backend.schemas.ingredient import IngredientCreate, IngredientUpdate, Ingre
 from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
 
-router = APIRouter(dependencies=[Depends(deps.require_pro_tier)])
+router = APIRouter(route_class=PosAccessRoute, dependencies=[Depends(deps.require_pro_tier)])
 
 
 @router.get("/", response_model=StandardResponse[List[IngredientResponse]])

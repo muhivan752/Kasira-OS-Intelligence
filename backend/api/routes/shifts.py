@@ -1,3 +1,4 @@
+from backend.services.pos_access import PosAccessRoute
 from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timezone, timedelta
@@ -22,7 +23,7 @@ from backend.services.audit import log_audit
 from backend.models.payment import Payment
 from backend.models.order import Order
 
-router = APIRouter()
+router = APIRouter(route_class=PosAccessRoute)
 
 
 async def _enrich_shift_with_payments(db: AsyncSession, shift) -> dict:

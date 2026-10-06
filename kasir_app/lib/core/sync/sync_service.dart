@@ -18,12 +18,15 @@ enum SyncStatus {
   idle,
   syncing,
   success,
+
   /// Expected offline scenarios: SocketException, TimeoutException, DioException
   /// connectionError/timeout. Di-log silent (debugPrint) — gak lempar exception
   /// biar caller fire-and-forget gak keganggu.
   networkError,
+
   /// HTTP error dari server (4xx/5xx). Di-rethrow biar caller bisa show UI.
   serverError,
+
   /// Bug di Flutter (parsing error, null deref, dll). Di-rethrow biar bug gak
   /// ketimbun silent.
   clientError,
@@ -36,8 +39,10 @@ class SyncService {
 
   static const String _lastSyncKey = 'last_sync_hlc';
   static const String _localClockKey = 'sync_local_hlc';
-  static const String _paginationBackfilledKey = 'sync_pagination_backfilled_v1';
+  static const String _paginationBackfilledKey =
+      'sync_pagination_backfilled_v1';
   static const String _hppBackfilledKey = 'recipe_hpp_backfilled_v1';
+
   /// Penanda backfill varian produk (v1.6.0) sudah jalan sekali di device ini.
   static const String _variantsBackfilledKey = 'variants_backfilled_v1';
   // Raw device installation ID — UUID random di-generate sekali saat first
@@ -60,7 +65,10 @@ class SyncService {
 
   bool get stockModeChanged => _stockModeChanged;
   String get newStockMode => _newStockMode;
-  void clearStockModeChanged() { _stockModeChanged = false; _newStockMode = ''; }
+  void clearStockModeChanged() {
+    _stockModeChanged = false;
+    _newStockMode = '';
+  }
 
   /// Current sync status — reset to terminal state (never stuck di syncing).
   SyncStatus _status = SyncStatus.idle;
@@ -120,6 +128,7 @@ class SyncService {
   // dipake ulang. Makanya kita re-init di [cancelInFlight] biar sync cycle
   // berikutnya start fresh.
   CancelToken _syncCancelToken = CancelToken();
+  int _generation = 0;
 
   /// Batalin request POST /sync yang sedang in-flight (kalau ada). Dipanggil
   /// dari `performLogout()` biar gak ada request "gentayangan" yang complete
@@ -128,6 +137,7 @@ class SyncService {
   /// Setelah cancel, token di-reset ke instance baru biar sync berikut
   /// (e.g. dari user baru yang login) punya CancelToken segar.
   void cancelInFlight() {
+    _generation++;
     if (!_syncCancelToken.isCancelled) {
       _syncCancelToken.cancel('logout');
     }
@@ -142,6 +152,20 @@ class SyncService {
     }
     _status = SyncStatus.syncing;
     _lastError = null;
+    final generation = _generation;
+    final sessionToken = SessionCache.instance.accessToken;
+    final session = SessionCache.instance;
+    final identity =
+        '${session.tenantId}:${session.userId}:${session.outletId}';
+    final cancelToken = _syncCancelToken;
+    void ensureCurrent() {
+      if (generation != _generation ||
+          sessionToken != session.accessToken ||
+          identity !=
+              '${session.tenantId}:${session.userId}:${session.outletId}') {
+        throw StateError('Sesi sinkronisasi sudah berubah');
+      }
+    }
 
     try {
       // Rule #50: scope unsynced reads ke outletId aktif — jangan push data
@@ -152,6 +176,35 @@ class SyncService {
         _status = SyncStatus.idle;
         return;
       }
+      var managed = session.accessMode == 'managed';
+      final cursorKey = managed ? 'managed_sync_hlc:$identity' : _lastSyncKey;
+      final accessKey = 'sync_access_version:$identity';
+      const cacheScopeKey = 'pos_cache_access_scope';
+      if (managed) {
+        final result = await dio.get('/auth/access', cancelToken: cancelToken);
+        ensureCurrent();
+        final manifest = Map<String, dynamic>.from(result.data['data'] as Map);
+        await session.applyAccess(manifest);
+        ensureCurrent();
+        managed = session.accessMode == 'managed';
+        if (prefs.getString(accessKey) != session.accessVersion || prefs.getString(cacheScopeKey) != '$identity:${session.accessVersion}') {
+          await db.clearAccessCaches();
+          ensureCurrent();
+          await prefs.remove(cursorKey);
+          // The owner needs a full pull after private cache rows are removed.
+          await prefs.setBool(_paginationBackfilledKey, false);
+          await prefs.setBool(_hppBackfilledKey, false);
+          await prefs.setBool(_variantsBackfilledKey, false);
+        }
+        if (!session.allowedOutlets.any((o) => o['id'] == currentOutletId) ||
+            !['pos.sell', 'stock.view', 'sales.detail.view']
+                .any(session.allows)) {
+          throw StateError(
+              'Izin sinkronisasi sudah berubah. Antrean transaksi tetap tersimpan.');
+        }
+      }
+
+      if (!managed) await prefs.setString(cacheScopeKey, 'legacy:$identity');
 
       // Batch #18 Rule #4: scope unsynced products by current tenant's brand
       // biar gak leak produk dari session tenant lama (kalau pernah login
@@ -189,7 +242,8 @@ class SyncService {
         // next sync pull returns fresh record.
         'outlet_stock': [],
         'shifts': unsyncedShifts.map(_shiftToJson).toList(),
-        'cash_activities': unsyncedCashActivities.map(_cashActivityToJson).toList(),
+        'cash_activities':
+            unsyncedCashActivities.map(_cashActivityToJson).toList(),
       };
 
       // Sekali seumur instalasi: paksa tarik-ulang penuh supaya varian produk
@@ -201,7 +255,7 @@ class SyncService {
       // sekarang — begitu APK baru dipasang, tabelnya kebuat tapi selamanya
       // kosong, dan kasir lihat produk tanpa pilihan Hot/Ice tanpa ada yang
       // ngeh kenapa. Nol-in kursornya sekali, biarin satu sync penuh jalan.
-      if (!(prefs.getBool(_variantsBackfilledKey) ?? false)) {
+      if (!managed && !(prefs.getBool(_variantsBackfilledKey) ?? false)) {
         await prefs.remove(_lastSyncKey);
         await prefs.setBool(_variantsBackfilledKey, true);
       }
@@ -209,9 +263,9 @@ class SyncService {
       final needsPaginationBackfill =
           !(prefs.getBool(_paginationBackfilledKey) ?? false);
       final needsHppBackfill = !(prefs.getBool(_hppBackfilledKey) ?? false);
-      final lastSyncHlc =
-          needsPaginationBackfill || needsHppBackfill
-              ? null : prefs.getString(_lastSyncKey);
+      final lastSyncHlc = managed
+          ? prefs.getString(cursorKey)
+          : needsPaginationBackfill || needsHppBackfill ? null : prefs.getString(cursorKey);
 
       // Multi-outlet tenant WAJIB kirim outlet_id — backend reject (400) kalau
       // tenant punya >1 outlet dan outlet_id kosong. Single-outlet backward
@@ -223,7 +277,7 @@ class SyncService {
       // prefs. Key di-remove dari prefs cuma setelah server balas 200 OK
       // (end of success block) — guarantee retry-safe walau mid-flight drop.
       String? pendingKey = prefs.getString(_pendingIdempotencyKey);
-      if (pendingKey == null || pendingKey.isEmpty) {
+      if (!managed && (pendingKey == null || pendingKey.isEmpty)) {
         pendingKey = _uuid.v4();
         await prefs.setString(_pendingIdempotencyKey, pendingKey);
       }
@@ -232,8 +286,9 @@ class SyncService {
         'node_id': nodeId,
         'outlet_id': currentOutletId,
         'last_sync_hlc': lastSyncHlc,
-        'idempotency_key': pendingKey,
-        'changes': changes,
+        if (!managed) 'idempotency_key': pendingKey,
+        if (managed) 'access_version': session.accessVersion,
+        'changes': managed ? <String, dynamic>{} : changes,
       };
 
       // 2. Send to server — pass cancel token biar logout bisa batalin
@@ -241,8 +296,9 @@ class SyncService {
       final response = await dio.post(
         '/sync/',
         data: payload,
-        cancelToken: _syncCancelToken,
+        cancelToken: cancelToken,
       );
+      ensureCurrent();
 
       if (response.statusCode == 200) {
         final data = response.data;
@@ -250,7 +306,7 @@ class SyncService {
         final serverChanges = data['changes'];
 
         // 3. Apply server changes to local DB
-        await _applyServerChanges(serverChanges);
+        await _applyServerChanges(serverChanges, ensureCurrent: ensureCurrent);
         var page = data;
         var hppSupported = serverChanges.containsKey('recipe_hpp');
         final seenCursors = <String>{};
@@ -272,14 +328,18 @@ class SyncService {
                 'cursor_hlc': cursor,
                 'cursor_last_id': lastId,
                 'changes': <String, dynamic>{},
+                if (managed) 'access_version': session.accessVersion,
               },
-              cancelToken: _syncCancelToken);
+              cancelToken: cancelToken);
+          ensureCurrent();
           if (continuation.statusCode != 200) {
             throw StateError('Halaman sinkronisasi gagal dimuat');
           }
           page = continuation.data;
-          hppSupported = hppSupported && page['changes'].containsKey('recipe_hpp');
-          await _applyServerChanges(page['changes']);
+          hppSupported =
+              hppSupported && page['changes'].containsKey('recipe_hpp');
+          await _applyServerChanges(page['changes'],
+              ensureCurrent: ensureCurrent);
         }
 
         // 3b. Persist stock_mode + subscription_tier via SessionCache
@@ -298,14 +358,16 @@ class SyncService {
         }
 
         // 4. Mark local changes as synced
-        await _markAsSynced(
-          products: unsyncedProducts,
-          orders: unsyncedOrders,
-          orderItems: unsyncedOrderItems,
-          payments: unsyncedPayments,
-          shifts: unsyncedShifts,
-          cashActivities: unsyncedCashActivities,
-        );
+        ensureCurrent();
+        if (!managed)
+          await _markAsSynced(
+            products: unsyncedProducts,
+            orders: unsyncedOrders,
+            orderItems: unsyncedOrderItems,
+            payments: unsyncedPayments,
+            shifts: unsyncedShifts,
+            cashActivities: unsyncedCashActivities,
+          );
 
         // Keep the server pull watermark separate from the device's write clock.
         // Advancing it to device time would skip updates made during this pull.
@@ -321,16 +383,21 @@ class SyncService {
         }
         await prefs.setString(
             _localClockKey, HLC.fromServer(localClock, serverHlc).toString());
-        await prefs.setString(_lastSyncKey, serverClock.toString());
-        await prefs.setBool(_paginationBackfilledKey, true);
+        ensureCurrent();
+        await prefs.setString(cursorKey, serverClock.toString());
+        if (managed && session.accessVersion != null) {
+          await prefs.setString(accessKey, session.accessVersion!);
+          await prefs.setString(cacheScopeKey, '$identity:${session.accessVersion}');
+        }
+        if (!managed) await prefs.setBool(_paginationBackfilledKey, true);
         // Keep backfill pending until every page supports HPP and has committed.
-        if (hppSupported) await prefs.setBool(_hppBackfilledKey, true);
+        if (!managed && hppSupported) await prefs.setBool(_hppBackfilledKey, true);
 
         // 6. Hapus pending idempotency_key — sync selesai end-to-end, next
         // sync() generate fresh. Timing: SETELAH HLC update + markAsSynced
         // biar kalau ada failure mid-way, key stays persist → retry reuses →
         // backend dedup. Placed paling akhir sebelum _status=success.
-        await prefs.remove(_pendingIdempotencyKey);
+        if (!managed) await prefs.remove(_pendingIdempotencyKey);
 
         _status = SyncStatus.success;
         // debugPrint('Sync completed successfully. New HLC: $serverHlc');
@@ -400,8 +467,32 @@ class SyncService {
   /// kasir lihat "Sinkronisasi gagal" + produk/stok/varian nggak ada.
   /// Kegigit 2 Sep 2026 — `products.base_price` jadi baris pertama yang mati,
   /// jadi nol tabel pernah keisi sejak backend pindah ke string Decimal.
-  Future<void> _applyServerChanges(Map<String, dynamic> changes) async {
+  Future<void> _applyServerChanges(Map<String, dynamic> changes,
+      {void Function()? ensureCurrent}) async {
     await db.transaction(() async {
+      ensureCurrent?.call();
+      if (SessionCache.instance.accessMode == 'managed') {
+        const names = {
+          'products': 'products',
+          'orders': 'orders',
+          'order_items': 'order_items',
+          'payments': 'payments',
+          'shifts': 'shifts',
+          'cash_activities': 'cash_activities',
+          'ingredients': 'ingredients',
+          'recipes': 'recipes',
+          'recipe_ingredients': 'recipe_ingredients',
+          'product_variants': 'product_variants',
+          'outlet_stock': 'outlet_stocks'
+        };
+        for (final entry in names.entries) {
+          if (changes[entry.key] == null) continue;
+          final pending = await db.protectedSyncIds(entry.value);
+          changes[entry.key] = (changes[entry.key] as List)
+              .where((row) => !pending.contains(row['id']))
+              .toList();
+        }
+      }
       // Apply Products — CRDT merge: gabungkan counter lokal & server
       if (changes['products'] != null) {
         for (var p in changes['products']) {
@@ -426,40 +517,42 @@ class SyncService {
             // ngabaikan perubahan server. Counter tetap di-merge buat storage/
             // kompat, tapi mergedStock TETAP = server stock_qty.
             final mPos = PNCounter.merge(
-                PNCounter.fromJson(existing.crdtPositive), PNCounter.fromJson(serverPos));
+                PNCounter.fromJson(existing.crdtPositive),
+                PNCounter.fromJson(serverPos));
             final mNeg = PNCounter.merge(
-                PNCounter.fromJson(existing.crdtNegative), PNCounter.fromJson(serverNeg));
+                PNCounter.fromJson(existing.crdtNegative),
+                PNCounter.fromJson(serverNeg));
             mergedPos = PNCounter.toJson(mPos);
             mergedNeg = PNCounter.toJson(mNeg);
             // mergedStock TIDAK di-override — pakai stock_qty server (authoritative).
           }
 
           await db.into(db.products).insertOnConflictUpdate(
-            ProductLocal(
-              id: p['id'],
-              brandId: p['brand_id'],
-              categoryId: p['category_id'],
-              name: p['name'],
-              description: p['description'],
-              basePrice: _toDouble(p['base_price']),
-              // buy_price (Decimal) datang sebagai string "8500.00" atau null
-              // dari backend. Server adalah source of truth — Flutter gak
-              // pernah push, jadi langsung overwrite local dengan server val.
-              buyPrice: _toDoubleOrNull(p['buy_price']),
-              sku: p['sku'],
-              barcode: p['barcode'],
-              imageUrl: p['image_url'],
-              stockEnabled: p['stock_enabled'] ?? false,
-              crdtPositive: mergedPos,
-              crdtNegative: mergedNeg,
-              stockQty: mergedStock,
-              isActive: p['is_active'] ?? true,
-              rowVersion: p['row_version'] ?? 0,
-              isDeleted: p['is_deleted'] ?? false,
-              lastModifiedHlc: p['hlc'],
-              isSynced: true,
-            ),
-          );
+                ProductLocal(
+                  id: p['id'],
+                  brandId: p['brand_id'],
+                  categoryId: p['category_id'],
+                  name: p['name'],
+                  description: p['description'],
+                  basePrice: _toDouble(p['base_price']),
+                  // buy_price (Decimal) datang sebagai string "8500.00" atau null
+                  // dari backend. Server adalah source of truth — Flutter gak
+                  // pernah push, jadi langsung overwrite local dengan server val.
+                  buyPrice: _toDoubleOrNull(p['buy_price']),
+                  sku: p['sku'],
+                  barcode: p['barcode'],
+                  imageUrl: p['image_url'],
+                  stockEnabled: p['stock_enabled'] ?? false,
+                  crdtPositive: mergedPos,
+                  crdtNegative: mergedNeg,
+                  stockQty: mergedStock,
+                  isActive: p['is_active'] ?? true,
+                  rowVersion: p['row_version'] ?? 0,
+                  isDeleted: p['is_deleted'] ?? false,
+                  lastModifiedHlc: p['hlc'],
+                  isSynced: true,
+                ),
+              );
         }
       }
 
@@ -467,63 +560,71 @@ class SyncService {
       if (changes['orders'] != null) {
         for (var o in changes['orders']) {
           await db.into(db.orders).insertOnConflictUpdate(
-            OrderLocal(
-              id: o['id'],
-              outletId: o['outlet_id'],
-              shiftSessionId: o['shift_session_id'],
-              customerId: o['customer_id'],
-              tableId: o['table_id'],
-              userId: o['user_id'],
-              orderNumber: o['order_number'],
-              displayNumber: o['display_number'],
-              status: o['status'],
-              orderType: o['order_type'],
-              subtotal: _toDouble(o['subtotal']),
-              serviceChargeAmount: _toDouble(o['service_charge_amount']),
-              taxAmount: _toDouble(o['tax_amount']),
-              discountAmount: _toDouble(o['discount_amount']),
-              totalAmount: _toDouble(o['total_amount']),
-              notes: o['notes'],
-              createdAt: o['created_at'] != null ? DateTime.parse(o['created_at']) : null,
-              updatedAt: o['updated_at'] != null ? DateTime.parse(o['updated_at']) : null,
-              rowVersion: o['row_version'] ?? 0,
-              isDeleted: o['is_deleted'] ?? false,
-              lastModifiedHlc: o['hlc'],
-              isSynced: true,
-            ),
-          );
+                OrderLocal(
+                  id: o['id'],
+                  outletId: o['outlet_id'],
+                  shiftSessionId: o['shift_session_id'],
+                  customerId: o['customer_id'],
+                  tableId: o['table_id'],
+                  userId: o['user_id'],
+                  orderNumber: o['order_number'],
+                  displayNumber: o['display_number'],
+                  status: o['status'],
+                  orderType: o['order_type'],
+                  subtotal: _toDouble(o['subtotal']),
+                  serviceChargeAmount: _toDouble(o['service_charge_amount']),
+                  taxAmount: _toDouble(o['tax_amount']),
+                  discountAmount: _toDouble(o['discount_amount']),
+                  totalAmount: _toDouble(o['total_amount']),
+                  notes: o['notes'],
+                  createdAt: o['created_at'] != null
+                      ? DateTime.parse(o['created_at'])
+                      : null,
+                  updatedAt: o['updated_at'] != null
+                      ? DateTime.parse(o['updated_at'])
+                      : null,
+                  rowVersion: o['row_version'] ?? 0,
+                  isDeleted: o['is_deleted'] ?? false,
+                  lastModifiedHlc: o['hlc'],
+                  isSynced: true,
+                ),
+              );
         }
       }
-      
+
       // Apply Order Items
       if (changes['order_items'] != null) {
         for (var oi in changes['order_items']) {
           await db.into(db.orderItems).insertOnConflictUpdate(
-            OrderItemLocal(
-              id: oi['id'],
-              orderId: oi['order_id'],
-              productId: oi['product_id'],
-              productVariantId: oi['product_variant_id'],
-              quantity: oi['quantity'],
-              unitPrice: _toDouble(oi['unit_price']),
-              discountAmount: _toDouble(oi['discount_amount']),
-              totalPrice: _toDouble(oi['total_price']),
-              // jsonEncode, BUKAN .toString(). Server ngirim modifiers sebagai
-              // objek JSON; `Map.toString()` di Dart ngasih `{variant_name:
-              // Dingin}` yang BUKAN JSON valid — jadi struk cetak-ulang offline
-              // yang mau baca nama varian dari sini bakal gagal parse dan
-              // diam-diam kehilangan "(Dingin)".
-              modifiers: oi['modifiers'] == null ? null : jsonEncode(oi['modifiers']),
-              notes: oi['notes'],
-              // Migration 085 — per-item ad-hoc payment fields (server source of truth)
-              paidAt: oi['paid_at'] != null ? DateTime.parse(oi['paid_at']) : null,
-              paidPaymentId: oi['paid_payment_id'],
-              rowVersion: oi['row_version'] ?? 0,
-              isDeleted: oi['is_deleted'] ?? false,
-              lastModifiedHlc: oi['hlc'],
-              isSynced: true,
-            ),
-          );
+                OrderItemLocal(
+                  id: oi['id'],
+                  orderId: oi['order_id'],
+                  productId: oi['product_id'],
+                  productVariantId: oi['product_variant_id'],
+                  quantity: oi['quantity'],
+                  unitPrice: _toDouble(oi['unit_price']),
+                  discountAmount: _toDouble(oi['discount_amount']),
+                  totalPrice: _toDouble(oi['total_price']),
+                  // jsonEncode, BUKAN .toString(). Server ngirim modifiers sebagai
+                  // objek JSON; `Map.toString()` di Dart ngasih `{variant_name:
+                  // Dingin}` yang BUKAN JSON valid — jadi struk cetak-ulang offline
+                  // yang mau baca nama varian dari sini bakal gagal parse dan
+                  // diam-diam kehilangan "(Dingin)".
+                  modifiers: oi['modifiers'] == null
+                      ? null
+                      : jsonEncode(oi['modifiers']),
+                  notes: oi['notes'],
+                  // Migration 085 — per-item ad-hoc payment fields (server source of truth)
+                  paidAt: oi['paid_at'] != null
+                      ? DateTime.parse(oi['paid_at'])
+                      : null,
+                  paidPaymentId: oi['paid_payment_id'],
+                  rowVersion: oi['row_version'] ?? 0,
+                  isDeleted: oi['is_deleted'] ?? false,
+                  lastModifiedHlc: oi['hlc'],
+                  isSynced: true,
+                ),
+              );
         }
       }
 
@@ -533,23 +634,25 @@ class SyncService {
           // Older servers also return standalone reservation deposits.
           if (p['order_id'] == null) continue;
           await db.into(db.payments).insertOnConflictUpdate(
-            PaymentLocal(
-              id: p['id'],
-              orderId: p['order_id'],
-              outletId: p['outlet_id'],
-              shiftSessionId: p['shift_session_id'],
-              amountDue: _toDouble(p['amount_due']),
-              amountPaid: _toDouble(p['amount_paid']),
-              paymentMethod: p['payment_method'],
-              status: p['status'],
-              referenceNumber: p['reference_id'] ?? p['reference_number'],
-              paidAt: p['paid_at'] != null ? DateTime.parse(p['paid_at']) : null,
-              rowVersion: p['row_version'] ?? 0,
-              isDeleted: p['is_deleted'] ?? false,
-              lastModifiedHlc: p['hlc'],
-              isSynced: true,
-            ),
-          );
+                PaymentLocal(
+                  id: p['id'],
+                  orderId: p['order_id'],
+                  outletId: p['outlet_id'],
+                  shiftSessionId: p['shift_session_id'],
+                  amountDue: _toDouble(p['amount_due']),
+                  amountPaid: _toDouble(p['amount_paid']),
+                  paymentMethod: p['payment_method'],
+                  status: p['status'],
+                  referenceNumber: p['reference_id'] ?? p['reference_number'],
+                  paidAt: p['paid_at'] != null
+                      ? DateTime.parse(p['paid_at'])
+                      : null,
+                  rowVersion: p['row_version'] ?? 0,
+                  isDeleted: p['is_deleted'] ?? false,
+                  lastModifiedHlc: p['hlc'],
+                  isSynced: true,
+                ),
+              );
         }
       }
 
@@ -557,42 +660,45 @@ class SyncService {
       if (changes['shifts'] != null) {
         for (var s in changes['shifts']) {
           await db.into(db.shifts).insertOnConflictUpdate(
-            ShiftLocal(
-              id: s['id'],
-              outletId: s['outlet_id'],
-              userId: s['user_id'],
-              status: s['status'],
-              startTime: DateTime.parse(s['start_time']),
-              endTime: s['end_time'] != null ? DateTime.parse(s['end_time']) : null,
-              startingCash: _toDouble(s['starting_cash']),
-              endingCash: _toDoubleOrNull(s['ending_cash']),
-              expectedEndingCash: _toDoubleOrNull(s['expected_ending_cash']),
-              notes: s['notes'],
-              rowVersion: s['row_version'] ?? 0,
-              isDeleted: s['is_deleted'] ?? false,
-              lastModifiedHlc: s['hlc'],
-              isSynced: true,
-            ),
-          );
+                ShiftLocal(
+                  id: s['id'],
+                  outletId: s['outlet_id'],
+                  userId: s['user_id'],
+                  status: s['status'],
+                  startTime: DateTime.parse(s['start_time']),
+                  endTime: s['end_time'] != null
+                      ? DateTime.parse(s['end_time'])
+                      : null,
+                  startingCash: _toDouble(s['starting_cash']),
+                  endingCash: _toDoubleOrNull(s['ending_cash']),
+                  expectedEndingCash:
+                      _toDoubleOrNull(s['expected_ending_cash']),
+                  notes: s['notes'],
+                  rowVersion: s['row_version'] ?? 0,
+                  isDeleted: s['is_deleted'] ?? false,
+                  lastModifiedHlc: s['hlc'],
+                  isSynced: true,
+                ),
+              );
         }
       }
-      
+
       // Apply Cash Activities
       if (changes['cash_activities'] != null) {
         for (var ca in changes['cash_activities']) {
           await db.into(db.cashActivities).insertOnConflictUpdate(
-            CashActivityLocal(
-              id: ca['id'],
-              shiftId: ca['shift_id'],
-              activityType: ca['activity_type'],
-              amount: _toDouble(ca['amount']),
-              description: ca['description'],
-              rowVersion: ca['row_version'] ?? 0,
-              isDeleted: ca['is_deleted'] ?? false,
-              lastModifiedHlc: ca['hlc'],
-              isSynced: true,
-            ),
-          );
+                CashActivityLocal(
+                  id: ca['id'],
+                  shiftId: ca['shift_id'],
+                  activityType: ca['activity_type'],
+                  amount: _toDouble(ca['amount']),
+                  description: ca['description'],
+                  rowVersion: ca['row_version'] ?? 0,
+                  isDeleted: ca['is_deleted'] ?? false,
+                  lastModifiedHlc: ca['hlc'],
+                  isSynced: true,
+                ),
+              );
         }
       }
 
@@ -600,24 +706,24 @@ class SyncService {
       if (changes['ingredients'] != null) {
         for (var ing in changes['ingredients']) {
           await db.into(db.ingredients).insertOnConflictUpdate(
-            IngredientLocal(
-              id: ing['id'],
-              brandId: ing['brand_id'],
-              name: ing['name'],
-              trackingMode: ing['tracking_mode'] ?? 'simple',
-              baseUnit: ing['base_unit'] ?? 'pcs',
-              unitType: ing['unit_type'] ?? 'COUNT',
-              buyPrice: _toDouble(ing['buy_price']),
-              buyQty: _toDouble(ing['buy_qty'], fallback: 1.0),
-              costPerBaseUnit: _toDouble(ing['cost_per_base_unit']),
-              ingredientType: ing['ingredient_type'] ?? 'recipe',
-              needsReview: ing['needs_review'] ?? false,
-              rowVersion: ing['row_version'] ?? 0,
-              isDeleted: ing['is_deleted'] ?? false,
-              lastModifiedHlc: ing['hlc'],
-              isSynced: true,
-            ),
-          );
+                IngredientLocal(
+                  id: ing['id'],
+                  brandId: ing['brand_id'],
+                  name: ing['name'],
+                  trackingMode: ing['tracking_mode'] ?? 'simple',
+                  baseUnit: ing['base_unit'] ?? 'pcs',
+                  unitType: ing['unit_type'] ?? 'COUNT',
+                  buyPrice: _toDouble(ing['buy_price']),
+                  buyQty: _toDouble(ing['buy_qty'], fallback: 1.0),
+                  costPerBaseUnit: _toDouble(ing['cost_per_base_unit']),
+                  ingredientType: ing['ingredient_type'] ?? 'recipe',
+                  needsReview: ing['needs_review'] ?? false,
+                  rowVersion: ing['row_version'] ?? 0,
+                  isDeleted: ing['is_deleted'] ?? false,
+                  lastModifiedHlc: ing['hlc'],
+                  isSynced: true,
+                ),
+              );
         }
       }
 
@@ -631,19 +737,19 @@ class SyncService {
       if (changes['product_variants'] != null) {
         for (var v in changes['product_variants']) {
           await db.into(db.productVariants).insertOnConflictUpdate(
-            ProductVariantLocal(
-              id: v['id'],
-              productId: v['product_id'],
-              name: v['name'],
-              priceAdjustment: _toDouble(v['price_adjustment']),
-              isActive: v['is_active'] ?? true,
-              sortOrder: v['sort_order'] ?? 0,
-              rowVersion: v['row_version'] ?? 0,
-              isDeleted: v['is_deleted'] ?? false,
-              lastModifiedHlc: v['hlc'],
-              isSynced: true,
-            ),
-          );
+                ProductVariantLocal(
+                  id: v['id'],
+                  productId: v['product_id'],
+                  name: v['name'],
+                  priceAdjustment: _toDouble(v['price_adjustment']),
+                  isActive: v['is_active'] ?? true,
+                  sortOrder: v['sort_order'] ?? 0,
+                  rowVersion: v['row_version'] ?? 0,
+                  isDeleted: v['is_deleted'] ?? false,
+                  lastModifiedHlc: v['hlc'],
+                  isSynced: true,
+                ),
+              );
         }
       }
 
@@ -651,19 +757,19 @@ class SyncService {
       if (changes['recipes'] != null) {
         for (var r in changes['recipes']) {
           await db.into(db.recipes).insertOnConflictUpdate(
-            RecipeLocal(
-              id: r['id'],
-              productId: r['product_id'],
-              version: r['version'] ?? 1,
-              isActive: r['is_active'] ?? true,
-              notes: r['notes'],
-              isEstimated: r['is_estimated'] ?? false,
-              rowVersion: 0,
-              isDeleted: r['is_deleted'] ?? false,
-              lastModifiedHlc: r['hlc'],
-              isSynced: true,
-            ),
-          );
+                RecipeLocal(
+                  id: r['id'],
+                  productId: r['product_id'],
+                  version: r['version'] ?? 1,
+                  isActive: r['is_active'] ?? true,
+                  notes: r['notes'],
+                  isEstimated: r['is_estimated'] ?? false,
+                  rowVersion: 0,
+                  isDeleted: r['is_deleted'] ?? false,
+                  lastModifiedHlc: r['hlc'],
+                  isSynced: true,
+                ),
+              );
         }
       }
 
@@ -671,51 +777,52 @@ class SyncService {
       if (changes['recipe_ingredients'] != null) {
         for (var ri in changes['recipe_ingredients']) {
           await db.into(db.recipeIngredients).insertOnConflictUpdate(
-            RecipeIngredientLocal(
-              id: ri['id'],
-              recipeId: ri['recipe_id'],
-              ingredientId: ri['ingredient_id'],
-              quantity: _toDouble(ri['quantity']),
-              quantityUnit: ri['quantity_unit'],
-              notes: ri['notes'],
-              isOptional: ri['is_optional'] ?? false,
-              rowVersion: 0,
-              isDeleted: ri['is_deleted'] ?? false,
-              lastModifiedHlc: ri['hlc'],
-              isSynced: true,
-            ),
-          );
+                RecipeIngredientLocal(
+                  id: ri['id'],
+                  recipeId: ri['recipe_id'],
+                  ingredientId: ri['ingredient_id'],
+                  quantity: _toDouble(ri['quantity']),
+                  quantityUnit: ri['quantity_unit'],
+                  notes: ri['notes'],
+                  isOptional: ri['is_optional'] ?? false,
+                  rowVersion: 0,
+                  isDeleted: ri['is_deleted'] ?? false,
+                  lastModifiedHlc: ri['hlc'],
+                  isSynced: true,
+                ),
+              );
         }
       }
 
       // Cache server HPP separately so snapshots can precede recipes in pagination.
       for (final snapshot in changes['recipe_hpp'] ?? []) {
         await db.into(db.recipeHppSnapshots).insertOnConflictUpdate(
-          RecipeHppLocal(
-            recipeId: snapshot['recipe_id'],
-            snapshot: jsonEncode(snapshot),
-          ),
-        );
+              RecipeHppLocal(
+                recipeId: snapshot['recipe_id'],
+                snapshot: jsonEncode(snapshot),
+              ),
+            );
       }
 
       // Apply Outlet Stock (ingredient stock per outlet, read-only from server)
       if (changes['outlet_stock'] != null) {
         for (var os in changes['outlet_stock']) {
           await db.into(db.outletStocks).insertOnConflictUpdate(
-            OutletStockLocal(
-              id: os['id'],
-              outletId: os['outlet_id'],
-              ingredientId: os['ingredient_id'],
-              computedStock: _toDouble(os['computed_stock']),
-              minStockBase: _toDouble(os['min_stock_base']),
-              rowVersion: os['row_version'] ?? 0,
-              isDeleted: os['is_deleted'] ?? false,
-              lastModifiedHlc: os['hlc'],
-              isSynced: true,
-            ),
-          );
+                OutletStockLocal(
+                  id: os['id'],
+                  outletId: os['outlet_id'],
+                  ingredientId: os['ingredient_id'],
+                  computedStock: _toDouble(os['computed_stock']),
+                  minStockBase: _toDouble(os['min_stock_base']),
+                  rowVersion: os['row_version'] ?? 0,
+                  isDeleted: os['is_deleted'] ?? false,
+                  lastModifiedHlc: os['hlc'],
+                  isSynced: true,
+                ),
+              );
         }
       }
+      ensureCurrent?.call();
     });
   }
 
@@ -783,103 +890,104 @@ class SyncService {
   }
 
   Map<String, dynamic> _productToJson(ProductLocal p) => {
-    'id': p.id,
-    'brand_id': p.brandId,
-    'category_id': p.categoryId,
-    'name': p.name,
-    'description': p.description,
-    'base_price': p.basePrice,
-    'sku': p.sku,
-    'barcode': p.barcode,
-    'image_url': p.imageUrl,
-    'stock_enabled': p.stockEnabled,
-    'stock_qty': p.stockQty,
-    // Pure CRDT: kirim kedua G-Counter agar backend bisa merge dengan benar
-    'crdt_positive': p.crdtPositive,
-    'crdt_negative': p.crdtNegative,
-    'is_active': p.isActive,
-    'row_version': p.rowVersion,
-    'is_deleted': p.isDeleted,
-    'hlc': p.lastModifiedHlc,
-  };
+        'id': p.id,
+        'brand_id': p.brandId,
+        'category_id': p.categoryId,
+        'name': p.name,
+        'description': p.description,
+        'base_price': p.basePrice,
+        'sku': p.sku,
+        'barcode': p.barcode,
+        'image_url': p.imageUrl,
+        'stock_enabled': p.stockEnabled,
+        'stock_qty': p.stockQty,
+        // Pure CRDT: kirim kedua G-Counter agar backend bisa merge dengan benar
+        'crdt_positive': p.crdtPositive,
+        'crdt_negative': p.crdtNegative,
+        'is_active': p.isActive,
+        'row_version': p.rowVersion,
+        'is_deleted': p.isDeleted,
+        'hlc': p.lastModifiedHlc,
+      };
 
   // Waktu dikirim UTC eksplisit (`toUtc()`): DateTime lokal Dart nggak bawa
   // zona, dan server tadinya nyimpan 23.30 WIB sebagai 23.30 UTC.
   Map<String, dynamic> _orderToJson(OrderLocal o) => {
-    'id': o.id,
-    'outlet_id': o.outletId,
-    'shift_session_id': o.shiftSessionId,
-    'customer_id': o.customerId,
-    'table_id': o.tableId,
-    'user_id': o.userId,
-    'order_number': o.orderNumber,
-    'display_number': o.displayNumber,
-    'status': o.status,
-    'order_type': o.orderType,
-    'subtotal': o.subtotal,
-    'service_charge_amount': o.serviceChargeAmount,
-    'tax_amount': o.taxAmount,
-    'discount_amount': o.discountAmount,
-    'total_amount': o.totalAmount,
-    'notes': o.notes,
-    'created_at': o.createdAt?.toUtc().toIso8601String(),
-    'updated_at': o.updatedAt?.toUtc().toIso8601String(),
-    'row_version': o.rowVersion,
-    'is_deleted': o.isDeleted,
-    'hlc': o.lastModifiedHlc,
-  };
+        'id': o.id,
+        'outlet_id': o.outletId,
+        'shift_session_id': o.shiftSessionId,
+        'customer_id': o.customerId,
+        'table_id': o.tableId,
+        'user_id': o.userId,
+        'order_number': o.orderNumber,
+        'display_number': o.displayNumber,
+        'status': o.status,
+        'order_type': o.orderType,
+        'subtotal': o.subtotal,
+        'service_charge_amount': o.serviceChargeAmount,
+        'tax_amount': o.taxAmount,
+        'discount_amount': o.discountAmount,
+        'total_amount': o.totalAmount,
+        'notes': o.notes,
+        'created_at': o.createdAt?.toUtc().toIso8601String(),
+        'updated_at': o.updatedAt?.toUtc().toIso8601String(),
+        'row_version': o.rowVersion,
+        'is_deleted': o.isDeleted,
+        'hlc': o.lastModifiedHlc,
+      };
 
   Map<String, dynamic> _orderItemToJson(OrderItemLocal oi) => {
-    'id': oi.id,
-    'order_id': oi.orderId,
-    'product_id': oi.productId,
-    'product_variant_id': oi.productVariantId,
-    'quantity': oi.quantity,
-    'unit_price': oi.unitPrice,
-    'discount_amount': oi.discountAmount,
-    'total_price': oi.totalPrice,
-    // Dikirim balik sebagai objek, bukan string — kolomnya JSONB di server.
-    'modifiers': oi.modifiers == null ? null : jsonDecode(oi.modifiers!),
-    'notes': oi.notes,
-    'row_version': oi.rowVersion,
-    'is_deleted': oi.isDeleted,
-    'hlc': oi.lastModifiedHlc,
-  };
+        'id': oi.id,
+        'order_id': oi.orderId,
+        'product_id': oi.productId,
+        'product_variant_id': oi.productVariantId,
+        'quantity': oi.quantity,
+        'unit_price': oi.unitPrice,
+        'discount_amount': oi.discountAmount,
+        'total_price': oi.totalPrice,
+        // Dikirim balik sebagai objek, bukan string — kolomnya JSONB di server.
+        'modifiers': oi.modifiers == null ? null : jsonDecode(oi.modifiers!),
+        'notes': oi.notes,
+        'row_version': oi.rowVersion,
+        'is_deleted': oi.isDeleted,
+        'hlc': oi.lastModifiedHlc,
+      };
 
   Map<String, dynamic> _paymentToJson(PaymentLocal p) => {
-    'id': p.id,
-    'order_id': p.orderId,
-    'outlet_id': p.outletId,
-    'shift_session_id': p.shiftSessionId,
-    'amount_due': p.amountDue,
-    'amount_paid': p.amountPaid,
-    // Kembalian nggak disimpan di PaymentLocal; dihitung di sini supaya kas
-    // masuk di laporan shift = tagihan, bukan uang yang disodorkan.
-    'change_amount': (p.amountPaid - p.amountDue) > 0 ? p.amountPaid - p.amountDue : 0,
-    'payment_method': p.paymentMethod,
-    'status': p.status,
-    'reference_number': p.referenceNumber,
-    'paid_at': p.paidAt?.toUtc().toIso8601String(),
-    'row_version': p.rowVersion,
-    'is_deleted': p.isDeleted,
-    'hlc': p.lastModifiedHlc,
-  };
+        'id': p.id,
+        'order_id': p.orderId,
+        'outlet_id': p.outletId,
+        'shift_session_id': p.shiftSessionId,
+        'amount_due': p.amountDue,
+        'amount_paid': p.amountPaid,
+        // Kembalian nggak disimpan di PaymentLocal; dihitung di sini supaya kas
+        // masuk di laporan shift = tagihan, bukan uang yang disodorkan.
+        'change_amount':
+            (p.amountPaid - p.amountDue) > 0 ? p.amountPaid - p.amountDue : 0,
+        'payment_method': p.paymentMethod,
+        'status': p.status,
+        'reference_number': p.referenceNumber,
+        'paid_at': p.paidAt?.toUtc().toIso8601String(),
+        'row_version': p.rowVersion,
+        'is_deleted': p.isDeleted,
+        'hlc': p.lastModifiedHlc,
+      };
 
   Map<String, dynamic> _shiftToJson(ShiftLocal s) => {
-    'id': s.id,
-    'outlet_id': s.outletId,
-    'user_id': s.userId,
-    'status': s.status,
-    'start_time': s.startTime.toUtc().toIso8601String(),
-    'end_time': s.endTime?.toUtc().toIso8601String(),
-    'starting_cash': s.startingCash,
-    'ending_cash': s.endingCash,
-    'expected_ending_cash': s.expectedEndingCash,
-    'notes': s.notes,
-    'row_version': s.rowVersion,
-    'is_deleted': s.isDeleted,
-    'hlc': s.lastModifiedHlc,
-  };
+        'id': s.id,
+        'outlet_id': s.outletId,
+        'user_id': s.userId,
+        'status': s.status,
+        'start_time': s.startTime.toUtc().toIso8601String(),
+        'end_time': s.endTime?.toUtc().toIso8601String(),
+        'starting_cash': s.startingCash,
+        'ending_cash': s.endingCash,
+        'expected_ending_cash': s.expectedEndingCash,
+        'notes': s.notes,
+        'row_version': s.rowVersion,
+        'is_deleted': s.isDeleted,
+        'hlc': s.lastModifiedHlc,
+      };
 
   static double _toDouble(dynamic v, {double fallback = 0.0}) {
     if (v == null) return fallback;
@@ -899,13 +1007,13 @@ class SyncService {
   }
 
   Map<String, dynamic> _cashActivityToJson(CashActivityLocal ca) => {
-    'id': ca.id,
-    'shift_id': ca.shiftId,
-    'activity_type': ca.activityType,
-    'amount': ca.amount,
-    'description': ca.description,
-    'row_version': ca.rowVersion,
-    'is_deleted': ca.isDeleted,
-    'hlc': ca.lastModifiedHlc,
-  };
+        'id': ca.id,
+        'shift_id': ca.shiftId,
+        'activity_type': ca.activityType,
+        'amount': ca.amount,
+        'description': ca.description,
+        'row_version': ca.rowVersion,
+        'is_deleted': ca.isDeleted,
+        'hlc': ca.lastModifiedHlc,
+      };
 }

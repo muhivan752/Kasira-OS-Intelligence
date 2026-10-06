@@ -1,3 +1,4 @@
+from backend.services.pos_access import PosAccessRoute
 from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timezone
@@ -98,7 +99,7 @@ async def compute_recipe_stock(db: AsyncSession, outlet_id: UUID, product_ids: L
 
     return result
 
-router = APIRouter()
+router = APIRouter(route_class=PosAccessRoute)
 
 @router.post("/{product_id}/restock", response_model=StandardResponse[ProductResponse])
 async def restock_product(
@@ -304,12 +305,15 @@ async def create_product(
 async def read_low_stock_products(
     request: Request,
     brand_id: Optional[UUID] = None,
+    outlet_id: Optional[UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
     Produk dengan stock_enabled=true dan stock_qty <= stock_low_threshold.
     """
+    if request.state.access.mode == "managed":
+        brand_id = request.state.pos_outlet.brand_id
     if brand_id is None:
         brand_row = (await db.execute(
             select(Brand).where(Brand.tenant_id == current_user.tenant_id, Brand.deleted_at.is_(None))
@@ -344,6 +348,7 @@ async def read_low_stock_products(
 async def read_products(
     request: Request,
     brand_id: Optional[UUID] = None,
+    outlet_id: Optional[UUID] = None,
     category_id: Optional[UUID] = None,
     skip: int = 0,
     limit: int = 100,
@@ -353,6 +358,8 @@ async def read_products(
     """
     Retrieve products. brand_id opsional — jika tidak dikirim, infer dari tenant user (Flutter POS).
     """
+    if request.state.access.mode == "managed":
+        brand_id = request.state.pos_outlet.brand_id
     # Jika brand_id tidak dikirim (Flutter POS), cari brand pertama milik tenant
     if brand_id is None:
         brand_row = (await db.execute(
@@ -381,6 +388,8 @@ async def read_products(
     outlet_row = (await db.execute(
         select(Outlet).where(Outlet.tenant_id == current_user.tenant_id, Outlet.deleted_at.is_(None))
     )).scalars().first()
+    if request.state.access.mode == "managed":
+        outlet_row = request.state.pos_outlet
     stock_mode = getattr(outlet_row, 'stock_mode', 'simple') if outlet_row else 'simple'
     stock_mode = stock_mode.value if hasattr(stock_mode, 'value') else str(stock_mode or 'simple')
 

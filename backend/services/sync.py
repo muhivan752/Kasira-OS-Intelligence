@@ -259,6 +259,7 @@ async def get_table_changes(
     limit: int = 500,
     cursor_last_id: Optional[str] = None,
     required_fields: tuple[str, ...] = (),
+    predicate=None,
 ) -> tuple[List[Dict[str, Any]], bool]:
     """Pull one page ordered by (HLC millisecond, row_version, id).
 
@@ -266,6 +267,8 @@ async def get_table_changes(
     the exact tuple, including models without row_version.
     """
     stmt = select(model_class)
+    if predicate is not None:
+        stmt = stmt.where(predicate)
     for k, v in filter_kwargs.items():
         stmt = stmt.filter(getattr(model_class, k) == v)
     for field in required_fields:

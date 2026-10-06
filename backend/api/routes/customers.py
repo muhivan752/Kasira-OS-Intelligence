@@ -17,6 +17,21 @@ from backend.services.audit import log_audit
 router = APIRouter()
 
 
+@router.get("/pos-lookup", response_model=StandardResponse[List[dict]])
+async def lookup_customer_for_pos(request: Request, outlet_id: UUID, search: str,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from sqlalchemy import or_
+    from backend.utils.phone import mask_phone
+    term = search.strip()
+    if len(term) < 3 or len(term) > 80:
+        raise HTTPException(422, "Ketik sedikitnya 3 karakter nama atau nomor pelanggan")
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    rows = (await db.scalars(select(Customer).where(Customer.tenant_id == current_user.tenant_id,
+        Customer.deleted_at.is_(None), or_(Customer.name.ilike(f"%{escaped}%", escape="\\"),
+        Customer.phone.ilike(f"%{escaped}%", escape="\\"))).order_by(Customer.name, Customer.id).limit(5))).all()
+    return StandardResponse(data=[{"id": str(r.id), "name": r.name, "phone": mask_phone(r.phone)} for r in rows])
+
+
 class CustomerCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     phone: Optional[str] = None

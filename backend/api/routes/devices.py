@@ -1,3 +1,4 @@
+from backend.services.pos_access import PosAccessRoute
 """Perangkat terdaftar + notifikasi push — /devices (5 Sep 2026).
 
 Semua tier. Kabar "pesanan online masuk" itu kebutuhan dasar warung, bukan
@@ -26,7 +27,7 @@ from backend.services import fcm
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=PosAccessRoute)
 
 
 async def _milik_tenant(db: AsyncSession, outlet_id: UUID, tenant_id) -> Outlet:

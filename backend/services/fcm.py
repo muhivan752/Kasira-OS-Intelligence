@@ -239,7 +239,36 @@ async def notify_outlet(outlet_id, *, title: str, body: str,
                     Device.device_type.in_(tipe),
                 )
             )).scalars().all()
-            tokens = [d.fcm_token for d in rows if d.fcm_token]
+            from backend.models.user import User
+            from backend.services.access import resolve_access
+            from fastapi import HTTPException
+            tokens = []
+            for device in rows:
+                actor = await db.scalar(select(User).where(User.id == device.user_id))
+                if not actor:
+                    continue
+                try:
+                    access = await resolve_access(db, actor)
+                    if access.mode == "managed":
+                        kind = (data or {}).get("type")
+                        permission = "pos.refund.approve" if kind == "refund_manual" else "pos.sell"
+                        if kind not in {"pesanan_online", "bukti_bayar", "antar_gagal", "refund_manual"}:
+                            continue
+                        access.require(permission)
+                        access.require_outlet(outlet_id)
+                        from backend.models.order import Order
+                        from uuid import UUID
+                        try:
+                            order_id = UUID((data or {}).get("order_id", ""))
+                        except (ValueError, TypeError, AttributeError):
+                            continue
+                        order = await db.scalar(select(Order).where(Order.id == order_id, Order.outlet_id == outlet_id, Order.deleted_at.is_(None)))
+                        if not order:
+                            continue
+                except HTTPException:
+                    continue
+                if device.fcm_token:
+                    tokens.append(device.fcm_token)
             if not tokens:
                 return 0
             hasil = await send_to_tokens(tokens, title=title, body=body, data=data)

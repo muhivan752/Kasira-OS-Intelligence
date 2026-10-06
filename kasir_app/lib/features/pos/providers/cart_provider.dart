@@ -306,6 +306,10 @@ class CartNotifier extends StateNotifier<CartState> {
   /// For dine-in Pro: open or reuse tab, create order, link to tab — NO payment yet.
   /// ONLINE ONLY — Tab is a server-side feature, cannot work offline.
   Future<Map<String, dynamic>?> submitDineInOrder() async {
+    if (!_cache.allows('pos.sell')) {
+      state = state.copyWith(error: 'Izin membuat pesanan belum diberikan.');
+      return null;
+    }
     if (state.items.isEmpty) return null;
     if (state.tableId == null) {
       state = state.copyWith(error: 'Pilih meja terlebih dahulu untuk Dine In');
@@ -469,6 +473,10 @@ class CartNotifier extends StateNotifier<CartState> {
   }
 
   Future<String?> submitOrder() async {
+    if (!_cache.allows('pos.sell')) {
+      state = state.copyWith(error: 'Izin membuat pesanan belum diberikan.');
+      return null;
+    }
     if (state.items.isEmpty) return null;
     // Dine-in wajib pilih meja
     if (state.orderType == 'Dine In' && state.tableId == null) {
@@ -553,6 +561,10 @@ class CartNotifier extends StateNotifier<CartState> {
 
   // ── Offline: simpan ke Drift SQLite, deduct stok lokal ──────────────────
   Future<String?> _submitOffline() async {
+    if (!_cache.offlinePosAllowed) {
+      state = state.copyWith(isSubmitting: false, error: 'Akun staf perlu koneksi internet untuk bertransaksi. Antrean lama tetap tersimpan.');
+      return null;
+    }
     try {
       // Pre-check stock (mirror backend guard agar gak oversell offline)
       final stockError = await _validateOfflineStock();
@@ -677,6 +689,10 @@ class CartNotifier extends StateNotifier<CartState> {
     required double amountDue,
     required double amountPaid,
   }) async {
+    if (!_cache.offlinePosAllowed) {
+      state = state.copyWith(error: 'Pembayaran akun staf perlu koneksi internet.');
+      return false;
+    }
     try {
       final now = DateTime.now();
       await _db.transaction(() async {

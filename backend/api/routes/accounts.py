@@ -11,7 +11,7 @@ from backend.api.deps import get_current_user
 from backend.core.database import get_db
 from backend.core.config import settings
 from backend.models import AccountChallenge, Brand, Category, HrEmployee, LoginSession, Outlet, Role, Tenant, User
-from backend.schemas.account import AccountRequest, ConsumeChallenge, EmployeeAccountSave, HRIS_PERMISSIONS, PasswordClaim, PasswordLogin, PasswordRegister, RoleSave
+from backend.schemas.account import AccountRequest, ConsumeChallenge, EmployeeAccountSave, SUPPORTED_ROLE_PERMISSIONS, PasswordClaim, PasswordLogin, PasswordRegister, RoleSave
 from backend.schemas.response import StandardResponse
 from backend.schemas.access import AccessPolicy
 from backend.services import accounts as svc
@@ -229,7 +229,7 @@ async def access_setup(user: User = Depends(get_current_user), db: AsyncSession 
     accounts = (await db.scalars(select(User).where(User.tenant_id == user.tenant_id, User.deleted_at.is_(None)).order_by(User.full_name))).all()
     employees = (await db.scalars(select(HrEmployee).where(HrEmployee.tenant_id == user.tenant_id, HrEmployee.deleted_at.is_(None)).order_by(HrEmployee.name))).all()
     return response({"shop_username": tenant.login_username, "roles": [role_data(r) for r in roles],
-        "accounts": [user_data(r) for r in accounts], "permissions": sorted(HRIS_PERMISSIONS),
+        "accounts": [user_data(r) for r in accounts], "permissions": sorted(SUPPORTED_ROLE_PERMISSIONS),
         "outlets": context.public()["outlets"], "employees": [{"id": str(r.id), "name": r.name,
             "user_id": str(r.user_id) if r.user_id else None, "outlet_id": str(r.outlet_id),
             "row_version": r.row_version, "is_active": r.is_active} for r in employees]})

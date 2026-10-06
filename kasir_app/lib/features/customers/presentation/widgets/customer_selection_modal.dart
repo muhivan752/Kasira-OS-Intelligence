@@ -20,6 +20,7 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
   List<Map<String, dynamic>> _customers = [];
   bool _isLoading = true;
   String? _error;
+  int _request = 0;
 
   @override
   void initState() {
@@ -34,6 +35,12 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
   }
 
   Future<void> _fetchCustomers({String? search}) async {
+    final current = ++_request;
+    final managed = SessionCache.instance.accessMode == 'managed';
+    if (managed && (search?.length ?? 0) < 3) {
+      setState(() { _customers = []; _isLoading = false; _error = 'Ketik sedikitnya 3 karakter nama atau nomor pelanggan.'; });
+      return;
+    }
     setState(() {
       _isLoading = true;
       _error = null;
@@ -46,20 +53,23 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
       ));
 
       final response = await dio.get(
-        '/customers/',
+        managed ? '/customers/pos-lookup' : '/customers/',
         queryParameters: {
           if (search != null && search.isNotEmpty) 'search': search,
           'limit': 50,
+          if (managed) 'outlet_id': SessionCache.instance.outletId,
         },
         options: Options(headers: SessionCache.instance.authHeaders),
       );
 
       final data = response.data['data'] as List;
+      if (!mounted || current != _request) return;
       setState(() {
         _customers = data.cast<Map<String, dynamic>>();
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted || current != _request) return;
       setState(() {
         _error = 'Gagal memuat daftar pelanggan';
         _isLoading = false;
@@ -85,14 +95,14 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
       child: Container(
         width: 600,
         height: 600,
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? 16 : 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Pilih Pelanggan', style: Theme.of(context).textTheme.headlineMedium),
+                Expanded(child: Text('Pilih Pelanggan', style: Theme.of(context).textTheme.headlineSmall)),
                 IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(LucideIcons.x)),
               ],
             ),
@@ -116,7 +126,7 @@ class _CustomerSelectionModalState extends State<CustomerSelectionModal> {
             ),
             const SizedBox(height: 16),
 
-            OutlinedButton.icon(
+            if (SessionCache.instance.accessMode != 'managed') OutlinedButton.icon(
               onPressed: _showAddCustomerModal,
               icon: const Icon(LucideIcons.userPlus, size: 18),
               label: const Text('Tambah Pelanggan Baru'),

@@ -27,6 +27,60 @@ class AppDatabase extends _$AppDatabase {
 
   AppDatabase.withExecutor(QueryExecutor executor) : super(executor);
 
+  Future<Set<String>> protectedSyncIds(String table) async {
+    final queries = <String, String>{
+      'order_items':
+          'SELECT id FROM order_items WHERE is_synced = 0 OR order_id IN (SELECT id FROM orders WHERE is_synced = 0)',
+      'payments':
+          'SELECT id FROM payments WHERE is_synced = 0 OR order_id IN (SELECT id FROM orders WHERE is_synced = 0)',
+      'cash_activities':
+          'SELECT id FROM cash_activities WHERE is_synced = 0 OR shift_id IN (SELECT id FROM shifts WHERE is_synced = 0)',
+      'orders':
+          'SELECT id FROM orders WHERE is_synced = 0 UNION SELECT order_id FROM order_items WHERE is_synced = 0 UNION SELECT order_id FROM payments WHERE is_synced = 0',
+      'shifts':
+          'SELECT id FROM shifts WHERE is_synced = 0 UNION SELECT shift_id FROM cash_activities WHERE is_synced = 0 UNION SELECT shift_session_id FROM orders WHERE is_synced = 0 UNION SELECT shift_session_id FROM payments WHERE is_synced = 0',
+      'products':
+          'SELECT id FROM products WHERE is_synced = 0 UNION SELECT product_id FROM order_items WHERE is_synced = 0',
+      'product_variants':
+          'SELECT id FROM product_variants WHERE is_synced = 0 UNION SELECT product_variant_id FROM order_items WHERE is_synced = 0',
+    };
+    final query =
+        queries[table] ?? 'SELECT id FROM "$table" WHERE is_synced = 0';
+    return (await customSelect(query).get())
+        .map((r) => r.readNullable<String>('id'))
+        .whereType<String>()
+        .toSet();
+  }
+
+  Future<void> clearAccessCaches() async {
+    await transaction(() async {
+      for (final table in [
+        'order_items',
+        'payments',
+        'cash_activities',
+        'orders',
+        'shifts',
+        'products',
+        'product_variants',
+        'ingredients',
+        'recipes',
+        'recipe_ingredients',
+        'outlet_stocks'
+      ]) {
+        final protected = await protectedSyncIds(table);
+        final ids =
+            (await customSelect('SELECT id FROM "$table" WHERE is_synced = 1')
+                    .get())
+                .map((r) => r.read<String>('id'))
+                .where((id) => !protected.contains(id));
+        for (final id in ids) {
+          await customStatement('DELETE FROM "$table" WHERE id = ?', [id]);
+        }
+      }
+      await delete(recipeHppSnapshots).go();
+    });
+  }
+
   @override
   int get schemaVersion => 8;
 

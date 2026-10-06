@@ -33,6 +33,19 @@ import 'features/online_orders/presentation/pages/online_orders_page.dart';
 
 final _router = GoRouter(
   initialLocation: '/',
+  redirect: (context, state) {
+    final cache = SessionCache.instance;
+    if (cache.accessMode != 'managed') return null;
+    final path = state.uri.path;
+    if (['/', '/login', '/team', '/dashboard', '/account-code', '/register']
+        .contains(path)) return null;
+    if (cache.allows('pos.sell') &&
+        (['/tables', '/tabs', '/online-orders', '/payment/success', '/receipt']
+                .contains(path) ||
+            path.startsWith('/tabs/'))) return null;
+    if (cache.allows('pos.shift.manage') && path == '/shift/open') return null;
+    return '/dashboard';
+  },
   routes: [
     GoRoute(
       path: '/',

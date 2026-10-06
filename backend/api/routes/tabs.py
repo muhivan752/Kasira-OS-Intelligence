@@ -1,3 +1,4 @@
+from backend.services.pos_access import PosAccessRoute
 """
 Tab/Bon + Split Bill — Pro+ Feature
 Endpoints:
@@ -61,7 +62,7 @@ from backend.services.tab_service import (
     find_active_shift as _find_active_shift,
 )
 
-router = APIRouter(dependencies=[Depends(require_pro_tier)])
+router = APIRouter(route_class=PosAccessRoute, dependencies=[Depends(require_pro_tier)])
 
 
 # ── OPEN TAB ──
@@ -146,6 +147,9 @@ async def list_tabs(
     )
     if status:
         query = query.where(Tab.status == status)
+    if request.state.access.mode == "managed" and not request.state.access.allows("sales.detail.view"):
+        from sqlalchemy import or_
+        query = query.where(or_(Tab.status.notin_(["paid", "cancelled"]), Tab.opened_by == current_user.id, Tab.closed_by == current_user.id))
     if table_id:
         query = query.where(Tab.table_id == table_id)
     query = query.order_by(Tab.created_at.desc()).limit(50)

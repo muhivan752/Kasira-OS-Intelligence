@@ -1,3 +1,4 @@
+from backend.services.pos_access import PosAccessRoute
 import uuid
 from typing import Any, List
 from datetime import datetime, timezone
@@ -15,10 +16,11 @@ from backend.schemas.response import StandardResponse, ResponseMeta
 from backend.services.audit import log_audit
 import json
 
-router = APIRouter()
+router = APIRouter(route_class=PosAccessRoute)
 
 @router.get("/", response_model=StandardResponse[List[OutletSchema]])
 async def read_outlets(
+    request: Request,
     db: AsyncSession = Depends(deps.get_db),
     skip: int = 0,
     limit: int = 100,
@@ -32,6 +34,8 @@ async def read_outlets(
         Outlet.tenant_id == current_user.tenant_id
     ).offset(skip).limit(limit)
         
+    if request.state.access.mode == "managed":
+        stmt = stmt.where(Outlet.id.in_(request.state.access.outlet_ids))
     result = await db.execute(stmt)
     outlets = result.scalars().all()
     

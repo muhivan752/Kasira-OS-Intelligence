@@ -173,6 +173,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _storage.write(key: 'access_mode', value: cache.accessMode);
     await cache.setPhone(phone);
     await cache.setTenantId(data['tenant_id'] as String);
+    await cache.applyAccess(Map<String, dynamic>.from(
+        (data['access'] as Map?) ?? {'enforcement_mode': 'legacy'}));
     await cache.setOutletId(data['outlet_id']?.toString() ?? '');
     await cache.setStockMode(data['stock_mode']?.toString() ?? 'simple');
     await cache.setSubscriptionTier(
@@ -397,10 +399,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
               receiveTimeout: const Duration(seconds: 3),
             )).get('/auth/access',
                 options: Options(headers: {'Authorization': 'Bearer $token'}));
-            SessionCache.instance.accessMode =
-                res.data['data']['enforcement_mode']?.toString() ?? 'legacy';
-            await _storage.write(
-                key: 'access_mode', value: SessionCache.instance.accessMode);
+            await SessionCache.instance.applyAccess(
+                Map<String, dynamic>.from(res.data['data'] as Map));
           } on DioException catch (error) {
             if (error.response != null) {
               state = state.copyWith(
@@ -410,7 +410,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
                       'Masuk kembali untuk memperbarui akses akun.'));
               return;
             }
-            // Existing offline POS queues remain available when the server is unreachable.
+            if (!SessionCache.instance.offlinePosAllowed) {
+              state = state.copyWith(
+                  isLoading: false,
+                  error:
+                      'Akun staf perlu koneksi internet untuk memeriksa izin. Antrean transaksi tetap tersimpan.');
+              return;
+            }
           }
         } else {
           usePasswordInstead();
@@ -513,7 +519,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       final tenantId = cache.tenantId;
       final outletId = cache.outletId;
       if (cache.accessMode == 'managed') {
-        if (context.mounted) context.go('/team');
+        if (context.mounted)
+          context.go(cache.allows('pos.sell') ||
+                  cache.allows('stock.view') ||
+                  cache.allows('sales.detail.view') || cache.allows('pos.shift.manage') || cache.allows('pos.cash.manage') || cache.allows('pos.refund') || cache.allows('pos.refund.approve') || cache.allows('pos.kitchen')
+              ? '/dashboard'
+              : '/team');
         return;
       }
       LocationService.sendLocationSilent();

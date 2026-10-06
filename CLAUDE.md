@@ -12,20 +12,19 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 
 ## Fondasi akses server pada source dan QA 6 Oktober 2026
 
-AccessContext dan GET /auth/access sekarang memakai user/role/status HRIS/
-outlet/izin canonical. Managed policy version1 di Role.permissions hanya
-membuka auth/self-profile dan HRIS; endpoint lain fail closed sampai domain
-terintegrasi. Legacy selain HRIS tetap handler lama, belum filter AI granular.
-Staf HRIS nonaktif ditolak di auth dan login; pengelola tutup absensinya.
-Username/password, migrasi owner legacy, editor akun/jabatan HRIS dan sesi
-perangkat sekarang selesai pada source/QA; docs/ACCOUNT_ACCESS_REVIEW.md.
-Role baru HRIS-only; pengaturan akun hanya owner aktual. Nonaktif HRIS kini
-mencabut sesi, reaktivasi memerlukan login baru. GPS/foto dan seluruh domain/
-AI belum terintegrasi. Fondasi detail docs/ACCESS_REVIEW.md.
-Backend/web dipasang produksi pada 6 Oktober, migrasi114; APK signed POS/Dapur
-1.6.32+199 sudah dirilis setelah Ivan "deploy dan rilis apk". Review deployment
-docs/ACCOUNT_ACCESS_RELEASE.md. Role baru tetap HRIS-only, jangan mengaktifkan
-policy POS lama sebagai managed sebelum domain terintegrasi.
+AccessContext dan GET /auth/access memakai user/role/status HRIS/outlet/izin
+canonical. Managed role sekarang mendukung HRIS, POS, stok dan sync pull-only.
+Registry endpoint identity+method menolak modul lain, termasuk AI. Owner aktual
+mengatur akun/jabatan; legacy tidak dimigrasikan otomatis. Pengaturan harga
+modal/menu/keuangan/AI managed belum dibuka. Review docs/POS_ACCESS_REVIEW.md.
+Staf nonaktif/sesi dicabut ditolak server. Managed native bertransaksi online;
+cold manifest, cache/history dan sync mengikuti izin/outlet. Antrean SQLite,
+pending retry key dan parent transaksi dipertahankan saat revoke/switch;
+sync tidak mengirim push atau menandai queue synced untuk managed. Legacy
+POS offline tetap existing. Masa izin offline baru belum ditetapkan.
+Akun 1.6.32+199 sudah live migration114; tahap POS menyiapkan 1.6.33+200 sesuai
+izin deploy/rilis sebelumnya. Status deployment ada di MEMORY.md/SESSION.md.
+Jangan recreate backend image lama: seluruh hotfix harus dipertahankan.
 
 ## HRIS web tahap pertama (6 Oktober 2026)
 

@@ -1,5 +1,7 @@
 'use client';
 
+import { POS_WORKSPACE_PERMISSIONS } from '@/lib/pos-access';
+
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -31,6 +33,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [accessMode, setAccessMode] = useState<string | null>(null);
+  const [accessPermissions, setAccessPermissions] = useState<string[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktop, setDesktop] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -70,6 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const access = await getAccountAccess();
         if (!access.success) { router.push('/login'); return; }
         setAccessMode(access.data.enforcement_mode);
+        setAccessPermissions(access.data.permissions);
         const user = await getCurrentUser();
         if (!user) {
           router.push('/login');
@@ -109,7 +113,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   // Build navigation based on tier
-  const mainNav = accessMode === 'managed' ? [{ name: 'Tim & absensi', href: '/dashboard/hris', icon: Users }] : [
+  const mainNav = accessMode === 'managed' ? [
+    ...(accessPermissions.some(p => POS_WORKSPACE_PERMISSIONS.includes(p)) ? [{ name: 'Operasional', href: '/dashboard/operasional', icon: Store }] : []),
+    { name: 'Tim & absensi', href: '/dashboard/hris', icon: Users },
+  ] : [
     { name: 'Beranda', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Menu', href: '/dashboard/menu', icon: MenuIcon },
     { name: 'Toko Online', href: '/dashboard/toko', icon: Globe },
@@ -317,7 +324,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
           {logoutError && <p role="alert" className="mb-4 text-[var(--danger)]">{logoutError}</p>}
-          {!accessMode ? <p role="status">Memuat akses akun…</p> : accessMode === 'managed' && !['/dashboard/hris', '/dashboard/account'].includes(pathname) ? <div><p>Fitur ini belum tersedia untuk pengaturan akses akun Anda.</p><Link href="/dashboard/hris">Buka tim dan absensi</Link></div> : children}
+          {!accessMode ? <p role="status">Memuat akses akun…</p> : accessMode === 'managed' && !['/dashboard/hris', '/dashboard/account', ...(accessPermissions.some(p => POS_WORKSPACE_PERMISSIONS.includes(p)) ? ['/dashboard/operasional'] : [])].includes(pathname) ? <div><p>Fitur ini belum tersedia untuk pengaturan akses akun Anda.</p><Link href="/dashboard/hris">Buka tim dan absensi</Link></div> : children}
         </main>
       </div>
     </div>

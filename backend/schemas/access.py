@@ -4,8 +4,16 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
 
+POS_PERMISSIONS = frozenset({
+    "pos.sell", "pos.refund", "pos.refund.approve", "pos.discount.override",
+    "pos.shift.manage", "pos.cash.manage", "pos.kitchen", "sales.detail.view",
+    "stock.view", "stock.receive", "stock.adjust", "customers.lookup",
+})
+
+
 PERMISSIONS = frozenset({
     "pos.sell", "pos.refund", "pos.refund.approve", "pos.discount.override",
+    "pos.shift.manage", "pos.cash.manage", "pos.kitchen",
     "sales.view", "sales.detail.view", "hpp.view", "hpp.manage", "hpp.approve",
     "stock.view", "stock.receive", "stock.adjust", "purchasing.view", "purchasing.manage",
     "supplier.price.view", "finance.view", "finance.manage", "customers.lookup",

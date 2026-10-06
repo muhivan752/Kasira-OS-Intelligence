@@ -244,6 +244,7 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
   Future<List<ProductModel>> _fetchProducts({String? categoryId}) async {
     final online = await _isOnline();
     if (!online) {
+      if (SessionCache.instance.accessMode == 'managed') throw StateError('Akun staf perlu koneksi internet untuk memuat menu.');
       return _fetchFromLocal(categoryId: categoryId);
     }
 
@@ -259,6 +260,7 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
       ));
 
       final queryParams = <String, dynamic>{
+        if (c.accessMode == 'managed') 'outlet_id': c.outletId,
         if (categoryId != null && categoryId != 'all') 'category_id': categoryId,
       };
 
@@ -288,6 +290,7 @@ class ProductsNotifier extends AsyncNotifier<List<ProductModel>> {
 
       return items;
     } catch (_) {
+      if (SessionCache.instance.accessMode == 'managed') rethrow;
       // Network error — fallback ke lokal
       return _fetchFromLocal(categoryId: categoryId);
     }

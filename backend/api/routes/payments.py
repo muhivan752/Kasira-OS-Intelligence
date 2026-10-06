@@ -1,3 +1,4 @@
+from backend.services.pos_access import PosAccessRoute
 import asyncio
 import logging
 from typing import Any, List, Optional, Dict
@@ -32,7 +33,7 @@ from backend.utils.encryption import decrypt_field
 from backend.services.fonnte import send_whatsapp_message
 from backend.models.event import Event
 
-router = APIRouter()
+router = APIRouter(route_class=PosAccessRoute)
 
 
 async def _handle_deposit_webhook_paid(db: AsyncSession, payment: Payment) -> None:
@@ -435,6 +436,16 @@ async def create_payment(
                 status_code=400,
                 detail="Order sudah dibatalkan otomatis oleh sistem (stale cleanup) — silakan buat order baru."
             )
+
+    if request.state.access.mode == "managed":
+        from decimal import Decimal
+        paid = await db.scalar(select(func.coalesce(func.sum(Payment.amount_paid - Payment.change_amount), 0)).where(
+            Payment.order_id == order.id, Payment.status == "paid", Payment.deleted_at.is_(None)))
+        remaining = max(Decimal(0), order.total_amount - paid)
+        if (not payment_in.is_partial and payment_in.amount_due != remaining) or (payment_in.is_partial and not Decimal(0) < payment_in.amount_due <= remaining):
+            raise HTTPException(422, "Tagihan pembayaran tidak sesuai sisa pesanan")
+        if payment_in.is_partial and payment_in.payment_method == PaymentMethod.cash and payment_in.amount_paid != payment_in.amount_due:
+            raise HTTPException(422, "Pembayaran tunai sebagian memakai jumlah pas")
 
     # Block partial payments for non-Pro tiers (Rule #43)
     if payment_in.is_partial:
@@ -1202,6 +1213,8 @@ async def list_refunds(
         .order_by(PaymentRefund.created_at.desc())
         .limit(50)
     )
+    if request.state.access.mode == "managed":
+        query = query.where(Payment.invoice_id.is_(None), (Payment.order_id.isnot(None)) | (Payment.tab_id.isnot(None)))
     if status:
         query = query.where(PaymentRefund.status == status)
 
@@ -1233,6 +1246,10 @@ async def read_payments(
         Payment.deleted_at.is_(None)
     )
     
+    if request.state.access.mode == "managed":
+        query = query.where(Payment.invoice_id.is_(None), (Payment.order_id.isnot(None)) | (Payment.tab_id.isnot(None)))
+        if not request.state.access.allows("sales.detail.view"):
+            query = query.join(Order, Order.id == Payment.order_id).where((Order.user_id == current_user.id) | (Order.accepted_by == current_user.id))
     if order_id:
         query = query.where(Payment.order_id == order_id)
         
@@ -1702,7 +1719,9 @@ async def request_refund(
     from decimal import Decimal as D
 
     # Check permission
-    if current_user.role_id:
+    if request.state.access.mode == "managed":
+        request.state.access.require("pos.refund")
+    elif current_user.role_id:
         role = await db.get(Role, current_user.role_id)
         if role and not role.can_refund and not current_user.is_superuser:
             raise HTTPException(status_code=403, detail="Anda tidak punya izin untuk refund")
@@ -1808,7 +1827,9 @@ async def approve_refund(
     from decimal import Decimal as D
 
     # Check permission
-    if current_user.role_id:
+    if request.state.access.mode == "managed":
+        request.state.access.require("pos.refund.approve")
+    elif current_user.role_id:
         role = await db.get(Role, current_user.role_id)
         if role and not role.can_approve_refund and not current_user.is_superuser:
             raise HTTPException(status_code=403, detail="Anda tidak punya izin untuk approve refund")
@@ -1868,7 +1889,9 @@ async def reject_refund(
     """Reject a pending refund."""
     from backend.models.payment_refund import PaymentRefund
 
-    if not current_user.is_superuser:
+    if request.state.access.mode == "managed":
+        request.state.access.require("pos.refund.approve")
+    elif not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Hanya owner yang bisa reject refund")
 
     refund = await db.execute(

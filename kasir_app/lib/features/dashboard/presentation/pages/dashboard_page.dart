@@ -23,6 +23,7 @@ import '../../providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../../pos/providers/pos_mode_provider.dart';
 import '../../../online_orders/providers/online_orders_provider.dart';
+import 'managed_workspace_page.dart';
 
 final _currencyFmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -43,6 +44,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
   @override
   void initState() {
     super.initState();
+    if (SessionCache.instance.accessMode == 'managed') return;
     _loadTier();
     // Pesanan online: SSE + bel hidup selama dashboard hidup (= selama login).
     // Observer pertama di app ini: putus stream saat app ke belakang,
@@ -75,6 +77,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (SessionCache.instance.accessMode == 'managed') return;
     final n = ref.read(onlineOrdersProvider.notifier);
     if (state == AppLifecycleState.resumed) {
       n.onForeground();
@@ -418,6 +421,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
 
   @override
   Widget build(BuildContext context) {
+    if (SessionCache.instance.accessMode == 'managed') return const ManagedWorkspacePage();
     // One-shot redirect ke POS tab kalau pendingNavigateToPos=true (di-set oleh
     // tab_detail_page.dart saat user tap "Tambah Pesanan"). Setelah consume,
     // clear provider — gak persistent jadi user tetap bisa navigate balik ke

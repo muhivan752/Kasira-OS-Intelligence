@@ -344,7 +344,7 @@ class _ShiftPageState extends State<ShiftPage> {
         iconTheme: const IconThemeData(color: KasiraDS.textStrong),
         elevation: 0,
         actions: [
-          TextButton.icon(
+          if (SessionCache.instance.allows('pos.cash.manage')) TextButton.icon(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CashDrawerHistoryPage())),
             icon: const Icon(LucideIcons.history, color: KasiraDS.brandPrimary),
             label: const Text('Riwayat Kas', style: TextStyle(color: KasiraDS.brandPrimary)),

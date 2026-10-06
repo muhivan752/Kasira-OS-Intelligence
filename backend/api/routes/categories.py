@@ -1,3 +1,4 @@
+from backend.services.pos_access import PosAccessRoute
 from typing import Any, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -13,7 +14,7 @@ from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 from backend.api.deps import validate_brand_ownership, validate_category_ownership
 
-router = APIRouter()
+router = APIRouter(route_class=PosAccessRoute)
 
 @router.post("/", response_model=StandardResponse[CategoryResponse])
 async def create_category(

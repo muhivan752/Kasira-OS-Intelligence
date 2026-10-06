@@ -22,6 +22,7 @@ class SyncPayload(BaseModel):
     product_variants: List[Dict[str, Any]] = []
 
 class SyncRequest(BaseModel):
+    access_version: Optional[str] = None
     last_sync_hlc: Optional[str] = None
     node_id: str
     # outlet_id: wajib untuk multi-outlet tenant (Pro+ yang punya >1 outlet).
@@ -48,6 +49,7 @@ class SyncRequest(BaseModel):
     changes: SyncPayload
 
 class SyncResponse(BaseModel):
+    access: Optional[dict] = None
     last_sync_hlc: str
     changes: SyncPayload
     stock_mode: Optional[str] = None

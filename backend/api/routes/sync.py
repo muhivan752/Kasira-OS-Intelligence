@@ -1,6 +1,7 @@
+from backend.services.pos_access import PosAccessRoute
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_, text
 from datetime import datetime, timezone
@@ -107,11 +108,12 @@ def _normalize_push(changes, syncing_user_id: str, tz_name: str) -> None:
                     r[f] = fix_ts(r[f])
 
 
-router = APIRouter()
+router = APIRouter(route_class=PosAccessRoute)
 
 @router.post("/", response_model=SyncResponse)
 async def sync_data(
     request: SyncRequest,
+    http_request: Request,
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ) -> Any:
@@ -120,12 +122,18 @@ async def sync_data(
     """
     # Resolve outlet dengan tenant-scoping validation (CRITICAL #3 fix).
     # Multi-outlet tenant tanpa outlet_id explicit = cross-outlet data leak risk.
+    access = http_request.state.access
+    managed = access.mode == "managed"
     all_outlets = (await db.execute(
         select(Outlet).filter(
             Outlet.tenant_id == current_user.tenant_id,
             Outlet.deleted_at.is_(None),
         )
     )).scalars().all()
+    if managed:
+        all_outlets = list(access.outlets)
+        if (request.cursor_hlc or request.access_version is not None) and request.access_version != access.version:
+            raise HTTPException(409, detail={"code": "ACCESS_CHANGED", "message": "Izin akun berubah. Muat ulang sinkronisasi"})
     if not all_outlets:
         raise HTTPException(status_code=400, detail="User is not assigned to an outlet")
 
@@ -435,6 +443,8 @@ async def sync_data(
     # last_sync_hlc (first page marker). Zero data loss: filter > cursor
     # ASC sorted, limit+1 detect has_more.
     effective_hlc_str = request.cursor_hlc or request.last_sync_hlc
+    if managed and not request.cursor_hlc and request.access_version != access.version:
+        effective_hlc_str = None
     client_last_sync_hlc = None
     if effective_hlc_str:
         try:
@@ -451,11 +461,15 @@ async def sync_data(
     # cash_activities) akan di-handle dgn inline paginated query di bawah.
     cat_records, cat_more = await get_table_changes(db, Category, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
     prod_records, prod_more = await get_table_changes(db, Product, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
-    ord_records, ord_more = await get_table_changes(db, Order, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
+    financial_read = not managed or access.allows("pos.sell") or access.allows("sales.detail.view")
+    own_only = managed and not access.allows("sales.detail.view")
+    order_predicate = ((Order.user_id == access.user_id) | (Order.accepted_by == access.user_id)) if own_only and financial_read else (True if financial_read else False)
+    payment_predicate = (Payment.invoice_id.is_(None) & Payment.order_id.in_(select(Order.id).where(Order.outlet_id == outlet_id, order_predicate))) if managed else None
+    ord_records, ord_more = await get_table_changes(db, Order, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id, predicate=order_predicate)
     # Drift caches order payments; reservation deposits remain in the server
     # reservation flow until they are attached to an order.
-    pay_records, pay_more = await get_table_changes(db, Payment, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id, required_fields=("order_id",))
-    shift_records, shift_more = await get_table_changes(db, Shift, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
+    pay_records, pay_more = await get_table_changes(db, Payment, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id, required_fields=("order_id",), predicate=payment_predicate)
+    shift_records, shift_more = await get_table_changes(db, Shift, {"outlet_id": outlet_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id, predicate=False if managed else None)
     ing_records, ing_more = await get_table_changes(db, Ingredient, {"brand_id": brand_id}, client_last_sync_hlc, server_node_id, limit=page_limit, cursor_last_id=cursor_last_id)
 
     pull_changes = SyncPayload(
@@ -511,7 +525,7 @@ async def sync_data(
 
     # Custom pull for order_items — JOIN Order untuk outlet scoping.
     # Pagination: ORDER BY + LIMIT+1 pattern.
-    stmt = select(OrderItem).join(Order).filter(Order.outlet_id == outlet_id)
+    stmt = select(OrderItem).join(Order).filter(Order.outlet_id == outlet_id, order_predicate)
     stmt = _apply_delta_filter(stmt, OrderItem)
     stmt = stmt.order_by(*pull_order_columns(OrderItem)).limit(page_limit + 1)
     order_items_records = (await db.execute(stmt)).scalars().all()
@@ -555,7 +569,8 @@ async def sync_data(
     pull_changes.recipe_ingredients = [_row_to_dict(r, has_row_version=False) for r in ri_records]
     has_more_any = has_more_any or ri_more
 
-    pull_changes.recipe_hpp = await get_recipe_hpp_changes(db, brand_id, pull_changes)
+    if not managed or access.allows("hpp.view"):
+        pull_changes.recipe_hpp = await get_recipe_hpp_changes(db, brand_id, pull_changes)
 
     # Custom pull untuk product_variants (join Product buat scoping brand).
     # Punya row_version, tapi nggak lewat get_table_changes karena filter-nya
@@ -581,6 +596,8 @@ async def sync_data(
 
     # Custom pull for cash_activities (join Shift untuk outlet scoping)
     stmt = select(CashActivity).join(Shift).filter(Shift.outlet_id == outlet_id)
+    if managed:
+        stmt = stmt.where(False)
     stmt = _apply_delta_filter(stmt, CashActivity)
     stmt = stmt.order_by(*pull_order_columns(CashActivity)).limit(page_limit + 1)
     ca_records = (await db.execute(stmt)).scalars().all()
@@ -647,6 +664,7 @@ async def sync_data(
         pass
 
     return SyncResponse(
+        access=access.public() if managed else None,
         last_sync_hlc=pull_watermark.to_string(),
         changes=pull_changes,
         stock_mode=sm_str,

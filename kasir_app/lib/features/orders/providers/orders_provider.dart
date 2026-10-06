@@ -176,6 +176,10 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
 
   /// Offline-first: daftar dari Drift, yang belum sync ditandai.
   Future<void> _loadLocal(String outletId, {String? status}) async {
+    if (SessionCache.instance.accessMode == 'managed') {
+      state = state.copyWith(orders: [], isLoading: false, error: 'Akun staf perlu koneksi internet untuk melihat riwayat.');
+      return;
+    }
     final list = await _local.recentOrders(outletId, status: status);
     state = state.copyWith(orders: list, isLoading: false, isOffline: true, clearError: true);
   }
@@ -226,7 +230,7 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
           .toList();
       // Yang masih ngantre di HP belum ada di server: taruh di atas dengan
       // tanda, supaya kasir nggak ngira transaksinya hilang.
-      final pending = await _local.recentOrders(outletId, status: status, onlyUnsynced: true);
+      final pending = c.accessMode == 'managed' ? <OrderModel>[] : await _local.recentOrders(outletId, status: status, onlyUnsynced: true);
       final serverIds = list.map((o) => o.id).toSet();
       final merged = [...pending.where((o) => !serverIds.contains(o.id)), ...list];
       state = state.copyWith(orders: merged, isLoading: false, isOffline: false);
@@ -294,7 +298,7 @@ final orderDetailProvider = FutureProvider.family<OrderModel, String>((ref, orde
 
   // Order yang belum sync cuma ada di HP; server bakal 404. Lokal duluan.
   final fromLocal = await local.orderById(orderId);
-  if (fromLocal != null && !fromLocal.isSynced) return fromLocal;
+  if (c.accessMode != 'managed' && fromLocal != null && !fromLocal.isSynced) return fromLocal;
 
   final dio = Dio(BaseOptions(
     baseUrl: AppConfig.apiV1,
@@ -312,7 +316,7 @@ final orderDetailProvider = FutureProvider.family<OrderModel, String>((ref, orde
     );
     return OrderModel.fromJson(resp.data['data'] as Map<String, dynamic>);
   } on DioException catch (e) {
-    if (e.response == null && fromLocal != null) return fromLocal;
+    if (c.accessMode != 'managed' && e.response == null && fromLocal != null) return fromLocal;
     rethrow;
   }
 });

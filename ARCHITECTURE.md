@@ -711,7 +711,8 @@ access_version; hash ini belum identitas sesi/versi JWT. HRIS memakai izin
 profil/jadwal/absensi/self terpisah dengan scope outlet dan replay.
 Managed policy version1 menggantikan fallback legacy dan membatasi scope
 tenant/brand/outlet. Handler authenticated yang belum mendukung managed,
-termasuk sync dan AI, ditolak lewat endpoint identity+method. Legacy di luar
+termasuk AI, ditolak lewat endpoint identity+method. POS/stok/sync kini
+terintegrasi melalui registry; managed sync pull-only. Legacy di luar
 HRIS tetap mengikuti aturan existing. Belum enforcement AI/cache/history/
 worker granular atau GPS/foto. Tahap akun berikutnya pada source menambah
 username/password, migrasi legacy tanpa gantiUUID, editor jabatan/akun HRIS
@@ -719,7 +720,11 @@ owner-only, sesi sid/cv dan challenge sekali pakai. Migrasi114 melengkapi
 sessions existing dengan tenant langsung+FORCE RLS. Penonaktifan staf
 mencabut sesi permanen; reaktivasi memerlukan login baru. Native mengganti
 identitas lewatUUID dan membatalkan sync tanpa menghapus SQLite/antrean.
-Role managed baru tetap HRIS-only; kontrak/QA docs/ACCOUNT_ACCESS_REVIEW.md.
+Role managed baru mendukung HRIS/POS/stok; kontrak/QA
+docs/POS_ACCESS_REVIEW.md. Harga modal/keuangan/AI managed tetap tertutup.
+Managed native online-only, cache/cursor per identitas/versi akses dan queue
+serta dependency dipertahankan saat revoke/switch; tidak push/mark synced.
+Algoritme stok simple bersama brand dan resep per outlet tetap existing.
 Fondasi dan tahap akun sudah deploy ke backend/web dengan migrasi114 dan
 APK1.6.32+199 setelah izin rilis Ivan. Tidak mengubah role POS existing menjadi
 managed. Rincian penerapan/QA docs/ACCESS_REVIEW.md, deployment

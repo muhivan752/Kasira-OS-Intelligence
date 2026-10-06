@@ -4,7 +4,28 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
-## UPDATE TERAKHIR - Akun live dan APK 1.6.32+199 dirilis, 6 Oktober 2026
+## UPDATE TERAKHIR - POS/stok/sync QA selesai, menyiapkan 1.6.33+200
+
+- Ivan "oke lanjut ke 1" memilih POS/stok/sync; deploy/rilis sudah diotorisasi
+  sebelumnya. Source/QA review docs/POS_ACCESS_REVIEW.md, status live belum baru.
+- Managed registry exact callable+method; scope parent/outlet/brand/tenant,
+  canonical order price/discount/payment due; grants sell/refund/approve/shift/
+  cash/kitchen/history/stock/customer lookup terpisah. HPP/counter/secret/blind
+  drawer direduksi, future modules fail closed. Legacy tidak dimigrasi otomatis.
+- Web Operasional dengan stock receive/count dan uncertain-write lock. APK
+  workspace managed untuk POS/riwayat/shift/kas/refund/dapur, stock via web.
+  Cold manifest/foreground/online refresh; queue/dependencies/retry key tetap,
+  managed pull-only dan cache/cursor scoped. Masa offline lease belum dipilih.
+- QA 62 unit +1 skip, 5 kelompok HTTP PostgreSQL/JWT/RLS, 45 native +2 skip,
+  10 izin khusus, browser stok light/dark 320..1440/200%, checkbox grants editor.
+  Inner overflow screenshot diperbaiki dan pengecekan panel ditambahkan.
+- 1.6.33+200 disiapkan. Backup privat /tmp/selaris-pos-access-release-backup
+  DB/source/hotfix/image/version/APK1.6.32. Runtime diff 21 backend files.
+  Deploy dengan copy/restart existing backend, frontend-only compose --no-deps.
+  Jangan recreate image backend lama. Belum uji HP fisik.
+- Lanjut Keuangan/Pembelian/CRM/HPP, seluruh AI, lalu GPS/foto sesuai owner.
+
+## UPDATE SEBELUMNYA - Akun live dan APK 1.6.32+199 dirilis, 6 Oktober 2026
 
 - Ivan "deploy dan rilis apk" mengotorisasi main/native. Source 66ddd59 dipush,
   SHA main diverifikasi, CI #199/run37451765808 sukses. Deployment review:

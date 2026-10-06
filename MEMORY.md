@@ -1,7 +1,34 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## TERKINI - AKUN LIVE DAN APK 1.6.32+199 DIRILIS, 2026-10-06
+## TERKINI - IZIN POS/STOK/SYNC SELESAI DI QA, RILIS 1.6.33 DISIAPKAN
+
+- Ivan memilih langkah 1 setelah akun 1.6.32: granular POS/stok/sync. Instruksi
+  deploy/rilis sebelumnya masih menjadi otorisasi. Review docs/POS_ACCESS_REVIEW.md.
+- Registry endpoint+method managed dan scope parent/outlet/brand/tenant sebelum
+  mutation. POS/refund/approve/discount/shift/cash/kitchen/history/stock/customer
+  lookup grants terpisah; HPP/counter/secret/total laci disembunyikan sesuai izin.
+  Tagihan canonical dan harga/diskon server; modul keuangan/HPP/AI tetap tertutup.
+- Web operasional stok: receive produk simple/bahan resep, opname simple, outlet
+  dan uncertainty lock tanpa retry otomatis. Simple stock tetap bersama brand;
+  resep per outlet. Owner memilih grant melalui editor HRIS existing.
+- Native managed workspace, riwayat/menu online, kas/refund/dapur sesuai grant.
+  Cold manifest/foreground/sync refresh; cursor tenant/user/outlet/access-version.
+  Managed online-only/pull-only; tidak mengubah antrean/pending retry key atau
+  parent, tidak overwrite same-ID pending. Legacy offline tetap existing.
+  Offline lease baru belum dipilih. Stok managed lewat web; Dapur PIN existing.
+- QA 62 unit PASS +1 skip, 5 kelompok HTTP PG/JWT/RLS/SSE/FCM/stock; 45 native
+  PASS +2 fixture opsional skip, 10 khusus izin; browser stock light/dark
+  320..1440/200% dan editor semua grants. Screenshot menemukan inner overflow
+  yang lolos cek root; grid/min-width diperbaiki dan cek panel ditambah.
+- Rilis 1.6.33+200 dan frontend build sedang disiapkan; belum klaim live.
+  Backup baru /tmp/selaris-pos-access-release-backup: seluruh source/hotfix,
+  DB custom terverifikasi, image/version/APK1.6.32. Selisih runtime 21 file
+  backend. Jangan recreate backend lama; copy file terarah + restart saja.
+- Berikutnya Keuangan/Pembelian/CRM/HPP lalu seluruh AI/cache/history/RAG/worker.
+  GPS/foto/OTP/offline/radius/retensi tetap keputusan tersendiri.
+
+## SEBELUMNYA - AKUN LIVE DAN APK 1.6.32+199 DIRILIS, 2026-10-06
 
 - Ivan eksplisit "deploy dan rilis apk"; publikasi main/native yang sebelumnya
   pending kini diotorisasi. Source 66ddd59 dipush dan SHA diverifikasi sebelum
