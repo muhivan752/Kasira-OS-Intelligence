@@ -73,7 +73,9 @@ async function appearance(page, label) {
     assert.equal(await page.getByRole('link', { name: 'Susun draft HPP' }).count(), 1);
     for (const width of [320, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 }); await appearance(page, 'AI light ' + width);
+      if ([320, 1440].includes(width)) await page.screenshot({ path: `/tmp/selaris-ai-managed-light-${width}.png`, fullPage: true });
       await page.getByRole('button', { name: 'Gunakan tema gelap' }).click(); await appearance(page, 'AI dark ' + width);
+      if ([320, 1440].includes(width)) await page.screenshot({ path: `/tmp/selaris-ai-managed-dark-${width}.png`, fullPage: true });
       await page.getByRole('button', { name: 'Gunakan tema terang' }).click();
     }
     await page.getByLabel('Pertanyaan Anda').fill('Pertanyaan fixture pertama'); await page.getByLabel('Pertanyaan Anda').press('Enter');

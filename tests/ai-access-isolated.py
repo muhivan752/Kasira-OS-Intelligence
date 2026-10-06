@@ -19,6 +19,7 @@ from backend.core.config import settings
 from backend.core.database import AsyncSessionLocal, engine
 from backend.core.security import create_access_token
 from backend.models import Tenant, Brand, Outlet, User, Role, Product, Ingredient, OutletStock, Order, Payment, LoginSession
+from backend.models.knowledge_graph import KnowledgeGraphEdge
 from backend.models.purchasing import PurchaseOrder
 from backend.models.hpp_setup import HppSetupSession, HppSetupTurn
 from backend.services.access import resolve_access
@@ -71,6 +72,8 @@ async def main():
             tracking_mode="simple", base_unit="gram", unit_type="WEIGHT", buy_price=54321, buy_qty=1000,
             cost_per_base_unit=Decimal("54.321")) for i, b in enumerate(brands)]
         db.add_all(products + ingredients); await db.flush()
+        db.add(KnowledgeGraphEdge(tenant_id=tid, source_node_type="product", source_node_id=products[0].id,
+            target_node_type="product", target_node_id=products[1].id, relation_type="contains", metadata_payload={"secret": "FORBIDDEN KG PAYLOAD"}))
         for i, outlet in enumerate(outlets):
             db.add(OutletStock(outlet_id=outlet.id, ingredient_id=ingredients[0 if i < 2 else i - 1].id,
                 computed_stock=100 + i))
@@ -120,6 +123,22 @@ async def main():
         assert '"stock": 100.0' in contexts["data"] and '"stock": 101.0' not in contexts["data"]
         assert "54321" not in contexts["hpp_no_price"] and "54.321" in contexts["hpp_no_price"]
         print("PASS permission-filtered facts, outlet-only sales/stock/purchases/finance, safe HPP fields and forced RLS")
+
+        vector = [0.0] * 511 + [1.0]
+        async with Admin() as db:
+            for product in products:
+                row = await db.get(Product, product.id); row.embedding = vector
+            await db.commit()
+        from backend.services import embedding_service
+        with patch.object(embedding_service, "is_available", return_value=True), patch.object(embedding_service, "embed_query", new_callable=AsyncMock, return_value=vector):
+            async with AsyncSessionLocal() as db:
+                await db.execute(text("SELECT set_config('app.current_tenant_id', :tid, true)"), {"tid": str(tid)})
+                access = await resolve_access(db, await db.get(User, users["data"].id))
+                prompt = await managed_context(db, access, oid, "menu relevan")
+                assert "PRODUK RELEVAN" in prompt and "FORBIDDEN" not in prompt
+                results = await embedding_service.search_similar_products("synthetic", brands[0].id, db)
+                assert [p["id"] for p in results] == [str(products[0].id)]
+        print("PASS actual pgvector RAG retrieval stays within the authorized outlet brand and tenant")
 
         async with Admin() as db:
             a = await resolve_access(db, await db.get(User, users["chat"].id))
@@ -174,7 +193,9 @@ async def main():
         answer = service.ModelReply(action="edit_recipe", reply="Synthetic recipe draft", draft=service.Draft(
             product_name="VISIBLE MENU", servings=Decimal(1), servings_source="existing",
             ingredients=[service.DraftIngredient(name="VISIBLE FLOUR", quantity=Decimal(2), quantity_unit="gram", quantity_source="existing", price_source="existing")]))
-        async def generate(*args, **kwargs): return answer, {"model": "synthetic"}
+        async def generate(*args, **kwargs):
+            assert "FORBIDDEN KG PAYLOAD" not in args[4]
+            return answer, {"model": "synthetic"}
         with patch.object(service, "generate", side_effect=generate):
             message = {"outlet_id": oid, "request_id": str(uuid4()), "revision": 0, "mode": "estimate", "message": "Bantu estimasikan resep synthetic"}
             await call("POST", "/ai/hpp-setup/sessions/" + chat["id"] + "/messages", "draft", message, 202)
@@ -243,6 +264,16 @@ async def main():
             extract.assert_not_called()
             response = await call("POST", "/invoice-ocr/scan", "ocr", params={"outlet_id": oid}, files={"file": ("synthetic.png", b"synthetic", "image/png")})
             assert response.json()["data"]["items"][0]["matched_ingredient_id"] == str(ingredients[0].id)
+        async def revoked_ocr(*args):
+            async with Admin() as db:
+                role = await db.get(Role, roles["ocr"].id)
+                role.permissions = {"access_policy": {"version": 1, "permissions": {}, "outlet_ids": [oid, sibling]}}
+                await db.commit()
+            return {"supplier_name": "SYNTHETIC SECRET OCR", "items": []}
+        with patch("backend.services.invoice_ocr_service.extract_invoice_data", side_effect=revoked_ocr):
+            response = await call("POST", "/invoice-ocr/scan", "ocr", expected=403,
+                params={"outlet_id": oid}, files={"file": ("synthetic.png", b"synthetic", "image/png")})
+            assert "SYNTHETIC SECRET OCR" not in response.text
         item = {"name": "VISIBLE FLOUR", "quantity": 10, "unit": "gram", "unit_price": 10, "total_price": 100, "matched_ingredient_id": str(ingredients[0].id)}
         await call("POST", "/invoice-ocr/apply", "ocr", {"outlet_id": oid, "items": [item]}, 403)
         tokens["approve"] = tokens["owner"]

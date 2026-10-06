@@ -268,11 +268,11 @@ export function HppChat({ initialProduct, initialOutlet }: { initialProduct: str
           </section>}
           {session?.status === 'applied' && <div className="hpp-chat-saved" role="status">
             <p>Bahan dan resep sudah tersimpan.</p>
-            {session.result?.new_product && <p>Menu baru masih nonaktif. Atur harga jualnya dulu di Menu.</p>}
+            {session.result?.new_product && <p>{session.managed ? 'Menu baru masih nonaktif. Minta pemilik usaha mengatur harga jual dan mengaktifkannya di Menu.' : 'Menu baru masih nonaktif. Atur harga jualnya dulu di Menu.'}</p>}
             <div className="hpp-chat-saved-links">
-              <Link className="hpp-button" href={'/dashboard/hpp?product=' + session.result?.product_id}>Lihat resep tersimpan</Link>
-              <Link className="hpp-button" href="/dashboard/bahan-baku">Catat stok bahan</Link>
-              {session.result?.new_product && <Link className="hpp-button" href="/dashboard/menu">Atur menu baru</Link>}
+              <Link className="hpp-button" href={`/dashboard/hpp?product=${session.result?.product_id}&outlet=${session.outlet_id}`}>Lihat resep tersimpan</Link>
+              {session.can_stock_receive !== false && <Link className="hpp-button" href={session.managed ? '/dashboard/operasional' : '/dashboard/bahan-baku'}>Catat stok bahan</Link>}
+              {session.result?.new_product && !session.managed && <Link className="hpp-button" href="/dashboard/menu">Atur menu baru</Link>}
             </div>
           </div>}
           {problem && !panel && recovery}

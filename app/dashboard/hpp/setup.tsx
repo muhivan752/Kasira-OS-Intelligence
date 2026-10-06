@@ -7,13 +7,13 @@ import { useProGuard } from '@/app/hooks/use-pro-guard';
 import { HppRecipeEditor } from '@/components/hpp-recipe-editor';
 import { hppMoney, hppNumber, type HppProduct, type HppRecipe } from '@/lib/hpp';
 
-export function HppSetup({ initialProduct }: { initialProduct: string }) {
+export function HppSetup({ initialProduct, initialOutlet = '' }: { initialProduct: string; initialOutlet?: string }) {
   const allowed = useProGuard('Atur HPP');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [brandId, setBrandId] = useState('');
   const [canManage, setCanManage] = useState(false), [managed, setManaged] = useState(false), [canChat, setCanChat] = useState(false);
-  const [outlets, setOutlets] = useState<{ id: string; name: string }[]>([]), [outletId, setOutletId] = useState('');
+  const [outlets, setOutlets] = useState<{ id: string; name: string }[]>([]), [outletId, setOutletId] = useState(initialOutlet);
   const [products, setProducts] = useState<HppProduct[]>([]);
   const [recipes, setRecipes] = useState<HppRecipe[]>([]);
   const [selected, setSelected] = useState(initialProduct);

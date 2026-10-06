@@ -96,6 +96,7 @@ async def view(db, session):
     access = await fresh(db, session.user_id, session.tenant_id, session.outlet_id,
         grants=("ai.chat", "hpp.view", "supplier.price.view"))
     return {"id": str(session.id), "outlet_id": str(session.outlet_id), "mode": session.mode,
+        "managed": access.mode == "managed", "can_stock_receive": access.mode != "managed" or access.allows("stock.receive"),
         "can_approve": access.mode != "managed" or (access.allows("hpp.manage") and access.allows("hpp.approve")),
         "status": session.status, "revision": session.revision, "preview": session.preview,
         "result": session.result, "error": session.error,

@@ -18,6 +18,7 @@ export type HppChatPreview = {
 };
 export type HppChatSession = {
   can_approve?: boolean;
+  managed?: boolean; can_stock_receive?: boolean;
   id: string; outlet_id: string; mode: HppChatMode; status: 'draft' | 'applied';
   revision: number; preview: HppChatPreview | null; pending: boolean;
   retry_allowed: boolean; error: string | null;
