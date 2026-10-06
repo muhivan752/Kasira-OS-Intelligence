@@ -38,12 +38,32 @@ const fixture = http.createServer(async (req, res) => {
       scope: 'allowed_outlets', timezone: 'Asia/Jakarta', workspace_key: 'scoped-fixture', generated_at: '2026-10-01T00:00:00Z',
       can_manage: allowed('customers.manage'), can_export: allowed('customers.export') };
   } else if (path.includes('/customers/workspace/')) data = { ...person, orders: [], favourites: [], timeline: [], history_skip: 0, history_limit: 20, can_manage: allowed('customers.manage'), can_export: allowed('customers.export') };
-  else if (path.endsWith('/products')) data = [{ id: other, brand_id: other, name: 'Kopi fixture', base_price: 20000, stock_qty: 10 }];
+  else if (path.endsWith('/products')) data = [{ id: other, brand_id: other, name: 'Kopi fixture', is_active: true, base_price: 20000, stock_qty: 10 }];
   else if (path.endsWith('/ingredients')) data = [{ id, name: 'Gula fixture', base_unit: 'gram', cost_per_base_unit: 50, buy_price: 5000, buy_qty: 100, row_version: 1 }];
   else if (path.endsWith('/recipes')) data = [{ id, product_id: other, total_cost: 100, ingredients: [{ ingredient_id: id, ingredient_name: 'Gula fixture', quantity: 2, quantity_unit: 'gram' }] }];
   else if (path.includes('/ai/') || path.includes('/invoice-ocr/')) status = 403;
   res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(status >= 400 ? { detail: { code: 'PERMISSION_DENIED', message: 'Tidak diizinkan' } } : { success: true, data }));
 });
+
+async function appearance(page, label) {
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, label + ' overflow');
+  const issues = await page.locator('main').evaluate(root => {
+    const luminance = color => color.match(/[\d.]+/g).slice(0, 3).map(Number).map(x => x / 255).map(x => x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4).reduce((sum, x, i) => sum + x * [.2126, .7152, .0722][i], 0);
+    const issues = [];
+    for (const el of root.querySelectorAll('*')) {
+      const style = getComputedStyle(el), box = el.getBoundingClientRect();
+      if (!box.width || !box.height || el.tagName === 'OPTION' || style.visibility === 'hidden' || el.closest(':disabled')) continue;
+      if (['BUTTON', 'SELECT', 'INPUT'].includes(el.tagName) && el.type !== 'checkbox' && (box.width < 43 || box.height < 43)) issues.push('target ' + el.textContent);
+      if (!Array.from(el.childNodes).some(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim())) continue;
+      let bg = el; while (bg.parentElement && ['transparent', 'rgba(0, 0, 0, 0)'].includes(getComputedStyle(bg).backgroundColor)) bg = bg.parentElement;
+      const a = luminance(style.color), b = luminance(getComputedStyle(bg).backgroundColor);
+      const ratio = (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+      if (ratio < 4.5) issues.push('contrast ' + el.textContent.trim().slice(0, 30) + ' ' + ratio);
+    }
+    return issues;
+  });
+  assert.deepEqual(issues, [], label);
+}
 
 (async () => {
   await new Promise(resolve => fixture.listen(Number(process.env.FIXTURE_PORT || 8188), '127.0.0.1', resolve));
@@ -57,11 +77,13 @@ const fixture = http.createServer(async (req, res) => {
     const page = await context.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(base + '/dashboard/keuangan');
     await page.getByRole('heading', { name: 'Laba setelah biaya tercatat', exact: true }).waitFor();
+    await appearance(page, 'finance viewer');
     assert.equal(await page.getByRole('button', { name: 'Catat pengeluaran', exact: true }).count(), 0);
     assert.equal(await page.getByRole('button', { name: /Catat pembayaran bulanan/ }).count(), 0);
     for (const label of ['Keuangan', 'Pembelian', 'Pelanggan', 'HPP']) assert(await page.locator('nav').getByRole('link', { name: label, exact: true }).count(), label);
     await page.locator('nav').getByRole('link', { name: 'Pembelian', exact: true }).click();
     await page.getByRole('heading', { name: 'Total nota bulan ini' }).waitFor();
+    await appearance(page, 'purchase viewer');
     assert.equal(await page.getByRole('button', { name: 'Catat nota', exact: true }).count(), 0);
     assert.match(await page.locator('.p-notas').innerText(), /Nominal tidak diizinkan/);
     await page.locator('.p-nota').click(); await page.getByRole('dialog').waitFor();
@@ -72,6 +94,7 @@ const fixture = http.createServer(async (req, res) => {
     assert.equal(await page.getByRole('button', { name: 'Tambah supplier' }).count(), 0);
     await page.locator('nav').getByRole('link', { name: 'Pelanggan', exact: true }).click();
     await page.locator('.c-summary').waitFor();
+    await appearance(page, 'customer viewer');
     assert.equal(await page.getByRole('button', { name: 'Tambah pelanggan' }).count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Ekspor halaman CSV' }).count(), 0);
     await page.getByRole('button', { name: 'Buka profil Pelanggan fixture' }).click();
@@ -89,9 +112,12 @@ const fixture = http.createServer(async (req, res) => {
     for (const width of [320, 375, 768, 1440]) for (const dark of [false, true]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.evaluate(value => document.documentElement.classList.toggle('dark', value), dark);
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'HPP overflow ' + width + '/' + dark);
+      await appearance(page, 'HPP viewer ' + width + '/' + dark);
     }
-    await page.screenshot({ path: '/tmp/selaris-business-managed-hpp.png', fullPage: true });
+    await page.evaluate(() => document.documentElement.style.fontSize = '200%');
+    await appearance(page, 'HPP viewer 200%');
+    await page.evaluate(() => document.documentElement.style.fontSize = '');
+    await page.screenshot({ path: '/tmp/selaris-business-managed-hpp.png', fullPage: true, animations: 'disabled' });
     console.log('PASS managed view-only controls across Finance/Purchasing/CRM/HPP; truthful price denial and cookie-selected HPP outlet; four widths/themes');
     permissions.push('customers.export');
     await page.goto(base + '/dashboard/pelanggan'); await page.locator('.c-summary').waitFor();

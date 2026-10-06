@@ -1,7 +1,46 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## TERKINI - POS/STOK/SYNC LIVE DAN APK 1.6.33+200 DIRILIS, 2026-10-06
+## TERKINI - TAHAP 2 AKSES BISNIS LIVE, 2026-10-06
+
+- Ivan “gas tahap 2”, lalu melanjutkan turn yang terhenti. Otorisasi deploy
+  sebelumnya tetap; source runtime 4f1cd8f dipush/remote diverifikasi dan live.
+  Review + Delivery Gate docs/BUSINESS_ACCESS_REVIEW.md; deployment
+  docs/BUSINESS_ACCESS_RELEASE.md. Native tidak diubah; APK tetap1.6.33+200.
+- Managed Keuangan/Pembelian/CRM/HPP memakai 31 callable+method rules dan
+  izin lihat/ubah/ekspor/harga/approve terpisah. Query ganda/ID/nested parent,
+  tenant/brand/outlet, brand nonaktif dan revoke pada JWT aktif diuji.
+- Role baru dapat memilih outlet atau tenant seluruh bisnis, termasuk outlet
+  baru. Role tenant bisa dipasang pada karyawan; kosong outlet scope ditolak.
+  Tidak memigrasikan role lama. Owner/legacy existing tetap.
+- Pengeluaran global dan edit shared cash account hanya tenant scope;
+  akun outlet lain disaring, opening balance scope outlet disamarkan, GET
+  managed tidak seed akun. Nota/pay perlu manage+harga; receive perlu stok.
+  Tanpa harga, nominal/foto/catatan/pembayaran nota disamarkan.
+- Profil/catatan CRM dan supplier bersama bisnis, resep/katalog bersama
+  brand. Transaksi/statistik/riwayat/favorit CRM serta agregat supplier hanya
+  outlet yang diizinkan. CSV CRM meminta izin export ulang di server.
+- Manual HPP persist butuh manage+approve; editor web juga butuh harga.
+  Unit/stock/HPP math tidak diubah. Semua AI, chat HPP, OCR dan API alternatif
+  tetap tertutup. Foreground web refresh manifest, invalid manifest closed.
+  Pending UUID/workspace key/queue native tetap.
+- Backup privat /tmp/selaris-business-access-release-backup: DB custom
+  tervalidasi, 309 source/hotfix baseline, version dan image metadata. Deploy
+  13 file (12 existing+1 baru), 297 lain tetap; seluruh310 hash live cocok.
+  Backend image160766…31a tidak direcreate; tidak HPP pending saat restart.
+  Frontend-only --no-deps imagec24faa…9403, 14 source hash cocok. Schema114.
+- QA 63 PASS+1 skip, tujuh kelompok HTTP/JWT/PG/RLS, empat legacy SQL suite,
+  21 HPP math+5 catalog dan konversi JS/Python PASS. TypeScript/build final
+  dan tujuh browser suite image final PASS: grant/tenant scope/manifest rusak,
+  revoke/replay, mobile/tema/200%/AA/keyboard. Publik24 auth keadaan tanpa
+  pageerror, 17 route401, hash/length kedua APK dan legacydomain PASS.
+- Empat service dan DB/background healthy; tidak write merchant atau uji
+  perangkat fisik. QA preview/container/network tugas dihentikan; artifact/
+  log/backup /tmp/selaris-business* tersimpan.
+- Berikutnya tahap 3 seluruh AI/context/cache/history/RAG/worker/write.
+  GPS/foto/OTP/offline/radius/retensi tetap keputusan tersendiri.
+
+## SEBELUMNYA - POS/STOK/SYNC LIVE DAN APK 1.6.33+200 DIRILIS, 2026-10-06
 
 - Ivan “oke lanjut ke 1”; deploy/rilis sebelumnya tetap otorisasi. Source e0947ba
   dipush dan SHA remote diverifikasi. CI #200/run37458813872 sukses; release

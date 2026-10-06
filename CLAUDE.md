@@ -14,7 +14,7 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 
 AccessContext dan GET /auth/access memakai user/role/status HRIS/outlet/izin
 canonical. Managed role mendukung HRIS, POS, stok dan sync pull-only, ditambah
-tahap 2 Keuangan/Pembelian/CRM/HPP pada source dan QA.
+tahap 2 Keuangan/Pembelian/CRM/HPP live, QA image final PASS.
 Registry endpoint identity+method menolak modul lain, termasuk AI. Owner aktual
 mengatur akun/jabatan; legacy tidak dimigrasikan otomatis. Role baru dapat
 memilih outlet atau seluruh bisnis. HPP manual butuh manage+approve; editor
@@ -27,7 +27,9 @@ sync tidak mengirim push atau menandai queue synced untuk managed. Legacy
 POS offline tetap existing. Masa izin offline baru belum ditetapkan.
 Backend/web POS/stok/sync live migration114; APK1.6.33+200 resmi dirilis
 sesuai izin deploy/rilis sebelumnya. Deployment docs/POS_ACCESS_RELEASE.md;
-status juga di MEMORY.md/SESSION.md.
+Tahap 2 backend/web live, APK tetap1.6.33+200; deployment
+docs/BUSINESS_ACCESS_RELEASE.md. Berikutnya seluruh AI/context/cache/history/
+RAG/worker/write. Status juga di MEMORY.md/SESSION.md.
 Jangan recreate backend image lama: seluruh hotfix harus dipertahankan.
 
 ## HRIS web tahap pertama (6 Oktober 2026)

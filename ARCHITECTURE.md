@@ -731,5 +731,7 @@ Algoritme stok simple bersama brand dan resep per outlet tetap existing.
 Fondasi dan tahap akun sudah deploy ke backend/web dengan migrasi114 dan
 APK1.6.33+200 setelah izin rilis Ivan. Tahap POS/stok/sync sudah live;
 deployment docs/POS_ACCESS_RELEASE.md. Tidak mengubah role POS existing menjadi
-managed. Rincian penerapan/QA docs/ACCESS_REVIEW.md, deployment
+managed. Tahap 2 backend/web live, APK tetap1.6.33+200; deployment
+docs/BUSINESS_ACCESS_RELEASE.md. Berikutnya seluruh AI/context/cache/history/
+RAG/worker/write. Rincian fondasi docs/ACCESS_REVIEW.md, deployment
 docs/ACCOUNT_ACCESS_RELEASE.md.
