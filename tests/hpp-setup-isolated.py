@@ -35,13 +35,19 @@ async def request_id(request: Request, call_next):
 users, tenants, brands, outlets = [], [], [], []
 
 
-async def current_user(x_test_user: str = Header(default=""), db=Depends(get_db)):
+async def current_user(request: Request, x_test_user: str = Header(default=""), db=Depends(get_db)):
     if not x_test_user:
         raise HTTPException(401)
     user = next((u for u in users if str(u.id) == x_test_user), None)
     if not user:
         raise HTTPException(401)
     await hpp_setup.scope(db, user)
+    from backend.services.access import resolve_access
+    from backend.core.security import create_access_token
+    from jose import jwt
+    request.state.access = await resolve_access(db, user)
+    request.state.auth_token = create_access_token(user.id)
+    request.state.auth_claims = jwt.decode(request.state.auth_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     return user
 
 

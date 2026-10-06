@@ -55,7 +55,7 @@ def route_rules():
     add(customers, "GET", "lookup_customer_for_pos", "customers.lookup")
     from backend.schemas.access import BUSINESS_PERMISSIONS
     for endpoint in (outlets.read_outlets, outlets.read_outlet):
-        rules["GET", endpoint] += tuple(BUSINESS_PERMISSIONS)
+        rules["GET", endpoint] += tuple(BUSINESS_PERMISSIONS) + ("ai.chat",)
     for endpoint in (products.read_products, products.read_product, categories.read_categories, categories.read_category):
         rules["GET", endpoint] += ("hpp.view", "purchasing.view", "purchasing.manage")
     for endpoint in (ingredients.list_ingredients, ingredients.get_ingredient):

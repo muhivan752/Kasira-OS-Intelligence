@@ -19,7 +19,7 @@ LEGACY_FLAGS = {
     "can_refund": "pos.refund", "can_approve_refund": "pos.refund.approve",
     "can_discount_override": "pos.discount.override",
 }
-ENFORCED_MODULES = ("hris", "pos", "stock", "sync", "finance", "purchasing", "customers", "hpp")
+ENFORCED_MODULES = ("hris", "pos", "stock", "sync", "finance", "purchasing", "customers", "hpp", "ai")
 
 
 def denied(code, message):
@@ -165,5 +165,6 @@ def enforce_route(request, context):
     # FastAPI has resolved endpoint identity before dependencies, even without scope['route'].
     from backend.services.pos_access import supported_route
     from backend.services.business_access import supported_route as business_route
-    if (request.method, request.scope.get("endpoint")) not in allowed and not supported_route(request) and not business_route(request):
+    from backend.services.ai_access import supported_route as ai_route
+    if (request.method, request.scope.get("endpoint")) not in allowed and not supported_route(request) and not business_route(request) and not ai_route(request):
         denied("ACCESS_ROUTE_NOT_READY", "Fitur ini belum tersedia untuk akun dengan pengaturan akses baru")

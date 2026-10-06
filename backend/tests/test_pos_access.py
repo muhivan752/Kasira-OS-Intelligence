@@ -53,11 +53,12 @@ class PosAccessTests(unittest.TestCase):
         self.assertEqual(value['cash_payments'], []); self.assertEqual(value['review'], [])
         self.assertTrue(value['blind_close']); self.assertFalse(value['is_owner'])
 
-    def test_role_grants_are_strict_and_ai_remains_unavailable(self):
+    def test_role_grants_are_strict_and_ai_is_explicit(self):
         body = dict(id=uuid4(), client_request_id=uuid4(), name='Cashier', outlet_ids=[uuid4()])
         RoleSave(**body, permissions={'pos.sell': True, 'stock.receive': False})
         RoleSave(**body, permissions={'finance.manage': True, 'hpp.view': True, 'customers.export': True})
-        for permissions in ({'pos.sell': 1}, {'pos.sell': 'true'}, {'ai.chat': True}, {'unknown.view': True}):
+        self.assertTrue(RoleSave(**body, permissions={'ai.chat': True}).permissions['ai.chat'])
+        for permissions in ({'pos.sell': 1}, {'pos.sell': 'true'}, {'ai.superuser': True}, {'unknown.view': True}):
             with self.subTest(permissions=permissions), self.assertRaises(ValidationError):
                 RoleSave(**body, permissions=permissions)
 

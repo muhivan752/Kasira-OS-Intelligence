@@ -40,7 +40,7 @@ export function AccountSettings({ onSaved }: { onSaved?: () => void } = {}) {
         <p>{info.password_enabled ? 'Ganti password akun pemilik. Perangkat lain akan diminta masuk kembali.' : 'Migrasikan akun lama dengan username toko dan password. Usaha dan riwayat tetap memakai akun yang sama. Masuk ulang melalui akun lama jika sesi sudah lebih dari 15 menit.'}</p>
         <label>Username toko<input name="shop_username" defaultValue={info.shop_username || ''} readOnly={Boolean(info.shop_username)} autoCapitalize="none" minLength={3} maxLength={64} required /></label>
         {info.password_enabled && <label>Password saat ini<input name="current_password" type="password" autoComplete="current-password" required /></label>}
-        <label>Password baru<input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /></label><label>Ulangi password<input name="confirm" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /></label>
+        <label>Password baru<input name="password" type="password" autoComplete="new-password" minLength={8} maxLength={128} required /></label><label>Ulangi password<input name="confirm" type="password" autoComplete="new-password" minLength={8} maxLength={128} required /></label>
         <button className="f-button f-primary" disabled={busy}>{busy ? 'Menyimpan…' : info.password_enabled ? 'Ganti password' : 'Tetapkan username dan password'}</button>
       </form>}
       <h3>Perangkat yang masih masuk</h3><ul>{sessions.map(row => <li key={row.id}>{row.current ? 'Perangkat ini' : 'Perangkat lain'} · Masuk {new Date(row.created_at).toLocaleString('id-ID')}</li>)}</ul>

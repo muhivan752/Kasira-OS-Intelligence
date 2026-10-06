@@ -57,10 +57,11 @@ async def main():
                 result = await client.request(method, "/api/v1" + path, json=body, headers=headers)
                 assert result.status_code == status, (method, path, status, result.status_code, result.text)
                 return result.json().get("data")
-            password = "qa strong password 123"
+            password = "qa-short"
             shop = "qa-" + uuid4().hex[:16]
             register = {"shop_username": shop.upper(), "password": password, "business_name": "QA synthetic shop",
                 "owner_name": "QA owner", "client_request_id": str(uuid4())}
+            await call("POST", "/auth/password/register", {**register, "password": "short7!"}, status=422)
             registered, replay = await asyncio.gather(*[call("POST", "/auth/password/register", register) for _ in range(2)])
             assert registered["tenant_id"] == replay["tenant_id"] and registered["user_id"] == replay["user_id"]
             assert registered["recovery_code"] == replay["recovery_code"]
@@ -93,7 +94,9 @@ async def main():
             saved_role = await call("POST", "/hris/access/roles", role, owner_token)
             assert saved_role["row_version"] == 1
             assert await call("POST", "/hris/access/roles", role, owner_token) == saved_role
-            await call("POST", "/hris/access/roles", {**role, "id": str(uuid4()), "client_request_id": str(uuid4()), "permissions": {"ai.chat": True}}, owner_token, status=422)
+            ai_role = await call("POST", "/hris/access/roles", {**role, "id": str(uuid4()), "client_request_id": str(uuid4()), "permissions": {"ai.chat": True}}, owner_token)
+            assert ai_role["policy"]["permissions"] == {"ai.chat": True}
+            await call("POST", "/hris/access/roles", {**role, "id": str(uuid4()), "client_request_id": str(uuid4()), "permissions": {"ai.superuser": True}}, owner_token, status=422)
             await call("POST", "/hris/access/roles", {**role, "id": str(uuid4()), "client_request_id": str(uuid4()), "outlet_ids": [str(uuid4())]}, owner_token, status=404)
             async with Admin() as db:
                 employee = HrEmployee(id=uuid4(), tenant_id=tid, outlet_id=oid, code="QA-KRY", name="QA staff",

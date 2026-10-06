@@ -17,6 +17,7 @@ export type HppChatPreview = {
   notes: string;
 };
 export type HppChatSession = {
+  can_approve?: boolean;
   id: string; outlet_id: string; mode: HppChatMode; status: 'draft' | 'applied';
   revision: number; preview: HppChatPreview | null; pending: boolean;
   retry_allowed: boolean; error: string | null;

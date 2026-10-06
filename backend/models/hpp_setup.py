@@ -9,6 +9,7 @@ class HppSetupSession(BaseModel):
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
     outlet_id = Column(UUID(as_uuid=True), ForeignKey("outlets.id"), nullable=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    access_version = Column(String(64), nullable=True)
     mode = Column(String, nullable=False, default="manual")
     status = Column(String, nullable=False, default="draft")
     revision = Column(Integer, nullable=False, default=0)

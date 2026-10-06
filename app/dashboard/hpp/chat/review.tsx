@@ -40,7 +40,8 @@ export function HppReview({ session, preview, busy, hasUnsent, hasError, confirm
     </li>)}</ol>
     {preview.missing.length > 0 && <div><h3>Masih perlu dilengkapi</h3><ul className="hpp-chat-missing">{preview.missing.map((item, index) => <li key={index}>{item}</li>)}</ul><p>Lengkapi atau koreksi lewat obrolan.</p></div>}
     <details><summary className="hpp-chat-evidence">Lihat rumus HPP</summary><p>Biaya satuan = total harga beli ÷ jumlah beli dalam satuan bahan. Biaya bahan = takaran per porsi × biaya satuan. HPP = jumlah biaya bahan wajib. Takaran batch dibagi jumlah porsi. Biaya satuan disimpan hingga 8 desimal; total tampilan dibulatkan ke 2 desimal.</p></details>
-    {session.status !== 'applied' && <div className="hpp-chat-approval">
+    {session.status !== 'applied' && session.can_approve === false && <p>Draft belum tersimpan. Akun ini belum memiliki izin persetujuan resep.</p>}
+    {session.status !== 'applied' && session.can_approve !== false && <div className="hpp-chat-approval">
       {preview.is_estimated && <p>Harga atau takaran perkiraan tetap diberi label estimasi setelah disimpan.</p>}
       <label className="hpp-chat-choice"><input type="checkbox" checked={confirmed} disabled={blocked} onChange={event => onConfirmed(event.target.checked)} /><span>Bahan, harga, takaran, dan jumlah porsi sudah sesuai.</span></label>
       {preview.replaces_recipe && <label className="hpp-chat-choice"><input type="checkbox" checked={replacing} disabled={blocked} onChange={event => onReplacing(event.target.checked)} /><span>Ganti resep aktif produk ini dengan resep di atas.</span></label>}

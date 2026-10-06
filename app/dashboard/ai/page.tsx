@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Bot, Send, Trash2, Loader2, AlertCircle, CheckCircle2, FlaskConical, ChevronDown, ChevronUp, Utensils } from 'lucide-react';
 import { useProGuard } from '@/app/hooks/use-pro-guard';
+import { getAccountAccess } from '@/app/actions/accounts';
+import { ScopedAIChat } from './scoped-chat';
 
 interface ProposalIngredient {
   name: string;
@@ -93,6 +95,8 @@ const rp = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
 
 export default function AIChatPage() {
   const allowed = useProGuard('AI Asisten');
+  const [accessMode, setAccessMode] = useState<string>();
+  useEffect(() => { let active = true; void getAccountAccess().then(result => { if (active && result.success) setAccessMode(result.data.enforcement_mode); }); return () => { active = false; }; }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -187,11 +191,13 @@ export default function AIChatPage() {
       });
 
       if (res.status === 403) {
+        const body = await res.json().catch(() => ({}));
+        const detail = body.detail;
         setMessages(prev => prev.filter(m => m.id !== assistantId));
         setMessages(prev => [...prev, {
           id: assistantId,
           role: 'error',
-          content: 'Fitur AI Chatbot hanya tersedia untuk paket Pro. Upgrade untuk mengakses.',
+          content: typeof detail === 'string' ? detail : detail?.message || 'Akses AI belum diberikan. Hubungi pemilik usaha.',
         }]);
         setLoading(false);
         return;
@@ -500,6 +506,8 @@ export default function AIChatPage() {
     return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
   }
 
+  if (!accessMode) return <p role="status">Memuat akses AI…</p>;
+  if (accessMode === 'managed') return <ScopedAIChat />;
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] lg:h-[calc(100vh-6rem)] max-w-3xl mx-auto">
       {/* Header */}

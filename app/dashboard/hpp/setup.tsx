@@ -12,7 +12,7 @@ export function HppSetup({ initialProduct }: { initialProduct: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [brandId, setBrandId] = useState('');
-  const [canManage, setCanManage] = useState(false), [managed, setManaged] = useState(false);
+  const [canManage, setCanManage] = useState(false), [managed, setManaged] = useState(false), [canChat, setCanChat] = useState(false);
   const [outlets, setOutlets] = useState<{ id: string; name: string }[]>([]), [outletId, setOutletId] = useState('');
   const [products, setProducts] = useState<HppProduct[]>([]);
   const [recipes, setRecipes] = useState<HppRecipe[]>([]);
@@ -31,7 +31,7 @@ export function HppSetup({ initialProduct }: { initialProduct: string }) {
       if (!current) return;
       if (!result.success) setError(result.message);
       else { setBrandId(result.brandId); setProducts(result.products); setRecipes(result.recipes);
-        setCanManage(result.canManage); setManaged(result.managed); setOutlets(result.outlets); setOutletId(result.outletId); }
+        setCanManage(result.canManage); setCanChat(result.canChat); setManaged(result.managed); setOutlets(result.outlets); setOutletId(result.outletId); }
       setLoading(false);
     }).catch(() => { if (current) { setError('Produk belum bisa dimuat. Coba lagi.'); setLoading(false); } });
     return () => { current = false; };
@@ -48,7 +48,7 @@ export function HppSetup({ initialProduct }: { initialProduct: string }) {
   const prepared = products.filter(item => recipes.some(recipe => recipe.product_id === item.id));
 
   return <div className="hpp-workspace space-y-6 max-w-6xl">
-    <header className="space-y-2"><h1 className="text-2xl sm:text-3xl font-semibold">{canManage ? 'Atur HPP' : 'HPP produk'}</h1><p className="max-w-2xl text-[var(--text-muted)]">Bahan dan resep dipakai bersama brand. HPP adalah modal bahan per porsi, sebelum biaya operasional.</p>{!managed && !loading && <Link className="hpp-button hpp-primary" href={`/dashboard/hpp/chat${selected ? `?product=${selected}` : ''}`}>Atur lewat percakapan</Link>}</header>
+    <header className="space-y-2"><h1 className="text-2xl sm:text-3xl font-semibold">{canManage ? 'Atur HPP' : 'HPP produk'}</h1><p className="max-w-2xl text-[var(--text-muted)]">Bahan dan resep dipakai bersama brand. HPP adalah modal bahan per porsi, sebelum biaya operasional.</p>{canChat && !loading && <Link className="hpp-button hpp-primary" href={`/dashboard/hpp/chat?outlet=${outletId}${selected ? `&product=${selected}` : ''}`}>Atur lewat percakapan</Link>}</header>
     {outlets.length > 1 && <label className="block max-w-2xl">Outlet<select className="hpp-control w-full" aria-label="Outlet" value={outletId || outlets[0].id} disabled={busy} onChange={e => { if (dirty && !window.confirm('Buang perubahan resep dan pindah outlet?')) return; setSelected(''); setDirty(false); setOutletId(e.target.value); }}>{outlets.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>}
     {!allowed || loading ? <p role="status">Memuat produk...</p> : error ? <div className="hpp-panel space-y-3"><p role="alert">{error}</p><button className="hpp-button" onClick={() => setReload(value => value + 1)}>Coba lagi</button><Link className="hpp-button" href="/dashboard/settings">Buka pengaturan</Link></div> : products.length === 0 ? <div className="hpp-panel space-y-3"><p>Belum ada produk. Tambahkan produk dan harga jualnya sebelum mengisi resep.</p><Link className="hpp-button hpp-primary" href="/dashboard/menu">Tambah produk di Menu</Link></div> : <>
       <div className="max-w-2xl space-y-2"><label htmlFor="hpp-product" className="block font-semibold">Produk yang ingin dihitung</label><select id="hpp-product" className="hpp-control w-full" disabled={busy} value={product ? selected : ''} onChange={event => changeProduct(event.target.value)}>

@@ -31,6 +31,7 @@ const fixture = http.createServer(async (req, res) => {
   calls.push({ method: req.method, path, body });
   let data = [], status = 200, detail;
   if (path.endsWith('/users/me')) data = { id, full_name: 'Pemilik fixture', subscription_tier: 'pro', subscription_status: 'active' };
+  else if (path.endsWith('/auth/access')) data = { tenant_id: id, user_id: id, enforcement_mode: 'owner', permissions: [], outlets: [{ id, name: 'Toko fixture' }] };
   else if (path.endsWith('/outlets')) data = [{ id, brand_id: id, name: 'Toko fixture', stock_mode: 'simple' }];
   else if (path.endsWith('/sessions') && req.method === 'GET') data = chats.map(c => ({ id: c.id, name: c.preview?.product_name || 'Resep baru', status: c.status, updated_at: new Date().toISOString() }));
   else if (path.endsWith('/sessions') && req.method === 'POST') {
@@ -105,7 +106,7 @@ async function closePanel(page) {
 }
 
 (async () => {
-  await new Promise(resolve => fixture.listen(8188, '127.0.0.1', resolve));
+  await new Promise(resolve => fixture.listen(Number(process.env.FIXTURE_PORT || 8188), '127.0.0.1', resolve));
   const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });

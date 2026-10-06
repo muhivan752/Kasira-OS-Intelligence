@@ -224,9 +224,9 @@ class _PasswordAccountPageState extends ConsumerState<PasswordAccountPage> {
                                 _field('code', 'Kode Anda', minimum: 32)
                               ],
                               _field('password', 'Password baru',
-                                  password: true, minimum: 12),
+                                  password: true, minimum: 8),
                               _field('confirm', 'Ulangi password',
-                                  password: true, minimum: 12),
+                                  password: true, minimum: 8),
                               FilledButton(
                                   onPressed: _busy ? null : _submit,
                                   child: Text(_busy

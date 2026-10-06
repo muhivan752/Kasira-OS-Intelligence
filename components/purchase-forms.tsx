@@ -21,7 +21,7 @@ interface DraftLine { key: string; target: string; name: string; quantity: strin
 const blankLine = (): DraftLine => ({key:crypto.randomUUID(),target:'',name:'',quantity:'1',unit:'',price:'',total:'',base:'',sell:''});
 const amountOf = (line: DraftLine) => line.total !== '' ? Number(line.total) : Math.round(Number(line.quantity) * Number(line.price) * 100) / 100;
 
-export function PurchaseForm({outlet,isPro,suppliers,onClose,onSaved,managed=false,canReceive=true,canCreateIngredient=true}:{outlet:PurchaseSetup['outlets'][number];isPro:boolean;suppliers:Supplier[];onClose:()=>void;onSaved:(p:Purchase)=>void;managed?:boolean;canReceive?:boolean;canCreateIngredient?:boolean}) {
+export function PurchaseForm({outlet,isPro,suppliers,onClose,onSaved,managed=false,canScan=true,canReceive=true,canCreateIngredient=true}:{outlet:PurchaseSetup['outlets'][number];isPro:boolean;suppliers:Supplier[];onClose:()=>void;onSaved:(p:Purchase)=>void;managed?:boolean;canScan?:boolean;canReceive?:boolean;canCreateIngredient?:boolean}) {
   const [targets,setTargets] = useState<PurchaseTarget[] | null>(null), [targetError,setTargetError] = useState(''), [reload,setReload] = useState(0);
   const [lines,setLines] = useState<DraftLine[]>(() => [blankLine()]);
   const [fields,setFields] = useState({supplier:'',supplierName:'',date:jakartaDate(),invoice:'',notes:'',mode:'paid',paid:'0',due:''});
@@ -98,7 +98,7 @@ export function PurchaseForm({outlet,isPro,suppliers,onClose,onSaved,managed=fal
       {!targets && !targetError && <p role="status">Memuat daftar barang…</p>}
       {targetError && <div className="f-notice f-error" role="alert"><p>{targetError}</p><button className="f-button" type="button" onClick={() => setReload(n => n + 1)}>Coba muat barang lagi</button></div>}
       <fieldset disabled={locked || !targets} className="p-fields">
-        {!managed && <label className="p-upload">Foto nota (opsional)<input aria-label="Foto nota" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={e => { const file=e.target.files?.[0]; if (file) void scan(file); e.target.value=''; }} /><span>JPG, PNG, WebP; maksimal 8 MB. Foto mengisi draf untuk Anda periksa.</span></label>}
+        {canScan && <label className="p-upload">Foto nota (opsional)<input aria-label="Foto nota" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={e => { const file=e.target.files?.[0]; if (file) void scan(file); e.target.value=''; }} /><span>JPG, PNG, WebP; maksimal 8 MB. Foto mengisi draf untuk Anda periksa.</span></label>}
         {scanning && <p role="status">Membaca foto nota…</p>}{scanNote && <p className="f-notice" role="status">{scanNote}</p>}
         <div className="f-field-grid"><label>Supplier<select aria-label="Supplier" value={fields.supplier} onChange={e => field('supplier',e.target.value)}><option value="">Tanpa supplier</option>{suppliers.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}<option value="__new">Supplier baru</option></select></label>
           <label>Tanggal barang diterima<input aria-label="Tanggal barang diterima" type="date" max={jakartaDate()} required value={fields.date} onChange={e => field('date',e.target.value)} /></label>

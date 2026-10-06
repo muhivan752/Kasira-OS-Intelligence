@@ -1688,12 +1688,23 @@ async def stream_ai_response(
     redis_client,
     user_id: str = "",
     conversation_id: Optional[str] = None,
+    access=None,
+    access_guard=None,
 ) -> AsyncGenerator[str, None]:
     """
     Generator untuk SSE stream.
     Yields: "data: {...}\n\n" strings
     """
 
+    if access is not None and access.mode == "managed":
+        from backend.services.ai_access import managed_stream
+        async for chunk in managed_stream(message, outlet_id, db, redis_client, access, access_guard, conversation_id):
+            yield chunk
+        return
+    from backend.services.ai_access import namespace
+    history_namespace = namespace(access, outlet_id) if access is not None else f"{tenant_id}:{user_id}:{outlet_id}"
+    if access_guard:
+        await access_guard()
     # Normalize conversation_id — generate UUID kalau null supaya client
     # selalu dapet ID via done event. Invalid/empty string di-treat as None.
     if not conversation_id or not isinstance(conversation_id, str):
@@ -1754,6 +1765,8 @@ async def stream_ai_response(
             )
         else:
             # Execute restock
+            if access_guard:
+                await access_guard(lock=True)
             ok = await execute_restock(
                 ingredient_id=result["ingredient_id"],
                 outlet_id=outlet_id,
@@ -1843,7 +1856,7 @@ async def stream_ai_response(
     # Anthropic prompt cache breakpoint tetep di system param = cache hit
     # preserved untuk non-pricing intent.
     prior_history = await _load_conversation_history(
-        redis_client, tenant_id, conversation_id
+        redis_client, history_namespace, conversation_id
     )
     messages = prior_history + [{"role": "user", "content": message}]
 
@@ -1982,8 +1995,10 @@ async def stream_ai_response(
                     yield sse(done_payload)
                     # Persist multi-turn: pake 'message' asli (tanpa pricing_ctx
                     # inline yg di system_prompt) + full assistant response.
+                    if access_guard:
+                        await access_guard()
                     await _save_conversation_turn(
-                        redis_client, tenant_id, conversation_id,
+                        redis_client, history_namespace, conversation_id,
                         user_message=message,
                         assistant_message="".join(buffer),
                     )
@@ -2037,8 +2052,10 @@ async def stream_ai_response(
         })
         # Persist multi-turn turn pair setelah stream sukses. Fail-silent
         # supaya error save gak corrupt user-visible done event.
+        if access_guard:
+            await access_guard()
         await _save_conversation_turn(
-            redis_client, tenant_id, conversation_id,
+            redis_client, history_namespace, conversation_id,
             user_message=message,
             assistant_message="".join(assistant_buffer),
         )

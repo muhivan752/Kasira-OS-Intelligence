@@ -51,6 +51,7 @@ class InsightRequest(BaseModel):
 
 @router.post("/insight")
 async def ai_insight(
+    request: Request,
     body: InsightRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
@@ -68,7 +69,14 @@ async def ai_insight(
 
     from datetime import timedelta
     now_wib = datetime.now(timezone.utc) + timedelta(hours=7)
-    cache_key = f"ai_insight:{body.outlet_id}:{now_wib.strftime('%Y%m%d-%H')}"
+    from backend.services.ai_access import fresh, namespace
+    access = request.state.access
+    async def guard():
+        return await fresh(db, current_user.id, current_user.tenant_id, body.outlet_id,
+            grants=("ai.chat", "sales.view"), expected=access.version,
+            claims=request.state.auth_claims, token=request.state.auth_token)
+    await guard()
+    cache_key = f"ai_insight:v2:{namespace(access, body.outlet_id)}:{now_wib.strftime('%Y%m%d-%H')}"
     redis = await get_redis_client()
     cached = await redis.get(cache_key)
     if cached:
@@ -87,7 +95,9 @@ async def ai_insight(
     ).replace(",", ".")
 
     from backend.services.ai_service import generate_dashboard_insight
+    await db.commit()
     insight = await generate_dashboard_insight(outlet.name or "Toko", summary)
+    await guard()
     if insight:
         await redis.set(cache_key, insight, ex=7200)
     return {"success": True, "data": {"insight": insight}}
@@ -171,12 +181,12 @@ _HINT_DISPLAY_OVERRIDE = {
 
 
 class ChatRequest(BaseModel):
-    message: str
-    outlet_id: str
+    message: str = Field(min_length=1, max_length=100000)
+    outlet_id: UUID
     # Multi-turn: kirim null di turn pertama, server balikin UUID di `done` event.
     # Pake UUID itu untuk turn-turn berikutnya supaya server load prior history.
     # History TTL 30min rolling (Redis ephemeral), max 5 turn pair.
-    conversation_id: Optional[str] = None
+    conversation_id: UUID | None = None
 
 
 @router.post("/chat")
@@ -260,13 +270,14 @@ async def ai_chat(
             after_state={
                 "message_length": len(body.message),
                 "tier": tier,
-                "conversation_id": body.conversation_id,
+                "conversation_id": str(body.conversation_id) if body.conversation_id else None,
             },
             user_id=str(current_user.id),
             tenant_id=str(current_user.tenant_id),
         )
         await db.commit()
     except Exception as e:
+        await db.rollback()
         logger.warning(f"Audit log failed (non-blocking): {e}")
 
     # Track estimated spend — 1 cent per Haiku, 2 cents per Sonnet
@@ -280,18 +291,34 @@ async def ai_chat(
 
     async def event_generator() -> AsyncGenerator[str, None]:
         try:
+            from backend.services.ai_access import fresh
+            access = request.state.access
+            user_id, tenant_id = current_user.id, current_user.tenant_id
+            async def guard(lock=False):
+                return await fresh(db, user_id, tenant_id, body.outlet_id,
+                    grants=("ai.chat",), expected=access.version,
+                    claims=request.state.auth_claims, token=request.state.auth_token, lock=lock)
+            buffered = []
             async for chunk in stream_ai_response(
                 message=body.message,
-                outlet_id=body.outlet_id,
+                outlet_id=str(body.outlet_id),
                 tenant_id=str(current_user.tenant_id),
                 outlet_name=outlet.name,
                 tier=tier,
                 db=db,
                 redis_client=redis,
                 user_id=str(current_user.id),
-                conversation_id=body.conversation_id,
+                conversation_id=str(body.conversation_id) if body.conversation_id else None,
+                access=access, access_guard=guard,
             ):
+                buffered.append(chunk)
+            await guard()
+            for chunk in buffered:
                 yield chunk
+        except HTTPException as exc:
+            await db.rollback()
+            message = exc.detail.get("message") if isinstance(exc.detail, dict) else exc.detail
+            yield f"data: {json.dumps({'type': 'error', 'message': message}, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"SSE stream error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'message': 'Terjadi kesalahan pada server'}, ensure_ascii=False)}\n\n"
@@ -570,6 +597,9 @@ async def apply_recipe_proposal(
         tenant_id=str(current_user.tenant_id),
     )
 
+    from backend.services.ai_access import fresh
+    await fresh(db, current_user.id, current_user.tenant_id, body.outlet_id,
+        expected=request.state.access.version, claims=request.state.auth_claims, token=request.state.auth_token, lock=True)
     await db.commit()
 
     # Invalidate AI context cache (ingredients/recipe changed)
@@ -860,6 +890,9 @@ async def apply_menu_batch(
         tenant_id=str(current_user.tenant_id),
     )
 
+    from backend.services.ai_access import fresh
+    await fresh(db, current_user.id, current_user.tenant_id, body.outlet_id,
+        expected=request.state.access.version, claims=request.state.auth_claims, token=request.state.auth_token, lock=True)
     await db.commit()
 
     # Invalidate context cache
@@ -882,17 +915,23 @@ async def apply_menu_batch(
 
 @router.delete("/context/{outlet_id}")
 async def clear_ai_context_cache(
-    outlet_id: str,
+    request: Request,
+    outlet_id: UUID,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """
     Force-clear cached AI context untuk outlet ini.
     Berguna setelah ada perubahan besar di menu/outlet.
     """
-    # Validate ownership
+    from backend.services.ai_access import fresh, context_key
+    access = await fresh(db, current_user.id, current_user.tenant_id, outlet_id, grants=("ai.chat",))
     redis = await get_redis_client()
-    cache_key = f"ai:context:{outlet_id}"
-    await redis.delete(cache_key)
+    if access.mode == "managed":
+        async for key in redis.scan_iter(match=context_key(access, outlet_id) + ":*"):
+            await redis.delete(key)
+    else:
+        await redis.delete(f"ai:context:{outlet_id}")
     return {"success": True, "message": "Context cache dibersihkan"}
 
 

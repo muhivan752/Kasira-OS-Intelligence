@@ -26,7 +26,7 @@ class PasswordLogin(UsernameBody):
 
 
 class NewPassword(UsernameBody):
-    password: str = Field(min_length=12, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
     client_request_id: UUID
 
 
@@ -49,7 +49,7 @@ class PasswordClaim(NewPassword):
 
 class ConsumeChallenge(UsernameBody):
     code: str = Field(min_length=32, max_length=128)
-    password: str = Field(min_length=12, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
     purpose: Literal["activation", "recovery"]
     client_request_id: UUID
 
@@ -60,7 +60,7 @@ class AccountRequest(AccountBody):
 
 HRIS_PERMISSIONS = frozenset({"hris.self", "hris.employees.manage", "hris.schedules.manage", "hris.attendance.manage"})
 from backend.schemas.access import POS_PERMISSIONS, BUSINESS_PERMISSIONS
-SUPPORTED_ROLE_PERMISSIONS = HRIS_PERMISSIONS | POS_PERMISSIONS | BUSINESS_PERMISSIONS
+SUPPORTED_ROLE_PERMISSIONS = HRIS_PERMISSIONS | POS_PERMISSIONS | BUSINESS_PERMISSIONS | {"ai.chat"}
 
 
 class RoleSave(AccountRequest):

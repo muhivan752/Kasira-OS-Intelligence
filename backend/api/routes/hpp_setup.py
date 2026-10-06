@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,7 @@ from backend.models.audit_log import AuditLog
 from backend.models.event import Event
 from backend.models.knowledge_graph import KnowledgeGraphEdge
 from backend.services import hpp_setup_service as service
+from backend.services.ai_access import fresh
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(deps.require_pro_tier)])
@@ -57,6 +58,7 @@ async def scope(db, user):
 
 
 async def outlet_owned(db, outlet_id, user):
+    await fresh(db, user.id, user.tenant_id, outlet_id, grants=("ai.chat", "hpp.view", "supplier.price.view"))
     outlet = (await db.execute(select(Outlet).where(Outlet.id == outlet_id,
         Outlet.tenant_id == user.tenant_id, Outlet.deleted_at.is_(None)))).scalar_one_or_none()
     if not outlet:
@@ -77,6 +79,10 @@ async def owned(db, session_id, user, lock=False):
     if not session:
         raise HTTPException(404, "Percakapan tidak ditemukan")
     outlet = await outlet_owned(db, session.outlet_id, user)
+    access = await fresh(db, user.id, user.tenant_id, session.outlet_id,
+        grants=("ai.chat", "hpp.view", "supplier.price.view"))
+    if access.mode == "managed" and session.access_version != access.version:
+        raise HTTPException(404, "Percakapan tidak tersedia dalam akses terbaru. Mulai percakapan baru")
     return session, outlet
 
 
@@ -87,7 +93,10 @@ async def turns(db, session):
 
 
 async def view(db, session):
+    access = await fresh(db, session.user_id, session.tenant_id, session.outlet_id,
+        grants=("ai.chat", "hpp.view", "supplier.price.view"))
     return {"id": str(session.id), "outlet_id": str(session.outlet_id), "mode": session.mode,
+        "can_approve": access.mode != "managed" or (access.allows("hpp.manage") and access.allows("hpp.approve")),
         "status": session.status, "revision": session.revision, "preview": session.preview,
         "result": session.result, "error": session.error,
         "pending": bool(session.pending_request),
@@ -97,7 +106,7 @@ async def view(db, session):
 
 
 @router.post("/sessions")
-async def create(body: Create, db: AsyncSession = Depends(get_db), user: User = Depends(deps.get_current_user)):
+async def create(body: Create, request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(deps.get_current_user)):
     outlet = await outlet_owned(db, body.outlet_id, user)
     draft = None
     if body.product_id:
@@ -121,10 +130,12 @@ async def create(body: Create, db: AsyncSession = Depends(get_db), user: User = 
                 for row in recipe.ingredients if row.deleted_at is None and row.ingredient_id in by_id]
         draft = data.model_dump(mode="json")
     session = HppSetupSession(id=uuid4(), tenant_id=user.tenant_id, outlet_id=outlet.id,
-        user_id=user.id, mode=body.mode, draft=draft, status="draft", revision=0)
+        user_id=user.id, access_version=request.state.access.version, mode=body.mode, draft=draft, status="draft", revision=0)
     db.add(session)
     db.add(AuditLog(tenant_id=user.tenant_id, user_id=user.id, action="HPP_SETUP_STARTED",
         entity="hpp_setup_session", entity_id=session.id, after_state={"mode": body.mode}))
+    await fresh(db, user.id, user.tenant_id, outlet.id, grants=("ai.chat", "hpp.view", "supplier.price.view", "hpp.manage"),
+        expected=request.state.access.version, claims=request.state.auth_claims, token=request.state.auth_token, lock=True)
     await db.commit()
     await scope(db, user)
     return {"data": await view(db, session)}
@@ -133,9 +144,12 @@ async def create(body: Create, db: AsyncSession = Depends(get_db), user: User = 
 @router.get("/sessions")
 async def listing(outlet_id: UUID, db: AsyncSession = Depends(get_db), user: User = Depends(deps.get_current_user)):
     await outlet_owned(db, outlet_id, user)
+    access = await fresh(db, user.id, user.tenant_id, outlet_id, grants=("ai.chat", "hpp.view", "supplier.price.view"))
     sessions = (await db.execute(select(HppSetupSession).where(HppSetupSession.tenant_id == user.tenant_id,
         HppSetupSession.user_id == user.id, HppSetupSession.outlet_id == outlet_id,
-        HppSetupSession.deleted_at.is_(None)).order_by(HppSetupSession.updated_at.desc()).limit(100))).scalars()
+        HppSetupSession.deleted_at.is_(None),
+        HppSetupSession.access_version == access.version if access.mode == "managed" else True)
+        .order_by(HppSetupSession.updated_at.desc()).limit(100))).scalars()
     return {"data": [{"id": str(s.id), "name": (s.draft or {}).get("product_name") or "Resep baru",
         "status": s.status, "updated_at": s.updated_at.isoformat()} for s in sessions]}
 
@@ -147,9 +161,11 @@ async def get(session_id: UUID, db: AsyncSession = Depends(get_db), user: User =
 
 
 @router.post("/sessions/{session_id}/messages", status_code=202)
-async def message(session_id: UUID, body: Message, background: BackgroundTasks, db: AsyncSession = Depends(get_db), user: User = Depends(deps.get_current_user)):
+async def message(session_id: UUID, body: Message, background: BackgroundTasks, request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(deps.get_current_user)):
     if not body.message.strip():
         raise HTTPException(422, "Pesan belum diisi")
+    await fresh(db, user.id, user.tenant_id, body.outlet_id, grants=("ai.chat", "hpp.view", "supplier.price.view", "hpp.manage"),
+        expected=request.state.access.version, claims=request.state.auth_claims, token=request.state.auth_token, lock=True)
     session, outlet = await owned(db, session_id, user, lock=True)
     if session.outlet_id != body.outlet_id:
         raise HTTPException(409, "Percakapan ini milik outlet lain. Pilih outlet yang sesuai")
@@ -179,36 +195,54 @@ async def message(session_id: UUID, body: Message, background: BackgroundTasks, 
         db.add(HppSetupTurn(tenant_id=user.tenant_id, session_id=session.id,
             request_id=body.request_id, mode=body.mode, message=body.message,
             usage={"previous_mode": previous_mode}))
+    await fresh(db, user.id, user.tenant_id, outlet.id, grants=("ai.chat", "hpp.view", "supplier.price.view", "hpp.manage"),
+        expected=request.state.access.version, claims=request.state.auth_claims, token=request.state.auth_token, lock=True)
     await db.commit()
-    background.add_task(process_message, session_id, body, user.id, user.tenant_id)
+    background.add_task(process_message, session_id, body, user.id, user.tenant_id,
+        request.state.access.version, request.state.auth_claims, request.state.auth_token)
     await scope(db, user)
     snapshot = await view(db, session)
     await db.commit()
     return {"data": snapshot}
 
 
-async def process_message(session_id, body, user_id, tenant_id):
+async def process_message(session_id, body, user_id, tenant_id, access_version=None, claims=None, token=None):
     async with AsyncSessionLocal() as db:
         await db.execute(text("SELECT set_config('app.current_tenant_id', :tenant, true)"), {"tenant": str(tenant_id)})
         user = (await db.execute(select(User).where(User.id == user_id,
             User.tenant_id == tenant_id, User.is_active.is_(True), User.deleted_at.is_(None)))).scalar_one_or_none()
-        if not user:
-            return
-        session, outlet = await owned(db, session_id, user)
-        if session.pending_request != body.request_id or session.revision != body.revision:
-            return
-        await generate_and_save(db, session, outlet, session_id, body, user)
+        try:
+            if not user:
+                raise HTTPException(403, "Akun tidak aktif")
+            await fresh(db, user_id, tenant_id, body.outlet_id,
+                grants=("ai.chat", "hpp.view", "supplier.price.view", "hpp.manage"), expected=access_version, claims=claims, token=token)
+            session, outlet = await owned(db, session_id, user)
+            if session.pending_request != body.request_id or session.revision != body.revision:
+                return
+            await generate_and_save(db, session, outlet, session_id, body, user, access_version, claims, token)
+        except HTTPException:
+            await db.rollback()
+            await db.execute(text("SELECT set_config('app.current_tenant_id', :tenant, true)"), {"tenant": str(tenant_id)})
+            await db.execute(update(HppSetupSession).where(HppSetupSession.id == session_id,
+                HppSetupSession.tenant_id == tenant_id, HppSetupSession.user_id == user_id,
+                HppSetupSession.pending_request == body.request_id).values(pending_request=None, pending_until=None,
+                    error="Akses atau sesi berubah. Mulai percakapan baru dengan akses terbaru"))
+            await db.commit()
 
 
-async def generate_and_save(db, session, outlet, session_id, body, user):
+async def generate_and_save(db, session, outlet, session_id, body, user, access_version=None, claims=None, token=None):
+    user_id, tenant_id, outlet_id = user.id, user.tenant_id, outlet.id
     try:
         mode = session.mode
         await scope(db, user)
         ctx = await service.context(db, outlet.brand_id)
         history = await turns(db, session)
+        history_messages = [turn.message for turn in history]
         reference = ""
         product_ids = [p.id for p in ctx[1]]
-        edges = (await db.execute(select(KnowledgeGraphEdge).where(
+        access = await fresh(db, user.id, user.tenant_id, outlet.id,
+            grants=("ai.chat", "hpp.view", "supplier.price.view", "hpp.manage"), expected=access_version, claims=claims, token=token)
+        edges = [] if access.mode == "managed" else (await db.execute(select(KnowledgeGraphEdge).where(
             KnowledgeGraphEdge.tenant_id == user.tenant_id, KnowledgeGraphEdge.deleted_at.is_(None),
             ((KnowledgeGraphEdge.source_node_type == "product") & KnowledgeGraphEdge.source_node_id.in_(product_ids)) |
             ((KnowledgeGraphEdge.target_node_type == "product") & KnowledgeGraphEdge.target_node_id.in_(product_ids)))
@@ -228,7 +262,13 @@ async def generate_and_save(db, session, outlet, session_id, body, user):
         except Exception:
             logger.info("HPP retrieval unavailable")
         await db.commit()
+        await fresh(db, user.id, user.tenant_id, outlet.id,
+            grants=("ai.chat", "hpp.view", "supplier.price.view", "hpp.manage"), expected=access_version, claims=claims, token=token)
         answer, usage = await service.generate(session.draft, history, ctx, mode, reference, status=session.status)
+        await db.rollback()
+        await fresh(db, user_id, tenant_id, outlet_id,
+            grants=("ai.chat", "hpp.view", "supplier.price.view", "hpp.manage"), expected=access_version,
+            claims=claims, token=token, lock=True)
         session, outlet = await owned(db, session_id, user, lock=True)
         if session.pending_request != body.request_id or session.revision != body.revision:
             raise HTTPException(409, "Pesan sudah digantikan proses lain. Muat percakapan terbaru")
@@ -250,7 +290,7 @@ async def generate_and_save(db, session, outlet, session_id, body, user):
             if answer.draft is None:
                 raise ValueError('Draft resep belum disertakan')
             session.draft = answer.draft.model_dump(mode="json")
-            session.preview = service.prepare(answer.draft, ctx, [t.message for t in history], mode)
+            session.preview = service.prepare(answer.draft, ctx, history_messages, mode)
             session.revision += 1
             turn.reply = service.reply_for_preview(answer.reply, session.preview, mode)
         session.pending_request = None
@@ -267,6 +307,9 @@ async def generate_and_save(db, session, outlet, session_id, body, user):
         raise
     except Exception as exc:
         await db.rollback()
+        await fresh(db, user_id, tenant_id, outlet_id,
+            grants=("ai.chat", "hpp.view", "supplier.price.view", "hpp.manage"), expected=access_version,
+            claims=claims, token=token, lock=True)
         session, _ = await owned(db, session_id, user, lock=True)
         if session.pending_request == body.request_id:
             session.pending_request = None
@@ -281,7 +324,10 @@ async def generate_and_save(db, session, outlet, session_id, body, user):
 
 
 @router.post("/sessions/{session_id}/approve")
-async def approve(session_id: UUID, body: Approval, db: AsyncSession = Depends(get_db), user: User = Depends(deps.get_current_user)):
+async def approve(session_id: UUID, body: Approval, request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(deps.get_current_user)):
+    await fresh(db, user.id, user.tenant_id, body.outlet_id,
+        grants=("ai.chat", "hpp.view", "supplier.price.view", "hpp.manage", "hpp.approve"),
+        expected=request.state.access.version, claims=request.state.auth_claims, token=request.state.auth_token, lock=True)
     session, outlet = await owned(db, session_id, user, lock=True)
     if session.outlet_id != body.outlet_id:
         raise HTTPException(409, "Percakapan ini milik outlet lain. Pilih outlet yang sesuai")

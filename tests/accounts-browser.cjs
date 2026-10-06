@@ -74,10 +74,12 @@ async function layout(page, title) {
     }
     await page.setViewportSize({ width: 320, height: 760 });
     await page.goto(`${base}/register`);
+    assert.equal(await page.getByLabel('Password baru', { exact: true }).getAttribute('minlength'), '8');
+    assert.equal(await page.getByLabel('Username toko', { exact: true }).getAttribute('minlength'), '3');
     await page.getByLabel('Username toko', { exact: true }).fill('qa-shop'); await page.getByLabel('Nama pemilik').fill('QA owner'); await page.getByLabel('Nama usaha').fill('QA shop');
-    await page.getByLabel('Password baru', { exact: true }).fill('qa strong password'); await page.getByLabel('Ulangi password').fill('qa wrong password'); await page.getByRole('button', { name: 'Buat usaha', exact: true }).click();
+    await page.getByLabel('Password baru', { exact: true }).fill('qa-short'); await page.getByLabel('Ulangi password').fill('qa wrong password'); await page.getByRole('button', { name: 'Buat usaha', exact: true }).click();
     await page.getByRole('alert').filter({ hasText: 'Konfirmasi' }).waitFor();
-    await page.getByLabel('Ulangi password').fill('qa strong password'); await page.getByRole('button', { name: 'Buat usaha', exact: true }).click();
+    await page.getByLabel('Ulangi password').fill('qa-short'); await page.getByRole('button', { name: 'Buat usaha', exact: true }).click();
     await page.getByLabel('Kode pemulihan', { exact: true }).waitFor(); await layout(page, 'Recovery code 320');
     assert(await page.getByRole('button', { name: 'Lanjut ke usaha' }).isDisabled()); await page.getByLabel('Saya sudah menyimpan kode ini').check(); await page.getByRole('button', { name: 'Lanjut ke usaha' }).click(); await page.waitForURL('**/onboarding');
     assert(calls.some(c => c.path.endsWith('/auth/password/register') && c.body.client_request_id));

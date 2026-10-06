@@ -9,7 +9,7 @@ import logging
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,6 +50,7 @@ async def _get_brand_id(tenant_id: UUID, db: AsyncSession, outlet_id: Optional[U
 
 @router.post("/scan")
 async def scan_invoice(
+    request: Request,
     outlet_id: Optional[UUID] = None,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
@@ -67,6 +68,17 @@ async def scan_invoice(
         raise HTTPException(400, detail=f"Ukuran file maksimal {MAX_SIZE_MB}MB")
 
     brand_id = await _get_brand_id(current_user.tenant_id, db, outlet_id)
+    from backend.services.ai_access import fresh
+    access = request.state.access
+    user_id, tenant_id = current_user.id, current_user.tenant_id
+    async def guard():
+        from sqlalchemy import text
+        await db.execute(text("SELECT set_config('app.current_tenant_id', :tenant, true)"), {"tenant": str(tenant_id)})
+        if outlet_id:
+            await fresh(db, user_id, tenant_id, outlet_id,
+                grants=("ai.chat", "purchasing.manage", "supplier.price.view"), expected=access.version,
+                claims=request.state.auth_claims, token=request.state.auth_token)
+    await guard()
 
     # Budget check — OCR costs ~3 cents per scan (image + extraction)
     try:
@@ -86,10 +98,12 @@ async def scan_invoice(
         pass
 
     # Step 1: Extract data via Claude Vision
+    await db.commit()
     try:
         extracted = await invoice_ocr_service.extract_invoice_data(content, file.content_type)
     except RuntimeError as e:
         raise HTTPException(503, detail=str(e))
+    await guard()
 
     if "error" in extracted:
         return StandardResponse(
@@ -132,12 +146,14 @@ class ApplyItem(BaseModel):
     matched_ingredient_id: Optional[str] = None
 
 class ApplyRequest(BaseModel):
+    outlet_id: UUID | None = None
     items: List[ApplyItem]
 
 
 @router.post("/apply")
 async def apply_prices(
-    request: ApplyRequest,
+    body: ApplyRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
@@ -145,10 +161,22 @@ async def apply_prices(
     Apply scanned invoice prices to matched ingredients.
     Only updates ingredients that have a matched_ingredient_id.
     """
-    brand_id = await _get_brand_id(current_user.tenant_id, db)
+    brand_id = await _get_brand_id(current_user.tenant_id, db, body.outlet_id)
+    if body.outlet_id:
+        from backend.services.ai_access import fresh
+        await fresh(db, current_user.id, current_user.tenant_id, body.outlet_id,
+            grants=("ai.chat", "hpp.view", "supplier.price.view", "hpp.manage", "hpp.approve"),
+            expected=request.state.access.version, claims=request.state.auth_claims, token=request.state.auth_token, lock=True)
+    from backend.models.ingredient import Ingredient
+    for item in body.items:
+        if item.matched_ingredient_id:
+            from backend.services.pos_access import as_id
+            if not await db.scalar(select(Ingredient.id).where(Ingredient.id == as_id(item.matched_ingredient_id),
+                Ingredient.brand_id == brand_id, Ingredient.deleted_at.is_(None))):
+                raise HTTPException(404, "Bahan tidak tersedia dalam brand outlet ini")
 
     result = await invoice_ocr_service.apply_invoice_prices(
-        [item.model_dump() for item in request.items],
+        [item.model_dump() for item in body.items],
         brand_id,
         db,
     )

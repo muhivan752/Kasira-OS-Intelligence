@@ -87,7 +87,7 @@ export default function PembelianPage() {
       </section>}
       <p className="f-footnote">Tanggal memakai WIB. Pembayaran nota tercermin di <Link href="/dashboard/keuangan">Keuangan</Link>. Belanja stok menjadi HPP saat barang terjual; baris biaya di nota menjadi pengeluaran.</p>
     </>}
-    {nota && outlet && setup && data && <PurchaseForm outlet={outlet} isPro={setup.isPro} managed={setup.managed} canReceive={setup.canReceive} canCreateIngredient={setup.canCreateIngredient} suppliers={data.suppliers} onClose={() => setNota(false)} onSaved={p => { setNota(false); saved(`Nota ${p.po_number} dan penerimaan barang sudah dicatat.`); }} />}
+    {nota && outlet && setup && data && <PurchaseForm outlet={outlet} isPro={setup.isPro} managed={setup.managed} canScan={setup.canScan} canReceive={setup.canReceive} canCreateIngredient={setup.canCreateIngredient} suppliers={data.suppliers} onClose={() => setNota(false)} onSaved={p => { setNota(false); saved(`Nota ${p.po_number} dan penerimaan barang sudah dicatat.`); }} />}
     {detail && <PurchaseDetail id={detail} canPay={setup?.canRecord} onClose={() => setDetail(null)} onSaved={() => saved('Pembayaran utang dicatat. Stok tidak bertambah dari pembayaran.')} />}
     {supplierForm && <SupplierForm initial={supplierForm} onClose={() => setSupplierForm(null)} onSaved={() => { setSupplierForm(null); saved('Supplier disimpan.'); }} />}
     {removing && <InventoryDialog title="Hapus supplier" busy={busy} onClose={() => setRemoving(null)}><div className="finance-form"><p>Hapus {removing.name} dari daftar? Nota dan utang yang sudah tercatat tetap tersimpan. Untuk menghentikan pembelian sementara, Anda bisa menonaktifkannya lewat Ubah.</p>

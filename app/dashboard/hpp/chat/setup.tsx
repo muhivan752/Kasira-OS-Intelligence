@@ -9,7 +9,7 @@ import type { HppChatMode, HppChatSession, HppChatListItem } from '@/lib/hpp-cha
 import { hppMoney } from '@/lib/hpp';
 import { HppReview } from './review';
 
-export function HppChat({ initialProduct }: { initialProduct: string }) {
+export function HppChat({ initialProduct, initialOutlet }: { initialProduct: string; initialOutlet?: string }) {
   const allowed = useProGuard('Setup HPP lewat percakapan');
   const [list, setList] = useState<HppChatListItem[]>([]);
   const [session, setSession] = useState<HppChatSession | null>(null);
@@ -99,7 +99,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
   }, [session?.id, loading, busy]);
 
   async function reloadList() {
-    const result = await listHppChats();
+    const result = await listHppChats(initialOutlet);
     if (result.success) setList(result.data); else setError(result.message);
   }
   useEffect(() => {
@@ -107,12 +107,12 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
     let active = true;
     (async () => {
       try {
-        const result = await listHppChats();
+        const result = await listHppChats(initialOutlet);
         if (!active) return;
         if (result.success) setList(result.data); else setError(result.message);
         const id = new URL(window.location.href).searchParams.get('conversation');
         if (id) {
-          const chat = await getHppChat(id);
+          const chat = await getHppChat(id, initialOutlet);
           if (!active) return;
           if (chat.success) receive(chat.data); else setError(chat.message);
         }
@@ -135,7 +135,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
       if (stopped) return;
       if (!lock.current) {
         try {
-          const result = await getHppChat(id);
+          const result = await getHppChat(id, initialOutlet);
           if (stopped) return;
           if (result.success) { receive(result.data); if (!result.data.pending) return; }
           else setError(result.message);
@@ -161,7 +161,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
   async function refresh() {
     await run(async () => {
       if (session) {
-        const result = await getHppChat(session.id);
+        const result = await getHppChat(session.id, initialOutlet);
         if (result.success) receive(result.data); else setError(result.message);
       }
       await reloadList();
@@ -176,7 +176,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
         startingProduct.current = ''; setPanel(null);
         return;
       }
-      const result = await getHppChat(id);
+      const result = await getHppChat(id, initialOutlet);
       if (result.success) { receive(result.data); setPanel(null); } else setError(result.message);
     });
   }
@@ -190,7 +190,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
       nearEnd.current = true; setSendingText(retry ? '' : content);
       let chat = session;
       if (!chat) {
-        const created = await createHppChat(selectedMode, startingProduct.current);
+        const created = await createHppChat(selectedMode, startingProduct.current, initialOutlet);
         if (!created.success) { setError(created.message); return; }
         chat = created.data; receive(chat);
         try { localStorage.setItem('hpp-chat-input:' + chat.id, content); } catch {}
@@ -207,7 +207,7 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
       const payload = { request_id: requestId, revision: chat.revision,
         mode: retry && unanswered ? unanswered.mode : selectedMode, message: content };
       try { localStorage.setItem(key, JSON.stringify(payload)); } catch {}
-      const result = await sendHppChat(chat.id, payload);
+      const result = await sendHppChat(chat.id, payload, initialOutlet);
       if (!result.success) { setError(result.message); return; }
       receive(result.data);
       if (result.data.turns.some(turn => turn.id === requestId)) {
@@ -221,9 +221,9 @@ export function HppChat({ initialProduct }: { initialProduct: string }) {
     });
   }
   async function approve() {
-    if (!session || !preview || !confirmed || text.trim() || (preview.replaces_recipe && !replacing)) return;
+    if (!session || session.can_approve === false || !preview || !confirmed || text.trim() || (preview.replaces_recipe && !replacing)) return;
     await run(async () => {
-      const result = await approveHppChat(session.id, session.revision, preview.fingerprint, replacing);
+      const result = await approveHppChat(session.id, session.revision, preview.fingerprint, replacing, initialOutlet);
       if (result.success) { receive(result.data); setPanel(null); nearEnd.current = true; await reloadList(); }
       else setError(result.message);
     });

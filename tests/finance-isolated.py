@@ -129,7 +129,8 @@ async def main():
         print('PASS tenant references, validation and concurrent edit conflict')
 
         async with AdminSession() as db:
-            count = (await db.execute(select(func.count(Expense.id)).where(Expense.note == 'QA idempotency'))).scalar()
+            count = (await db.execute(select(func.count(Expense.id)).where(Expense.note == 'QA idempotency',
+                Expense.tenant_id == users[0].tenant_id))).scalar()
             assert count == 1
             db.add(PurchaseOrder(outlet_id=outlets[0].id, po_number='QA-legacy', status='received', total_amount=200, paid_amount=200, received_at=when(10)))
             for _ in range(2):

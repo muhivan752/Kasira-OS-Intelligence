@@ -32,33 +32,33 @@ async function hppChatRequest<T>(path: string, options: RequestInit = {}): Promi
   }
 }
 
-export async function listHppChats(): Promise<HppChatResult<HppChatListItem[]>> {
-  const outlet = (await cookies()).get('outlet_id')?.value;
+export async function listHppChats(outletId?: string): Promise<HppChatResult<HppChatListItem[]>> {
+  const outlet = outletId || (await cookies()).get('outlet_id')?.value;
   if (!outlet) return { success: false, message: 'Pilih outlet dahulu.' };
   return hppChatRequest(`sessions?outlet_id=${encodeURIComponent(outlet)}`);
 }
 
-export async function createHppChat(mode: HppChatMode, productId?: string): Promise<HppChatResult<HppChatSession>> {
-  const outlet = (await cookies()).get('outlet_id')?.value;
+export async function createHppChat(mode: HppChatMode, productId?: string, outletId?: string): Promise<HppChatResult<HppChatSession>> {
+  const outlet = outletId || (await cookies()).get('outlet_id')?.value;
   if (!outlet) return { success: false, message: 'Pilih outlet dahulu.' };
   return hppChatRequest('sessions', { method: 'POST', body: JSON.stringify({ outlet_id: outlet, mode, product_id: productId || null }) });
 }
 
-export async function getHppChat(id: string): Promise<HppChatResult<HppChatSession>> {
+export async function getHppChat(id: string, outletId?: string): Promise<HppChatResult<HppChatSession>> {
   const result = await hppChatRequest<HppChatSession>(`sessions/${encodeURIComponent(id)}`);
-  const outlet = (await cookies()).get('outlet_id')?.value;
+  const outlet = outletId || (await cookies()).get('outlet_id')?.value;
   if (result.success && result.data.outlet_id !== outlet) return { success: false, message: 'Percakapan ini milik outlet lain. Pilih outlet yang sesuai.' };
   return result;
 }
 
-export async function sendHppChat(id: string, payload: { request_id: string; revision: number; mode: HppChatMode; message: string }): Promise<HppChatResult<HppChatSession>> {
-  const outlet = (await cookies()).get('outlet_id')?.value;
+export async function sendHppChat(id: string, payload: { request_id: string; revision: number; mode: HppChatMode; message: string }, outletId?: string): Promise<HppChatResult<HppChatSession>> {
+  const outlet = outletId || (await cookies()).get('outlet_id')?.value;
   if (!outlet) return { success: false, message: 'Pilih outlet dahulu.' };
   return hppChatRequest(`sessions/${encodeURIComponent(id)}/messages`, { method: 'POST', body: JSON.stringify({ ...payload, outlet_id: outlet }) });
 }
 
-export async function approveHppChat(id: string, revision: number, fingerprint: string, replaceRecipe: boolean): Promise<HppChatResult<HppChatSession>> {
-  const outlet = (await cookies()).get('outlet_id')?.value;
+export async function approveHppChat(id: string, revision: number, fingerprint: string, replaceRecipe: boolean, outletId?: string): Promise<HppChatResult<HppChatSession>> {
+  const outlet = outletId || (await cookies()).get('outlet_id')?.value;
   if (!outlet) return { success: false, message: 'Pilih outlet dahulu.' };
   return hppChatRequest(`sessions/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({ outlet_id: outlet, revision, fingerprint, replace_recipe: replaceRecipe }) });
 }
@@ -740,6 +740,7 @@ export async function loadHppProducts(outletId?: string) {
     return { success: true as const, brandId: outlet.brand_id as string, stockMode: outlet.stock_mode as string,
       outlets: outlets.map((o: any) => ({ id: o.id as string, name: o.name as string })), outletId: outlet.id as string,
       managed: access.managed, canManage: access.allows('hpp.manage') && access.allows('hpp.approve') && access.allows('supplier.price.view'),
+      canChat: ['ai.chat', 'hpp.view', 'hpp.manage', 'supplier.price.view'].every(access.allows),
       products: products as HppProduct[], recipes: recipes as HppRecipe[] };
   } catch (error) { return { success: false as const, message: hppError(error) }; }
 }
@@ -1077,6 +1078,7 @@ export async function getPurchasingSetup(): Promise<PurchaseResult<PurchaseSetup
     return { success: true, data: { outlets, managed: access.managed,
       canManage: access.allows('purchasing.manage'), canRecord: access.allows('purchasing.manage') && access.allows('supplier.price.view'),
       canReceive: access.allows('stock.receive'), canCreateIngredient: access.allows('hpp.manage') && access.allows('hpp.approve'),
+      canScan: access.allows('ai.chat') && access.allows('purchasing.manage') && access.allows('supplier.price.view'),
       selectedOutletId: (await cookies()).get('outlet_id')?.value,
       isPro: ['pro', 'business', 'enterprise'].includes(user.subscription_tier) } };
   } catch (error) { return { success: false, message: purchaseError(error) }; }

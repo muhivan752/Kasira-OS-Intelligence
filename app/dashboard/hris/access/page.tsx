@@ -24,6 +24,7 @@ const labels: Record<string, string> = {
   'customers.manage': 'Kelola profil dan catatan pelanggan bersama bisnis', 'customers.export': 'Ekspor halaman pelanggan ke CSV',
   'hpp.view': 'Lihat resep dan harga modal katalog bersama brand',
   'hpp.manage': 'Kelola bahan dan resep', 'hpp.approve': 'Setujui penyimpanan langsung bahan dan resep',
+  'ai.chat': 'Gunakan AI sesuai izin data akun',
 };
 
 export default function TeamAccess() {

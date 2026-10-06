@@ -2,7 +2,7 @@
 
 import { POS_WORKSPACE_PERMISSIONS } from '@/lib/pos-access';
 
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -34,6 +34,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [accessMode, setAccessMode] = useState<string | null>(null);
   const [accessPermissions, setAccessPermissions] = useState<string[]>([]);
+  const [accessVersion, setAccessVersion] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktop, setDesktop] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -77,6 +78,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (!access.success) { setAccessMode(null); setAccessPermissions([]); router.push('/login'); return; }
         setAccessMode(access.data.enforcement_mode);
         setAccessPermissions(access.data.permissions);
+        setAccessVersion(`${access.data.tenant_id}:${access.data.user_id}:${access.data.access_version || access.data.permissions.join(',')}`);
         const user = await getCurrentUser();
         if (!active || current !== revision) return;
         if (!user) {
@@ -143,6 +145,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const proNav = accessMode === 'managed' ? [
     ...(accessPermissions.includes('hpp.view') ? [{ name: 'HPP', href: '/dashboard/hpp', icon: Calculator }] : []),
+    ...(accessPermissions.includes('ai.chat') ? [{ name: 'AI Asisten', href: '/dashboard/ai', icon: MessageCircle }] : []),
   ] : [
     { name: 'Atur HPP', href: '/dashboard/hpp', icon: Calculator },
     { name: 'Bahan Baku', href: '/dashboard/bahan-baku', icon: Package },
@@ -164,7 +167,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ...(accessPermissions.includes('finance.view') ? ['/dashboard/keuangan'] : []),
     ...(accessPermissions.includes('purchasing.view') ? ['/dashboard/pembelian'] : []),
     ...(accessPermissions.includes('customers.view') ? ['/dashboard/pelanggan'] : []),
-    ...(accessPermissions.includes('hpp.view') ? ['/dashboard/hpp'] : [])];
+    ...(accessPermissions.includes('hpp.view') ? ['/dashboard/hpp'] : []),
+    ...(accessPermissions.includes('ai.chat') ? ['/dashboard/ai'] : []),
+    ...(['ai.chat', 'hpp.view', 'hpp.manage', 'supplier.price.view'].every(p => accessPermissions.includes(p)) ? ['/dashboard/hpp/chat'] : [])];
 
   const renderNavItem = (item: { name: string; href: string; icon: any }, locked = false) => {
     const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
@@ -345,7 +350,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
           {logoutError && <p role="alert" className="mb-4 text-[var(--danger)]">{logoutError}</p>}
-          {!accessMode ? <p role="status">Memuat akses akun…</p> : accessMode === 'managed' && !managedPaths.includes(pathname) ? <div><p>Fitur ini belum tersedia untuk pengaturan akses akun Anda.</p><Link href="/dashboard/hris">Buka tim dan absensi</Link></div> : children}
+          {!accessMode ? <p role="status">Memuat akses akun…</p> : accessMode === 'managed' && !managedPaths.includes(pathname) ? <div><p>Fitur ini belum tersedia untuk pengaturan akses akun Anda.</p><Link href="/dashboard/hris">Buka tim dan absensi</Link></div> : <Fragment key={accessVersion}>{children}</Fragment>}
         </main>
       </div>
     </div>
