@@ -10,7 +10,7 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 - **ARCHITECTURE.md → WAJIB BACA FULL kalau menyentuh stock, recipe, tab, storefront, sync, atau CRDT**
 - ROADMAP.md → Master Plan & Build Order
 
-## Fondasi akses server pada source dan QA 6 Oktober 2026
+## Fondasi akses server live 6 Oktober 2026
 
 AccessContext dan GET /auth/access memakai user/role/status HRIS/outlet/izin
 canonical. Managed role sekarang mendukung HRIS, POS, stok dan sync pull-only.
@@ -22,8 +22,9 @@ cold manifest, cache/history dan sync mengikuti izin/outlet. Antrean SQLite,
 pending retry key dan parent transaksi dipertahankan saat revoke/switch;
 sync tidak mengirim push atau menandai queue synced untuk managed. Legacy
 POS offline tetap existing. Masa izin offline baru belum ditetapkan.
-Akun 1.6.32+199 sudah live migration114; tahap POS menyiapkan 1.6.33+200 sesuai
-izin deploy/rilis sebelumnya. Status deployment ada di MEMORY.md/SESSION.md.
+Backend/web POS/stok/sync live migration114; APK1.6.33+200 resmi dirilis
+sesuai izin deploy/rilis sebelumnya. Deployment docs/POS_ACCESS_RELEASE.md;
+status juga di MEMORY.md/SESSION.md.
 Jangan recreate backend image lama: seluruh hotfix harus dipertahankan.
 
 ## HRIS web tahap pertama (6 Oktober 2026)
@@ -39,7 +40,7 @@ HRIS ke chat utama belum dibuat. Native self/punch online ada pada source
 tahap akun dan rilis1.6.32; belum GPS/foto/offline. Source dan hasil uji di
 docs/HRIS_REVIEW.md serta docs/ACCOUNT_ACCESS_REVIEW.md.
 Backend existing hotfix dipasang docker cp; jangan recreateimage160766…31a.
-Publikasi main/APK telah disetujui pada permintaan rilis terakhir; APK1.6.32+199.
+Publikasi main/APK telah disetujui; rilis terbaru APK1.6.33+200.
 
 ## CRM web terbaru (6 Oktober 2026)
 

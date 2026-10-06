@@ -1,32 +1,42 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## TERKINI - IZIN POS/STOK/SYNC SELESAI DI QA, RILIS 1.6.33 DISIAPKAN
+## TERKINI - POS/STOK/SYNC LIVE DAN APK 1.6.33+200 DIRILIS, 2026-10-06
 
-- Ivan memilih langkah 1 setelah akun 1.6.32: granular POS/stok/sync. Instruksi
-  deploy/rilis sebelumnya masih menjadi otorisasi. Review docs/POS_ACCESS_REVIEW.md.
-- Registry endpoint+method managed dan scope parent/outlet/brand/tenant sebelum
-  mutation. POS/refund/approve/discount/shift/cash/kitchen/history/stock/customer
-  lookup grants terpisah; HPP/counter/secret/total laci disembunyikan sesuai izin.
-  Tagihan canonical dan harga/diskon server; modul keuangan/HPP/AI tetap tertutup.
-- Web operasional stok: receive produk simple/bahan resep, opname simple, outlet
-  dan uncertainty lock tanpa retry otomatis. Simple stock tetap bersama brand;
-  resep per outlet. Owner memilih grant melalui editor HRIS existing.
-- Native managed workspace, riwayat/menu online, kas/refund/dapur sesuai grant.
-  Cold manifest/foreground/sync refresh; cursor tenant/user/outlet/access-version.
-  Managed online-only/pull-only; tidak mengubah antrean/pending retry key atau
-  parent, tidak overwrite same-ID pending. Legacy offline tetap existing.
-  Offline lease baru belum dipilih. Stok managed lewat web; Dapur PIN existing.
-- QA 62 unit PASS +1 skip, 5 kelompok HTTP PG/JWT/RLS/SSE/FCM/stock; 45 native
-  PASS +2 fixture opsional skip, 10 khusus izin; browser stock light/dark
-  320..1440/200% dan editor semua grants. Screenshot menemukan inner overflow
-  yang lolos cek root; grid/min-width diperbaiki dan cek panel ditambah.
-- Rilis 1.6.33+200 dan frontend build sedang disiapkan; belum klaim live.
-  Backup baru /tmp/selaris-pos-access-release-backup: seluruh source/hotfix,
-  DB custom terverifikasi, image/version/APK1.6.32. Selisih runtime 21 file
-  backend. Jangan recreate backend lama; copy file terarah + restart saja.
-- Berikutnya Keuangan/Pembelian/CRM/HPP lalu seluruh AI/cache/history/RAG/worker.
-  GPS/foto/OTP/offline/radius/retensi tetap keputusan tersendiri.
+- Ivan “oke lanjut ke 1”; deploy/rilis sebelumnya tetap otorisasi. Source e0947ba
+  dipush dan SHA remote diverifikasi. CI #200/run37458813872 sukses; release
+  v1.6.33 berisi signed POS/Dapur APK+AAB. Review docs/POS_ACCESS_REVIEW.md
+  dan deployment docs/POS_ACCESS_RELEASE.md. Update opsional.
+- Backend 21 file runtime dicopy/restart existing; hash baru sesuai source,
+  288 source Python lain tetap hotfix baseline. Image backend 160766…31a
+  tidak direcreate, migration114 tetap. Frontend-only compose --no-deps,
+  image 3f2b849…33c3. Semua service/DB/background healthy.
+- Backup privat /tmp/selaris-pos-access-release-backup: DB custom tervalidasi,
+  seluruh source/hotfix, image/version/APK1.6.32. Tidak HPP pending saat restart.
+  APK dan version.json diganti atomik setelah APK/AAB signature/package/
+  build200/Firebase/hash/ukuran lolos; signer sama existing. Download HTTPS
+  kedua app cocok hash/Content-Length; API dan label download 1.6.33.
+- Managed registry callable+method dan scope parent/outlet/brand/tenant.
+  Sell/refund/approve/discount/shift/cash/kitchen/history/stock/lookup terpisah;
+  harga/tagihan canonical, biaya/counter/provider/blind drawer direduksi.
+  ID path/query/body bertentangan dan parent payment palsu ditolak; invoice
+  billing tidak terbuka lewat POS. SSE/FCM hanya event POS sesuai izin.
+- Web Operasional: outlet, receive simple/bahan resep, count simple,
+  uncertainty lock tanpa retry. Simple stock tetap bersama brand; resep per
+  outlet. APK workspace managed kasir/riwayat/shift/kas/refund/dapur; stok web.
+- Managed online-only/pull-only; cold manifest/foreground refresh. Cache
+  ownership/cursor tenant/user/outlet/access-version memaksa full pull setelah
+  switch/revoke/owner roundtrip; semua queue/dependency/retry key tetap dan
+  same-ID pending tidak ditimpa. Legacy offline existing, offline lease belum
+  dipilih. Dapur PIN existing. Tidak memigrasikan role lama otomatis.
+- QA 62 unit +1 skip, lima kelompok HTTP PG/JWT/RLS/SSE/FCM, 45 native +2
+  optional skip, sepuluh izin khusus; web image produksi tindakan stok empat
+  lebar/tema/200%/kontras/keyboard PASS. Smoke publik 24 auth keadaan,
+  download/legacy dan delapan protected route denied tanpa kredensial.
+  Tidak write merchant/uji perangkat fisik. QA preview/container/network
+  milik tugas dihentikan; artifact/log/backup tetap /tmp/selaris-pos-access*.
+- Berikutnya tahap 2 Keuangan/Pembelian/CRM/HPP, lalu seluruh AI/cache/history/
+  RAG/worker/write. GPS/foto/OTP/offline/radius/retensi keputusan tersendiri.
 
 ## SEBELUMNYA - AKUN LIVE DAN APK 1.6.32+199 DIRILIS, 2026-10-06
 

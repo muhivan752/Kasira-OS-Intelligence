@@ -1,6 +1,6 @@
 # Izin POS, stok dan sync
 
-6 Oktober 2026. Ivan memilih langkah 1 setelah rilis akun 1.6.32: membedakan hak lihat/tindakan, membatasi outlet, dan menjaga antrean saat akses berubah. Source ini menyiapkan rilis 1.6.33+200. Status deployment dicatat terpisah setelah verifikasi produksi.
+6 Oktober 2026. Ivan memilih langkah 1 setelah rilis akun 1.6.32: membedakan hak lihat/tindakan, membatasi outlet, dan menjaga antrean saat akses berubah. Backend/web live dan rilis resmi 1.6.33+200 terverifikasi; rincian di [deployment POS](POS_ACCESS_RELEASE.md).
 
 Managed staff memakai izin canonical yang diperiksa ulang server pada setiap permintaan. Registry mencocokkan callable endpoint dan HTTP method; nama/path serupa tidak membuka handler baru. Scope outlet aktif, brand, tenant, parent pesanan/pembayaran/tab/shift dan tujuan perpindahan diperiksa sebelum mutation. ID path/query/body yang bertentangan ditolak; tambahan ID tidak boleh menyamarkan target atau parent. Owner aktual dan akun legacy mempertahankan alur existing. Role lama tidak diubah otomatis.
 
@@ -43,6 +43,8 @@ QA memakai schema-only dan data sintetis pada PostgreSQL terpisah dengan FORCE R
 | Web | TypeScript PASS dan Docker Next production build PASS; `/tmp/selaris-pos-access-tsc.log`, `/tmp/selaris-pos-access-web-build-final.log`. |
 | Browser stok | 320/375/768/1440 light/dark, 200% teks, AA kontras, keyboard, outlet, terima/count, unit bahan, timeout lock tanpa retry, error/empty, revoke dan download PASS; `/tmp/selaris-pos-access-browser-final.log`, trace `/tmp/selaris-pos-access-browser-trace.zip`, screenshot `/tmp/selaris-pos-access-stock.png`. |
 | Browser akun | Regresi auth/HRIS dan klik semua checkbox izin baru PASS; `/tmp/selaris-pos-access-accounts-browser.log`. |
+
+QA pada image produksi juga PASS dengan fixture yang sama (`/tmp/selaris-pos-access-production-browser.log`), termasuk empat lebar/tema/200% dan seluruh tindakan. Locator alert QA dibatasi ke workspace agar tidak bentrok dengan route announcer bawaan Next produksi.
 
 Preview memakai berkas font Selaris existing agar tidak bergantung pada DNS Google Fonts; source font tidak dipatch. Docker production build memakai konfigurasi produksi. Native memakai Plus Jakarta Sans dan tema operasional existing; web Source Sans 3. Belum pengujian perangkat fisik.
 

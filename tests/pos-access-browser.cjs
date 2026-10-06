@@ -80,7 +80,7 @@ async function check(page, label) {
     await page.getByText('8 pcs', { exact: true }).waitFor();
     uncertain = true;
     await page.getByRole('button', { name: /Terima barang/ }).click(); await page.getByLabel('Jumlah (pcs)').fill('2'); await page.getByRole('button', { name: 'Simpan stok', exact: true }).click();
-    await page.getByRole('alert').waitFor();
+    await page.locator('.finance-workspace [role=alert]').waitFor();
     assert(await page.getByRole('button', { name: /Terima barang/ }).isDisabled());
     await page.getByRole('button', { name: 'Tutup', exact: true }).click();
     assert(await page.getByRole('button', { name: /Terima barang/ }).isDisabled());
@@ -103,7 +103,7 @@ async function check(page, label) {
     await page.screenshot({ path: '/tmp/selaris-pos-access-stock.png', fullPage: true });
     await page.getByRole('link', { name: 'Unduh aplikasi POS' }).click(); await page.waitForURL('**/download');
     await page.goto('http://127.0.0.1:3188/dashboard/operasional');
-    fail = true; await page.getByRole('button', { name: 'Muat ulang akses dan stok' }).click(); await page.getByRole('alert').waitFor();
+    fail = true; await page.getByRole('button', { name: 'Muat ulang akses dan stok' }).click(); await page.locator('.finance-workspace [role=alert]').waitFor();
     fail = false; empty = true; await page.getByRole('button', { name: 'Muat ulang akses dan stok' }).click(); await page.getByText('Belum ada barang untuk outlet ini.').waitFor();
     empty = false; permissions = ['hris.self']; await page.getByRole('button', { name: 'Muat ulang akses dan stok' }).click(); await page.getByText('Izin melihat stok belum diberikan untuk akun ini.').waitFor();
     assert.equal(await page.getByRole('button', { name: /Terima barang/ }).count(), 0);

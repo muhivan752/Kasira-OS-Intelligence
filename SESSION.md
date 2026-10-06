@@ -4,26 +4,42 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
-## UPDATE TERAKHIR - POS/stok/sync QA selesai, menyiapkan 1.6.33+200
+## UPDATE TERAKHIR - POS/STOK/SYNC LIVE DAN APK 1.6.33+200 DIRILIS, 2026-10-06
 
-- Ivan "oke lanjut ke 1" memilih POS/stok/sync; deploy/rilis sudah diotorisasi
-  sebelumnya. Source/QA review docs/POS_ACCESS_REVIEW.md, status live belum baru.
-- Managed registry exact callable+method; scope parent/outlet/brand/tenant,
-  canonical order price/discount/payment due; grants sell/refund/approve/shift/
-  cash/kitchen/history/stock/customer lookup terpisah. HPP/counter/secret/blind
-  drawer direduksi, future modules fail closed. Legacy tidak dimigrasi otomatis.
-- Web Operasional dengan stock receive/count dan uncertain-write lock. APK
-  workspace managed untuk POS/riwayat/shift/kas/refund/dapur, stock via web.
-  Cold manifest/foreground/online refresh; queue/dependencies/retry key tetap,
-  managed pull-only dan cache/cursor scoped. Masa offline lease belum dipilih.
-- QA 62 unit +1 skip, 5 kelompok HTTP PostgreSQL/JWT/RLS, 45 native +2 skip,
-  10 izin khusus, browser stok light/dark 320..1440/200%, checkbox grants editor.
-  Inner overflow screenshot diperbaiki dan pengecekan panel ditambahkan.
-- 1.6.33+200 disiapkan. Backup privat /tmp/selaris-pos-access-release-backup
-  DB/source/hotfix/image/version/APK1.6.32. Runtime diff 21 backend files.
-  Deploy dengan copy/restart existing backend, frontend-only compose --no-deps.
-  Jangan recreate image backend lama. Belum uji HP fisik.
-- Lanjut Keuangan/Pembelian/CRM/HPP, seluruh AI, lalu GPS/foto sesuai owner.
+- Ivan “oke lanjut ke 1”; deploy/rilis sebelumnya tetap otorisasi. Source e0947ba
+  dipush dan SHA remote diverifikasi. CI #200/run37458813872 sukses; release
+  v1.6.33 berisi signed POS/Dapur APK+AAB. Review docs/POS_ACCESS_REVIEW.md
+  dan deployment docs/POS_ACCESS_RELEASE.md. Update opsional.
+- Backend 21 file runtime dicopy/restart existing; hash baru sesuai source,
+  288 source Python lain tetap hotfix baseline. Image backend 160766…31a
+  tidak direcreate, migration114 tetap. Frontend-only compose --no-deps,
+  image 3f2b849…33c3. Semua service/DB/background healthy.
+- Backup privat /tmp/selaris-pos-access-release-backup: DB custom tervalidasi,
+  seluruh source/hotfix, image/version/APK1.6.32. Tidak HPP pending saat restart.
+  APK dan version.json diganti atomik setelah APK/AAB signature/package/
+  build200/Firebase/hash/ukuran lolos; signer sama existing. Download HTTPS
+  kedua app cocok hash/Content-Length; API dan label download 1.6.33.
+- Managed registry callable+method dan scope parent/outlet/brand/tenant.
+  Sell/refund/approve/discount/shift/cash/kitchen/history/stock/lookup terpisah;
+  harga/tagihan canonical, biaya/counter/provider/blind drawer direduksi.
+  ID path/query/body bertentangan dan parent payment palsu ditolak; invoice
+  billing tidak terbuka lewat POS. SSE/FCM hanya event POS sesuai izin.
+- Web Operasional: outlet, receive simple/bahan resep, count simple,
+  uncertainty lock tanpa retry. Simple stock tetap bersama brand; resep per
+  outlet. APK workspace managed kasir/riwayat/shift/kas/refund/dapur; stok web.
+- Managed online-only/pull-only; cold manifest/foreground refresh. Cache
+  ownership/cursor tenant/user/outlet/access-version memaksa full pull setelah
+  switch/revoke/owner roundtrip; semua queue/dependency/retry key tetap dan
+  same-ID pending tidak ditimpa. Legacy offline existing, offline lease belum
+  dipilih. Dapur PIN existing. Tidak memigrasikan role lama otomatis.
+- QA 62 unit +1 skip, lima kelompok HTTP PG/JWT/RLS/SSE/FCM, 45 native +2
+  optional skip, sepuluh izin khusus; web image produksi tindakan stok empat
+  lebar/tema/200%/kontras/keyboard PASS. Smoke publik 24 auth keadaan,
+  download/legacy dan delapan protected route denied tanpa kredensial.
+  Tidak write merchant/uji perangkat fisik. QA preview/container/network
+  milik tugas dihentikan; artifact/log/backup tetap /tmp/selaris-pos-access*.
+- Berikutnya tahap 2 Keuangan/Pembelian/CRM/HPP, lalu seluruh AI/cache/history/
+  RAG/worker/write. GPS/foto/OTP/offline/radius/retensi keputusan tersendiri.
 
 ## UPDATE SEBELUMNYA - Akun live dan APK 1.6.32+199 dirilis, 6 Oktober 2026
 

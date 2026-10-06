@@ -726,6 +726,7 @@ Managed native online-only, cache/cursor per identitas/versi akses dan queue
 serta dependency dipertahankan saat revoke/switch; tidak push/mark synced.
 Algoritme stok simple bersama brand dan resep per outlet tetap existing.
 Fondasi dan tahap akun sudah deploy ke backend/web dengan migrasi114 dan
-APK1.6.32+199 setelah izin rilis Ivan. Tidak mengubah role POS existing menjadi
+APK1.6.33+200 setelah izin rilis Ivan. Tahap POS/stok/sync sudah live;
+deployment docs/POS_ACCESS_RELEASE.md. Tidak mengubah role POS existing menjadi
 managed. Rincian penerapan/QA docs/ACCESS_REVIEW.md, deployment
 docs/ACCOUNT_ACCESS_RELEASE.md.
