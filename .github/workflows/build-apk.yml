@@ -307,11 +307,11 @@ jobs:
         run: flutter analyze
         working-directory: kasir_app
 
-      - name: Test onboarding, login and sync
+      - name: Test onboarding, login, accounts, sync and HPP
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libsqlite3-dev
-          flutter test test/onboarding_test.dart test/login_test.dart test/sync_service_test.dart
+          flutter test test/onboarding_test.dart test/login_test.dart test/accounts_test.dart test/sync_service_test.dart test/recipe_hpp_test.dart
         working-directory: kasir_app
 
       # POS dan Dapur sekarang DUA app terpisah di Play (`com.selaris.pos`

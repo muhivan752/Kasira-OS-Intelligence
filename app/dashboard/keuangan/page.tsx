@@ -1,373 +1,238 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import {
-  Wallet, Plus, X, Trash2, Pencil, Loader2, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight,
-  TrendingUp, TrendingDown, Copy, Info, Receipt,
-} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import {
-  getOutlets, getFinanceSummary, getFinanceCategories, getCashAccounts, getExpenses,
-  createExpense, updateExpense, deleteExpense, copyRecurringExpenses, getSuppliers,
-} from '@/app/actions/api';
+import { Download, Plus, RefreshCw, Pencil, Trash2 } from 'lucide-react';
+import { InventoryDialog } from '@/components/inventory-dialog';
+import { getFinanceSetup, getFinanceReport, createExpense, updateExpense, deleteExpense, copyRecurringExpenses } from '@/app/actions/api';
+import { jakartaDate, money, monthName, moveMonth, reportCsv, type FinanceExpense, type FinanceSummary, type FinanceSetup } from '@/lib/finance';
+import './finance.css';
 
-// ── Tipe ──────────────────────────────────────────────────────────────
-interface Cat { key: string; label: string }
-interface Account { id: string; name: string; kind: string; default_for: string[] }
-interface Expense {
-  id: string; category: string; category_label: string; amount: string; paid_at: string; payment_method: string;
-  cash_account_id?: string | null; cash_account_name?: string | null; supplier_id?: string | null; supplier_name?: string | null;
-  purchase_id?: string | null; note?: string | null; recurring: string; row_version: number;
-}
-interface Summary {
-  month: string; revenue: string; refunds: string; net_revenue: string; delivery_fees?: string; cogs: string; cogs_coverage: number;
-  gross_profit: string; gross_margin_pct: number; expenses_total: string; petty_cash_out: string;
-  expenses_by_category: { key: string; label: string; amount: string; count: number }[];
-  net_profit: string; net_margin_pct: number; orders_count: number;
-  cash_in: string; cash_out: string; cash_net: string;
-  accounts: { id: string | null; name: string; kind: string; inflow: string; outflow: string; net: string }[];
-  purchases_paid: string; payables_outstanding: string;
-  trend: { month: string; label: string; revenue: string; cogs: string; expenses: string; net: string }[];
-  recurring_pending: number;
-}
-
-const rp = (n: number | string | null | undefined) => 'Rp ' + Math.round(Number(n || 0)).toLocaleString('id-ID');
-const rpShort = (n: number | string) => {
-  const v = Number(n || 0), a = Math.abs(v);
-  const s = a >= 1e9 ? (a / 1e9).toFixed(1) + ' M' : a >= 1e6 ? (a / 1e6).toFixed(1) + ' jt' : a >= 1e3 ? Math.round(a / 1e3) + ' rb' : String(a);
-  return (v < 0 ? '−' : '') + s;
-};
-const tgl = (iso: string) => new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-const monthLabel = (k: string) => { const [y, m] = k.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }); };
-const shiftMonth = (k: string, d: number) => { const [y, m] = k.split('-').map(Number); return monthKey(new Date(y, m - 1 + d, 1)); };
+type Setup = FinanceSetup;
 const METHODS = [['cash', 'Tunai'], ['transfer', 'Transfer'], ['qris', 'QRIS'], ['card', 'Kartu'], ['ewallet', 'E-wallet']] as const;
+const errorText = (error: unknown) => error instanceof Error ? error.message : 'Koneksi terputus. Coba lagi.';
 
 export default function KeuanganPage() {
-  const [loading, setLoading] = useState(true);
+  const [setup, setSetup] = useState<Setup | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [outletId, setOutletId] = useState('');
-  const [month, setMonth] = useState(() => monthKey(new Date()));
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [cats, setCats] = useState<Cat[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
-  const [form, setForm] = useState<Partial<Expense> | null>(null);
+  const [month, setMonth] = useState(() => jakartaDate().slice(0, 7));
+  const [summary, setSummary] = useState<FinanceSummary | null>(null);
+  const [expenses, setExpenses] = useState<FinanceExpense[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [form, setForm] = useState<Partial<FinanceExpense> | null>(null);
+  const [confirming, setConfirming] = useState<FinanceExpense | 'recurring' | null>(null);
+  const [mutating, setMutating] = useState(false);
+  const request = useRef(0);
+  const currentMonth = jakartaDate().slice(0, 7);
 
-  const showToast = (kind: 'ok' | 'err', text: string) => { setToast({ kind, text }); setTimeout(() => setToast(null), k5(kind)); };
-  const k5 = (k: string) => (k === 'ok' ? 4000 : 7000);
-
-  const reload = async (oid = outletId, m = month) => {
-    if (!oid) return;
-    setBusy(true);
-    const [s, e] = await Promise.all([getFinanceSummary(oid, m), getExpenses(oid, m)]);
-    setSummary(s); setExpenses(e); setBusy(false);
-  };
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const [outlets, c, a, sup] = await Promise.all([getOutlets(), getFinanceCategories(), getCashAccounts(), getSuppliers()]);
-        setCats(c); setAccounts(a); setSuppliers(sup);
-        if (!outlets?.length) return;
-        setOutletId(outlets[0].id);
-        await reload(outlets[0].id, month);
-      } finally { setLoading(false); }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const bootstrap = useCallback(async () => {
+    setInitialLoading(true); setError('');
+    try {
+      const result = await getFinanceSetup();
+      if (!result.success) { setError(result.message); return; }
+      const data = result.data;
+      setSetup(data);
+      setOutletId(data.outlets.find(o => o.id === data.selectedOutletId)?.id || data.outlets[0]?.id || '');
+    } catch (e) { setError(errorText(e)); }
+    finally { setInitialLoading(false); }
   }, []);
 
-  const changeMonth = async (d: number) => { const m = shiftMonth(month, d); setMonth(m); await reload(outletId, m); };
-
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-500">Memuat...</div>;
-  if (!outletId) return <div className="bg-white rounded-xl border p-8 text-center text-gray-500">Belum ada outlet.</div>;
-
-  const s = summary;
-  const net = Number(s?.net_profit || 0);
-  const isFuture = month > monthKey(new Date());
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Keuangan</h1>
-          <p className="text-gray-500">Laba rugi dan arus kas dihitung otomatis dari transaksi, nota belanja, dan pengeluaran.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-white border border-gray-200 rounded-lg">
-            <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-50 rounded-l-lg"><ChevronLeft className="w-4 h-4" /></button>
-            <span className="px-3 text-sm font-semibold text-gray-900 min-w-[150px] text-center">{monthLabel(month)}</span>
-            <button onClick={() => changeMonth(1)} disabled={isFuture} className="p-2 hover:bg-gray-50 rounded-r-lg disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
-          </div>
-          <button onClick={() => setForm({ category: 'lainnya', payment_method: 'cash', recurring: 'none' })} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-            <Plus className="w-4 h-4" /> Catat Pengeluaran
-          </button>
-        </div>
-      </div>
-
-      {toast && (
-        <div className={`rounded-lg px-4 py-3 text-sm flex items-start gap-2 border ${toast.kind === 'ok' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-          {toast.kind === 'ok' ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" /> : <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />}<span>{toast.text}</span>
-        </div>
-      )}
-
-      {s && s.recurring_pending > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-wrap items-center justify-between gap-2">
-          <span className="flex items-center gap-2"><Copy className="w-4 h-4" /> {s.recurring_pending} pengeluaran bulanan (sewa, gaji, dll) belum dicatat bulan ini.</span>
-          <button onClick={async () => { try { const r = await copyRecurringExpenses(outletId, month); showToast('ok', r.message); await reload(); } catch (e: any) { showToast('err', e.message); } }} className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700">Salin dari bulan lalu</button>
-        </div>
-      )}
-
-      {/* ── Laba rugi ── */}
-      <div className={`rounded-2xl border p-5 ${net >= 0 ? 'bg-white border-gray-200' : 'bg-red-50 border-red-200'}`}>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Laba bersih {monthLabel(month)}</p>
-            <p className={`mt-1 text-4xl font-bold tabular-nums ${net >= 0 ? 'text-gray-900' : 'text-red-700'}`}>{busy ? '…' : rp(net)}</p>
-            <p className="text-sm text-gray-500 mt-1">{s?.orders_count || 0} order lunas · margin bersih {s?.net_margin_pct ?? 0}%</p>
-          </div>
-          <Trend trend={s?.trend || []} />
-        </div>
-        <div className={`mt-5 grid gap-2 sm:grid-cols-2 text-sm ${Number(s?.delivery_fees || 0) > 0 ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
-          <Row label="Pendapatan" value={s?.revenue} hint={Number(s?.refunds) > 0 ? `- refund ${rp(s?.refunds)}` : undefined} />
-          {/* Ongkir baru muncul kalau tokonya memang mengantar. Warung yang
-              nggak pernah antar nggak perlu lihat baris kosong. */}
-          {Number(s?.delivery_fees || 0) > 0 && (
-            <Row label="Ongkir terkumpul" value={s?.delivery_fees} hint="di luar penjualan barang" />
-          )}
-          <Row label="HPP terjual" value={s?.cogs} neg hint={s && s.cogs_coverage < 1 ? `${Math.round(s.cogs_coverage * 100)}% item punya HPP` : 'semua item punya HPP'} />
-          <Row label="Laba kotor" value={s?.gross_profit} bold hint={`margin ${s?.gross_margin_pct ?? 0}%`} />
-          <Row label="Pengeluaran" value={Number(s?.expenses_total || 0) + Number(s?.petty_cash_out || 0)} neg hint={Number(s?.petty_cash_out) > 0 ? `termasuk kas kecil shift ${rp(s?.petty_cash_out)}` : undefined} />
-          <Row label="Laba bersih" value={s?.net_profit} bold />
-        </div>
-        {s && s.cogs_coverage < 0.7 && (
-          <p className="mt-3 text-xs text-amber-700 flex items-start gap-1.5"><Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />Sebagian besar produk belum punya harga modal, jadi laba kotor terlihat lebih besar dari yang sebenarnya. Isi resep (Pro) atau catat nota belanja produk agar harga modalnya terisi.</p>
-        )}
-      </div>
-
-      {/* ── Arus kas ── */}
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="font-bold text-gray-900">Posisi kas</h2>
-            <span className={`text-sm font-semibold tabular-nums ${Number(s?.cash_net) >= 0 ? 'text-green-700' : 'text-red-700'}`}>net {rp(s?.cash_net)}</span>
-          </div>
-          <div className="mt-3 divide-y divide-gray-100">
-            {(s?.accounts || []).map(a => (
-              <div key={a.id || a.name} className="py-2.5 flex items-center justify-between text-sm">
-                <div>
-                  <p className="font-medium text-gray-900">{a.name}</p>
-                  <p className="text-xs text-gray-500">masuk {rp(a.inflow)} · keluar {rp(a.outflow)}</p>
-                </div>
-                <span className={`font-bold tabular-nums ${Number(a.net) >= 0 ? 'text-gray-900' : 'text-red-700'}`}>{rp(a.net)}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500 space-y-1">
-            <p>Belanja stok yang dibayar bulan ini: <b className="text-gray-700">{rp(s?.purchases_paid)}</b> (keluar dari kas, masuk laba rugi sebagai HPP waktu terjual).</p>
-            {Number(s?.payables_outstanding) > 0 && <p>Utang supplier belum dibayar: <Link href="/dashboard/pembelian" className="font-semibold text-amber-700 hover:underline">{rp(s?.payables_outstanding)} →</Link></p>}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <h2 className="font-bold text-gray-900">Pengeluaran per kategori</h2>
-          {(s?.expenses_by_category || []).length === 0 ? (
-            <p className="mt-3 text-sm text-gray-500">Belum ada pengeluaran bulan ini.</p>
-          ) : (
-            <div className="mt-3 space-y-2">
-              {s!.expenses_by_category.map(c => {
-                const pct = Number(s!.expenses_total) ? Math.round(Number(c.amount) / Number(s!.expenses_total) * 100) : 0;
-                return (
-                  <div key={c.key} className="text-sm">
-                    <div className="flex justify-between"><span className="text-gray-700">{c.label} <span className="text-gray-400">({c.count})</span></span><span className="font-semibold tabular-nums">{rp(c.amount)}</span></div>
-                    <div className="mt-1 h-1.5 rounded-full bg-gray-100"><div className="h-1.5 rounded-full bg-blue-500" style={{ width: `${pct}%` }} /></div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Daftar pengeluaran ── */}
-      <div className="bg-white rounded-2xl border border-gray-200">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-bold text-gray-900">Pengeluaran {monthLabel(month)}</h2>
-          <span className="text-sm text-gray-500">{expenses.length} catatan</span>
-        </div>
-        {expenses.length === 0 ? (
-          <div className="p-8 text-center text-sm text-gray-500">
-            <Wallet className="w-10 h-10 mx-auto mb-2 text-blue-300" />
-            Belum ada. Catat sewa, listrik, gaji, dan gas dalam sekali ketuk. Yang rutin tandai "ulangi tiap bulan" agar bulan depan tinggal disalin.
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {expenses.map(e => (
-              <div key={e.id} className="px-5 py-3 flex items-center gap-3 text-sm">
-                <div className="w-12 shrink-0 text-gray-400 tabular-nums">{tgl(e.paid_at)}</div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-gray-900 truncate">{e.category_label}{e.note ? <span className="text-gray-500 font-normal"> · {e.note}</span> : ''}</p>
-                  <p className="text-xs text-gray-500">{e.cash_account_name || e.payment_method}{e.supplier_name ? ` · ${e.supplier_name}` : ''}{e.recurring === 'monthly' ? ' · tiap bulan' : ''}{e.purchase_id ? ' · dari nota belanja' : ''}</p>
-                </div>
-                <span className="font-semibold tabular-nums">{rp(e.amount)}</span>
-                {e.purchase_id ? (
-                  <Link href="/dashboard/pembelian" className="p-2 text-gray-400 hover:text-blue-600" title="Lihat nota"><Receipt className="w-4 h-4" /></Link>
-                ) : (
-                  <>
-                    <button onClick={() => setForm(e)} className="p-2 text-gray-400 hover:text-gray-700"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={async () => { if (!confirm('Hapus pengeluaran ini?')) return; try { await deleteExpense(e.id); await reload(); showToast('ok', 'Dihapus'); } catch (er: any) { showToast('err', er.message); } }} className="p-2 text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {form && (
-        <ExpenseModal
-          initial={form} cats={cats} accounts={accounts} suppliers={suppliers} outletId={outletId}
-          onClose={() => setForm(null)}
-          onSaved={async (msg) => { setForm(null); await reload(); showToast('ok', msg); }}
-        />
-      )}
-    </div>
-  );
-}
-
-function Row({ label, value, neg, bold, hint }: { label: string; value?: string | number; neg?: boolean; bold?: boolean; hint?: string }) {
-  return (
-    <div className="rounded-lg bg-gray-50 px-3 py-2.5">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className={`tabular-nums ${bold ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'}`}>{neg ? '− ' : ''}{rp(value)}</p>
-      {hint && <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>}
-    </div>
-  );
-}
-
-/** Tren 6 bulan: batang pendapatan + garis laba bersih, CSS murni. */
-function Trend({ trend }: { trend: Summary['trend'] }) {
-  if (!trend.length) return null;
-  const max = Math.max(1, ...trend.map(t => Math.abs(Number(t.revenue)), ...trend.map(t => Math.abs(Number(t.net)))));
-  return (
-    <div className="flex items-end gap-2 h-20">
-      {trend.map(t => {
-        const rev = Number(t.revenue), net = Number(t.net);
-        return (
-          <div key={t.month} className="flex flex-col items-center gap-1 w-10" title={`${t.label}: pendapatan ${rp(rev)}, laba ${rp(net)}`}>
-            <div className="relative w-full h-14 flex items-end justify-center">
-              <div className="w-5 rounded-t bg-blue-200" style={{ height: `${Math.max(2, rev / max * 100)}%` }} />
-              <div className={`absolute w-5 rounded-sm ${net >= 0 ? 'bg-green-500' : 'bg-red-500'}`} style={{ height: 3, bottom: `${Math.max(0, Math.min(100, (net >= 0 ? net : 0) / max * 100))}%` }} />
-            </div>
-            <span className={`text-[10px] ${net < 0 ? 'text-red-600' : 'text-gray-500'}`}>{t.label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ExpenseModal({ initial, cats, accounts, suppliers, outletId, onClose, onSaved }: {
-  initial: Partial<Expense>; cats: Cat[]; accounts: Account[]; suppliers: { id: string; name: string }[]; outletId: string;
-  onClose: () => void; onSaved: (msg: string) => void;
-}) {
-  const isEdit = !!initial.id;
-  const [f, setF] = useState({
-    category: initial.category || 'lainnya',
-    amount: initial.amount ? String(Math.round(Number(initial.amount))) : '',
-    paid_at: initial.paid_at ? initial.paid_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
-    payment_method: initial.payment_method || 'cash',
-    cash_account_id: initial.cash_account_id || '',
-    supplier_id: initial.supplier_id || '',
-    note: initial.note || '',
-    recurring: initial.recurring || 'none',
-  });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const submit = async () => {
-    if (!(Number(f.amount) > 0)) { setError('Isi nominalnya.'); return; }
-    setBusy(true); setError('');
+  const reload = useCallback(async () => {
+    if (!outletId) return;
+    const id = ++request.current;
+    setLoading(true); setError(''); setSummary(null); setExpenses([]);
     try {
-      const payload = {
-        category: f.category, amount: Number(f.amount),
-        paid_at: new Date(f.paid_at + 'T12:00:00').toISOString(),
-        payment_method: f.payment_method, cash_account_id: f.cash_account_id || null,
-        supplier_id: f.supplier_id || null, note: f.note || null, recurring: f.recurring,
-      };
-      if (isEdit) { await updateExpense(initial.id!, { ...payload, row_version: initial.row_version }); onSaved('Pengeluaran diperbarui'); }
-      else { await createExpense({ ...payload, outlet_id: outletId }); onSaved('Pengeluaran dicatat'); }
-    } catch (e: any) { setError(e.message); }
-    finally { setBusy(false); }
+      const result = await getFinanceReport(outletId, month);
+      if (id === request.current) {
+        if (result.success) { setSummary(result.data.summary); setExpenses(result.data.expenses); }
+        else setError(result.message);
+      }
+    } catch (e) { if (id === request.current) setError(errorText(e)); }
+    finally { if (id === request.current) setLoading(false); }
+  }, [outletId, month]);
+
+  useEffect(() => { void bootstrap(); }, [bootstrap]);
+  useEffect(() => { void reload(); return () => { request.current++; }; }, [reload]);
+
+  const changePeriod = (value: string) => {
+    if (/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(value) && value >= '2000-01' && value <= currentMonth) {
+      setSummary(null); setExpenses([]); setMonth(value); setNotice('');
+    }
+  };
+  const outletName = setup?.outlets.find(o => o.id === outletId)?.name || '';
+  const exportReport = () => {
+    if (!summary) return;
+    const url = URL.createObjectURL(new Blob([reportCsv(summary, expenses, outletName)], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = `keuangan-${month}-${outletId}.csv`; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setNotice('Laporan diunduh. File memuat ringkasan, arus kas, dan catatan pengeluaran.');
+  };
+  const confirmAction = async () => {
+    if (!confirming || mutating) return;
+    setMutating(true); setError('');
+    try {
+      if (confirming === 'recurring') {
+        const result = await copyRecurringExpenses(outletId, month);
+        if (!result.success) { setError(result.message); return; }
+        setNotice(result.message || 'Pembayaran bulanan dicatat.');
+      } else {
+        const result = await deleteExpense(confirming.id);
+        if (!result.success) { setError(result.message); return; }
+        setNotice('Pengeluaran dihapus dari laporan. Riwayat perubahan tetap dicatat.');
+      }
+      setConfirming(null); await reload();
+    } catch (e) { setError(errorText(e)); }
+    finally { setMutating(false); }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-3 flex items-center justify-between">
-          <h2 className="font-bold text-gray-900">{isEdit ? 'Ubah Pengeluaran' : 'Catat Pengeluaran'}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><X className="w-5 h-5" /></button>
+  return <div className="finance-workspace">
+    <header className="finance-heading">
+      <div><h1>Keuangan</h1><p>Periksa hasil usaha, uang masuk dan keluar, serta pengeluaran toko.</p></div>
+      <button className="f-button f-primary" disabled={!setup || !outletId || loading || !!error || !!form || mutating} onClick={() => setForm({ category: 'lainnya', payment_method: 'cash', recurring: 'none' })}>
+        <Plus size={18} aria-hidden="true" /> Catat pengeluaran
+      </button>
+    </header>
+    {initialLoading ? <p role="status" className="f-panel">Memuat akun dan outlet…</p> : <>
+      {setup && setup.outlets.length > 0 && <div className="finance-toolbar">
+        <label>Outlet<select aria-label="Outlet" value={outletId} disabled={!!form || !!confirming || mutating} onChange={e => { setSummary(null); setExpenses([]); setOutletId(e.target.value); setNotice(''); }}>
+          {setup.outlets.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select></label>
+        <label>Bulan laporan<input type="month" min="2000-01" max={currentMonth} value={month} disabled={!!form || !!confirming || mutating} onChange={e => changePeriod(e.target.value)} /></label>
+        <div className="f-period-buttons">
+          <button className="f-button" aria-label="Bulan sebelumnya" disabled={month <= '2000-01' || !!form || !!confirming || mutating} onClick={() => changePeriod(moveMonth(month, -1))}>Sebelumnya</button>
+          <button className="f-button" aria-label="Bulan berikutnya" disabled={month >= currentMonth || !!form || !!confirming || mutating} onClick={() => changePeriod(moveMonth(month, 1))}>Berikutnya</button>
         </div>
-        <div className="p-5 space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-gray-500">Buat apa</label>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {cats.map(c => (
-                <button key={c.key} onClick={() => setF({ ...f, category: c.key })} className={`px-3 py-1.5 rounded-full text-sm border transition ${f.category === c.key ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'}`}>{c.label}</button>
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-gray-500">Nominal</label>
-              <input type="number" inputMode="numeric" min="0" autoFocus value={f.amount} onChange={e => setF({ ...f, amount: e.target.value })} placeholder="0" className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-lg font-semibold" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500">Tanggal</label>
-              <input type="date" value={f.paid_at} onChange={e => setF({ ...f, paid_at: e.target.value })} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-gray-500">Bayar pakai</label>
-              <select value={f.payment_method} onChange={e => setF({ ...f, payment_method: e.target.value, cash_account_id: '' })} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                {METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500">Dari akun</label>
-              <select value={f.cash_account_id} onChange={e => setF({ ...f, cash_account_id: e.target.value })} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                <option value="">Otomatis ikut metode</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-500">Catatan (opsional)</label>
-            <input value={f.note} onChange={e => setF({ ...f, note: e.target.value })} placeholder="mis. Sewa ruko September" className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-          </div>
-          {suppliers.length > 0 && (
-            <div>
-              <label className="text-xs font-semibold text-gray-500">Dibayar ke supplier (opsional)</label>
-              <select value={f.supplier_id} onChange={e => setF({ ...f, supplier_id: e.target.value })} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                <option value="">-</option>
-                {suppliers.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
-              </select>
-            </div>
-          )}
-          <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
-            <input type="checkbox" checked={f.recurring === 'monthly'} onChange={e => setF({ ...f, recurring: e.target.checked ? 'monthly' : 'none' })} className="mt-0.5" />
-            <span>Ulangi tiap bulan <span className="text-gray-400">(bulan depan tinggal klik "Salin dari bulan lalu")</span></span>
-          </label>
-          {error && <p className="text-sm text-red-600 flex items-center gap-2"><AlertTriangle className="w-4 h-4" />{error}</p>}
-          <div className="flex justify-end gap-2 pt-1">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Batal</button>
-            <button onClick={submit} disabled={busy} className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" />}{isEdit ? 'Simpan' : 'Catat'}</button>
-          </div>
+        <button className="f-button" disabled={loading || mutating || !!form || !!confirming} onClick={() => void reload()}><RefreshCw size={16} aria-hidden="true" /> Muat ulang</button>
+        <button className="f-button" disabled={!summary || loading || mutating} onClick={exportReport}><Download size={16} aria-hidden="true" /> Unduh CSV</button>
+      </div>}
+      {notice && <div role="status" className="f-notice">{notice}</div>}
+      {error && <div role="alert" className="f-notice f-error"><p>{error}</p>
+        {!confirming && <button className="f-button" onClick={() => void (setup ? reload() : bootstrap())}>Coba lagi</button>}
+        {error.includes('Masuk kembali') && <Link className="f-button" href="/login">Masuk kembali</Link>}
+      </div>}
+      {setup && !setup.outlets.length && <div className="f-panel"><h2>Belum ada outlet</h2><p>Tambahkan outlet agar transaksi dan pengeluaran bisa direkap.</p><Link className="f-button" href="/dashboard/settings">Buka pengaturan</Link></div>}
+      {loading && <p role="status" className="f-panel">Memuat laporan {monthName(month)}…</p>}
+      {summary && !loading && <>
+        <section className="f-panel f-result" aria-labelledby="profit-heading">
+          <div className="f-report-title"><div><p className="f-eyebrow">{outletName} · {monthName(month)}</p><h2 id="profit-heading">Laba setelah biaya tercatat</h2></div><span className="f-estimate">Perkiraan</span></div>
+          <p className={`f-amount ${Number(summary.net_profit) < 0 ? 'f-negative' : ''}`}>{money(summary.net_profit)}</p>
+          <p>{summary.orders_count} pesanan lunas · margin {summary.net_margin_pct}%</p>
+          <p className="f-explanation">Dihitung dari penjualan, HPP terkini, refund, dan biaya yang sudah dicatat. Angka dapat berubah saat harga modal atau catatan biaya diperbarui. Total penjualan masih termasuk pajak dan biaya layanan yang tercatat di POS.</p>
+          {summary.cogs_coverage < 1 && <div className="f-notice">HPP baru tersedia untuk {(summary.cogs_coverage * 100).toLocaleString('id-ID', { maximumFractionDigits: 1 })}% jumlah barang terjual. Laba bisa terlihat terlalu tinggi. <Link href="/dashboard/menu">Periksa harga modal produk</Link>.</div>}
+          <dl className="f-calculation">
+            <Amount label="Penjualan sebelum refund" value={summary.revenue} />
+            <Amount label="Refund" value={summary.refunds} subtract />
+            {Number(summary.delivery_fees || 0) > 0 && <Amount label="Ongkir terkumpul" value={summary.delivery_fees!} />}
+            <Amount label="HPP barang terjual" value={summary.cogs} subtract />
+            <Amount label="Laba kotor perkiraan" value={summary.gross_profit} total />
+            <Amount label="Pengeluaran tercatat" value={summary.expenses_total} subtract />
+            <Amount label="Pengeluaran kas kecil" value={summary.petty_cash_out} subtract />
+            <Amount label="Laba setelah biaya tercatat" value={summary.net_profit} total />
+          </dl>
+        </section>
+        <div className="f-columns">
+          <section className="f-panel" aria-labelledby="cash-heading"><h2 id="cash-heading">Arus kas bulan ini</h2>
+            <p>Perubahan uang selama {monthName(month)}. Ini bukan saldo rekening atau kas yang sudah dihitung fisik.</p>
+            <dl className="f-calculation"><Amount label="Uang masuk" value={summary.cash_in} /><Amount label="Uang keluar" value={summary.cash_out} subtract /><Amount label="Perubahan kas" value={summary.cash_net} total /></dl>
+            <div className="f-account-list">{summary.accounts.map(a => <div key={a.id || a.name}><h3>{a.name}</h3><p>Masuk {money(a.inflow)} · keluar {money(a.outflow)}</p><p>Perubahan <strong>{money(a.net)}</strong></p></div>)}</div>
+            <p className="f-explanation">Pembayaran nota: {money(summary.purchases_paid)}. Pembelian stok memengaruhi kas saat dibayar dan HPP saat barang terjual. Akun asal pembayaran nota belum dicatat, sehingga ditampilkan terpisah.</p>
+            {summary.cash_history_estimated && <p className="f-notice">Sebagian nota lama belum punya riwayat pembayaran lengkap. Bagian kas tersebut masih memakai perkiraan bulan penerimaan.</p>}
+          </section>
+          <section className="f-panel" aria-labelledby="payables-heading"><h2 id="payables-heading">Utang supplier saat ini</h2><p className="f-secondary-amount">{money(summary.payables_outstanding)}</p>
+            <p>Semua nota yang belum lunas, termasuk dari bulan lain. Angka ini mengikuti kondisi terbaru.</p>
+            {Number(summary.payables_overdue || 0) > 0 && <p className="f-notice">Lewat jatuh tempo: <strong>{money(summary.payables_overdue!)}</strong></p>}
+            <Link className="f-button" href="/dashboard/pembelian">Periksa nota dan pembayaran</Link>
+            <h3 className="f-spaced">Pengeluaran per kategori</h3>
+            {!summary.expenses_by_category.length ? <p>Belum ada pengeluaran tercatat pada bulan ini.</p> : <dl className="f-calculation">{summary.expenses_by_category.map(c => <Amount key={c.key} label={`${c.label} (${c.count} catatan)`} value={c.amount} />)}</dl>}
+          </section>
         </div>
-      </div>
-    </div>
-  );
+        {summary.recurring_pending > 0 && <div className="f-notice f-recurring"><div><strong>{summary.recurring_pending} pembayaran bulanan bisa disalin</strong><p>Periksa dahulu apakah sewa, gaji, atau tagihan lainnya sudah benar-benar dibayar.</p></div><button className="f-button" disabled={mutating} onClick={() => setConfirming('recurring')}>Periksa sebelum mencatat</button></div>}
+        <section className="f-panel" aria-labelledby="expenses-heading"><div className="f-report-title"><h2 id="expenses-heading">Catatan pengeluaran</h2><span>{expenses.length} catatan</span></div>
+          {!expenses.length ? <p className="f-empty">Belum ada pengeluaran pada {monthName(month)}. Catat pembayaran listrik, sewa, gaji, atau biaya toko lainnya setelah dibayar.</p> : <ul className="f-expense-list">{expenses.map(e => <li key={e.id}>
+            <div className="f-expense-detail"><time dateTime={e.paid_at}>{jakartaDate(new Date(e.paid_at))}</time><h3>{e.category_label}</h3>{e.note && <p>{e.note}</p>}<p>{e.cash_account_name || METHODS.find(([key]) => key === e.payment_method)?.[1] || 'Nonkas'}{e.supplier_name ? ` · ${e.supplier_name}` : ''}{e.recurring === 'monthly' ? ' · template bulanan' : ''}</p></div>
+            <strong className="f-expense-amount">{money(e.amount)}</strong>
+            <div className="f-expense-actions">{e.purchase_id ? <Link className="f-button" href="/dashboard/pembelian">Lihat nota</Link> : e.payment_method === 'none' ? <span>Catatan nonkas dari stok</span> : <>
+              <button className="f-button" aria-label={`Ubah ${e.category_label}${e.note ? ` ${e.note}` : ''}`} onClick={() => setForm(e)}><Pencil size={16} aria-hidden="true" /> Ubah</button>
+              <button className="f-button f-delete" aria-label={`Hapus ${e.category_label}${e.note ? ` ${e.note}` : ''}`} onClick={() => { setError(''); setConfirming(e); }}><Trash2 size={16} aria-hidden="true" /> Hapus</button>
+            </>}</div>
+          </li>)}</ul>}
+        </section>
+        <section className="f-panel"><h2>Perbandingan enam bulan</h2><p>Semua bulan memakai HPP terkini dan biaya yang sudah dicatat.</p><div className="f-trend">{summary.trend.map(t => <div key={t.month}><h3>{monthName(t.month)}</h3><p>Penjualan {money(t.revenue)}</p><p>Laba perkiraan <strong className={Number(t.net) < 0 ? 'f-negative' : ''}>{money(t.net)}</strong></p></div>)}</div></section>
+        <p className="f-footnote">Periode laporan memakai WIB. Biaya tanpa outlet juga ikut ditampilkan. {summary.generated_at && <>Diperbarui {new Date(summary.generated_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.</>}</p>
+      </>}
+    </>}
+    {form && setup && <ExpenseForm initial={form} setup={setup} outletId={outletId} outletName={outletName} onClose={() => setForm(null)} onSaved={async message => { setForm(null); setNotice(message); await reload(); }} />}
+    {confirming && <InventoryDialog title={confirming === 'recurring' ? 'Catat pembayaran bulanan' : 'Hapus catatan pengeluaran'} busy={mutating} onClose={() => { setConfirming(null); setError(''); }}><div className="finance-form">
+      {confirming === 'recurring' ? <p>Salin {summary?.recurring_pending} catatan yang belum ada ke {monthName(month)} untuk {outletName}. Ini langsung mencatat biaya dan uang keluar. Lanjutkan hanya jika pembayaran sudah dilakukan. Nominal yang berubah bisa diperbaiki setelah disalin.</p> : <p>Hapus {confirming.category_label} senilai {money(confirming.amount)}{confirming.note ? ` (${confirming.note})` : ''}? Laporan laba dan arus kas akan dihitung ulang.</p>}
+      {error && <p role="alert" className="f-notice f-error">{error}</p>}
+      <div className="f-form-actions"><button className="f-button" disabled={mutating} onClick={() => { setConfirming(null); setError(''); }}>Batal</button><button className="f-button f-primary" disabled={mutating} onClick={() => void confirmAction()}>{mutating ? 'Menyimpan…' : confirming === 'recurring' ? 'Sudah dibayar, catat' : 'Hapus pengeluaran'}</button></div>
+    </div></InventoryDialog>}
+  </div>;
+}
+
+function Amount({ label, value, subtract, total }: { label: string; value: string; subtract?: boolean; total?: boolean }) {
+  return <div className={total ? 'f-total' : ''}><dt>{label}</dt><dd>{subtract && Number(value) !== 0 ? '− ' : ''}{money(value)}</dd></div>;
+}
+
+function ExpenseForm({ initial, setup, outletId, outletName, onClose, onSaved }: {
+  initial: Partial<FinanceExpense>; setup: Setup; outletId: string; outletName: string; onClose: () => void; onSaved: (message: string) => Promise<void>;
+}) {
+  const [fields, setFields] = useState({ category: initial.category || 'lainnya', amount: initial.amount ? String(initial.amount) : '',
+    date: initial.paid_at ? jakartaDate(new Date(initial.paid_at)) : jakartaDate(), payment_method: initial.payment_method || 'cash',
+    cash_account_id: initial.cash_account_id || '', supplier_id: initial.supplier_id || '', note: initial.note || '', recurring: initial.recurring || 'none' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [pendingCreate, setPendingCreate] = useState<Record<string, unknown> | null>(null);
+  const activeAccounts = setup.accounts.filter(a => a.is_active || a.id === initial.cash_account_id);
+  const locked = busy || !!pendingCreate;
+  const selectedAccount = fields.cash_account_id ? activeAccounts.find(a => a.id === fields.cash_account_id)
+    : activeAccounts.find(a => a.is_active && a.default_for.includes(fields.payment_method));
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault(); if (busy) return;
+    if (!/^\d+(\.\d{1,2})?$/.test(fields.amount) || Number(fields.amount) <= 0 || Number(fields.amount) >= 1e10) { setError('Isi nominal lebih dari nol, maksimal dua angka desimal.'); return; }
+    if (!fields.date || fields.date > jakartaDate()) { setError('Pilih tanggal pembayaran yang sudah terjadi.'); return; }
+    if (!selectedAccount) { setError('Pilih akun asal pembayaran yang aktif.'); return; }
+    setBusy(true); setError('');
+    try {
+      const payload = { category: fields.category, amount: fields.amount,
+        paid_at: initial.paid_at && jakartaDate(new Date(initial.paid_at)) === fields.date ? initial.paid_at
+          : fields.date === jakartaDate() ? new Date().toISOString() : `${fields.date}T12:00:00+07:00`,
+        payment_method: fields.payment_method, cash_account_id: selectedAccount.id,
+        supplier_id: fields.supplier_id || null, note: fields.note.trim() || null, recurring: fields.recurring };
+      if (initial.id) {
+        const result = await updateExpense(initial.id, { ...payload, row_version: initial.row_version });
+        if (!result.success) { setError(result.message); return; }
+      }
+      else {
+        const request = pendingCreate || { ...payload, outlet_id: outletId, client_request_id: crypto.randomUUID() };
+        setPendingCreate(request);
+        const result = await createExpense(request);
+        if (!result.success) {
+          if (!result.uncertain) setPendingCreate(null);
+          setError(result.message); return;
+        }
+      }
+      await onSaved(`${initial.id ? 'Pengeluaran diperbarui' : 'Pengeluaran dicatat'} untuk ${fields.date} WIB.`);
+    } catch (e) { setError(`${errorText(e)}${!initial.id ? ' Coba simpan lagi untuk memeriksa permintaan yang sama. Formulir tetap disimpan.' : ''}`); }
+    finally { setBusy(false); }
+  };
+  return <InventoryDialog title={initial.id ? 'Ubah pengeluaran' : 'Catat pengeluaran'} busy={busy} onClose={onClose}><form className="finance-form" onSubmit={submit}>
+    <p>Catat pembayaran yang sudah dilakukan untuk <strong>{outletName}</strong>. Pembelian stok dan pelunasan supplier dicatat melalui <Link href="/dashboard/pembelian">Nota belanja</Link> supaya tidak terhitung dua kali.</p>
+    {pendingCreate && error && <p className="f-notice">Penyimpanan sebelumnya belum bisa dipastikan. Tombol simpan memeriksa permintaan yang sama agar tidak membuat catatan ganda.</p>}
+    <label>Kategori<select aria-label="Kategori" value={fields.category} onChange={e => setFields({ ...fields, category: e.target.value })} disabled={locked}>{setup.categories.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}</select></label>
+    {fields.category === 'bahan' && <p className="f-notice">Untuk pembelian barang atau bahan yang masuk stok, gunakan Nota belanja agar stok dan harga modal ikut diperbarui.</p>}
+    <div className="f-field-grid"><label>Nominal (Rp)<input autoFocus required type="number" inputMode="decimal" min="0.01" max="9999999999.99" step="0.01" value={fields.amount} onChange={e => setFields({ ...fields, amount: e.target.value })} disabled={locked} placeholder="Contoh: 350000" /></label>
+      <label>Tanggal pembayaran (WIB)<input required type="date" max={jakartaDate()} value={fields.date} onChange={e => setFields({ ...fields, date: e.target.value })} disabled={locked} /></label></div>
+    <div className="f-field-grid"><label>Metode pembayaran<select aria-label="Metode pembayaran" value={fields.payment_method} onChange={e => setFields({ ...fields, payment_method: e.target.value, cash_account_id: '' })} disabled={locked}>{METHODS.map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label>
+      <label>Akun asal pembayaran<select aria-label="Akun asal pembayaran" value={fields.cash_account_id} onChange={e => setFields({ ...fields, cash_account_id: e.target.value })} disabled={locked}><option value="">{selectedAccount ? `Otomatis: ${selectedAccount.name}` : 'Pilih akun aktif'}</option>{activeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label></div>
+    <label>Catatan (opsional)<input maxLength={200} value={fields.note} onChange={e => setFields({ ...fields, note: e.target.value })} disabled={locked} placeholder="Contoh: listrik toko bulan Oktober" /></label>
+    {!!setup.suppliers.length && <label>Supplier (opsional)<select aria-label="Supplier (opsional)" value={fields.supplier_id} onChange={e => setFields({ ...fields, supplier_id: e.target.value })} disabled={locked}><option value="">Tidak terkait supplier</option>{setup.suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
+    <label className="f-checkbox"><input type="checkbox" checked={fields.recurring === 'monthly'} onChange={e => setFields({ ...fields, recurring: e.target.checked ? 'monthly' : 'none' })} disabled={locked} /><span>Jadikan template bulanan. Bulan berikutnya tetap perlu diperiksa dan dicatat setelah dibayar.</span></label>
+    {fields.amount && Number(fields.amount) > 0 && <p className="f-notice">Akan mencatat biaya {money(fields.amount)} dan uang keluar dari {selectedAccount?.name || 'akun yang dipilih'}.</p>}
+    {error && <p role="alert" className="f-notice f-error">{error}</p>}
+    <div className="f-form-actions"><button type="button" className="f-button" disabled={busy} onClick={onClose}>Batal</button><button type="submit" className="f-button f-primary" disabled={busy}>{busy ? 'Menyimpan…' : initial.id ? 'Simpan perubahan' : 'Catat pembayaran'}</button></div>
+  </form></InventoryDialog>;
 }

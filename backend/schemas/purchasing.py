@@ -1,20 +1,36 @@
 from typing import Optional, List
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
+
+
+def _name(value):
+    value = value.strip()
+    if not value:
+        raise ValueError("Nama wajib diisi")
+    return value
+
+
+def _date(value):
+    if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+        raise ValueError("Tanggal harus menyertakan zona waktu")
+    return value
 
 
 # ── Supplier ──
 
 class SupplierCreate(BaseModel):
+    client_request_id: Optional[UUID] = None
     name: str = Field(..., min_length=1, max_length=120)
     phone: Optional[str] = None
     email: Optional[str] = None
     address: Optional[str] = None
     notes: Optional[str] = None
     payment_terms_days: int = Field(0, ge=0, le=365)
+
+    _clean_name = field_validator('name')(_name)
 
 
 class SupplierUpdate(BaseModel):
@@ -25,7 +41,14 @@ class SupplierUpdate(BaseModel):
     notes: Optional[str] = None
     payment_terms_days: Optional[int] = Field(None, ge=0, le=365)
     is_active: Optional[bool] = None
-    row_version: int
+    row_version: int = Field(..., ge=0)
+
+    @field_validator('name', 'payment_terms_days', 'is_active')
+    @classmethod
+    def required_when_present(cls, value):
+        if value is None:
+            raise ValueError("Kolom wajib tidak boleh kosong")
+        return _name(value) if isinstance(value, str) else value
 
 
 class SupplierResponse(BaseModel):
@@ -56,11 +79,15 @@ class NewIngredientIn(BaseModel):
     # (kg → gram, liter → ml, dus → pcs).
     base_unit: Optional[str] = None
 
+    _clean_name = field_validator('name')(_name)
+
 
 class NewProductIn(BaseModel):
     """Produk jadi yang belum ada — dibikin dengan tracking stok aktif."""
     name: str = Field(..., min_length=1, max_length=120)
-    sell_price: Decimal = Field(..., ge=0)
+    sell_price: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
+
+    _clean_name = field_validator('name')(_name)
 
 
 class PurchaseLineIn(BaseModel):
@@ -76,13 +103,13 @@ class PurchaseLineIn(BaseModel):
     new_ingredient: Optional[NewIngredientIn] = None
     new_product: Optional[NewProductIn] = None
     name: Optional[str] = Field(None, max_length=120)
-    quantity: float = Field(..., gt=0)
+    quantity: float = Field(..., gt=0, le=1e9, allow_inf_nan=False)
     # Satuan di nota. Kosong = dianggap base_unit bahan (atau pcs buat produk).
     unit: Optional[str] = None
-    unit_price: Decimal = Field(..., ge=0)
+    unit_price: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
     # Kalau dikirim, ini yang dipakai (nota sering bulatin); kalau nggak,
     # quantity × unit_price.
-    total_price: Optional[Decimal] = Field(None, ge=0)
+    total_price: Optional[Decimal] = Field(None, ge=0, max_digits=12, decimal_places=2)
 
     @model_validator(mode='after')
     def one_target(self):
@@ -99,6 +126,7 @@ class PurchaseLineIn(BaseModel):
 
 
 class PurchaseCreate(BaseModel):
+    client_request_id: Optional[UUID] = None
     outlet_id: UUID
     supplier_id: Optional[UUID] = None
     # Tanpa supplier_id tapi ada nama → supplier baru dibikin otomatis.
@@ -108,9 +136,20 @@ class PurchaseCreate(BaseModel):
     notes: Optional[str] = None
     received_at: Optional[datetime] = None
     # None = lunas (cash di tempat). Angka = yang udah dibayar, sisanya utang.
-    paid_amount: Optional[Decimal] = Field(None, ge=0)
+    paid_amount: Optional[Decimal] = Field(None, ge=0, max_digits=12, decimal_places=2)
     due_at: Optional[datetime] = None
-    items: List[PurchaseLineIn] = Field(..., min_length=1)
+    items: List[PurchaseLineIn] = Field(..., min_length=1, max_length=100)
+
+    _timezone = field_validator('received_at', 'due_at')(_date)
+
+    @model_validator(mode='after')
+    def valid_dates(self):
+        received = self.received_at or datetime.now(timezone.utc)
+        if received > datetime.now(timezone.utc) + timedelta(minutes=5):
+            raise ValueError("Catat nota setelah barang diterima")
+        if self.due_at is not None and self.due_at < received:
+            raise ValueError("Jatuh tempo tidak boleh sebelum barang diterima")
+        return self
 
 
 class PurchaseLineResponse(BaseModel):
@@ -121,6 +160,7 @@ class PurchaseLineResponse(BaseModel):
     name: str
     quantity: float
     unit: Optional[str] = None
+    base_unit: Optional[str] = None
     qty_base: Optional[float] = None
     unit_price: Decimal
     total_price: Decimal
@@ -148,14 +188,19 @@ class PurchaseResponse(BaseModel):
     row_version: int
     created_at: datetime
     items: List[PurchaseLineResponse] = []
+    payments: list[dict] = Field(default_factory=list)
+    payment_history_incomplete: bool = False
 
 
 class PurchasePay(BaseModel):
-    amount: Decimal = Field(..., gt=0)
-    row_version: int
+    client_request_id: Optional[UUID] = None
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
+    row_version: int = Field(..., ge=0)
 
 
 class PurchaseSummary(BaseModel):
+    month: Optional[str] = None
+    generated_at: Optional[datetime] = None
     month_total: Decimal
     month_count: int
     outstanding_total: Decimal
@@ -164,3 +209,5 @@ class PurchaseSummary(BaseModel):
     next_due_at: Optional[datetime] = None
     next_due_supplier: Optional[str] = None
     next_due_amount: Optional[Decimal] = None
+    overdue_total: Decimal = Decimal('0')
+    overdue_count: int = 0

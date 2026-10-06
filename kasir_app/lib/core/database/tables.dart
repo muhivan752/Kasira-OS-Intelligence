@@ -7,7 +7,7 @@ mixin CrdtTable on Table {
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
   TextColumn get lastModifiedHlc => text().nullable()();
   BoolColumn get isSynced => boolean().withDefault(const Constant(true))();
-  
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -29,8 +29,10 @@ class Products extends Table with CrdtTable {
   BoolColumn get stockEnabled => boolean().withDefault(const Constant(false))();
   // CRDT PNCounter untuk stock — pure CRDT, tidak pernah overwrite
   // Format JSON: {"deviceNodeId": count}
-  TextColumn get crdtPositive => text().withDefault(const Constant('{}'))(); // restock
-  TextColumn get crdtNegative => text().withDefault(const Constant('{}'))(); // sale
+  TextColumn get crdtPositive =>
+      text().withDefault(const Constant('{}'))(); // restock
+  TextColumn get crdtNegative =>
+      text().withDefault(const Constant('{}'))(); // sale
   // Cache computed dari CRDT — bisa direcompute kapanpun
   RealColumn get stockQty => real().withDefault(const Constant(0.0))();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
@@ -67,7 +69,8 @@ class Orders extends Table with CrdtTable {
   TextColumn get status => text().withDefault(const Constant('pending'))();
   TextColumn get orderType => text().withDefault(const Constant('dine_in'))();
   RealColumn get subtotal => real().withDefault(const Constant(0.0))();
-  RealColumn get serviceChargeAmount => real().withDefault(const Constant(0.0))();
+  RealColumn get serviceChargeAmount =>
+      real().withDefault(const Constant(0.0))();
   RealColumn get taxAmount => real().withDefault(const Constant(0.0))();
   RealColumn get discountAmount => real().withDefault(const Constant(0.0))();
   RealColumn get totalAmount => real().withDefault(const Constant(0.0))();
@@ -138,7 +141,9 @@ class Ingredients extends Table with CrdtTable {
   RealColumn get buyPrice => real().withDefault(const Constant(0.0))();
   RealColumn get buyQty => real().withDefault(const Constant(1.0))();
   RealColumn get costPerBaseUnit => real().withDefault(const Constant(0.0))();
-  TextColumn get ingredientType => text().withDefault(const Constant('recipe'))();
+  TextColumn get ingredientType =>
+      text().withDefault(const Constant('recipe'))();
+  BoolColumn get needsReview => boolean().withDefault(const Constant(false))();
 }
 
 @DataClassName('RecipeLocal')
@@ -147,6 +152,16 @@ class Recipes extends Table with CrdtTable {
   IntColumn get version => integer().withDefault(const Constant(1))();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
   TextColumn get notes => text().nullable()();
+  BoolColumn get isEstimated => boolean().withDefault(const Constant(false))();
+}
+
+@DataClassName('RecipeHppLocal')
+class RecipeHppSnapshots extends Table {
+  TextColumn get recipeId => text()();
+  TextColumn get snapshot => text()();
+
+  @override
+  Set<Column> get primaryKey => {recipeId};
 }
 
 @DataClassName('RecipeIngredientLocal')

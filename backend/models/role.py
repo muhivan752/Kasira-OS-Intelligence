@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, ForeignKey
+from sqlalchemy import Column, String, Boolean, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM
 from backend.models.base import BaseModel
 
@@ -8,6 +8,7 @@ class Role(BaseModel):
 
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False)
+    row_version = Column(Integer, default=1, server_default='1', nullable=False)
     scope = Column(ENUM("tenant", "brand", "outlet", name="role_scope", create_type=False), nullable=False)
     permissions = Column(JSONB, nullable=True)
     is_system = Column(Boolean, server_default="false", nullable=False)

@@ -5,7 +5,10 @@ from backend.models.base import BaseModel
 class User(BaseModel):
     __tablename__ = "users"
 
-    phone = Column(String, unique=True, index=True, nullable=False)
+    phone = Column(String, unique=True, index=True, nullable=True)
+    login_username = Column(String(64), nullable=True)
+    password_hash = Column(String, nullable=True)
+    credential_version = Column(Integer, server_default='0', default=0, nullable=False)
     full_name = Column(String, nullable=False)
     google_project_id = Column(String(128), nullable=True)
     google_uid = Column(String(128), nullable=True)

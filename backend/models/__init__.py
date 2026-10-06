@@ -31,3 +31,5 @@ from .crm import CustomerTag, CustomerTagLink, CustomerTimeline, Voucher, Vouche
 from .campaign import Campaign, CampaignMessage
 from .courier import Courier
 from .device import Device
+from .hris import HrEmployee, HrSchedule, HrAttendance
+from .account import LoginSession, AccountChallenge

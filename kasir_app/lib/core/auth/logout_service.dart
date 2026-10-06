@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:dio/dio.dart';
+import '../config/app_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/push_service.dart';
 import '../services/session_cache.dart';
@@ -27,6 +29,25 @@ import '../../features/auth/presentation/pages/login_page.dart';
 ///    fisik device, harus survive logout. `SessionCache.clear()` cuma hapus
 ///    key `c_*` prefix, jadi aman.
 Future<void> performLogout(WidgetRef ref) async {
+  final cache = SessionCache.instance;
+  if (cache.accessToken != null) {
+    try {
+      await Dio(BaseOptions(
+              baseUrl: AppConfig.apiV1,
+              connectTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 15)))
+          .delete('/auth/logout',
+              options: Options(headers: {
+                'Authorization': 'Bearer ${cache.accessToken}',
+                'X-Tenant-ID': cache.tenantId
+              }));
+    } on DioException catch (error) {
+      if (![401, 403].contains(error.response?.statusCode)) {
+        throw StateError(
+            'Logout belum terkonfirmasi. Periksa koneksi lalu coba lagi.');
+      }
+    }
+  }
   // 1 & 2. Cancel in-flight request + reset state — dipanggil SEBELUM
   //        SessionCache.clear() biar kalau request udah terkirim tapi belum
   //        ke-cancel, header-nya masih valid (graceful). Token lama aman

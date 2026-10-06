@@ -28,6 +28,7 @@ from backend.services import sefrekuensi as _sefre
 from backend.services.redis import get_redis_client
 from backend.services.audit import log_audit
 from backend.services.google_auth import verify_google_token
+from backend.services.access import resolve_access
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -44,19 +45,22 @@ async def _login_payload(user: User, db: AsyncSession) -> dict:
     ))).scalar_one_or_none()
     if tenant is None or not tenant.is_active:
         raise HTTPException(403, "Usaha tidak aktif. Hubungi admin.")
-    outlet = (await db.execute(select(Outlet).where(
-        Outlet.tenant_id == user.tenant_id, Outlet.deleted_at.is_(None),
-        Outlet.is_active.is_(True),
-    ).order_by(Outlet.created_at).limit(1))).scalar_one_or_none()
+    access = await resolve_access(db, user)
+    outlet = access.outlets[0] if access.outlets else None
     tier = tenant.subscription_tier
     mode = getattr(outlet, "stock_mode", "simple")
+    from backend.services.accounts import issue_session
+    token = await issue_session(db, user, outlet.id if outlet else None)
+    await db.commit()
     return {
-        "access_token": security.create_access_token(user.id),
+        "access_token": token,
         "token_type": "bearer", "tenant_id": str(user.tenant_id),
         "outlet_id": str(outlet.id) if outlet else None,
         "stock_mode": mode.value if hasattr(mode, "value") else str(mode),
         "subscription_tier": tier.value if hasattr(tier, "value") else str(tier),
         "phone": user.phone,
+        "user_id": str(user.id), "username": user.login_username,
+        "shop_username": tenant.login_username, "access": access.public(),
     }
 
 
@@ -316,38 +320,7 @@ async def verify_otp(
         raise HTTPException(status_code=404, detail="User not found")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
-        
-    # Get user's outlet + tenant tier
-    outlet_id = None
-    stock_mode = None
-    subscription_tier = "starter"
-    if user.tenant_id:
-        tenant = (await db.execute(
-            select(Tenant).where(Tenant.id == user.tenant_id)
-        )).scalar_one_or_none()
-        if tenant:
-            st = getattr(tenant, 'subscription_tier', 'starter')
-            subscription_tier = st.value if hasattr(st, 'value') else str(st or 'starter')
-
-        stmt_outlet = select(Outlet).where(Outlet.tenant_id == user.tenant_id, Outlet.deleted_at == None).limit(1)
-        result_outlet = await db.execute(stmt_outlet)
-        outlet = result_outlet.scalar_one_or_none()
-        if outlet:
-            outlet_id = str(outlet.id)
-            sm = getattr(outlet, 'stock_mode', 'simple')
-            stock_mode = sm.value if hasattr(sm, 'value') else str(sm or 'simple')
-
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    token_data = Token(
-        access_token=security.create_access_token(
-            user.id, expires_delta=access_token_expires
-        ),
-        token_type="bearer",
-        tenant_id=str(user.tenant_id) if user.tenant_id else None,
-        outlet_id=outlet_id,
-        stock_mode=stock_mode,
-        subscription_tier=subscription_tier,
-    )
+    token_data = Token(**await _login_payload(user, db))
     return StandardResponse(data=token_data, message="Login successful")
 
 @router.post("/login/pin", response_model=StandardResponse[Token])
@@ -581,6 +554,9 @@ async def verify_pin_login(
         else:
             await redis.incr(pin_rate_key)
         raise HTTPException(status_code=401, detail="Nomor HP atau PIN salah")
+    access = await resolve_access(db, user)
+    if access.mode == "managed":
+        raise HTTPException(403, "Aplikasi Dapur belum mendukung pengaturan akses akun ini")
 
     # Reset counter on success
     await redis.delete(pin_rate_key)
@@ -607,8 +583,8 @@ async def verify_pin_login(
             detail="Layar dapur belum diaktifkan. Nyalakan di Dashboard, menu Pengaturan, bagian Layar Dapur."
         )
 
-    from backend.core.security import create_access_token
-    access_token = create_access_token(subject=str(user.id))
+    from backend.services.accounts import issue_session
+    access_token = await issue_session(db, user, km_outlet.id)
 
     # Get outlet_id
     outlet_id = None
@@ -639,11 +615,22 @@ async def verify_pin_login(
 # ---------------------------------------------------------------------------
 @router.delete("/logout", response_model=StandardResponse[dict])
 async def logout(
+    request: Request,
     current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
 ) -> Any:
-    """Revoke access token (blacklist di Redis)."""
-    redis = await get_redis_client()
-    await redis.setex(f"blacklist:{current_user.id}", 60 * 60 * 24 * 8, "1")
+    from backend.services.accounts import digest, now
+    session = request.state.login_session
+    if session:
+        session.revoked_at = now()
+        session.row_version += 1
+        await log_audit(db, action="session_logout", entity="user", entity_id=current_user.id,
+            user_id=current_user.id, tenant_id=current_user.tenant_id)
+    else:
+        redis = await get_redis_client()
+        await redis.setex(f"revoked-token:{digest(request.state.auth_token)}", 60 * 60 * 24 * 8, "1")
+        await log_audit(db, action="session_logout", entity="user", entity_id=current_user.id,
+            user_id=current_user.id, tenant_id=current_user.tenant_id)
     return StandardResponse(data={"ok": True}, message="Logout berhasil")
 
 
@@ -657,10 +644,8 @@ async def get_me(
 ) -> Any:
     """Return profil user + outlet aktif."""
     outlet_id = None
-    stmt_outlet = select(Outlet).where(
-        Outlet.tenant_id == current_user.tenant_id, Outlet.deleted_at == None
-    ).limit(1)
-    outlet = (await db.execute(stmt_outlet)).scalar_one_or_none()
+    access = await resolve_access(db, current_user)
+    outlet = access.outlets[0] if access.outlets else None
     if outlet:
         outlet_id = str(outlet.id)
 
@@ -689,6 +674,14 @@ async def get_me(
         "subscription_tier": subscription_tier,
         "stock_mode": stock_mode,
     }, message="OK")
+
+
+@router.get("/access", response_model=StandardResponse[dict])
+async def get_access(
+    current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+) -> Any:
+    return StandardResponse(data=(await resolve_access(db, current_user)).public())
 
 
 # ---------------------------------------------------------------------------

@@ -14,9 +14,10 @@ import '../../../../core/widgets/sefrekuensi_otp_card.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/services/google_auth_service.dart';
+import '../../../../core/sync/sync_provider.dart';
 
 // --- STATE ---
-enum AuthStep { inputPhone, inputOtp, setPin, pinLogin }
+enum AuthStep { inputPassword, inputPhone, inputOtp, setPin, pinLogin }
 
 class AuthState {
   final AuthStep step;
@@ -94,16 +95,23 @@ class AuthState {
 
 // --- PROVIDER ---
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier();
+  return AuthNotifier(ref: ref);
 });
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier({bool restoreSession = true}) : super(AuthState()) {
+  AuthNotifier({bool restoreSession = true, Ref? ref, Dio? client})
+      : _sessionRef = ref,
+        _client = client,
+        super(AuthState()) {
     if (restoreSession) _checkInitialState();
   }
 
   final _storage = const FlutterSecureStorage();
-  Dio get _dio => Dio(BaseOptions(
+  final Ref? _sessionRef;
+  final Dio? _client;
+  Dio get _dio =>
+      _client ??
+      Dio(BaseOptions(
         baseUrl: AppConfig.baseUrl,
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 10),
@@ -116,10 +124,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (savedPin != null && savedPin.isNotEmpty) {
         state = state.copyWith(step: AuthStep.pinLogin, isLoading: false);
       } else {
-        state = state.copyWith(step: AuthStep.inputPhone, isLoading: false);
+        state = state.copyWith(step: AuthStep.inputPassword, isLoading: false);
       }
     } catch (e) {
-      state = state.copyWith(step: AuthStep.inputPhone, isLoading: false);
+      state = state.copyWith(step: AuthStep.inputPassword, isLoading: false);
     }
   }
 
@@ -130,11 +138,39 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> acceptGoogleSession(Map<String, dynamic> data) async {
     final cache = SessionCache.instance;
     final phone = data['phone']?.toString() ?? '';
-    if (cache.phone != phone) {
+    String? userId = data['user_id']?.toString();
+    if (userId == null) {
+      final claims = jsonDecode(utf8.decode(base64Url.decode(base64Url
+          .normalize((data['access_token'] as String).split('.')[1])))) as Map;
+      userId = claims['sub']?.toString();
+    }
+    if (userId == null || userId.isEmpty)
+      throw StateError('Identitas akun tidak tersedia');
+    final nextMode =
+        (data['access'] as Map?)?['enforcement_mode']?.toString() ?? 'legacy';
+    if (cache.userId != userId ||
+        cache.tenantId != data['tenant_id'] ||
+        cache.accessMode != nextMode) {
+      final sessionRef = _sessionRef;
+      if (cache.accessToken != null && sessionRef != null) {
+        try {
+          final sync = sessionRef.read(syncServiceProvider);
+          sync.cancelInFlight();
+          sync.resetState();
+          sessionRef.invalidate(syncServiceProvider);
+        } catch (_) {
+          if (kDebugMode)
+            debugPrint('Auth: sync belum diinisialisasi saat pergantian akun.');
+        }
+      }
       await cache.clear();
       await _storage.delete(key: 'user_pin');
     }
     await cache.setAccessToken(data['access_token'] as String);
+    await cache.setUserId(userId);
+    cache.accessMode =
+        (data['access'] as Map?)?['enforcement_mode']?.toString() ?? 'legacy';
+    await _storage.write(key: 'access_mode', value: cache.accessMode);
     await cache.setPhone(phone);
     await cache.setTenantId(data['tenant_id'] as String);
     await cache.setOutletId(data['outlet_id']?.toString() ?? '');
@@ -151,6 +187,36 @@ class AuthNotifier extends StateNotifier<AuthState> {
         pinAttempts: 0,
         isLocked: false,
         firstPin: '');
+  }
+
+  Future<void> loginPassword(
+      String shop, String username, String password) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final response = await _dio.post('/api/v1/auth/password/login', data: {
+        'shop_username': shop.trim(),
+        'username': username.trim(),
+        'password': password,
+      });
+      await acceptGoogleSession(
+          Map<String, dynamic>.from(response.data['data'] as Map));
+    } on DioException catch (error) {
+      state = state.copyWith(
+          isLoading: false,
+          error: otpErrorMessage(error.response?.data?['detail'],
+              'Belum dapat masuk. Periksa koneksi lalu coba lagi.'));
+    } catch (_) {
+      state = state.copyWith(
+          isLoading: false, error: 'Akun belum dapat dibuka. Coba lagi.');
+    }
+  }
+
+  void usePasswordInstead() {
+    state = state.copyWith(
+        step: AuthStep.inputPassword,
+        isLoading: false,
+        isSuccess: false,
+        clearError: true);
   }
 
   /// [channel] null = pakai kanal yang lagi dipilih di state (buat kirim
@@ -253,10 +319,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           : response.data as Map<String, dynamic>;
       final data = respData['data'] as Map<String, dynamic>;
       final token = data['access_token']?.toString() ?? '';
-      final tenantId = data['tenant_id']?.toString();
-      final outletId = data['outlet_id']?.toString();
-      final stockMode = data['stock_mode']?.toString();
-      final subscriptionTier = data['subscription_tier']?.toString();
 
       if (token.isEmpty) {
         state = state.copyWith(
@@ -264,15 +326,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return;
       }
 
-      // Populate session cache — all subsequent reads are 0ms from memory
-      final cache = SessionCache.instance;
-      await cache.setAccessToken(token);
-      await cache.setPhone(state.phone);
-      if (tenantId != null) await cache.setTenantId(tenantId);
-      if (outletId != null) await cache.setOutletId(outletId);
-      if (stockMode != null) await cache.setStockMode(stockMode);
-      if (subscriptionTier != null)
-        await cache.setSubscriptionTier(subscriptionTier);
+      await acceptGoogleSession(data);
 
       _timer?.cancel();
 
@@ -286,7 +340,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } on DioException catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: e.response?.data['detail'] ?? 'Kode OTP salah atau kedaluwarsa',
+        error: otpErrorMessage(
+            e.response?.data?['detail'], 'Kode OTP salah atau kedaluwarsa'),
       );
     } catch (e, stack) {
       // Jejaknya dibuang = bug abadi (CLAUDE.md gotcha #20). Dikurung kDebugMode
@@ -333,26 +388,36 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (savedPin == pin) {
         // PIN benar → init cache + langsung masuk (jangan block UI)
         await SessionCache.instance.init();
-        state =
-            state.copyWith(isLoading: false, pinAttempts: 0, isSuccess: true);
-        // Fire-and-forget token check
         final token = SessionCache.instance.accessToken;
         if (token != null) {
-          Dio(BaseOptions(
-            baseUrl: AppConfig.apiV1,
-            connectTimeout: const Duration(seconds: 3),
-            receiveTimeout: const Duration(seconds: 3),
-          ))
-              .get('/auth/me',
-                  options: Options(headers: {'Authorization': 'Bearer $token'}))
-              .then((res) {
-            if (res.statusCode != 200) {
-              // Token invalid — will be caught by 401 interceptor on next API call
+          try {
+            final res = await Dio(BaseOptions(
+              baseUrl: AppConfig.apiV1,
+              connectTimeout: const Duration(seconds: 3),
+              receiveTimeout: const Duration(seconds: 3),
+            )).get('/auth/access',
+                options: Options(headers: {'Authorization': 'Bearer $token'}));
+            SessionCache.instance.accessMode =
+                res.data['data']['enforcement_mode']?.toString() ?? 'legacy';
+            await _storage.write(
+                key: 'access_mode', value: SessionCache.instance.accessMode);
+          } on DioException catch (error) {
+            if (error.response != null) {
+              state = state.copyWith(
+                  step: AuthStep.inputPassword,
+                  isLoading: false,
+                  error: otpErrorMessage(error.response?.data?['detail'],
+                      'Masuk kembali untuk memperbarui akses akun.'));
+              return;
             }
-          }).catchError((_) {
-            // Offline or error — no problem, offline-first
-          });
+            // Existing offline POS queues remain available when the server is unreachable.
+          }
+        } else {
+          usePasswordInstead();
+          return;
         }
+        state =
+            state.copyWith(isLoading: false, pinAttempts: 0, isSuccess: true);
       } else {
         final attempts = state.pinAttempts + 1;
         if (attempts >= 3) {
@@ -395,6 +460,10 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
+  final _shopController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _staffPassword = false;
 
   String _pinInput = '';
   bool _isConfirmingPin = false;
@@ -429,20 +498,25 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   void dispose() {
     _phoneController.dispose();
     _otpController.dispose();
+    _shopController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _checkShiftAndNavigate(BuildContext context) async {
     try {
-      // Silent location — fire and forget, never blocks
-      LocationService.sendLocationSilent();
-
       // Init cache if not already (e.g. PIN login path)
       final cache = SessionCache.instance;
       if (!cache.isInitialized) await cache.init();
       final token = cache.accessToken;
       final tenantId = cache.tenantId;
       final outletId = cache.outletId;
+      if (cache.accessMode == 'managed') {
+        if (context.mounted) context.go('/team');
+        return;
+      }
+      LocationService.sendLocationSilent();
 
       // debugPrint('[NAV] checkShift: token=${token != null ? "yes" : "null"} tenant=$tenantId outlet=$outletId');
 
@@ -574,7 +648,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 _buildHeader(),
                 const SizedBox(height: 32),
                 _buildContent(authState),
-                if (authState.step == AuthStep.inputPhone ||
+                if (authState.step == AuthStep.inputPassword ||
+                    authState.step == AuthStep.inputPhone ||
                     authState.step == AuthStep.pinLogin) ...[
                   const SizedBox(height: 24),
                   Wrap(
@@ -621,6 +696,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   Widget _buildContent(AuthState state) {
     switch (state.step) {
+      case AuthStep.inputPassword:
+        return _buildPassword(state);
       case AuthStep.inputPhone:
         return _buildInputPhone(state);
       case AuthStep.inputOtp:
@@ -630,6 +707,77 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       case AuthStep.pinLogin:
         return _buildPinLogin(state);
     }
+  }
+
+  Widget _buildPassword(AuthState state) {
+    return AutofillGroup(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Masuk ke usaha Anda',
+          style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
+      const SizedBox(height: 16),
+      TextField(
+          controller: _shopController,
+          enabled: !state.isLoading,
+          autocorrect: false,
+          textCapitalization: TextCapitalization.none,
+          decoration: const InputDecoration(labelText: 'Username toko'),
+          textInputAction: TextInputAction.next),
+      Material(
+          color: Colors.transparent,
+          child: CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Saya masuk sebagai karyawan'),
+              value: _staffPassword,
+              onChanged: state.isLoading
+                  ? null
+                  : (value) =>
+                      setState(() => _staffPassword = value ?? false))),
+      if (_staffPassword)
+        TextField(
+            controller: _usernameController,
+            enabled: !state.isLoading,
+            autocorrect: false,
+            autofillHints: const [AutofillHints.username],
+            decoration: const InputDecoration(labelText: 'Username akun'),
+            textInputAction: TextInputAction.next),
+      TextField(
+          controller: _passwordController,
+          enabled: !state.isLoading,
+          obscureText: true,
+          autofillHints: const [AutofillHints.password],
+          decoration: const InputDecoration(labelText: 'Password'),
+          onSubmitted: (_) => _passwordLogin()),
+      const SizedBox(height: 20),
+      SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+              onPressed: state.isLoading ? null : _passwordLogin,
+              child: Text(state.isLoading ? 'Memproses…' : 'Masuk ke usaha'))),
+      TextButton(
+          onPressed:
+              state.isLoading ? null : () => context.push('/account-code'),
+          child: const Text('Aktivasi akun atau pulihkan password')),
+      TextButton(
+          onPressed: state.isLoading
+              ? null
+              : () => ref.read(authProvider.notifier).useOtpInstead(),
+          child: const Text('Masuk akun lama dengan kode atau Google')),
+    ]));
+  }
+
+  void _passwordLogin() {
+    if (_shopController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty ||
+        (_staffPassword && _usernameController.text.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Isi username toko, akun karyawan bila dipilih, dan password.')));
+      return;
+    }
+    ref.read(authProvider.notifier).loginPassword(
+        _shopController.text,
+        _staffPassword ? _usernameController.text : 'owner',
+        _passwordController.text);
   }
 
   Widget _buildInputPhone(AuthState state) {
@@ -662,8 +810,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         Text('Nomor HP Anda',
             style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
         const SizedBox(height: 6),
-        Text(
-            'Kode masuk dikirim ke WhatsApp atau $kSefrekuensiName. Nggak ada password.',
+        Text('Kode masuk akun lama dikirim ke WhatsApp atau $kSefrekuensiName.',
             style: KasiraDS.sans(size: 13.5, color: KasiraDS.textMuted)),
         const SizedBox(height: 20),
         Text('NOMOR HP', style: KasiraDS.eyebrow()),

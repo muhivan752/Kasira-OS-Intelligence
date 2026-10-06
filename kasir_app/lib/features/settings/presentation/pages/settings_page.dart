@@ -38,7 +38,8 @@ class SettingsPage extends ConsumerWidget {
           Container(
             color: KasiraDS.surfaceCard,
             width: double.infinity,
-            child: LebarKonten(child: SafeArea(
+            child: LebarKonten(
+                child: SafeArea(
               bottom: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 8, 24, 20),
@@ -59,10 +60,11 @@ class SettingsPage extends ConsumerWidget {
               ),
             )),
           ),
-          
+
           // Settings List
           Expanded(
-            child: LebarKonten(child: ListView(
+            child: LebarKonten(
+                child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
                 _buildSectionTitle('Perangkat & Hardware'),
@@ -73,7 +75,8 @@ class SettingsPage extends ConsumerWidget {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const PrinterSettingsPage()),
+                      MaterialPageRoute(
+                          builder: (context) => const PrinterSettingsPage()),
                     );
                   },
                 ),
@@ -84,7 +87,7 @@ class SettingsPage extends ConsumerWidget {
                 //   subtitle: 'Tidak Terhubung',
                 //   onTap: () {},
                 // ),
-                
+
                 const SizedBox(height: 32),
                 _buildSectionTitle('Pembayaran'),
                 _buildSettingTile(
@@ -94,7 +97,9 @@ class SettingsPage extends ConsumerWidget {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const PaymentMethodsSettingsPage()),
+                      MaterialPageRoute(
+                          builder: (context) =>
+                              const PaymentMethodsSettingsPage()),
                     );
                   },
                 ),
@@ -108,7 +113,8 @@ class SettingsPage extends ConsumerWidget {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const SyncSettingsPage()),
+                      MaterialPageRoute(
+                          builder: (context) => const SyncSettingsPage()),
                     );
                   },
                 ),
@@ -118,7 +124,7 @@ class SettingsPage extends ConsumerWidget {
                   subtitle: 'Kosongkan memori sementara',
                   onTap: () {},
                 ),
-                
+
                 const SizedBox(height: 32),
                 _buildSectionTitle('Server & Koneksi'),
                 _buildSettingTile(
@@ -137,7 +143,8 @@ class SettingsPage extends ConsumerWidget {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const StaffPage()),
+                      MaterialPageRoute(
+                          builder: (context) => const StaffPage()),
                     );
                   },
                 ),
@@ -148,7 +155,8 @@ class SettingsPage extends ConsumerWidget {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const ProfilePage()),
+                      MaterialPageRoute(
+                          builder: (context) => const ProfilePage()),
                     );
                   },
                 ),
@@ -198,7 +206,15 @@ class SettingsPage extends ConsumerWidget {
               // - wipe credential RAM + SecureStorage + SharedPreferences
               // - invalidate syncServiceProvider → nodeId re-eval saat login
               // - SQLite data TIDAK dihapus (offline-first)
-              await performLogout(ref);
+              try {
+                await performLogout(ref);
+              } catch (_) {
+                if (context.mounted)
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text(
+                          'Logout belum terkonfirmasi. Periksa koneksi lalu coba lagi.')));
+                return;
+              }
               if (context.mounted) {
                 context.go('/login');
               }
@@ -246,8 +262,10 @@ class SettingsPage extends ConsumerWidget {
           child: Icon(icon, color: KasiraDS.textMuted),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(subtitle, style: const TextStyle(color: KasiraDS.textMuted)),
-        trailing: const Icon(LucideIcons.chevronRight, color: KasiraDS.textMuted),
+        subtitle:
+            Text(subtitle, style: const TextStyle(color: KasiraDS.textMuted)),
+        trailing:
+            const Icon(LucideIcons.chevronRight, color: KasiraDS.textMuted),
         onTap: onTap,
       ),
     );

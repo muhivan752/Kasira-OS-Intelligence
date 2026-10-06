@@ -1,0 +1,32 @@
+.p-summary { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 1.75rem; }
+.p-summary > div + div { border-left: 1px solid var(--border-default); padding-left: 1.75rem; }
+.p-summary .f-button { margin-top: .75rem; }
+.p-tabs { display: flex; flex-wrap: wrap; gap: .5rem; }
+.p-tabs [aria-pressed="true"] { border-color: var(--brand-primary); background: var(--surface-sunken); font-weight: 600; }
+.p-filter { margin: 1rem 0; }
+.p-notas, .p-suppliers { display: grid; gap: .75rem; margin-top: 1rem; }
+.p-nota { width: 100%; min-height: 44px; border: 1px solid var(--control-border); border-radius: .6rem; background: var(--surface-card); padding: 1rem; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,.6fr); gap: 1rem; color: var(--text-body); text-align: left; cursor: pointer; }
+.p-nota:hover { background: var(--surface-sunken); }
+.p-nota strong { color: var(--text-strong); font-size: 1.05rem; overflow-wrap: anywhere; }
+.p-nota p { font-size: .9rem; }
+.p-nota-money { text-align: right; font-variant-numeric: tabular-nums; }
+.p-nota .p-debt { color: var(--danger); }
+.p-pagination { display: flex; justify-content: space-between; gap: .75rem; flex-wrap: wrap; align-items: center; margin-top: 1rem; }
+.p-suppliers li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 1rem 0; border-top: 1px solid var(--border-default); }
+.p-suppliers li > div { min-width: 0; overflow-wrap: anywhere; }
+.p-fields { min-width: 0; display: grid; gap: 1rem; border: 0; padding: 0; }
+.p-form h3 { color: var(--text-strong); font-weight: 600; }
+.p-upload { border: 1px dashed var(--control-border); padding: .8rem; border-radius: .5rem; }
+.p-upload span { font-weight: 400; font-size: .9rem; }
+.p-line { min-width: 0; display: grid; gap: .75rem; border: 1px solid var(--border-default); border-radius: .6rem; padding: .8rem; }
+.p-line legend { color: var(--text-strong); padding: 0 .4rem; font-weight: 600; }
+.p-line-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; }
+.p-line-end { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: space-between; }
+.p-detail-lines { display: grid; gap: .75rem; }
+.p-detail-lines li { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,.4fr); gap: .75rem; padding-bottom: .75rem; border-bottom: 1px solid var(--border-default); overflow-wrap: anywhere; }
+.p-detail-lines li > strong { text-align: right; font-variant-numeric: tabular-nums; }
+.p-payments li { display: flex; justify-content: space-between; gap: .5rem; padding: .6rem 0; border-bottom: 1px solid var(--border-default); overflow-wrap: anywhere; }
+.p-payments strong { min-width: 0; flex: 0 1 45%; text-align: right; font-variant-numeric: tabular-nums; }
+.p-payment { padding-top: 1rem; border-top: 1px solid var(--border-default); }
+@media(max-width:850px) { .p-summary { grid-template-columns: minmax(0,1fr); } .p-summary > div + div { border-left: 0; padding-left: 0; padding-top: 1.25rem; border-top: 1px solid var(--border-default); } }
+@media(max-width:480px) { .p-nota, .p-detail-lines li, .p-line-grid { grid-template-columns: minmax(0,1fr); } .p-nota-money, .p-detail-lines li > strong { text-align: left; } .p-pagination > div { width: 100%; } }

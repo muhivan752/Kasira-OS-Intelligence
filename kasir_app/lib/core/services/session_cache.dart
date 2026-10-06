@@ -23,8 +23,9 @@ class SessionCache {
   // Di-cache ke prefs supaya struk offline juga bisa nyetak link-nya.
   String? outletSlug;
 
-  String? get storefrontUrl =>
-      (outletSlug == null || outletSlug!.isEmpty) ? null : '${AppConfig.baseUrl}/$outletSlug';
+  String? get storefrontUrl => (outletSlug == null || outletSlug!.isEmpty)
+      ? null
+      : '${AppConfig.baseUrl}/$outletSlug';
   String? stockMode;
   String? subscriptionTier;
   String? shiftSessionId;
@@ -33,6 +34,7 @@ class SessionCache {
   String shiftMode = 'ringan';
   String? phone;
   String? userId;
+  String accessMode = 'legacy';
   // Business domain untuk Adaptive UI labels (Batch #26).
   // Values: 'fnb' (default) | 'retail' | 'service'. Null = belum di-detect,
   // treat as 'fnb' via BusinessLabels.getLabel fallback.
@@ -42,6 +44,7 @@ class SessionCache {
   /// Tunai selalu ada. Modal bayar dan tab meja cuma nampilin yang di sini.
   /// Di-cache di SharedPreferences supaya offline tetap tahu.
   List<String> paymentMethods = const ['cash', 'qris'];
+
   /// 'xendit' = QR dinamis dari server, 'manual' = QRIS statis toko yang
   /// kasir konfirmasi sendiri.
   String qrisChannel = 'manual';
@@ -83,12 +86,14 @@ class SessionCache {
     shiftSessionId = results[5];
     phone = results[6];
     userId = results[7];
+    accessMode = await secure.read(key: 'access_mode') ?? 'legacy';
 
     // Mirror non-sensitive to SharedPreferences for faster cold reads
     if (tenantId != null) prefs.setString('c_tenant_id', tenantId!);
     if (outletId != null) prefs.setString('c_outlet_id', outletId!);
     if (stockMode != null) prefs.setString('c_stock_mode', stockMode!);
-    if (subscriptionTier != null) prefs.setString('c_subscription_tier', subscriptionTier!);
+    if (subscriptionTier != null)
+      prefs.setString('c_subscription_tier', subscriptionTier!);
 
     // Prime outlet name/address dari SharedPreferences cache (populated via
     // order_detail_modal saat user buka receipt, atau via fetchOutletInfo).
@@ -141,7 +146,8 @@ class SessionCache {
     tenantId = value;
     Future.wait([
       const FlutterSecureStorage().write(key: 'tenant_id', value: value),
-      SharedPreferences.getInstance().then((p) => p.setString('c_tenant_id', value)),
+      SharedPreferences.getInstance()
+          .then((p) => p.setString('c_tenant_id', value)),
     ]);
   }
 
@@ -150,7 +156,8 @@ class SessionCache {
     outletId = value;
     Future.wait([
       const FlutterSecureStorage().write(key: 'outlet_id', value: value),
-      SharedPreferences.getInstance().then((p) => p.setString('c_outlet_id', value)),
+      SharedPreferences.getInstance()
+          .then((p) => p.setString('c_outlet_id', value)),
     ]);
     // Rule #50: saat outlet ganti, tax config outlet lama gak valid lagi.
     // Clear cache → fetch ulang saat provider dibaca di context outlet baru.
@@ -165,7 +172,8 @@ class SessionCache {
     stockMode = value;
     Future.wait([
       const FlutterSecureStorage().write(key: 'stock_mode', value: value),
-      SharedPreferences.getInstance().then((p) => p.setString('c_stock_mode', value)),
+      SharedPreferences.getInstance()
+          .then((p) => p.setString('c_stock_mode', value)),
     ]);
     _stockModeChanged = previous != null && previous != value;
   }
@@ -178,8 +186,10 @@ class SessionCache {
   Future<void> setSubscriptionTier(String value) async {
     subscriptionTier = value;
     Future.wait([
-      const FlutterSecureStorage().write(key: 'subscription_tier', value: value),
-      SharedPreferences.getInstance().then((p) => p.setString('c_subscription_tier', value)),
+      const FlutterSecureStorage()
+          .write(key: 'subscription_tier', value: value),
+      SharedPreferences.getInstance()
+          .then((p) => p.setString('c_subscription_tier', value)),
     ]);
   }
 
@@ -220,9 +230,9 @@ class SessionCache {
 
   // ── Auth headers (convenience) ─────────────────────────────────────────────
   Map<String, String> get authHeaders => {
-    if (accessToken != null) 'Authorization': 'Bearer $accessToken',
-    if (tenantId != null) 'X-Tenant-ID': tenantId!,
-  };
+        if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+        if (tenantId != null) 'X-Tenant-ID': tenantId!,
+      };
 
   /// Fetch outlet info dari GET /outlets/{outletId} — prime cache biar
   /// receipt/print gak pake fallback 'Selaris Outlet' di first transaction.
@@ -285,7 +295,8 @@ class SessionCache {
     final raw = data['payment_methods'];
     if (raw is List && raw.isNotEmpty) {
       paymentMethods = raw.map((e) => e.toString()).toList();
-      if (!paymentMethods.contains('cash')) paymentMethods = ['cash', ...paymentMethods];
+      if (!paymentMethods.contains('cash'))
+        paymentMethods = ['cash', ...paymentMethods];
       prefs.setStringList('c_payment_methods', paymentMethods);
     }
     final ch = data['qris_channel'] as String?;
@@ -293,7 +304,8 @@ class SessionCache {
       qrisChannel = ch;
       prefs.setString('c_qris_channel', ch);
     }
-    Future<void> setOpt(String key, String? value, void Function(String?) assign) async {
+    Future<void> setOpt(
+        String key, String? value, void Function(String?) assign) async {
       assign(value);
       if (value == null || value.isEmpty) {
         prefs.remove(key);
@@ -301,10 +313,21 @@ class SessionCache {
         prefs.setString(key, value);
       }
     }
-    if (data.containsKey('qris_static_image_url')) await setOpt('c_qris_static_image_url', data['qris_static_image_url'] as String?, (v) => qrisStaticImageUrl = v);
-    if (data.containsKey('bank_name')) await setOpt('c_bank_name', data['bank_name'] as String?, (v) => bankName = v);
-    if (data.containsKey('bank_account_number')) await setOpt('c_bank_account_number', data['bank_account_number'] as String?, (v) => bankAccountNumber = v);
-    if (data.containsKey('bank_account_name')) await setOpt('c_bank_account_name', data['bank_account_name'] as String?, (v) => bankAccountName = v);
+
+    if (data.containsKey('qris_static_image_url'))
+      await setOpt(
+          'c_qris_static_image_url',
+          data['qris_static_image_url'] as String?,
+          (v) => qrisStaticImageUrl = v);
+    if (data.containsKey('bank_name'))
+      await setOpt(
+          'c_bank_name', data['bank_name'] as String?, (v) => bankName = v);
+    if (data.containsKey('bank_account_number'))
+      await setOpt('c_bank_account_number',
+          data['bank_account_number'] as String?, (v) => bankAccountNumber = v);
+    if (data.containsKey('bank_account_name'))
+      await setOpt('c_bank_account_name', data['bank_account_name'] as String?,
+          (v) => bankAccountName = v);
   }
 
   /// Pastikan userId ada. `setUserId` sudah lama didefinisikan tapi nggak
@@ -320,7 +343,8 @@ class SessionCache {
         connectTimeout: const Duration(seconds: 5),
         receiveTimeout: const Duration(seconds: 5),
       ));
-      final res = await dio.get('/auth/me', options: Options(headers: authHeaders));
+      final res =
+          await dio.get('/auth/me', options: Options(headers: authHeaders));
       final id = res.data['data']?['id']?.toString();
       if (id != null && id.isNotEmpty) await setUserId(id);
     } catch (_) {
@@ -334,6 +358,7 @@ class SessionCache {
 
   // ── Logout / clear ─────────────────────────────────────────────────────────
   Future<void> clear() async {
+    accessMode = 'legacy';
     accessToken = null;
     tenantId = null;
     outletId = null;

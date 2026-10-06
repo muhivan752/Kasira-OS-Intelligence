@@ -1899,6 +1899,9 @@ async def stream_ai_response(
         pricing_ctx = await build_pricing_context(outlet_id, db)
         system_prompt += pricing_ctx + PRICING_COACH_SYSTEM_APPEND
 
+    from backend.services.finance_context import build_finance_context
+    system_prompt += await build_finance_context(message, outlet_id, tenant_id, db)
+
     # 4. Pilih model. PRICING_COACH override (Redis-down degraded) takes
     # precedence atas get_model_for_tier().
     task_complexity = classify_task_complexity(message)

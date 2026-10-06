@@ -10,6 +10,48 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 - **ARCHITECTURE.md → WAJIB BACA FULL kalau menyentuh stock, recipe, tab, storefront, sync, atau CRDT**
 - ROADMAP.md → Master Plan & Build Order
 
+## Fondasi akses server pada source dan QA 6 Oktober 2026
+
+AccessContext dan GET /auth/access sekarang memakai user/role/status HRIS/
+outlet/izin canonical. Managed policy version1 di Role.permissions hanya
+membuka auth/self-profile dan HRIS; endpoint lain fail closed sampai domain
+terintegrasi. Legacy selain HRIS tetap handler lama, belum filter AI granular.
+Staf HRIS nonaktif ditolak di auth dan login; pengelola tutup absensinya.
+Username/password, migrasi owner legacy, editor akun/jabatan HRIS dan sesi
+perangkat sekarang selesai pada source/QA; docs/ACCOUNT_ACCESS_REVIEW.md.
+Role baru HRIS-only; pengaturan akun hanya owner aktual. Nonaktif HRIS kini
+mencabut sesi, reaktivasi memerlukan login baru. GPS/foto dan seluruh domain/
+AI belum terintegrasi. Fondasi detail docs/ACCESS_REVIEW.md.
+Source belum dipasang produksi atau dirilis ke APK;
+jangan mengira status source ini sudah live atau mengaktifkan policy POS lama.
+
+## HRIS web tahap pertama (6 Oktober 2026)
+
+`/dashboard/hris` Tim & absensi aktif: profil karyawan terpisah akun POS,
+penempatan outlet, jadwal malam dan hadir/izin/sakit/cuti/libur. Owner atau
+Role permission hris_manage:true mengelola; staf terhubung hanya datanya
+sendiri dan punch di web. Shift kas bukan absensi. Migrasi113 FORCE RLS dan
+UUID/audit/version, pending per tenant/user, timezone mengikuti outlet.
+Masuk setelah tengah malam dalam jadwal tetap memakai tanggal mulai jadwal,
+termasuk ketika dikoreksi owner. Payroll/reminder/native/offline/integrasi
+HRIS ke chat utama belum dibuat. Native self/punch online ada pada source
+tahap akun; belum live dan belum GPS/foto/offline. Source dan hasil uji di
+docs/HRIS_REVIEW.md serta docs/ACCOUNT_ACCESS_REVIEW.md.
+Backend existing hotfix dipasang docker cp; jangan recreateimage160766…31a.
+Frontend live9eae7…bcd9. APK/main release sebelumnya masih belum disetujui.
+
+## CRM web terbaru (6 Oktober 2026)
+
+Dashboard Pelanggan sekarang memakai `/customers/workspace`, bukan cached
+`/customers/crm`. Service `customer_workspace` menghitung nota langsung per
+tenant/outlet: order biasa Payment paid, order tab hanya Tab paid. Payment
+jangkar pada tab yang masih open tidak membuktikan nota lunas. Metadata
+scope/basis/generated_at untuk konteks AI nanti, belum integrasi chat utama.
+Total nota gross sebelum refund, bukan belanja bersih atau jumlah kedatangan.
+Create/edit/note UUID replay dan version, pending storage per tenant/user;
+profile legacy ikut lock/version. Kontak tanpa HP memakai string kosong DB
+NOT NULL + HMAC unik, API null. Detail di docs/CUSTOMERS_REVIEW.md.
+
 ---
 
 ## ⛔ STOP — Sebelum Lo Mulai Coding
@@ -111,11 +153,17 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
     - Event `purchase.received` / `purchase.paid` di stream `purchase:{id}` = bahan projector ledger gelombang 2. Utang = `total_amount − paid_amount`, `due_at` dari `supplier.payment_terms_days` (default 7).
     - **Baris nota punya 5 bentuk** (mig `092`): `ingredient_id` / `product_id` (udah ada), `new_ingredient{name,base_unit?}` / `new_product{name,sell_price}` (dibikin on-the-fly, dedup by nama), atau `name` doang = **"Lainnya"** (gas, plastik, tisu): `is_other`, nol efek stok, tetap masuk total + utang → bahan pengeluaran gelombang 2. CHECK: salah satu dari ingredient_id / product_id / name_snapshot.
     - Dashboard `/dashboard/pembelian`, actions di `app/actions/api.ts` (getPurchases/createPurchase/payPurchase/getSuppliers/scanInvoice). OCR pakai `/invoice-ocr/scan` yang lama — `apply` lama (update harga tanpa stok) sekarang jalur kedua, jangan dipakai dari UI baru.
+    - **Update 2026-10-06:** UI memakai getPurchasingSetup/Data/Targets/Detail dan hasil write terstruktur. Nota/cicilan/supplier create client_request_id UUID + fingerprint after_state audit + advisory lock; replay tidak menambah stok/bayar lagi. Nota/cicilan pending sessionStorage pada tab yang sama. rowlock+version untuk edit/pay, nomor nota max suffix dengan lock, tiap baris target di-flush sebelum baris berikutnya. Modal stok bukan PO rencana. Review docs/PURCHASING_REVIEW.md.
+    - Harga modal produk = total aktual baris / pcs canonical (override/diskon dihormati); COUNT kemasan dikenal backend, UI pcs. Target scoped brand outlet, supplier aktif, overhead lewat baris biaya. Detail membaca snapshot biaya/histori event existing, legacy incomplete ditandai. Penerimaan invalid rollback seluruhnya, payment tidak restock. Cache AI/storefront brand diinvalidate setelah commit.
+    - Foto web memakai `/api/upload/invoice` dengan outlet_id, Nginx lokasi upload existing; maksimal8MB. Jangan kirim file besar lewat Server Actions (default1MB). API OCR tetap10MB, brand ambigu tanpa outlet mengembalikan400. Hasil OCR draf, baris unknown harus dipilih; tidak langsung apply harga/restock.
 30. **Rebrand Kasira → Selaris (2026-09-02) — domain lama JANGAN dimatiin.** Nama & URL kanonik cuma dari `lib/brand.ts` (web) dan `settings.BRAND_NAME`/`settings.SITE_URL` (backend, dari `.env`). Jangan hardcode "Kasira"/"Selaris"/domain di string user-facing baru. `kasira.online` WAJIB tetap ngelayanin `/api/*`, `/uploads/`, `/webhook*` selamanya: APK terpasang hardcode base URL lama, webhook Xendit tiap tenant (BYOK) didaftarin ke sana. Yang boleh di-redirect ke selaris.id cuma halaman web. Status + runbook go-live: memory `project_selaris_rebrand`. Yang sengaja gak diganti: `pulsa.kasira.online` (produk KasiraPay), nama repo/container/DB, slug demo `kasira-coffee`.
 31. **Jangan taruh hook React sesudah `return` awal (loading / not found)** — storefront `/{slug}` crash "Terjadi Kesalahan" buat SEMUA pelanggan dari 22 Jul sampai 2 Sep karena `useState(variantProduct)` diselipin di bawah `if (loading) return`. React #310 cuma muncul di browser (bukan di log server, bukan di `tsc`), jadi nggak kelihatan dari curl. **Cara reproduksi error client-side**: Chromium headless Playwright ada di `/var/www/antidetect/node_modules` — `NODE_PATH=/var/www/antidetect/node_modules node repro.js` (tangkap `pageerror` + console error), contoh skrip di memory `project_session_20260902_tab_sukses_erp`.
 32. **Keuangan (gelombang 2, SHIPPED 2026-09-02, semua tier) — laba rugi & arus kas DIHITUNG, bukan disimpan.** Nggak ada tabel ledger/journal; `finance_service.summary()` ngitung dari payments, payment_refunds, purchase_orders, expenses, cash_activities. Kalau nambah jalur uang baru (metode bayar baru, jenis pengeluaran baru, refund jalur lain), cek `_pnl_block` / `_cash_block` / `_expense_block` — bukan nambah tabel.
     - **Nota belanja ≠ beban.** Belanja stok masuk ARUS KAS (keluar) tapi masuk LABA RUGI baru waktu terjual (HPP). Cuma baris "Lainnya" di nota yang jadi `expenses` (dengan `purchase_id`) — dan di arus kas baris itu SENGAJA di-skip karena pembayaran notanya udah dihitung. Kalau lo lihat expense dengan purchase_id di arus kas = dobel.
-    - HPP per produk: `_get_hpp_map` (resep) → fallback `product.buy_price` (Starter). `cogs_coverage` < 1 = ada item terjual tanpa HPP; UI ngasih peringatan di < 70%.
+    - HPP per produk (update 2026-10-06): `cost_map_for_brand` memakai snapshot Decimal `recipe_hpp_sync` dari resep aktif terbaru. Resep invalid/incomplete seluruhnya unknown, jangan ditutup harga beli lama. Produk tanpa resep memakai `product.buy_price` positif. `cogs_coverage` < 1 selalu diperingatkan; laba perkiraan memakai HPP terkini, bukan modal historis.
+    - Cicilan nota masuk arus kas berdasarkan event pembayaran; nominal aktual dihitung dari selisih paid_after. Riwayat tidak lengkap diberi cash_history_estimated. Akun asal pembayaran nota belum disimpan, jangan dianggap kas laci. Utang/overdue adalah posisi sekarang, bukan saldo akhir bulan historis.
+    - Create expense memakai client_request_id UUID + fingerprint audit dan advisory lock tenant/request; replay identik satu catatan. Edit row lock/version; recurring copy lock tenant/bulan. Validasi akun/supplier tenant aktif, Decimal dua desimal dan paid_at dengan timezone. Lihat docs/FINANCE_REVIEW.md.
+    - Chat umum menambahkan finance_context terbaru sesuai outlet untuk pertanyaan keuangan, tanpa tren/cache ringkasan harian. Konteks baca saja; jangan mengaku bisa mencatat/reminder/transfer lewat chat. Kegagalan query tidak boleh diganti angka cache.
     - Akun kas auto-seed 3 akun per tenant di GET /finance/accounts (`ensure_accounts`). Pemetaan metode → akun lewat `default_for`.
     - `recurring='monthly'` cuma TEMPLATE; nggak ada cron. `copy-recurring` nyalin dari bulan lalu yang belum ada padanannya (cocok by kategori+catatan).
     - Semua bulan = WIB (`month_bounds`). Tren 6 bulan = 12 query tambahan per summary; kalau lambat, materialisasi per bulan — jangan bikin background projector tanpa baca gotcha #16.

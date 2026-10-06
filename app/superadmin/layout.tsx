@@ -20,6 +20,7 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [adminName, setAdminName] = useState('');
+  const [logoutError, setLogoutError] = useState('');
   const pathname = usePathname();
   const router = useRouter();
 
@@ -46,7 +47,13 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
   }, [router]);
 
   const handleLogout = async () => {
-    await logout();
+    setLogoutError('');
+    try {
+      const result = await logout();
+      if (result && !result.success) setLogoutError(result.message);
+    } catch {
+      setLogoutError('Logout belum terkonfirmasi. Periksa koneksi lalu coba lagi.');
+    }
   };
 
   const nav = [
@@ -127,6 +134,7 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
           </button>
         </div>
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+          {logoutError && <p role="alert" className="mb-4 text-red-400">{logoutError}</p>}
           {children}
         </main>
       </div>

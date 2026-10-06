@@ -24,11 +24,13 @@ import {
   Calculator,
 } from 'lucide-react';
 import { logout } from '@/app/actions/auth';
+import { getAccountAccess } from '@/app/actions/accounts';
 import { getCurrentUser, getOutlets } from '@/app/actions/api';
 import { Logo } from '@/components/ui/logo';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const [accessMode, setAccessMode] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktop, setDesktop] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -37,6 +39,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [outletName, setOutletName] = useState('Memuat...');
   const [tier, setTier] = useState('starter');
   const [subStatus, setSubStatus] = useState('active');
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -63,6 +67,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     async function loadData() {
       try {
+        const access = await getAccountAccess();
+        if (!access.success) { router.push('/login'); return; }
+        setAccessMode(access.data.enforcement_mode);
         const user = await getCurrentUser();
         if (!user) {
           router.push('/login');
@@ -70,7 +77,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
         setTier(user.subscription_tier || 'starter');
         setSubStatus(user.subscription_status || 'active');
-        const outlets = await getOutlets();
+        const outlets = access.data.outlets;
         if (outlets && outlets.length > 0) {
           setOutletName(outlets[0].name);
         } else {
@@ -88,11 +95,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [router]);
 
   const handleLogout = async () => {
-    await logout();
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setLogoutError(null);
+    try {
+      const result = await logout();
+      if (result && !result.success) setLogoutError(result.message);
+    } catch {
+      setLogoutError('Logout belum terkonfirmasi. Periksa koneksi lalu coba lagi.');
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   // Build navigation based on tier
-  const mainNav = [
+  const mainNav = accessMode === 'managed' ? [{ name: 'Tim & absensi', href: '/dashboard/hris', icon: Users }] : [
     { name: 'Beranda', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Menu', href: '/dashboard/menu', icon: MenuIcon },
     { name: 'Toko Online', href: '/dashboard/toko', icon: Globe },
@@ -100,11 +117,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Pelanggan', href: '/dashboard/pelanggan', icon: Users },
     { name: 'Pembelian', href: '/dashboard/pembelian', icon: ShoppingCart },
     { name: 'Keuangan', href: '/dashboard/keuangan', icon: Wallet },
+    { name: 'Tim & absensi', href: '/dashboard/hris', icon: Users },
     { name: 'Promo WA', href: '/dashboard/promo', icon: MessageCircle },
     { name: 'Laporan', href: '/dashboard/laporan', icon: BarChart3 },
   ];
 
-  const proNav = [
+  const proNav = accessMode === 'managed' ? [] : [
     { name: 'Atur HPP', href: '/dashboard/hpp', icon: Calculator },
     { name: 'Bahan Baku', href: '/dashboard/bahan-baku', icon: Package },
     { name: 'Reservasi', href: '/dashboard/reservasi', icon: CalendarDays },
@@ -112,9 +130,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
 
   const bottomNav = [
+    { name: 'Akun saya', href: '/dashboard/account', icon: Users },
+    ...(accessMode === 'managed' ? [] : [
     { name: 'Download POS', href: '/download', icon: Smartphone },
     ...(isPro ? [{ name: 'Download Dapur', href: '/download', icon: ChefHat }] : []),
     { name: 'Pengaturan', href: '/dashboard/settings', icon: Settings },
+    ]),
   ];
 
   const renderNavItem = (item: { name: string; href: string; icon: any }, locked = false) => {
@@ -225,6 +246,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="hidden lg:flex items-center justify-between mb-3 text-sm text-[var(--text-muted)]"><span>Tampilan</span><ThemeToggle /></div>
             <button
               onClick={handleLogout}
+              disabled={loggingOut}
               className="flex items-center gap-3 w-full min-h-11 px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             >
               <LogOut className="w-5 h-5" />
@@ -256,6 +278,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 nggak keliatan. Ditaruh langsung di header biar kejangkau. */}
             <button
               onClick={handleLogout}
+              disabled={loggingOut}
               aria-label="Keluar"
               title="Keluar"
               className="p-2 min-h-11 min-w-11 text-red-600 hover:bg-red-50 rounded-md"
@@ -293,7 +316,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          {children}
+          {logoutError && <p role="alert" className="mb-4 text-[var(--danger)]">{logoutError}</p>}
+          {!accessMode ? <p role="status">Memuat akses akun…</p> : accessMode === 'managed' && !['/dashboard/hris', '/dashboard/account'].includes(pathname) ? <div><p>Fitur ini belum tersedia untuk pengaturan akses akun Anda.</p><Link href="/dashboard/hris">Buka tim dan absensi</Link></div> : children}
         </main>
       </div>
     </div>

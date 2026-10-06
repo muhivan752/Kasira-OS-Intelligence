@@ -37,6 +37,7 @@ class SyncService {
   static const String _lastSyncKey = 'last_sync_hlc';
   static const String _localClockKey = 'sync_local_hlc';
   static const String _paginationBackfilledKey = 'sync_pagination_backfilled_v1';
+  static const String _hppBackfilledKey = 'recipe_hpp_backfilled_v1';
   /// Penanda backfill varian produk (v1.6.0) sudah jalan sekali di device ini.
   static const String _variantsBackfilledKey = 'variants_backfilled_v1';
   // Raw device installation ID — UUID random di-generate sekali saat first
@@ -207,8 +208,10 @@ class SyncService {
 
       final needsPaginationBackfill =
           !(prefs.getBool(_paginationBackfilledKey) ?? false);
+      final needsHppBackfill = !(prefs.getBool(_hppBackfilledKey) ?? false);
       final lastSyncHlc =
-          needsPaginationBackfill ? null : prefs.getString(_lastSyncKey);
+          needsPaginationBackfill || needsHppBackfill
+              ? null : prefs.getString(_lastSyncKey);
 
       // Multi-outlet tenant WAJIB kirim outlet_id — backend reject (400) kalau
       // tenant punya >1 outlet dan outlet_id kosong. Single-outlet backward
@@ -249,6 +252,7 @@ class SyncService {
         // 3. Apply server changes to local DB
         await _applyServerChanges(serverChanges);
         var page = data;
+        var hppSupported = serverChanges.containsKey('recipe_hpp');
         final seenCursors = <String>{};
         while (page['has_more'] == true) {
           final cursor = page['next_cursor_hlc'];
@@ -274,6 +278,7 @@ class SyncService {
             throw StateError('Halaman sinkronisasi gagal dimuat');
           }
           page = continuation.data;
+          hppSupported = hppSupported && page['changes'].containsKey('recipe_hpp');
           await _applyServerChanges(page['changes']);
         }
 
@@ -318,6 +323,8 @@ class SyncService {
             _localClockKey, HLC.fromServer(localClock, serverHlc).toString());
         await prefs.setString(_lastSyncKey, serverClock.toString());
         await prefs.setBool(_paginationBackfilledKey, true);
+        // Keep backfill pending until every page supports HPP and has committed.
+        if (hppSupported) await prefs.setBool(_hppBackfilledKey, true);
 
         // 6. Hapus pending idempotency_key — sync selesai end-to-end, next
         // sync() generate fresh. Timing: SETELAH HLC update + markAsSynced
@@ -604,6 +611,7 @@ class SyncService {
               buyQty: _toDouble(ing['buy_qty'], fallback: 1.0),
               costPerBaseUnit: _toDouble(ing['cost_per_base_unit']),
               ingredientType: ing['ingredient_type'] ?? 'recipe',
+              needsReview: ing['needs_review'] ?? false,
               rowVersion: ing['row_version'] ?? 0,
               isDeleted: ing['is_deleted'] ?? false,
               lastModifiedHlc: ing['hlc'],
@@ -649,6 +657,7 @@ class SyncService {
               version: r['version'] ?? 1,
               isActive: r['is_active'] ?? true,
               notes: r['notes'],
+              isEstimated: r['is_estimated'] ?? false,
               rowVersion: 0,
               isDeleted: r['is_deleted'] ?? false,
               lastModifiedHlc: r['hlc'],
@@ -677,6 +686,16 @@ class SyncService {
             ),
           );
         }
+      }
+
+      // Cache server HPP separately so snapshots can precede recipes in pagination.
+      for (final snapshot in changes['recipe_hpp'] ?? []) {
+        await db.into(db.recipeHppSnapshots).insertOnConflictUpdate(
+          RecipeHppLocal(
+            recipeId: snapshot['recipe_id'],
+            snapshot: jsonEncode(snapshot),
+          ),
+        );
       }
 
       // Apply Outlet Stock (ingredient stock per outlet, read-only from server)

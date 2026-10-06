@@ -23,6 +23,7 @@ from backend.services.ingredient_stock_service import deduct_ingredients_for_pro
 from backend.models.tenant import Tenant
 from backend.models.ingredient import Ingredient
 from backend.models.recipe import Recipe, RecipeIngredient
+from backend.services.recipe_hpp_sync import get_recipe_hpp_changes
 
 logger = logging.getLogger(__name__)
 
@@ -553,6 +554,8 @@ async def sync_data(
         ri_records = ri_records[:page_limit]
     pull_changes.recipe_ingredients = [_row_to_dict(r, has_row_version=False) for r in ri_records]
     has_more_any = has_more_any or ri_more
+
+    pull_changes.recipe_hpp = await get_recipe_hpp_changes(db, brand_id, pull_changes)
 
     # Custom pull untuk product_variants (join Product buat scoping brand).
     # Punya row_version, tapi nggak lewat get_table_changes karena filter-nya

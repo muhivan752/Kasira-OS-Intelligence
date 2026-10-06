@@ -8,14 +8,27 @@ import 'tables.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [Products, ProductVariants, Orders, OrderItems, Payments, Shifts, CashActivities, Ingredients, Recipes, RecipeIngredients, OutletStocks])
+@DriftDatabase(tables: [
+  Products,
+  ProductVariants,
+  Orders,
+  OrderItems,
+  Payments,
+  Shifts,
+  CashActivities,
+  Ingredients,
+  Recipes,
+  RecipeIngredients,
+  OutletStocks,
+  RecipeHppSnapshots
+])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   AppDatabase.withExecutor(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -50,6 +63,11 @@ class AppDatabase extends _$AppDatabase {
             // masa lalu, dan varian yang udah ada `updated_at`-nya lebih baru
             // dari situ, jadi semuanya ketarik tanpa perlu reset sync.
             await m.createTable(productVariants);
+          }
+          if (from < 8) {
+            await m.addColumn(ingredients, ingredients.needsReview);
+            await m.addColumn(recipes, recipes.isEstimated);
+            await m.createTable(recipeHppSnapshots);
           }
         },
       );
@@ -107,11 +125,10 @@ class AppDatabase extends _$AppDatabase {
             ..where((t) => t.outletId.equals(outletId)))
           .get();
 
-  Future<List<ShiftLocal>> getUnsyncedShifts(String outletId) =>
-      (select(shifts)
-            ..where((t) => t.isSynced.equals(false))
-            ..where((t) => t.outletId.equals(outletId)))
-          .get();
+  Future<List<ShiftLocal>> getUnsyncedShifts(String outletId) => (select(shifts)
+        ..where((t) => t.isSynced.equals(false))
+        ..where((t) => t.outletId.equals(outletId)))
+      .get();
 
   /// CashActivities tidak punya outletId column — scope via parent Shift.
   Future<List<CashActivityLocal>> getUnsyncedCashActivities(String outletId) {

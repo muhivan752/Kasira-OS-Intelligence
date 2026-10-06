@@ -7,13 +7,16 @@ nyatet nota produk jadi + utang supplier — itu justru yang mereka butuhin
 (mayoritas Starter non-F&B).
 """
 import logging
+import hashlib
+import json
+from collections import defaultdict, deque
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from typing import Any, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select, func, update, false
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from sqlalchemy import select, func, update, false, text, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -23,6 +26,8 @@ from backend.models.user import User
 from backend.models.tenant import Tenant
 from backend.models.outlet import Outlet
 from backend.models.purchasing import Supplier, PurchaseOrder, PurchaseOrderItem
+from backend.models.audit_log import AuditLog
+from backend.models.event import Event
 from backend.schemas.purchasing import (
     SupplierCreate, SupplierUpdate, SupplierResponse,
     PurchaseCreate, PurchaseResponse, PurchaseLineResponse, PurchasePay, PurchaseSummary,
@@ -36,6 +41,74 @@ logger = logging.getLogger(__name__)
 
 suppliers_router = APIRouter()
 purchases_router = APIRouter()
+
+
+async def _invalidate_received(db, outlet_id, tenant_id):
+    try:
+        outlet = await db.get(Outlet, outlet_id)
+        rows = (await db.execute(select(Outlet.id, Outlet.slug).where(
+            Outlet.tenant_id == tenant_id, Outlet.brand_id == outlet.brand_id, Outlet.deleted_at.is_(None),
+        ))).all()
+        from backend.services.redis import get_redis_client
+        redis = await get_redis_client()
+        keys = [key for oid, slug in rows for key in (f'ai:context:{oid}', f'connect:storefront:{slug}')]
+        if keys:
+            await redis.delete(*keys)
+    except Exception:
+        logger.warning('Purchase received cache refresh unavailable', exc_info=True)
+
+
+async def _replay(db, body, user, entity, action, scope=None):
+    fingerprint = hashlib.sha256(json.dumps({'body': body.model_dump(mode='json', exclude={'client_request_id'}), 'scope': scope},
+                                            sort_keys=True).encode()).hexdigest()
+    metadata = {}
+    if body.client_request_id:
+        key = str(body.client_request_id)
+        await db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'),
+                         {'key': f'purchasing:{user.tenant_id}:{key}'})
+        previous = (await db.execute(select(AuditLog).where(
+            AuditLog.tenant_id == user.tenant_id,
+            AuditLog.after_state['client_request_id'].astext == key,
+        ).order_by(AuditLog.created_at).limit(1))).scalar_one_or_none()
+        if previous:
+            if (previous.user_id != user.id or previous.entity != entity or previous.action != action
+                    or previous.after_state.get('fingerprint') != fingerprint):
+                raise HTTPException(status_code=409, detail='Permintaan ini sudah digunakan untuk data berbeda')
+            return previous.entity_id, metadata
+        metadata = {'client_request_id': key, 'fingerprint': fingerprint}
+    return None, metadata
+
+
+async def _purchase_detail(db, po):
+    events = (await db.execute(select(Event).where(
+        Event.stream_id == f'purchase:{po.id}', Event.outlet_id == po.outlet_id,
+        Event.event_type.in_(['purchase.received', 'purchase.paid']),
+    ).order_by(Event.created_at, Event.id))).scalars().all()
+    received = next((e for e in events if e.event_type == 'purchase.received'), None)
+    response = _po_to_response(po, (received.event_data.get('lines') or []) if received else None)
+    previous = Decimal(str(received.event_data.get('paid', '0'))) if received else None
+    if previous is not None and previous > 0:
+        response.payments.append({'id': str(received.id), 'kind': 'initial', 'amount': str(previous),
+                                  'paid_at': (po.received_at or received.created_at).isoformat()})
+    for event in events:
+        if event.event_type != 'purchase.paid':
+            continue
+        after = Decimal(str(event.event_data.get('paid_after', previous or '0')))
+        before = Decimal(str(event.event_data['paid_before'])) if 'paid_before' in event.event_data else previous
+        if before is None or after < before or before < 0:
+            response.payment_history_incomplete = True
+            previous = after
+            continue
+        if previous is not None and before != previous:
+            response.payment_history_incomplete = True
+        amount = after - before
+        previous = after
+        if amount > 0:
+            response.payments.append({'id': str(event.id), 'kind': 'installment', 'amount': str(amount),
+                                      'paid_at': event.created_at.isoformat()})
+    if sum((Decimal(p['amount']) for p in response.payments), Decimal('0')) != po.paid_amount:
+        response.payment_history_incomplete = True
+    return response
 
 
 # ───────────────────────── helpers ─────────────────────────
@@ -56,12 +129,16 @@ async def _tenant_outlet_ids(db: AsyncSession, tenant_id: UUID) -> list[UUID]:
 
 
 def _po_to_response(po: PurchaseOrder, effects: Optional[list] = None) -> PurchaseResponse:
-    effect_by_name = {e["name"]: e for e in (effects or [])}
+    effect_groups = defaultdict(deque)
+    for effect in effects or []:
+        key = str(effect.get('ingredient_id') or effect.get('product_id') or effect.get('name'))
+        effect_groups[key].append(effect)
     items = []
     for it in po.items:
         if it.deleted_at is not None:
             continue
-        eff = effect_by_name.get(it.display_name, {})
+        key = str(it.ingredient_id or it.product_id or it.display_name)
+        eff = effect_groups[key].popleft() if effect_groups[key] else {}
         items.append(PurchaseLineResponse(
             id=it.id,
             ingredient_id=it.ingredient_id,
@@ -70,6 +147,7 @@ def _po_to_response(po: PurchaseOrder, effects: Optional[list] = None) -> Purcha
             name=it.display_name,
             quantity=it.quantity,
             unit=it.unit,
+            base_unit=eff.get('base_unit') or ('pcs' if it.product_id else None),
             qty_base=it.qty_base,
             unit_price=it.unit_price,
             total_price=it.total_price,
@@ -103,9 +181,12 @@ def _po_to_response(po: PurchaseOrder, effects: Optional[list] = None) -> Purcha
 async def list_suppliers(
     request: Request,
     include_inactive: bool = False,
+    outlet_id: Optional[UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
+    if outlet_id:
+        await _outlet_of_tenant(db, outlet_id, current_user.tenant_id)
     stmt = select(Supplier).where(
         Supplier.tenant_id == current_user.tenant_id,
         Supplier.deleted_at.is_(None),
@@ -117,7 +198,9 @@ async def list_suppliers(
     # Ringkasan belanja per supplier — satu query agregat, bukan N+1.
     agg: dict = {}
     if suppliers:
-        outlet_ids = await _tenant_outlet_ids(db, current_user.tenant_id)
+        if outlet_id:
+            await _outlet_of_tenant(db, outlet_id, current_user.tenant_id)
+        outlet_ids = [outlet_id] if outlet_id else await _tenant_outlet_ids(db, current_user.tenant_id)
         rows = (await db.execute(
             select(
                 PurchaseOrder.supplier_id,
@@ -154,6 +237,14 @@ async def create_supplier(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
+    replay, metadata = await _replay(db, body, current_user, 'suppliers', 'CREATE')
+    if replay:
+        sup = await db.get(Supplier, replay)
+        if not sup or sup.deleted_at:
+            raise HTTPException(status_code=409, detail='Supplier dari permintaan ini sudah dihapus')
+        return StandardResponse(success=True, data=SupplierResponse.model_validate(sup), request_id=request.state.request_id)
+    await db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'),
+                     {'key': f'supplier-name:{current_user.tenant_id}'})
     dup = (await db.execute(
         select(Supplier).where(
             Supplier.tenant_id == current_user.tenant_id,
@@ -164,13 +255,13 @@ async def create_supplier(
     if dup:
         raise HTTPException(status_code=400, detail=f"Supplier '{dup.name}' sudah ada")
 
-    sup = Supplier(tenant_id=current_user.tenant_id, **body.model_dump())
+    sup = Supplier(tenant_id=current_user.tenant_id, **body.model_dump(exclude={'client_request_id'}))
     sup.name = sup.name.strip()
     db.add(sup)
     await db.flush()
     await log_audit(
         db=db, action="CREATE", entity="suppliers", entity_id=sup.id,
-        after_state=body.model_dump(), user_id=current_user.id, tenant_id=current_user.tenant_id,
+        after_state={**body.model_dump(mode='json'), **metadata}, user_id=current_user.id, tenant_id=current_user.tenant_id,
     )
     await db.commit()
     await db.refresh(sup)
@@ -193,7 +284,7 @@ async def update_supplier(
             Supplier.id == supplier_id,
             Supplier.tenant_id == current_user.tenant_id,
             Supplier.deleted_at.is_(None),
-        )
+        ).with_for_update()
     )).scalar_one_or_none()
     if not sup:
         raise HTTPException(status_code=404, detail="Supplier tidak ditemukan")
@@ -202,6 +293,15 @@ async def update_supplier(
 
     before = {"name": sup.name, "phone": sup.phone, "payment_terms_days": sup.payment_terms_days, "is_active": sup.is_active}
     changes = body.model_dump(exclude_unset=True, exclude={"row_version"})
+    if 'name' in changes:
+        await db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'),
+                         {'key': f'supplier-name:{current_user.tenant_id}'})
+        duplicate = await db.scalar(select(Supplier.id).where(
+            Supplier.tenant_id == current_user.tenant_id, Supplier.deleted_at.is_(None),
+            Supplier.id != sup.id, func.lower(Supplier.name) == changes['name'].lower(),
+        ).limit(1))
+        if duplicate:
+            raise HTTPException(status_code=400, detail='Nama supplier sudah digunakan')
     for k, v in changes.items():
         setattr(sup, k, v.strip() if isinstance(v, str) and k == "name" else v)
     sup.row_version += 1
@@ -229,7 +329,7 @@ async def delete_supplier(
             Supplier.id == supplier_id,
             Supplier.tenant_id == current_user.tenant_id,
             Supplier.deleted_at.is_(None),
-        )
+        ).with_for_update()
     )).scalar_one_or_none()
     if not sup:
         raise HTTPException(status_code=404, detail="Supplier tidak ditemukan")
@@ -251,13 +351,14 @@ async def delete_supplier(
 async def purchase_summary(
     request: Request,
     outlet_id: UUID,
+    month: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     await _outlet_of_tenant(db, outlet_id, current_user.tenant_id)
-    wib = timezone(timedelta(hours=7))
-    now_wib = datetime.now(wib)
-    month_start = now_wib.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    from backend.services.finance_service import month_bounds, WIB
+    month = month or datetime.now(WIB).strftime('%Y-%m')
+    month_start, month_end = month_bounds(month)
 
     base = [
         PurchaseOrder.outlet_id == outlet_id,
@@ -266,7 +367,7 @@ async def purchase_summary(
     ]
     month_row = (await db.execute(
         select(func.coalesce(func.sum(PurchaseOrder.total_amount), 0), func.count(PurchaseOrder.id))
-        .where(*base, PurchaseOrder.received_at >= month_start)
+        .where(*base, PurchaseOrder.received_at >= month_start, PurchaseOrder.received_at < month_end)
     )).one()
     out_row = (await db.execute(
         select(
@@ -282,7 +383,13 @@ async def purchase_summary(
         .limit(1)
     )).scalar_one_or_none()
 
+    overdue = (await db.execute(select(
+        func.coalesce(func.sum(PurchaseOrder.total_amount - PurchaseOrder.paid_amount), 0), func.count(PurchaseOrder.id),
+    ).where(*base, PurchaseOrder.total_amount > PurchaseOrder.paid_amount,
+            PurchaseOrder.due_at < datetime.now(timezone.utc)))).one()
     data = PurchaseSummary(
+        month=month, generated_at=datetime.now(timezone.utc),
+        overdue_total=overdue[0], overdue_count=overdue[1],
         month_total=Decimal(str(month_row[0])),
         month_count=int(month_row[1]),
         outstanding_total=Decimal(str(out_row[0])),
@@ -300,8 +407,10 @@ async def list_purchases(
     outlet_id: UUID,
     unpaid_only: bool = False,
     supplier_id: Optional[UUID] = None,
-    skip: int = 0,
-    limit: int = 50,
+    month: Optional[str] = None,
+    search: Optional[str] = Query(None, max_length=120),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
@@ -323,6 +432,16 @@ async def list_purchases(
         stmt = stmt.where(PurchaseOrder.total_amount > PurchaseOrder.paid_amount)
     if supplier_id:
         stmt = stmt.where(PurchaseOrder.supplier_id == supplier_id)
+    if month:
+        from backend.services.finance_service import month_bounds
+        start, end = month_bounds(month)
+        stmt = stmt.where(PurchaseOrder.received_at >= start, PurchaseOrder.received_at < end)
+    if search and search.strip():
+        term = '%' + search.strip().replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+        stmt = stmt.outerjoin(Supplier, Supplier.id == PurchaseOrder.supplier_id).where(or_(
+            PurchaseOrder.po_number.ilike(term, escape='\\'), PurchaseOrder.invoice_no.ilike(term, escape='\\'),
+            Supplier.name.ilike(term, escape='\\'),
+        ))
     stmt = stmt.order_by(PurchaseOrder.received_at.desc().nullslast(), PurchaseOrder.created_at.desc()).offset(skip).limit(min(limit, 200))
     pos = (await db.execute(stmt)).scalars().all()
     return StandardResponse(
@@ -338,12 +457,21 @@ async def create_purchase(
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """Catat nota belanja: stok naik, HPP jadi rata-rata bergerak, utang kecatat."""
+    await _outlet_of_tenant(db, body.outlet_id, current_user.tenant_id)
+    replay, metadata = await _replay(db, body, current_user, 'purchase_orders', 'CREATE')
+    if replay:
+        loaded = await svc.load_purchase(db, replay)
+        if not loaded:
+            raise HTTPException(status_code=409, detail='Nota dari permintaan ini tidak tersedia')
+        return StandardResponse(success=True, data=await _purchase_detail(db, loaded), request_id=request.state.request_id)
     tenant = (await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))).scalar_one_or_none()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant tidak ditemukan")
     tier = get_tier_name(tenant)
     is_pro = is_pro_tier(tenant)
 
+    await db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'),
+                     {'key': f'supplier-name:{current_user.tenant_id}'})
     supplier = await svc.resolve_supplier(
         db, tenant_id=current_user.tenant_id,
         supplier_id=body.supplier_id, supplier_name=body.supplier_name,
@@ -370,16 +498,17 @@ async def create_purchase(
         db=db, action="CREATE", entity="purchase_orders", entity_id=po.id,
         after_state={
             "po_number": po.po_number, "supplier": supplier.name if supplier else None,
-            "total": str(po.total_amount), "paid": str(po.paid_amount), "lines": len(body.items),
+            "total": str(po.total_amount), "paid": str(po.paid_amount), "lines": len(body.items), **metadata,
         },
         user_id=current_user.id, tenant_id=current_user.tenant_id,
     )
     await db.commit()
 
     loaded = await svc.load_purchase(db, po.id)
+    await _invalidate_received(db, po.outlet_id, current_user.tenant_id)
     return StandardResponse(
         success=True,
-        data=_po_to_response(loaded, effects),
+        data=await _purchase_detail(db, loaded),
         message=f"Nota {po.po_number} dicatat",
         request_id=request.state.request_id,
     )
@@ -396,7 +525,7 @@ async def get_purchase(
     if not po:
         raise HTTPException(status_code=404, detail="Nota tidak ditemukan")
     await _outlet_of_tenant(db, po.outlet_id, current_user.tenant_id)
-    return StandardResponse(success=True, data=_po_to_response(po), request_id=request.state.request_id)
+    return StandardResponse(success=True, data=await _purchase_detail(db, po), request_id=request.state.request_id)
 
 
 @purchases_router.post("/{purchase_id}/pay", response_model=StandardResponse[PurchaseResponse])
@@ -408,14 +537,26 @@ async def pay_purchase(
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """Bayar utang nota (sebagian atau lunas). Optimistic lock via row_version."""
+    # The audit fingerprint also binds a payment request to this purchase.
+    replay, metadata = await _replay(db, body, current_user, 'purchase_orders', 'PAY', str(purchase_id))
+    if replay:
+        loaded = await svc.load_purchase(db, replay)
+        if not loaded:
+            raise HTTPException(status_code=409, detail='Nota tidak tersedia')
+        await _outlet_of_tenant(db, loaded.outlet_id, current_user.tenant_id)
+        return StandardResponse(success=True, data=await _purchase_detail(db, loaded), request_id=request.state.request_id)
+    await db.execute(select(PurchaseOrder.id).where(PurchaseOrder.id == purchase_id).with_for_update())
     po = await svc.load_purchase(db, purchase_id)
     if not po:
         raise HTTPException(status_code=404, detail="Nota tidak ditemukan")
     await _outlet_of_tenant(db, po.outlet_id, current_user.tenant_id)
+    if po.row_version != body.row_version:
+        raise HTTPException(status_code=409, detail='Nota sudah berubah, muat ulang dulu')
     if po.outstanding_amount <= 0:
         raise HTTPException(status_code=400, detail="Nota ini sudah lunas")
 
-    new_paid = min(po.paid_amount + body.amount, po.total_amount)
+    paid_before = po.paid_amount
+    new_paid = min(paid_before + body.amount, po.total_amount)
     result = await db.execute(
         update(PurchaseOrder)
         .where(PurchaseOrder.id == po.id, PurchaseOrder.row_version == body.row_version)
@@ -434,20 +575,21 @@ async def pay_purchase(
         stream_id=f"purchase:{po.id}",
         event_type="purchase.paid",
         event_data={
-            "purchase_id": str(po.id), "amount": str(body.amount),
+            "purchase_id": str(po.id), "amount": str(new_paid - paid_before),
+            "paid_before": str(paid_before),
             "paid_after": str(new_paid), "total": str(po.total_amount),
             "user_id": str(current_user.id),
         },
     ))
     await log_audit(
-        db=db, action="PAY", entity="purchase_orders", entity_id=po.id,
-        before_state={"paid": str(po.paid_amount)}, after_state={"paid": str(new_paid)},
+        db=db, action='PAY', entity="purchase_orders", entity_id=po.id,
+        before_state={"paid": str(paid_before)}, after_state={"paid": str(new_paid), **metadata},
         user_id=current_user.id, tenant_id=current_user.tenant_id,
     )
     await db.commit()
     loaded = await svc.load_purchase(db, po.id)
     return StandardResponse(
-        success=True, data=_po_to_response(loaded),
+        success=True, data=await _purchase_detail(db, loaded),
         message="Lunas" if new_paid >= po.total_amount else "Pembayaran dicatat",
         request_id=request.state.request_id,
     )

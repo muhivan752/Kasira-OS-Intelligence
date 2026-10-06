@@ -25,6 +25,8 @@ import 'features/reservations/presentation/pages/table_grid_page.dart';
 import 'features/tabs/presentation/pages/tab_detail_page.dart';
 import 'features/tabs/presentation/pages/active_tabs_list_page.dart';
 import 'features/auth/presentation/pages/register_page.dart';
+import 'features/auth/presentation/pages/password_account_page.dart';
+import 'features/auth/presentation/pages/team_account_page.dart';
 import 'features/onboarding/presentation/pages/welcome_page.dart';
 import 'features/onboarding/presentation/pages/ready_page.dart';
 import 'features/online_orders/presentation/pages/online_orders_page.dart';
@@ -56,11 +58,20 @@ final _router = GoRouter(
       path: '/register',
       builder: (context, state) {
         final extra = state.extra as Map<String, dynamic>?;
+        if (extra == null) return const PasswordAccountPage(register: true);
         return RegisterPage(
-            phone: extra?['phone'],
-            ownerName: extra?['owner_name'],
-            googleProof: extra?['google_proof']);
+            phone: extra['phone'],
+            ownerName: extra['owner_name'],
+            googleProof: extra['google_proof']);
       },
+    ),
+    GoRoute(
+      path: '/account-code',
+      builder: (context, state) => const PasswordAccountPage(),
+    ),
+    GoRoute(
+      path: '/team',
+      builder: (context, state) => const TeamAccountPage(),
     ),
     GoRoute(
       path: '/google',

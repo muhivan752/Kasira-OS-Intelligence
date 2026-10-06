@@ -14,10 +14,12 @@ from backend.models.tenant import Tenant
 from backend.schemas.token import TokenPayload
 from backend.services.redis import get_redis_client
 from sqlalchemy import text
+from backend.services.accounts import digest as security_token_hash
 
 security_bearer = HTTPBearer()
 
 async def get_current_user(
+    request: Request,
     db: AsyncSession = Depends(get_db), 
     token: HTTPAuthorizationCredentials = Depends(security_bearer)
 ) -> User:
@@ -34,13 +36,13 @@ async def get_current_user(
     
     # Cek blacklist (logout) di Redis
     redis = await get_redis_client()
-    if await redis.get(f"blacklist:{token_data.sub}"):
+    if await redis.get(f"revoked-token:{security_token_hash(token.credentials)}") or (not payload.get("sid") and await redis.get(f"blacklist:{token_data.sub}")):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token telah di-revoke. Silakan login ulang.",
         )
 
-    stmt = select(User).where(User.id == token_data.sub, User.deleted_at == None)
+    stmt = select(User).where(User.id == token_data.sub, User.deleted_at == None).execution_options(populate_existing=True)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
@@ -49,8 +51,9 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Akun tidak aktif")
 
-    # Activate RLS for this session — scope all queries to user's tenant
-    await db.execute(text(f"SET LOCAL app.current_tenant_id = '{user.tenant_id}'"))
+    from backend.services.access import enforce_route, resolve_access, validate_tenant_header
+    validate_tenant_header(request, user.tenant_id)
+    await db.execute(text("SELECT set_config('app.current_tenant_id', :tenant, true)"), {"tenant": str(user.tenant_id)})
 
     # Cek apakah tenant masih aktif (skip untuk platform admin)
     allowed_phones = [p.strip() for p in settings.SUPERADMIN_PHONES.split(",") if p.strip()]
@@ -58,12 +61,19 @@ async def get_current_user(
         tenant_stmt = select(Tenant).where(Tenant.id == user.tenant_id, Tenant.deleted_at == None)
         tenant_result = await db.execute(tenant_stmt)
         tenant = tenant_result.scalar_one_or_none()
-        if tenant and not tenant.is_active:
+        if tenant is None or not tenant.is_active:
             raise HTTPException(
                 status_code=403,
                 detail="Langganan bisnis Anda telah dihentikan. Hubungi admin untuk informasi lebih lanjut.",
             )
 
+    access = await resolve_access(db, user)
+    from backend.services.accounts import validate_session
+    request.state.login_session = await validate_session(db, user, payload, token.credentials)
+    request.state.auth_claims = payload
+    request.state.auth_token = token.credentials
+    enforce_route(request, access)
+    request.state.access = access
     return user
 
 async def get_current_tenant(
@@ -227,6 +237,7 @@ async def get_platform_admin(
 from backend.services.subscription import PRO_TIERS  # noqa: E402
 
 async def require_pro_tier(
+    current_user: User = Depends(get_current_user),
     tenant: Tenant = Depends(get_current_tenant),
 ) -> Tenant:
     """

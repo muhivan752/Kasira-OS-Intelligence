@@ -1,6 +1,436 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
+## TERKINI - AKUN PASSWORD, AKSES HRIS DAN SESI SELESAI DI SOURCE/QA, 2026-10-06
+
+- Ivan meminta baca memory lalu berulang "gas", terakhir "gas lgsung".
+  Tahap akun/migrasi/HRIS/sesi selesai pada source dan QA; belum deploy,
+  commit, push atau rilis. Review docs/ACCOUNT_ACCESS_REVIEW.md.
+- Owner memakai username toko global dan password; staf memakai username
+  toko dan username pribadi. Password 12..128 karakter, PBKDF2-SHA256 600.000,
+  terpisah PIN. Redis atomik: 12/identitas dan 60/sumber HTTP per 15 menit.
+  Phone nullable untuk akun tanpa nomor; tidak membuat nomor palsu.
+- Migrasi 114 melengkapi sessions existing dengan tenant/version/expiry,
+  FORCE RLS/FK, username/hash/credential_version/challenge. Roundtrip QA lulus;
+  downgrade menolak sebelum mutation jika masih ada phone NULL.
+- Registrasi atomik/idempotent membuat satu bisnis untuk web/APK. Claim owner
+  memakai login legacy baru <=15 menit atau password saat ini; UUID, tenant,
+  phone dan riwayat dipertahankan. Google/OTP legacy tersedia untuk migrasi.
+  Penautan nomor dan pemulihan password baru lewat OTP belum dibuat.
+- Recovery owner sekali pakai berlaku 365 hari, diganti sesudah consume;
+  aktivasi/reset staf berlaku 24 jam, dibagikan privat. DB menyimpan hash kode;
+  audit fingerprint HMAC tanpa password, kode atau JWT.
+- JWT baru sid/cv/iat dan sesi DB. Logout mencabut satu perangkat; logout semua,
+  password/reset/ubah akun/nonaktif HRIS mencabut seluruh sesi. JWT legacy
+  hanya cv0. Reaktivasi perlu login baru; catatan reuse JWT sebelumnya arsip.
+- Web login/register/activate/recover/account dan editor HRIS owner-only pada
+  source. Role baru hanya HRIS, bukan POS/AI. Role legacy bisa dipertahankan
+  saat username ditautkan. Mode managed hanya auth/self/HRIS.
+- Native password/kode/registrasi dan Tim self/punch online; pengelola tim
+  lengkap melalui web. Identitas memakai UUID meskipun nomor kosong. PIN/shift
+  lama dibersihkan, sync dibatalkan lewat service existing; SQLite/antrean
+  dipertahankan. Punch timeout disimpan scoped, retry UUID sama setelah reopen.
+  PIN online mengecek auth/access; offline POS belum kebijakan masa izin baru.
+- PASS: 58 unit + 1 skip, 6 kelompok HTTP akun PG/JWT/RLS/race/replay/revocation,
+  8 kelompok akses, Redis 20 concurrent (12 allow/8 reject), 13 test native,
+  browser 32 kombinasi auth + HRIS/200%/error/retry, Next production build dan
+  debug APK. Analyzer 7 file tanpa error, 1 info PIN existing.
+  Logs /tmp/selaris-account-*. Review mencatat Delivery Gate antislop.
+  Font QA offline memakai berkas asli frontend existing, source tidak diubah.
+- QA schema-only/data sintetis, app NOSUPERUSER/NOBYPASSRLS, tanpa provider
+  atau write merchant. APK debug lokal bukan release/uji perangkat fisik.
+  Produksi/APK tetap 1.6.31+198; publikasi main/native masih pending.
+  Jangan recreate image backend lama karena hotfix existing melalui docker cp.
+- Container DB/Redis, jaringan dan preview QA sudah dibersihkan, termasuk
+  salinan schema/harness/font sementara. Log/screenshot/debug APK disimpan.
+  Inspect read-only backend produksi tetap running/healthy.
+- Berikutnya enforcement domain/AI/cache/history/RAG/worker/write sebelum
+  membuka grant POS/AI, kemudian GPS/foto pilihan owner. OTP pemulihan, masa
+  izin offline/antrean, radius/mutu GPS/retensi belum diputuskan. Jangan klaim
+  semua AI/akses/offline mengikuti izin baru atau tahap source ini live.
+
+## SEBELUMNYA - FONDASI IZIN SERVER DAN HRIS TERUJI DI QA, 2026-10-06
+
+- Ivan kembali "gas" setelah rencana selesai dan langkah berikutnya disebut
+  menyatukan pemeriksaan izin server. Implementasi tahap fondasi selesai pada
+  source; belum deploy/commit/push/APK. Review docs/ACCESS_REVIEW.md.
+- backend/schemas/access.py dan services/access.py menghitung AccessContext:
+  tenant/user/status pegawai/role/outlet/izin dan fingerprint access_version.
+  GET /auth/access kontrak untuk web/APK; bukan sesi perangkat/JWT version.
+  Header X-Tenant-ID jika ada wajib UUID tenant user. Role asing/deleted atau
+  policy invalid ditolak, tidak fallback. Nama role Owner tidak memberi hak.
+- Legacy base POS/self + can_* dan hris_manage dipetakan eksplisit. Managed
+  memakai Role.permissions.access_policy version1, StrictBool izin dikenal,
+  scope tenant/brand/outlet dan target aktif tenant sendiri. Belum UI/API
+  penulis policy atau override/penugasan individual. Tidak mengaktifkan role
+  produksi sebagai managed. Owner is_superuser mendapat hak tenant sendiri.
+- HRIS memakai izin employees/schedules/attendance.manage serta hris.self,
+  memeriksa outlet asal/tujuan/record/replay, chooser scoped dan privasi self.
+  Rekap tak diizinkan null+summary_scopes; tidak campur scope jadwal/absensi.
+  Mode managed tidak memuat semua akun tenant; link/unlink memerlukan
+  access.manage. Link baru akun owner sebagai karyawan ditolak.
+- Staf terhubung HrEmployee nonaktif ditolak oleh auth dependency dan login
+  OTP/Google/PIN, termasuk JWT lama dan replay. User.is_active tetap berbeda;
+  profil owner lama tidak mencabut kepemilikan bisnis. Pengelola boleh tutup
+  absensi nonaktif lewat koreksi beralasan. Reactivation masih dapat memakai
+  JWT existing bila akun/role layak; sesi belum dicabut permanen per perangkat.
+- Managed hanya boleh handler auth/self-profile dan HRIS yang terintegrasi,
+  berdasarkan identitas endpoint+metode yang sudah di-resolve FastAPI.
+  AI/HPP/sync/POS/finance/CRM/purchasing/Dapur belum terintegrasi untuk managed
+  dan ditolak. Legacy domain selain HRIS masih mengikuti handler lama;
+  cache/history/RAG dan worker AI belum dibatasi granular. Jangan klaim seluruh
+  aplikasi/chat sudah mengikuti role baru. enforced_modules saat ini hris.
+- Payload login OTP/Google dan auth/me memilih outlet dari cakupan yang sama.
+  PIN Dapur menolak managed selama belum siap. Google legacy dipertahankan
+  untuk migrasi; username/password/pemulihan/sesi/GPS/foto belum dibuat.
+  Transport web HRIS/CRM/shared API membaca detail.message penolakan.
+- PASS58unit+1skip fixture auth Google khusus,8kelompok HTTP JWT/PG/RLS/race/
+  replay/status/legacy login (Google verifier tiruan),4kelompok regresi HRIS
+  lama; owner finance/CRM/purchases dan kasir productsGET200. QA schema saja
+  dari produksi, data seluruhnya sintetis, role app non-superuser/NOBYPASSRLS.
+  TypeScript/py_compile/diffcheck lulus; tidak build/browser baru (tanpa layout).
+  Logs/tmp/selaris-access-unit.log,selaris-access-qa-http.log,
+  selaris-access-hris-regression.log. Tidak provider calls/writes merchant.
+- Tier gate Pro mengautentikasi user sebelum tenant lookup. QA juga membuktikan
+  header tenant asing ditolak sebelum HPP tier gate; recipes/ingredientsGET
+  owner200. Container DB+network QA dan salinan schema/skrip adaptasi dibersihkan.
+  Read-only inspect backend produksi running/healthy, mount hanya/app/uploads;
+  perubahan source tidak otomatis terpasang ke container.
+- Produksi dan APK tetap keadaan sebelumnya1.6.31+198. Pending publikasi
+  main/native sebelumnya tetap ada. Backend image lama jangan direcreate.
+  Langkah berikut: akun username/password dan migrasi legacy, kontrol role/
+  penugasan via HRIS serta sesi, lalu enforcement domain/AI dan absensi.
+
+## SEBELUMNYA - RENCANA AKUN AKSES DAN ABSENSI DISUSUN, 2026-10-06
+
+- Ivan kembali meminta baca memory, lalu "gas" setelah penjelasan bahwa
+  langkah terdekat ialah merinci alur akun dan matriks hak akses. Task ini
+  melanjutkan kesepakatan "plan dulu"; belum implementasi atau deployment.
+- Rencana konkret disimpan di docs/ACCOUNT_ACCESS_ATTENDANCE_PLAN.md:
+  keputusan existing, temuan source, alur owner/staf, matriks izin, konteks
+  server bersama web/APK/AI, sesi/pencabutan, migrasi, absensi dan kriteria QA.
+- Source mengonfirmasi User belum punya username/password, phone wajib unik;
+  HrEmployee.is_active belum mencabut login; login/me dapat memilih outlet
+  pertama; AI context cache per outlet dan history tenant+conversation ID
+  belum menjadi isolasi izin individual. Jalur chat RESTOCK dapat write
+  langsung. Semua ini dicatat sebagai pekerjaan berikut, belum diperbaiki.
+- Usulan yang BELUM menjadi keputusan Ivan: OTP alternatif login/pemulihan
+  setelah nomor diverifikasi; kode pemulihan owner tanpa nomor; login staf
+  username toko+username pribadi+password; kebijakan absensi per outlet;
+  foto default tidak wajib, GPS/foto dicek saat masuk dan pulang. Radius,
+  mutu GPS, masa simpan bukti dan izin offline POS perlu dikunci sebelum
+  fitur terkait. Jangan menyatakan usulan ini sudah disetujui/live.
+- Urutan teknis: inventaris+fondasi izin server, akun/migrasi legacy,
+  pengaturan HRIS/web/APK, semua jalur AI, lalu absensi lokasi. Payroll
+  menyusul. Periksa tabel sessions existing sebelum membuat schema sesi.
+  Pencabutan offline tidak bisa dijamin seketika; antrean POS tidak dihapus.
+- Pemeriksaan task ini hanya source/dokumen dan konsistensi tautan; tidak
+  menjalankan QA runtime baru, provider AI, writes merchant atau rilis.
+  APK terakhir tercatat1.6.31+198. Perubahan dokumen belum di-commit/push;
+  publikasi main/APK sebelumnya tetap pending.
+
+## KESEPAKATAN PEKERJAAN BERIKUTNYA - AKUN, AKSES DAN ABSENSI, 2026-10-06
+
+- Ivan meminta diskusi/rencana dulu karena perubahan menyentuh APK, lalu
+  menyepakati arah ini sebagai pekerjaan berikutnya sebelum istirahat.
+  Turn ini hanya menyimpan keputusan; belum implementasi atau rilis.
+- Owner mendaftar Selaris dengan username toko dan password. Google login
+  tidak dipakai dalam rancangan baru. OTP SeFrekuensi tetap pilihan;
+  fungsi tepatnya (alternatif login/verifikasi/pemulihan) perlu dimatangkan.
+  Web dapat dipakai dahulu dengan ajakan download APK yang bisa dilewati;
+  akun dan bisnis harus sama di web dan APK.
+- Owner mengatur akses tiap jabatan/karyawan melalui HRIS. Rencana: akun
+  individual, outlet penugasan, hak lihat/tindakan dan status karyawan
+  terhubung ke akses web/APK/server. Fitur HRIS live belum memenuhi seluruh
+  kontrol akses aplikasi tersebut; HrEmployee.is_active belum mematikan User.
+- Absensi native direncanakan memeriksa lokasi di HP karyawan. Keputusan
+  terbaru: foto absensi boleh dipakai atau tidak, sebagai pilihan yang
+  diatur owner; bukan selalu wajib dan bukan karyawan melewati kewajiban
+  foto sendiri. Cakupan pengaturan per toko/outlet/jabatan belum diputuskan.
+- Usulan diskusi untuk rancangan rinci: lokasi/radius outlet, foto langsung
+  dari kamera jika diwajibkan, cek lokasi terbaru/akurasi, waktu server,
+  pengajuan pengecualian dengan persetujuan manajer jika GPS bermasalah,
+  serta status jelas jika pengiriman gagal. Masuk akun, mulai/pulang kerja,
+  dan shift kas tetap berbeda. Belum ada kesepakatan pengenalan wajah,
+  pemantauan lokasi terus-menerus atau mode absensi offline.
+- Ivan menyetujui AI dapat diajak berbicara sesuai hak akses yang owner
+  berikan. Rencana harus membatasi konteks bisnis dan tindakan AI menurut
+  pengguna/outlet/izin; hak melihat data dan mengubah data dibedakan.
+- Prioritas berikutnya: matangkan rencana akun dan akses lintas web/APK/AI,
+  lalu absensi lokasi dengan foto opsional. Ini mendahului usulan payroll
+  pada catatan HRIS sebelumnya. Migrasi akses pengguna lama perlu dijaga.
+  Tidak ada push/deploy/rilis APK pada turn penutupan ini.
+
+## TERKINI - HRIS TAHAP PERTAMA LIVE, 2026-10-06
+
+- Ivan menyetujui tahap awal HRIS dengan "gas" setelah pembahasan profil
+  pegawai umum, penempatan outlet, jadwal dan absensi. Web `/dashboard/hris`
+  + navigasi Tim & absensi aktif sekitar08:23UTC.
+- Profil HrEmployee terpisah User/POS: KRY otomatis, nama/tugas/outlet,
+  kontak/tanggal kerja/status/notes, optional satu akun kasir terhubung.
+  Tidak membuat akun kasir atau mengubah akses login POS saat nonaktif.
+- Owner is_superuser atau Role tenant permission hris_manage:true mengelola.
+  Staf hanya profil/jadwal/absensi sendiri; kontak/notes pengelola disembunyikan.
+  Akun terhubung bisa punch masuk/pulang di web dengan waktu server;
+  bukan fitur absensi native/offline atau bukti GPS.
+- Satu jadwal dan kehadiran per pegawai/tanggal kerja. Jadwal lintas malam
+  maksimum24jam, overlap/race ditolak. Tanggal mengikuti Outlet.timezone,
+  termasuk WIB/WITA/WIT. Masuk setelah tengah malam dalam jadwal memakai
+  tanggal mulai jadwal; pengelola bisa mengoreksinya dengan aturan sama.
+  Hadir/izin/sakit/cuti/libur, alasan koreksi/void, row_version/audit.
+  Catatan terbuka dapat ditutup meskipun profil sudah nonaktif. Jangan
+  ganti user/outlet profil saat absensi terbuka; guard mencegahnya.
+- Ringkasan query outlet/periode1..31hari, daftar/chooser50 dan searchliteral.
+  Belum tercatat tidak otomatis bolos; durasi hanya menit tercatat, bukan
+  lembur/gaji. Employee active count = profil aktif penempatan saat ini.
+  GET /hris/setup/workspace/employee-choices menyediakan scope/basis/period/
+  timezone/generated_at untuk konteks berikutnya; belum hook ke chat utama.
+- Migrasi113 dari112 menambah hr_employees/hr_schedules/hr_attendance,
+  FORCE RLS, FK composite tenant/employee, partial daily/open uniqueness.
+  Migration grant hanya3tabel ke role app existing non-superuser/bypassRLS.
+  Semua writes UUID+fingerprint+advisory locks/audit atomik; replay satu hasil.
+  Pending sessionStorage per tenant/user, pulih setelah close/reload;
+  serverAction cek workspace sebelum write. Client transport putus melepas
+  busy dan tetap menyimpan request. Pergantian akun tidak mengirim request
+  lama, pending asal tetap disimpan; bukan fitur offline.
+- PASS29unit, PG HTTP/RLS/permission/race/night correction, schema migrate/
+  downgrade-reupgrade hanyaQA; TS/build/py_compile/diffcheck. Browser dev dan
+  image produksi final5viewport×2tema×200%, AA4.5/batas3/44px, keyboard,
+  CRUD/punch/retry/empty/nooutlet/network/account isolation. Gate lengkap
+  docs/HRIS_REVIEW.md. Live API setup/3lists/choices200, daftar kosong asli,
+  regression customer/POS/finance/purchasingGET200; livebrowser3forms/cuti/
+  Escape/mobile375 lulus tanpa writes merchant/provider AI.
+- Backend7file docker cp + migrate113/restart existing pendingHPP0,
+  image160766…31a dan created4Okt tetap. Jangan recreatebackend dari image
+  lama; hotfix semua modul sebelumnya belum dibake. Backup/tmp/selaris-hris-backup.
+  Frontend final9eae7…bcd9 created2026-10-06T08:23:48Z via compose up --no-deps
+  frontend setelah suite final. Semua services/DB/bg_tasks healthy.
+- Belum payroll/lembur/pajak/BPJS/approval cuti staf/reminder otomatis/native
+  HRIS/offline atau HRIS ke chat utama. Tahap berikutnya baru payroll terkait
+  Keuangan dan konteks AI dengan izin terarah. Tidak push main/rilisAPK,
+  approval rilis native sebelumnya tetap pending; APK tetap1.6.31+198.
+  Source uncommitted. Token dan QA sementara dibersihkan setelah verifikasi.
+
+## HRIS - PEMERIKSAAN AWAL SEBELUM PERSETUJUAN GAS, 2026-10-06
+
+- Ivan menanyakan apakah HRIS sudah bisa dibangun setelah CRM dirapikan.
+  Pemeriksaan readiness saja pada turn ini, belum implementasi/deploy HRIS.
+- Fondasi existing: User/Role, pengelolaan kasir native, Shift kas/laci,
+  serta kategori expense gaji. Belum ditemukan model/migrasi HRIS untuk
+  profil pegawai umum, jadwal kerja, absensi, izin/cuti atau payroll.
+- Rekomendasi tahap awal: profil karyawan (termasuk tanpa akun POS),
+  penempatan outlet/jabatan, jadwal, absensi/izin, lalu rekap gaji yang
+  ditinjau owner dan terkait Keuangan ketika benar-benar dibayar.
+  Shift kas otomatis/manual bukan bukti jam kerja pegawai. Rencana ini
+  bukan implementasi yang sudah tersedia atau persetujuan detail payroll.
+
+## TERKINI - DATA PELANGGAN DIRAPIKAN DAN LIVE, 2026-10-06
+
+- Ivan: "ok data pelanggan gas juga ..lo rapikan juga biar bsa masuk ke
+  konteks ai nntnya". Fondasi CRM diselesaikan dahulu; belum menambahkan
+  integrasi pelanggan ke chat utama atau mengirim data ke provider AI.
+- Web Pelanggan mengikuti Keuangan/Pembelian: tambah/edit nama, HP, email,
+  ulang tahun, preferensi, izin promo; catatan layanan/keluhan timeline;
+  riwayat nota20/halaman, daftar50, search/sort/filter, CSV halaman yang jelas.
+  Ringkasan seluruh bisnis tidak mengikuti filter. Error bukan nol/kosong;
+  loading/retry, respon stale, WIB/Decimal2, mobile, dua tema dan keyboard.
+- GET /customers/workspace dan /{id} memakai fakta order langsung dengan
+  tenant+outlet scope. Tidak bergantung pada cached total_visits/total_spent.
+  Order biasa Payment paid, order tab Tab paid; pending anchor/cancelled/
+  deleted/unpaid dan refunded biasa dikeluarkan. Basis paid_orders_gross,
+  bukan belanja bersih/refund ledger. Satu nota satu transaksi, bukan satu
+  kedatangan fisik. Favorit qty seluruh riwayat, nama katalog saat ini.
+  Metadata scope/basis/timezone/generated_at untuk konteks AI berikutnya.
+- Normalisasi nomor08/+62 dan internasional, duplikat canonical legacy.
+  Profil tanpa HP memakai string kosong DB existing NOT NULL + HMAC unik,
+  API null. POS legacy juga bisa tambah beberapa pelanggan tanpa nomor.
+  Edit legacy/CRM ikut row lock dan version agar workspace melihat bentrok.
+- Create/edit/note UUID+fingerprint+advisory lock/audit atomik, replay satu
+  profil/catatan. Pending sessionStorage per tenant/user, pulih setelah
+  close/reload; bila storage diblokir hanya memory halaman, bukan offline.
+  Form perubahan nomor reset izin promo. Tidak mengirim WA/campaign.
+- CRM segmen legacy tetap di Promo; timestamp-null campuran memicu refresh,
+  favorit90hari usang direset. Tidak merge/delete kontak atau migrasi.
+- PASS25unit, PG HTTP RLS/race/Decimal/fresh facts/legacy compatibility;
+  TypeScript/build; browser dev dan image produksi final5viewport×2tema×200%
+  AA/44px, CSV/CRUD/retry/pagination/draft terpisah akun. Review lengkap dan
+  Delivery Gate docs/CUSTOMERS_REVIEW.md.
+- Live sekitar07:36UTC: backend6file cp/restart existing, pending HPP0,
+  hash final sama; image160766…31a/created4Okt tidak diganti. Frontend
+  4ec997…9395 setelah QA lalu compose up --no-deps frontend. Demo API
+  workspace/detail/POS200, list/detail uang sesuai; browser live real Server
+  Actions/profil/form/Escape/HP lulus tanpa writes merchant/providercalls.
+  Empat layanan healthy, healthdb/bg_tasks sehat. Backup/tmp/selaris-customers-backup.
+- Source uncommitted. Tidak push main atau rilis APK; izin publikasi native
+  sebelumnya tetap pending, APK tetap1.6.31. QA sementara dibersihkan.
+
+## TERKINI — PEMBELIAN DIRAPIKAN DAN LIVE, 2026-10-06
+
+- Ivan: "oke kita rapikan pembelian skrg biar smua udah rapi baru ai nya kita
+  ksi sluruh konteks bisnis ini". Selesaikan fondasi modul dahulu, integrasi
+  AI menyeluruh berikutnya. Task ini tidak membangun chat utama baru.
+- Web Pembelian mengikuti UI Keuangan; outlet cookie/pilihan, bulan WIB,
+  ringkasan penerimaan versus utang sekarang/overdue semua bulan, search
+  server dan pagination50. Error tidak menjadi nol/kosong. Supplier bersama
+  bisnis dengan statistik outlet, edit/nonaktif/hapus tetap menjaga nota/utang.
+- Create nota/cicilan/supplier UUID+fingerprint after_state audit existing,
+  advisory lock tenant/request. Replay identik satu penerimaan/event/expense;
+  payload/user/action berbeda409. Nota/cicilan pending dalam sessionStorage
+  tab browser, pulih setelah dialog ditutup/reload; bukan fitur offline.
+- Receiver memakai helper stock existing, lock target stabil, sequence nota
+  max suffix + lock, flush tiap target agar baris berulang memakai cost terbaru.
+  Produk HPP dari total aktual/pcs, termasuk override/kemasan COUNT; form pcs.
+  Bahan konversi UNIT_ALIASES dan precision8; overhead bukan stok. Tenant/brand
+  outlet divalidasi, Starter bahan403, supplier nonaktif ditolak. Semua efek
+  rollback bila satu baris invalid. Quantity resep/deduct tidak diubah.
+- Detail nota memakai snapshot HPP event received per target/baris dan history
+  actual deltas pembayaran. Legacy yang tidak terbukti ditandai incomplete.
+  Bayar tidak menambah stok atau mentransfer uang; belum ada return/cancel/PO
+  formal. Keuangan tetap sesuai tanggal penerimaan/pembayaran, akun asal nota
+  belum disimpan. Cache AI/storefront brand diinvalidate setelah receive commit.
+- Foto lewat Next /api/upload/invoice di bawah Nginx upload existing, maksimal
+  8MB (backend10), lolos fixture2MB tanpa batas Server Actions1MB. Backend OCR
+  menerima outlet_id untuk pilih brand, ambiguous legacy400 bukan500. Hasil
+  hanya draft; baris unknown wajib cocokkan. Tidak call provider OCR/LLM live.
+- PASS unit22 (purchasing/finance/HPPsnapshot), PG HTTP RLS/race/rollback/units/
+  repeatedtarget/HPP/history/financeperiod, TypeScript, build. Browser dev DAN
+  image produksi Pembelian+regresi Keuangan, 5viewport×2tema×200%, AA/44px,
+  error/retry/empty dan kontrol. Review docs/PURCHASING_REVIEW.md.
+- Live07:09UTC backend4file cp+restart existing pending HPP0, hash cocok;
+  image160766…31a tetap. Frontendd10c42…3380 dibangun+QA lalu no-depsfrontend.
+  Demo API summary/list/suppliers/finance200, currentdebt/overdue sama. Bulan
+  live kosong, history dibuktikan QA. Browser live targets/modal/supplier/HP
+  PASS, proxyfoto domainpublik400 validasi tanpaLLM. Healthdb/bgtasks/4service
+  sehat, frontend200. Tidak tulis nota/pembayaran testmerchant.
+- Backup /tmp/selaris-purchasing-backup, QA sementara dibersihkan. Source
+  uncommitted; tidak migrasi/recreate backend/push main/APK. APK tetap1.6.31;
+  approval publikasi native sebelumnya tetap pending, bukan bagian task ini.
+
+## TERKINI — KEUANGAN WEB DIPERBAIKI DAN LIVE, 2026-10-06
+
+- Ivan mengizinkan langsung: "klo keungan prlu lo buat lebih profesional lagi
+  gas aja tapi tetap user friendly". Keuangan kini laporan terurut, laba
+  perkiraan dengan basis/coverage jelas, arus kas sebagai perubahan bukan saldo,
+  utang supplier sekarang/overdue, kategori biaya, tren dan CSV dua desimal.
+  Loading/error tidak menyajikan nol palsu; tanggal WIB, outlet cookie,
+  respons terlambat, modal fokus/Escape, mobile dan dua tema sudah ditangani.
+- Bug cicilan diperbaiki: cash out mengikuti received/payment event bulan
+  pembayaran, bukan seluruh paid_amount bulan penerimaan. Event baru amount
+  aktual + paid_before; event lama baca selisih paid_after. Nota tidak
+  menggandakan expense terkait; akun asal nota belum tersimpan dan diberi label
+  tersendiri. Riwayat tidak lengkap ditandai perkiraan.
+- HPP finance memakai recipe_hpp_snapshot Decimal/resep terbaru; resep invalid
+  unknown, plain product fallback buy_price positif. Laba masih memakai HPP
+  terkini dan total POS termasuk pajak/service, belum ledger akuntansi formal.
+- Create expense UUID/fingerprint audit + advisory lock memastikan replay satu
+  catatan. Form retry mempertahankan payload bila hasil tidak pasti selama
+  modal terbuka. Edit row lock/version; recurring lock+dedup dan konfirmasi
+  biaya sudah dibayar. Validasi supplier/akun tenant, Decimal2 dan timezone.
+- Chat umum mendapat fakta finance live per tenant/outlet/bulan melalui
+  finance_context, tanpa tren/cache harian. Context baca saja, tidak mencatat
+  biaya, membuat reminder, membayar atau transfer. Belum membangun satu chat
+  persisten lintas HPP/umum/native. Cakupan visi tetap POS/CRM/HRIS+keuangan.
+- PASS: 24 unit; PostgreSQL/HTTP QA RLS/non-superuser/race/replay/cicilan;
+  TypeScript; build produksi; browser dev DAN image produksi lima viewport,
+  dua tema, 200% teks, AA/44px, CSV/error/retry/CRUD. Review docs/FINANCE_REVIEW.md.
+- Live sekitar06:46UTC: enam backend file docker cp + restart existing saat
+  pending HPP0, semua hash cocok; image backend160766…31a unchanged. Frontend
+  image92c5b9…91f2 dibangun+QA lalu compose up --no-deps frontend. Empat layanan
+  healthy, health db/bg_tasks sehat, frontend200. Demo GET finance empat
+  endpoint200 dan identitas kas/utang terverifikasi. Browser LIVE real Server
+  Actions memuat laporan, modal buka/tutup, HP tanpa overflow; tidak mencatat
+  biaya atau pembayaran merchant untuk tes, tidak memanggil provider LLM.
+- Backup /tmp/selaris-finance-backup. Source masih uncommitted, tidak migrasi
+  atau recreate backend. Izin publikasi main/rilis APK native tetap pending;
+  APK masih1.6.31. Pesan gas keuangan bukan jawaban approval APK sebelumnya.
+
+## ARAH PRODUK — SATU ASISTEN BISNIS, 2026-10-06
+
+- Ivan memperjelas cakupan: keuangan juga bagian utama asisten, bukan hanya
+  stok. Jangan mempersempit visi menjadi chatbot stok. Cakupan percakapan
+  menyambungkan penjualan, HPP, pembelian, kas/pengeluaran, dan utang; CRM/HRIS
+  tetap dalam visi. Tahap awal yang direkomendasikan juga mencakup keuangan.
+- Fondasi kode keuangan sudah ada: CashAccount/Expense, ringkasan laba-rugi,
+  arus kas, coverage HPP, dan payables dari PurchaseOrder. Ini bukan bukti
+  semua kemampuan tersebut sudah tersedia melalui chat. Pembelian/pembayaran
+  tidak boleh tercatat ganda; laba berbeda dari saldo kas dan estimasi harus
+  mengikuti kelengkapan data. Pencatatan pembayaran berbeda dari transfer uang.
+- Ivan menegaskan visi AI untuk POS, CRM, dan HRIS: pengguna dapat bertanya
+  dengan konteks bisnisnya, mendapat pengingat, serta dibantu menjaga/isi stok.
+  Ia menyetujui satu tempat utama percakapan; banyak tempat chat HPP sekarang
+  membuat pengalaman terasa terpisah. Ini arah produk, belum implementasi baru.
+- Usulan yang dibahas: percakapan persisten lintas web/native, akses data
+  operasional terbaru sesuai tenant/outlet/peran, ingatan preferensi bisnis,
+  dan pekerjaan/reminder persisten. Entry dari halaman produk/HPP/stok membawa
+  konteks ke asisten yang sama. Urutan POS/HPP/stok/pembelian lalu CRM/HRIS
+  merupakan rekomendasi agent, belum persetujuan detail seluruh roadmap.
+- Untuk bantuan stok, bedakan saldo awal/opname (jumlah absolut), barang
+  diterima (penambahan), dan rencana/pesanan pembelian (belum menambah stok).
+  Pertanyaan bisnis tidak otomatis menjadi perintah perubahan data.
+- Pemeriksaan kode: chat umum Redis 30 menit/5 pasang pesan; HPP sesi DB
+  tersendiri. Konteks umum cached sampai tengah malam WIB dengan invalidasi
+  di sejumlah jalur mutasi. Sudah ada pemantauan perubahan margin; jangan
+  mengklaim kemampuan proaktif sepenuhnya belum ada. Tidak mengubah aplikasi,
+  deployment, atau izin publikasi APK pada diskusi ini.
+
+## TERKINI — TOKO DEMO DIAKTIFKAN KEMBALI, 2026-10-06
+
+- Ivan secara eksplisit meminta toko demo yang gagal memuat HPP diaktifkan.
+  Tenant terkait brand7fb39595… diverifikasi is_demo=true lalu diaktifkan melalui
+  PUT /superadmin/tenants/{id}/status: is_active=true, subscription_status=active.
+  Paket tetapPro. Endpoint resmi mencatat auditUPDATE_STATUS, menaikkanrow_version
+  dan invalidasi cache tenant; tidak mengubah invoice menjadi paid atau dataresep.
+- Verifikasi DB statusactive/Pro; HTTPGET products/recipes/ingredients semuanya
+  200. HPP web dapat mengambil daftar kembali. Tidak restart/deploy aplikasi.
+- Persetujuan ini hanya reaktivasi toko demo; approval push/rilisAPK1.6.32 dari
+  perbaikan native masih pending, jangan dianggap diberikan oleh pesan ini.
+
+## TERKINI — WEB “DATA HPP BELUM BISA DIMUAT”, READ-ONLY 2026-10-06
+
+- Ivan memperjelas error pada Atur HPP web. Log actual `/recipes/` HTTP400,
+  `/outlets/` dan `/products/` HTTP200. GET dengan Bearer dan X-Tenant-ID yang
+  benar mereproduksi detail **Tenant tidak aktif**. Bukan kegagalan rumus/sync.
+- Toko demo terkait brand7fb39595…: tenant.is_active=false, tier=pro,
+  subscription_status=suspended, is_demo=true, next_billing_date2026-11-01.
+  Cache snapshot kosong, jadi ini keadaan DB aktual, bukan cache basi.
+  User identitas superadmin masih dapat membuka dashboard, namun require_pro_tier
+  melalui get_current_tenant menolak tenant nonaktif. Resep masih tersimpan.
+- `readHppData` web menutupi semua non403 sebagai “Data HPP belum bisa dimuat.
+  Coba lagi.” sehingga penyebab status toko tidak kelihatan. User kali ini
+  bertanya arti pesan, bukan meminta mengaktifkan langganan. Belum mengubah
+  status tenant, sesi, UI, deployment, atau rilis. Izin push/APK sebelumnya
+  masih pending; pesan ini BUKAN approval. Log lokal `/tmp/selaris-hpp-dashboard-*`.
+
+## TERKINI — PERBAIKAN HPP NATIVE, 2026-10-06 (RILIS MENUNGGU IZIN)
+
+- Ivan meminta bereskan bug native yang tercatat. HPP kini berasal dari snapshot
+  Decimal backend `changes.recipe_hpp`, bukan raw quantity × cost di Flutter.
+  Konversi memakai helper existing; optional/nonpositif nol, archived diabaikan,
+  unit invalid membuat total unavailable. Ingredient-only delta refresh resep
+  dependennya dengan brand scope/RLS; snapshot pull-only, tidak ikut cursor/push.
+- Drift schema8: estimasi resep, needs_review bahan, tabel snapshot. Backfill HPP
+  sekali hanya selesai sesudah seluruh halaman sukses dan mendukung protokol.
+  StreamProvider mengikuti database; null lama/resep berubah langsung refresh.
+  Transaksi offline, quantity stock mentah dan stok fisik tidak diubah/reset.
+- Rincian HPP menandai estimasi/optional/incomplete, uang2desimal dan takaran8,
+  selisih harga jual belum biaya operasional. 30 Flutter tests PASS + satu skip
+  diagnostik opsional; 17 HPP termasuk kontras >=4.5 kedua tema/5lebar/200% PASS.
+  13 backend unit PASS; PG HTTP QA13resep/pagination/ingredient-only/RLS PASS.
+  Analyzer nol error, empat warning lama. Review `docs/NATIVE_HPP_REVIEW.md`.
+- Backend3file docker cp + restart existing, source hash cocok/healthy. Backup
+  `/tmp/selaris-hpp-native-backup`. Tidak recreate backend/frontend, migration112
+  tetap. Health db/bg_tasks sehat, empat container healthy. Sync actual read-only
+  cocok API resep dan provider SQLite untuk17resep produk nonarsip; Egg Tart2178.33,
+  Kopi susu6254.00. Satu resep produk arsip memang disembunyikan provider.
+- APK live masih1.6.31+198. Automatic approval review MENOLAK commit+push main:
+  izin fix dinilai belum eksplisit untuk publikasi branch bersama/rilis CI.
+  User diminta izin async push+rilis1.6.32; BELUM ada jawaban. Tidak bypass.
+  Tidak ada commit/push/dispatch task ini. Metadata source dikembalikan1.6.31
+  agar tidak mengiklankan artifact belum ada; draft1.6.32 disimpan lokal
+  `/tmp/selaris-hpp-native-version-planned.json`. Setelah izin: restore draft,
+  commit/push verifiedSHA, dispatch CI, verifikasi signing/Firebase lalu pasang
+  artifact+version.json. Jangan klaim HP Ivan atau APK sudah diperbarui.
+
 ## TERKINI — VERIFIKASI HPP WEB KE APK, READ-ONLY 2026-10-04
 
 - Ivan bertanya apakah HPP terbaru benar-benar terhubung ke APK. Latest approved

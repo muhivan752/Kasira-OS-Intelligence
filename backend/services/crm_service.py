@@ -142,8 +142,7 @@ async def refresh_segments(db: AsyncSession, tenant_id: UUID) -> dict:
         c.rfm_recency_days = recency
         c.rfm_frequency_90d = freq_90
         c.rfm_monetary_90d = mon_90
-        if c.id in fav:
-            c.favorite_product_id = fav[c.id][0]
+        c.favorite_product_id = fav[c.id][0] if c.id in fav else None
         counts[seg] += 1
 
     await db.flush()
@@ -151,15 +150,14 @@ async def refresh_segments(db: AsyncSession, tenant_id: UUID) -> dict:
 
 
 async def needs_refresh(db: AsyncSession, tenant_id: UUID) -> bool:
-    oldest = (await db.execute(
-        select(func.min(Customer.segment_updated_at)).where(Customer.tenant_id == tenant_id, Customer.deleted_at.is_(None))
-    )).scalar()
-    has_any = (await db.execute(
-        select(func.count(Customer.id)).where(Customer.tenant_id == tenant_id, Customer.deleted_at.is_(None))
-    )).scalar() or 0
+    oldest, has_any, missing = (await db.execute(
+        select(func.min(Customer.segment_updated_at), func.count(Customer.id),
+               func.count(Customer.id).filter(Customer.segment_updated_at.is_(None)))
+        .where(Customer.tenant_id == tenant_id, Customer.deleted_at.is_(None))
+    )).one()
     if not has_any:
         return False
-    return oldest is None or (datetime.now(timezone.utc) - oldest) > STALE_AFTER
+    return bool(missing) or oldest is None or (datetime.now(timezone.utc) - oldest) > STALE_AFTER
 
 
 async def segment_summary(db: AsyncSession, tenant_id: UUID) -> list[dict]:

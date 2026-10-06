@@ -18,6 +18,7 @@ from backend.api import deps
 from backend.core.database import get_db
 from backend.models.user import User
 from backend.models.brand import Brand
+from backend.models.outlet import Outlet
 from backend.schemas.response import StandardResponse
 from backend.services import invoice_ocr_service
 
@@ -28,19 +29,28 @@ MAX_SIZE_MB = 10
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
-async def _get_brand_id(tenant_id: UUID, db: AsyncSession) -> UUID:
+async def _get_brand_id(tenant_id: UUID, db: AsyncSession, outlet_id: Optional[UUID] = None) -> UUID:
+    if outlet_id:
+        outlet = await db.scalar(select(Outlet).where(Outlet.id == outlet_id, Outlet.tenant_id == tenant_id,
+                                                      Outlet.deleted_at.is_(None)))
+        if not outlet or not outlet.brand_id:
+            raise HTTPException(404, detail='Brand outlet tidak ditemukan')
+        return outlet.brand_id
     brand = (await db.execute(
         select(Brand).where(Brand.tenant_id == tenant_id, Brand.deleted_at.is_(None))
-    )).scalar_one_or_none()
+    )).scalars().all()
     if not brand:
         raise HTTPException(status_code=404, detail="Brand not found")
-    return brand.id
+    if len(brand) > 1:
+        raise HTTPException(400, detail='Pilih outlet untuk membaca nota')
+    return brand[0].id
 
 
 # ─── Scan ───────────────────────────────────────────────────────────────────
 
 @router.post("/scan")
 async def scan_invoice(
+    outlet_id: Optional[UUID] = None,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
@@ -56,7 +66,7 @@ async def scan_invoice(
     if len(content) > MAX_SIZE_MB * 1024 * 1024:
         raise HTTPException(400, detail=f"Ukuran file maksimal {MAX_SIZE_MB}MB")
 
-    brand_id = await _get_brand_id(current_user.tenant_id, db)
+    brand_id = await _get_brand_id(current_user.tenant_id, db, outlet_id)
 
     # Budget check — OCR costs ~3 cents per scan (image + extraction)
     try:

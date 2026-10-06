@@ -1,9 +1,12 @@
 from fastapi import APIRouter
 from backend.api.routes import hpp_setup
+from backend.api.routes import hris
+from backend.api.routes import accounts
 from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect, ai, reservations, loyalty, media, customers, tables, tabs, webhook, ingredients, recipes, knowledge_graph, superadmin, billing, referrals, platform, embeddings, analytics, invoice_ocr, waitlist, landing, purchasing, finance, campaigns, crm, couriers, devices
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(accounts.auth_router, prefix="/auth", tags=["accounts"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(outlets.router, prefix="/outlets", tags=["outlets"])
@@ -48,3 +51,5 @@ api_router.include_router(campaigns.router, prefix="/campaigns", tags=["campaign
 api_router.include_router(crm.router, prefix="/crm", tags=["crm"])
 api_router.include_router(couriers.router, prefix="/couriers", tags=["delivery"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
+api_router.include_router(hris.router, prefix="/hris", tags=["hris"])
+api_router.include_router(accounts.hris_router, prefix="/hris", tags=["accounts"])

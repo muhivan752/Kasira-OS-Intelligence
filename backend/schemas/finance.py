@@ -1,6 +1,6 @@
 from typing import Optional, List
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
@@ -34,9 +34,10 @@ class CashAccountResponse(BaseModel):
 # ── Pengeluaran ──
 
 class ExpenseCreate(BaseModel):
+    client_request_id: Optional[UUID] = None
     outlet_id: Optional[UUID] = None
     category: str = "lainnya"
-    amount: Decimal = Field(..., gt=0)
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     paid_at: Optional[datetime] = None
     payment_method: str = "cash"
     cash_account_id: Optional[UUID] = None
@@ -44,6 +45,15 @@ class ExpenseCreate(BaseModel):
     note: Optional[str] = Field(None, max_length=200)
     photo_url: Optional[str] = None
     recurring: str = "none"
+
+    @field_validator("paid_at")
+    @classmethod
+    def _date(cls, v):
+        if v is not None and (v.tzinfo is None or v.utcoffset() is None):
+            raise ValueError("Tanggal pembayaran harus menyertakan zona waktu")
+        if v is not None and v > datetime.now(timezone.utc) + timedelta(minutes=5):
+            raise ValueError("Pengeluaran dicatat setelah pembayaran dilakukan")
+        return v
 
     @field_validator("category")
     @classmethod
@@ -72,7 +82,7 @@ class ExpenseCreate(BaseModel):
 
 class ExpenseUpdate(BaseModel):
     category: Optional[str] = None
-    amount: Optional[Decimal] = Field(None, gt=0)
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
     paid_at: Optional[datetime] = None
     payment_method: Optional[str] = None
     cash_account_id: Optional[UUID] = None
@@ -80,7 +90,19 @@ class ExpenseUpdate(BaseModel):
     note: Optional[str] = Field(None, max_length=200)
     photo_url: Optional[str] = None
     recurring: Optional[str] = None
-    row_version: int
+    row_version: int = Field(..., ge=0)
+
+    @field_validator("category", "amount", "paid_at", "payment_method", "recurring")
+    @classmethod
+    def _required_when_present(cls, v):
+        if v is None:
+            raise ValueError("Kolom wajib tidak boleh dikosongkan")
+        return v
+
+    _cat = field_validator("category")(ExpenseCreate._cat.__func__)
+    _pm = field_validator("payment_method")(ExpenseCreate._pm.__func__)
+    _rec = field_validator("recurring")(ExpenseCreate._rec.__func__)
+    _date = field_validator("paid_at")(ExpenseCreate._date.__func__)
 
 
 class ExpenseResponse(BaseModel):
@@ -164,3 +186,7 @@ class FinanceSummary(BaseModel):
 
     trend: List[MonthPoint]
     recurring_pending: int      # template bulanan yang belum disalin ke bulan ini
+    report_timezone: str = "Asia/Jakarta"
+    generated_at: Optional[datetime] = None
+    cash_history_estimated: bool = False
+    payables_overdue: Decimal = Decimal("0")

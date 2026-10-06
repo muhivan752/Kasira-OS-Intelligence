@@ -1,388 +1,140 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Search, Users, RefreshCw, Download, X, Star, Loader2 } from 'lucide-react';
-import { getCrmCustomers, getCrmCustomerDetail, refreshCrmStats } from '@/app/actions/api';
-import { getSegmentSummary } from '@/app/actions/crm';
-import Link from 'next/link';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { InventoryDialog } from '@/components/inventory-dialog';
+import { getCustomerWorkspace, getCustomerWorkspaceDetail, saveCustomerWorkspace, addCustomerWorkspaceNote } from '@/app/actions/customers';
+import type { CustomerList, CustomerDetail, CustomerFilters, CustomerSave, CustomerNote } from '@/lib/customers';
+import { customerDate, customerCsv } from '@/lib/customers';
+import { money, jakartaDate } from '@/lib/finance';
+import '../keuangan/finance.css';
+import './customers.css';
 
-type Customer = {
-  id: string;
-  name: string;
-  phone: string | null;
-  email: string | null;
-  notes: string | null;
-  total_visits: number;
-  total_spent: number;
-  avg_spent: number;
-  first_visit_at: string | null;
-  last_visit_at: string | null;
-  wa_marketing_consent: boolean;
-};
+const initialFilters: CustomerFilters = { search: '', segment: '', sort: 'last_visit', skip: 0 };
+const segments = [['', 'Semua pelanggan'], ['repeat', 'Belanja berulang'], ['lapse', 'Tidak belanja 30 hari'], ['new', 'Belanja pertama 30 hari'], ['unspent', 'Belum belanja'], ['consent', 'Setuju promo WA']];
+const sorts = [['last_visit', 'Terakhir belanja'], ['spent', 'Total belanja terbesar'], ['visits', 'Transaksi terbanyak'], ['newest', 'Terbaru dicatat'], ['name', 'Nama A sampai Z']];
+type Pending = { id?: string; profile?: CustomerSave; note?: CustomerNote };
+const pendingKey = 'selaris-customer-pending';
 
-type Detail = Customer & {
-  orders: {
-    id: string;
-    order_number: string;
-    created_at: string | null;
-    total_amount: number;
-    order_type: string;
-    items: { name: string; qty: number }[];
-  }[];
-  favourites: { name: string; qty: number }[];
-};
-
-// Segmen sengaja cuma empat dan semuanya kalimat yang bisa langsung
-// ditindaklanjuti pemilik warung — bukan istilah analitik yang harus
-// ditafsirkan dulu.
-const SEGMENTS = [
-  { key: '', label: 'Semua' },
-  { key: 'lapse', label: 'Lama tidak mampir', hint: 'Pernah belanja, tapi 30 hari terakhir tidak terlihat' },
-  { key: 'repeat', label: 'Balik lagi', hint: 'Sudah belanja lebih dari sekali' },
-  { key: 'baru', label: 'Baru kenal', hint: 'Pertama kali belanja dalam 30 hari terakhir' },
-  { key: 'belum_belanja', label: 'Belum pernah belanja', hint: 'Nomornya tersimpan tapi belum ada transaksi' },
-];
-
-const SORTS = [
-  { key: 'last_visit', label: 'Terakhir mampir' },
-  { key: 'spent', label: 'Belanja terbesar' },
-  { key: 'visits', label: 'Paling sering' },
-  { key: 'newest', label: 'Terbaru' },
-  { key: 'name', label: 'Nama' },
-];
-
-const rp = (n: number) =>
-  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0);
-
-function daysSince(iso: string | null): number | null {
-  if (!iso) return null;
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-}
-
-function tanggal(iso: string | null) {
-  if (!iso) return '-';
-  return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-export default function PelangganPage() {
-  const [items, setItems] = useState<Customer[]>([]);
-  const [total, setTotal] = useState(0);
-  const [repeat, setRepeat] = useState(0);
-  const [spentAll, setSpentAll] = useState(0);
-  const [search, setSearch] = useState('');
-  const [sort, setSort] = useState('last_visit');
-  const [segment, setSegment] = useState('');
-  const [rfm, setRfm] = useState('');
-  const [rfmSegments, setRfmSegments] = useState<{ key: string; label: string; hint: string; count: number; reachable: number }[]>([]);
-  const [segCounts, setSegCounts] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-
-  const load = useCallback(async (opts: { silent?: boolean } = {}) => {
-    if (!opts.silent) setLoading(true);
-    try {
-      const data = await getCrmCustomers({ search, sort, segment, rfm });
-      setItems(data?.items ?? []);
-      setTotal(data?.total ?? 0);
-      setRepeat(data?.repeat_customers ?? 0);
-      setSpentAll(data?.total_spent_all ?? 0);
-      setSegCounts(data?.segments ?? {});
-    } catch {
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [sort, search, segment, rfm]);
-
-  useEffect(() => { getSegmentSummary().then(setRfmSegments); }, []);
-
-  // Debounce pencarian — tiap ketikan jangan langsung nembak server.
+export default function CustomersPage() {
+  const [filters, setFilters] = useState(initialFilters), [search, setSearch] = useState('');
+  const [data, setData] = useState<CustomerList | null>(null), [loading, setLoading] = useState(true);
+  const [error, setError] = useState(''), [notice, setNotice] = useState(''), [revision, setRevision] = useState(0);
+  const [selected, setSelected] = useState<string | null>(null), [creating, setCreating] = useState(false);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const storageKey = useRef<string | null>(null);
+  useEffect(() => { const timer = setTimeout(() => setFilters(v => ({ ...v, search, skip: 0 })), 300); return () => clearTimeout(timer); }, [search]);
   useEffect(() => {
-    const t = setTimeout(() => load(), search ? 350 : 0);
-    return () => clearTimeout(t);
-  }, [load, search]);
-
-  async function openDetail(id: string) {
-    setDetailLoading(true);
-    setDetail(null);
-    try {
-      setDetail(await getCrmCustomerDetail(id));
-    } finally {
-      setDetailLoading(false);
-    }
-  }
-
-  async function recompute() {
-    setRefreshing(true);
-    try {
-      await refreshCrmStats();
-      await load({ silent: true });
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
-  function exportCsv() {
-    const head = ['Nama', 'No HP', 'Email', 'Kunjungan', 'Total Belanja', 'Rata-rata', 'Kunjungan Pertama', 'Terakhir Mampir', 'Catatan'];
-    const rows = items.map((c) => [
-      c.name, c.phone ?? '', c.email ?? '', c.total_visits,
-      Math.round(c.total_spent), Math.round(c.avg_spent),
-      tanggal(c.first_visit_at), tanggal(c.last_visit_at), (c.notes ?? '').replace(/\n/g, ' '),
-    ]);
-    const esc = (v: any) => `"${String(v).replace(/"/g, '""')}"`;
-    const csv = [head, ...rows].map((r) => r.map(esc).join(',')).join('\n');
-    // BOM biar Excel Indonesia baca UTF-8 dengan benar (nama sering pakai é/ñ).
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `pelanggan-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pelanggan</h1>
-          <p className="text-gray-500">Siapa yang balik lagi, dan seberapa sering.</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={recompute}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Hitung ulang
-          </button>
-          <button
-            onClick={exportCsv}
-            disabled={!items.length}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Stat label="Total pelanggan" value={String(total)} />
-        <Stat label="Pelanggan balik lagi" value={String(repeat)} hint={total ? `${Math.round((repeat / total) * 100)}% dari total` : undefined} />
-        <Stat label="Total belanja tercatat" value={rp(spentAll)} />
-      </div>
-
-      {/* Segmen otomatis (gelombang 3): dihitung dari order lunas 90 hari */}
-      {rfmSegments.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-3">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Segmen otomatis</p>
-            {rfm && <Link href={`/dashboard/promo?target=segment:${rfm}`} className="text-xs font-semibold text-blue-600 hover:underline">Kirim promo WA ke segmen ini →</Link>}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => setRfm('')} className={`rounded-full border px-3 py-1.5 text-sm font-medium ${!rfm ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-700'}`}>Semua</button>
-            {rfmSegments.map((sg) => (
-              <button key={sg.key} onClick={() => setRfm(sg.key)} title={sg.hint} className={`rounded-full border px-3 py-1.5 text-sm font-medium ${rfm === sg.key ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}>
-                {sg.label} <span className={rfm === sg.key ? 'ml-1 text-blue-100' : 'ml-1 text-gray-400'}>{sg.count}</span>
-              </button>
-            ))}
-          </div>
-          {rfm && <p className="mt-2 text-xs text-gray-500">{rfmSegments.find(s => s.key === rfm)?.hint} · {rfmSegments.find(s => s.key === rfm)?.reachable ?? 0} setuju dikirimi promo WA.</p>}
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        {SEGMENTS.map((sg) => {
-          const active = segment === sg.key;
-          const n = sg.key ? segCounts[sg.key] : total;
-          return (
-            <button
-              key={sg.key || 'all'}
-              onClick={() => setSegment(sg.key)}
-              title={sg.hint}
-              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
-                active
-                  ? 'border-emerald-600 bg-emerald-600 text-white'
-                  : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              {sg.label}
-              {typeof n === 'number' && (
-                <span className={active ? 'ml-1.5 text-emerald-100' : 'ml-1.5 text-gray-400'}>{n}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari nama, HP, atau email…"
-            className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-emerald-500"
-          />
-        </div>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
-        >
-          {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-        </select>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        {loading ? (
-          <div className="p-10 text-center text-gray-500">Memuat…</div>
-        ) : !items.length ? (
-          <div className="p-10 text-center">
-            <Users className="mx-auto h-8 w-8 text-gray-300" />
-            <p className="mt-3 font-semibold text-gray-700">
-              {segment
-                ? `Nggak ada pelanggan di "${SEGMENTS.find((x) => x.key === segment)?.label}"`
-                : 'Belum ada pelanggan tercatat'}
-            </p>
-            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
-              Pelanggan tercatat otomatis saat kasir memilih pelanggan di transaksi, atau saat struk dikirim
-              lewat WhatsApp. Semakin sering dipakai, semakin kelihatan siapa yang balik lagi.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="px-4 py-3">Nama</th>
-                  <th className="px-4 py-3">No HP</th>
-                  <th className="px-4 py-3 text-right">Kunjungan</th>
-                  <th className="px-4 py-3 text-right">Total belanja</th>
-                  <th className="px-4 py-3">Terakhir mampir</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {items.map((c) => {
-                  const d = daysSince(c.last_visit_at);
-                  return (
-                    <tr key={c.id} onClick={() => openDetail(c.id)} className="cursor-pointer hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-900">{c.name}</span>
-                        {c.total_visits > 1 && (
-                          <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                            balik lagi
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{c.phone || '-'}</td>
-                      <td className="px-4 py-3 text-right text-gray-900">{c.total_visits}×</td>
-                      <td className="px-4 py-3 text-right font-medium text-gray-900">{rp(c.total_spent)}</td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {tanggal(c.last_visit_at)}
-                        {d !== null && d > 30 && (
-                          <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                            {d} hari lalu
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {(detail || detailLoading) && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setDetail(null)}>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-white p-6 sm:max-w-lg sm:rounded-2xl"
-          >
-            {detailLoading || !detail ? (
-              <div className="py-10 text-center text-gray-500">Memuat…</div>
-            ) : (
-              <>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900">{detail.name}</h2>
-                    <p className="text-sm text-gray-500">{detail.phone || 'Nomor belum ada'}</p>
-                  </div>
-                  <button onClick={() => setDetail(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-
-                <div className="mt-4 grid grid-cols-3 gap-3">
-                  <MiniStat label="Kunjungan" value={`${detail.total_visits}×`} />
-                  <MiniStat label="Total" value={rp(detail.total_spent)} />
-                  <MiniStat label="Rata-rata" value={rp(detail.avg_spent)} />
-                </div>
-
-                {detail.favourites.length > 0 && (
-                  <div className="mt-5">
-                    <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-gray-500">
-                      <Star className="h-3.5 w-3.5" /> Sering dipesan
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {detail.favourites.map((f) => (
-                        <span key={f.name} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-                          {f.name} · {f.qty}×
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-5">
-                  <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Riwayat belanja</p>
-                  {detail.orders.length === 0 ? (
-                    <p className="mt-2 text-sm text-gray-500">Belum ada transaksi lunas yang tercatat.</p>
-                  ) : (
-                    <ul className="mt-2 divide-y divide-gray-100">
-                      {detail.orders.map((o) => (
-                        <li key={o.id} className="flex items-start justify-between gap-3 py-2.5">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900">{tanggal(o.created_at)}</p>
-                            <p className="truncate text-xs text-gray-500">
-                              {o.items.map((i) => `${i.name}${i.qty > 1 ? ` ×${i.qty}` : ''}`).join(', ') || o.order_number}
-                            </p>
-                          </div>
-                          <span className="shrink-0 text-sm font-semibold text-gray-900">{rp(o.total_amount)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    let current = true; setLoading(true); setError(''); setData(null);
+    getCustomerWorkspace(filters).then(result => { if (!current) return;
+      if (result.success) {
+        const key = `${pendingKey}:${result.data.workspace_key}`;
+        if (storageKey.current !== key) {
+          storageKey.current = key; setPending(null);
+          try { const raw = sessionStorage.getItem(key); if (raw) { const saved = JSON.parse(raw); if (saved.profile?.client_request_id || saved.note?.client_request_id) setPending(saved); } } catch { /* Browser storage can be disabled. */ }
+        }
+        setData(result.data);
+      } else setError(result.message); setLoading(false);
+    });
+    return () => { current = false; };
+  }, [filters, revision]);
+  const persist = (value: Pending | null) => { setPending(value); try { if (storageKey.current) { if (value) sessionStorage.setItem(storageKey.current, JSON.stringify(value)); else sessionStorage.removeItem(storageKey.current); } } catch { /* Retain the request in memory for this page. */ } };
+  const saved = (message: string) => { persist(null); setNotice(message); setRevision(v => v + 1); };
+  const change = (key: 'segment' | 'sort', value: string) => setFilters(v => ({ ...v, [key]: value, skip: 0 }));
+  const exportPage = () => { if (!data) return; const url = URL.createObjectURL(new Blob([customerCsv(data)], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a'); link.href = url; link.download = `pelanggan-halaman-${Math.floor(data.skip / 50) + 1}-${jakartaDate()}.csv`; link.click(); URL.revokeObjectURL(url); };
+  return <div className="finance-workspace customer-workspace">
+    <div className="finance-heading"><div><h1>Data pelanggan</h1><p className="f-explanation">Kontak, kebiasaan belanja, dan catatan layanan dalam satu profil.</p></div>
+      <button className="f-button f-primary" data-inventory-add disabled={Boolean(pending) || !storageKey.current} onClick={() => setCreating(true)}>Tambah pelanggan</button></div>
+    <p className="f-footnote">Cakupan: semua outlet dalam bisnis ini. Transaksi tanpa pelanggan terpilih tidak masuk riwayat pelanggan.</p>
+    {pending && <div className="f-notice" role="status"><p>Ada permintaan penyimpanan yang belum selesai. Periksa permintaan yang sama agar tidak tercatat dua kali.</p>
+      <button className="f-button" onClick={() => { if (pending.id) setSelected(pending.id); else setCreating(true); }}>Lanjutkan penyimpanan</button></div>}
+    {notice && <p className="f-notice" role="status">{notice}</p>}
+    <div className="finance-toolbar"><label>Cari pelanggan<input type="search" maxLength={120} placeholder="Nama, nomor HP, atau email" value={search} onChange={e => setSearch(e.target.value)} /></label>
+      <label>Kelompok pelanggan<select value={filters.segment} onChange={e => change('segment', e.target.value)}>{segments.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+      <label>Urutkan<select value={filters.sort} onChange={e => change('sort', e.target.value)}>{sorts.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+      <button className="f-button" disabled={loading} onClick={() => setRevision(v => v + 1)}>Muat ulang</button></div>
+    {loading ? <p className="f-notice" role="status">Memuat data pelanggan...</p> : error ? <div className="f-notice f-error" role="alert"><p>{error}</p><button className="f-button" data-inventory-retry onClick={() => setRevision(v => v + 1)}>Coba lagi</button></div> : data && <>
+      <section className="f-panel"><h2>Ringkasan bisnis</h2><p className="f-footnote">Semua pelanggan, terlepas dari filter daftar.</p>
+        <div className="c-summary"><div><p>Pelanggan tercatat</p><strong>{data.summary.total}</strong></div><div><p>Belanja berulang</p><strong>{data.summary.repeat}</strong></div><div><p>Total nota lunas</p><strong>{money(data.summary.spent)}</strong></div><div><p>Setuju promo WA</p><strong>{data.summary.consented}</strong></div></div>
+        <p className="f-footnote">{data.history_note} Diperbarui {customerDate(data.generated_at)} (WIB).</p></section>
+      <section className="f-panel"><div className="f-report-title"><div><h2>Daftar pelanggan</h2><p>{data.total} pelanggan sesuai filter.</p></div><button className="f-button" disabled={!data.items.length} onClick={exportPage}>Ekspor halaman CSV</button></div>
+        {!data.items.length ? <div className="f-empty"><h3>{data.summary.total ? 'Tidak ada pelanggan sesuai filter' : 'Belum ada pelanggan tercatat'}</h3><p>Tambahkan kontak, atau pilih pelanggan saat kasir mencatat transaksi.</p>
+          {(search || filters.segment) && <button className="f-button" onClick={() => { setSearch(''); setFilters(initialFilters); }}>Reset filter</button>}</div>
+          : <ul className="c-list">{data.items.map(c => <li key={c.id}><div><h3>{c.name}</h3><p>{c.phone || 'Nomor HP belum diisi'}</p><p className="f-footnote">{c.wa_marketing_consent ? 'Setuju promo WA' : 'Belum ada izin promo WA'}{c.email ? ` · ${c.email}` : ''}</p></div>
+            <div className="c-value"><p>{c.total_visits} transaksi lunas · {money(c.total_spent)}</p><p className="f-footnote">Terakhir: {customerDate(c.last_visit_at)}</p></div>
+            <button className="f-button" disabled={Boolean(pending && pending.id !== c.id)} onClick={() => setSelected(c.id)} aria-label={`Buka profil ${c.name}`}>Buka profil</button></li>)}</ul>}
+        {data.total > 0 && <div className="c-pager"><p>{data.skip + (data.items.length ? 1 : 0)} sampai {data.skip + data.items.length} dari {data.total}</p><div>
+          <button className="f-button" disabled={filters.skip === 0} onClick={() => setFilters(v => ({ ...v, skip: Math.max(0, v.skip - 50) }))}>Sebelumnya</button>
+          <button className="f-button" disabled={data.skip + data.items.length >= data.total} onClick={() => setFilters(v => ({ ...v, skip: v.skip + 50 }))}>Berikutnya</button></div></div>}</section>
+    </>}
+    {creating && <ProfileForm pending={pending?.profile && !pending.id ? pending : null} onPending={persist} onClose={() => setCreating(false)} onSaved={message => { saved(message); setCreating(false); }} />}
+    {selected && <CustomerProfile id={selected} pending={pending?.id === selected ? pending : null} onPending={persist} onClose={() => setSelected(null)} onSaved={saved} />}
+  </div>;
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <p className="text-sm font-medium text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-gray-400">{hint}</p>}
-    </div>
-  );
+function ProfileForm({ customer, pending, onPending, onClose, onSaved }: { customer?: CustomerDetail; pending: Pending | null; onPending: (value: Pending | null) => void; onClose: () => void; onSaved: (message: string) => void }) {
+  const preset = pending?.profile || customer;
+  const [name, setName] = useState(preset?.name || ''), [phone, setPhone] = useState(preset?.phone || ''), [email, setEmail] = useState(preset?.email || '');
+  const [notes, setNotes] = useState(preset?.notes || ''), [birthday, setBirthday] = useState(preset?.birthday || ''), [consent, setConsent] = useState(preset?.wa_marketing_consent || false);
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const frozen = Boolean(pending?.profile);
+  const submit = async (event: React.FormEvent) => { event.preventDefault(); if (busy) return; setBusy(true); setError('');
+    const payload: CustomerSave = pending?.profile || { client_request_id: crypto.randomUUID(), row_version: customer?.row_version,
+      name: name.trim(), phone: phone.trim() || null, email: email.trim() || null, notes: notes.trim() || null, birthday: birthday || null, wa_marketing_consent: consent };
+    onPending({ id: customer?.id, profile: payload });
+    const result = await saveCustomerWorkspace(payload, customer?.id);
+    setBusy(false); if (result.success) onSaved(result.message || 'Profil pelanggan disimpan'); else { setError(result.message); if (!result.uncertain) onPending(null); }
+  };
+  return <InventoryDialog title={customer ? 'Edit profil pelanggan' : 'Tambah pelanggan'} busy={busy} onClose={onClose}>
+    <form className="finance-form" onSubmit={submit}><p>Isi informasi yang sudah dikonfirmasi pelanggan. Kolom selain nama boleh dikosongkan.</p>
+      {frozen && <p className="f-notice">Periksa penyimpanan data yang sama sebelum mengubah isinya.</p>}
+      {error && <p className="f-notice f-error" role="alert">{error}</p>}
+      <label>Nama pelanggan<input autoFocus required maxLength={120} value={name} disabled={busy || frozen} onChange={e => setName(e.target.value)} /></label>
+      <div className="f-field-grid"><label>Nomor HP<input type="tel" maxLength={40} placeholder="08 atau +62" value={phone} disabled={busy || frozen} onChange={e => { setPhone(e.target.value); setConsent(false); }} /></label>
+        <label>Email<input type="email" maxLength={254} value={email} disabled={busy || frozen} onChange={e => setEmail(e.target.value)} /></label></div>
+      <label>Tanggal lahir<input type="date" max={jakartaDate()} value={birthday} disabled={busy || frozen} onChange={e => setBirthday(e.target.value)} /></label>
+      <label>Preferensi / catatan profil<textarea maxLength={2000} value={notes} disabled={busy || frozen} onChange={e => setNotes(e.target.value)} /></label>
+      <label className="f-checkbox"><input type="checkbox" checked={consent} disabled={busy || frozen || !phone.trim()} onChange={e => setConsent(e.target.checked)} />Pelanggan sudah menyetujui promo WhatsApp ke nomor ini</label>
+      <p className="f-footnote">Menyimpan izin ini tidak mengirim pesan. Perubahan nomor perlu persetujuan kembali.</p>
+      <div className="f-form-actions"><button type="button" className="f-button" disabled={busy} onClick={onClose}>Tutup</button><button className="f-button f-primary" disabled={busy}>{busy ? 'Menyimpan...' : frozen ? 'Periksa penyimpanan profil' : 'Simpan profil'}</button></div>
+    </form></InventoryDialog>;
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-gray-50 p-3">
-      <p className="text-[11px] font-medium text-gray-500">{label}</p>
-      <p className="mt-0.5 truncate text-sm font-bold text-gray-900">{value}</p>
-    </div>
-  );
+function CustomerProfile({ id, pending, onPending, onClose, onSaved }: { id: string; pending: Pending | null; onPending: (value: Pending | null) => void; onClose: () => void; onSaved: (message: string) => void }) {
+  const [data, setData] = useState<CustomerDetail | null>(null), [error, setError] = useState(''), [loading, setLoading] = useState(true);
+  const [skip, setSkip] = useState(0), [revision, setRevision] = useState(0), [editing, setEditing] = useState(Boolean(pending?.profile));
+  const [body, setBody] = useState(pending?.note?.body || ''), [kind, setKind] = useState<'note' | 'complaint'>(pending?.note?.kind || 'note');
+  const [busy, setBusy] = useState(false), [noteError, setNoteError] = useState(''), [notice, setNotice] = useState('');
+  const request = useRef(0);
+  const load = useCallback(async () => { const serial = ++request.current; setLoading(true); setError(''); setData(null);
+    const result = await getCustomerWorkspaceDetail(id, skip); if (request.current !== serial) return;
+    if (result.success) setData(result.data); else setError(result.message); setLoading(false);
+  }, [id, skip]);
+  useEffect(() => { load(); return () => { request.current++; }; }, [load, revision]);
+  const saveNote = async (event: React.FormEvent) => { event.preventDefault(); if (busy) return; setBusy(true); setNoteError('');
+    const payload = pending?.note || { client_request_id: crypto.randomUUID(), body: body.trim(), kind };
+    onPending({ id, note: payload }); const result = await addCustomerWorkspaceNote(id, payload); setBusy(false);
+    if (result.success) { onPending(null); setBody(''); setNotice('Catatan pelanggan disimpan'); setRevision(v => v + 1); onSaved('Catatan pelanggan disimpan'); }
+    else { setNoteError(result.message); if (!result.uncertain) onPending(null); }
+  };
+  if (editing && data) return <ProfileForm customer={data} pending={pending} onPending={onPending} onClose={() => { if (pending?.profile) onClose(); else setEditing(false); }} onSaved={message => { setEditing(false); setRevision(v => v + 1); onSaved(message); }} />;
+  return <InventoryDialog title="Profil pelanggan" busy={busy} onClose={onClose}><div className="finance-form c-profile">
+    {loading ? <p role="status">Memuat profil pelanggan...</p> : error ? <div className="f-notice f-error" role="alert"><p>{error}</p><button className="f-button" onClick={load}>Coba lagi</button></div> : data && <>
+      <section><div className="f-report-title"><div><h3>{data.name}</h3><p>{data.phone || 'Nomor HP belum diisi'}</p>{data.email && <p>{data.email}</p>}</div><button className="f-button" disabled={Boolean(pending)} onClick={() => setEditing(true)}>Edit profil</button></div>
+        <p>Tanggal lahir: {customerDate(data.birthday)}</p><p>{data.wa_marketing_consent ? `Setuju promo WA · dicatat ${customerDate(data.consent_given_at)}` : 'Belum ada izin promo WA'}</p>
+        {data.notes && <p className="f-notice c-pre">{data.notes}</p>}
+        <div className="c-summary"><div><p>Transaksi lunas</p><strong>{data.total_visits}</strong></div><div><p>Total nota lunas</p><strong>{money(data.total_spent)}</strong></div><div><p>Rata-rata nota</p><strong>{money(data.avg_spent)}</strong></div><div><p>Terakhir belanja</p><strong>{customerDate(data.last_visit_at)}</strong></div></div>
+        <p className="f-footnote">Semua outlet bisnis. Nilai nota berstatus lunas sebelum pengurangan refund; satu nota dihitung satu transaksi.</p></section>
+      <section><h3>Produk yang sering dibeli</h3>{data.favourites.length ? <ul>{data.favourites.map(f => <li key={f.id}>{f.name} · {f.qty} pcs</li>)}</ul> : <p>Belum ada produk tercatat dari transaksi lunas.</p>}<p className="f-footnote">Berdasarkan jumlah item di seluruh riwayat nota lunas. Nama mengikuti katalog produk saat ini.</p></section>
+      <section><h3>Riwayat transaksi lunas</h3>{data.orders.length ? <ul className="c-history">{data.orders.map(o => <li key={o.id}><p>{o.order_number} · {customerDate(o.created_at)} (WIB)</p><p>{o.items.map(i => `${i.name} ×${i.qty}`).join(', ') || 'Item tidak tersedia'}</p><strong>{money(o.total_amount)}</strong></li>)}</ul> : <p>Belum ada transaksi lunas di halaman ini.</p>}
+        {data.total_visits > 20 && <div className="c-pager"><p>{skip + (data.orders.length ? 1 : 0)} sampai {skip + data.orders.length} dari {data.total_visits}</p><div><button className="f-button" disabled={!skip || busy} onClick={() => setSkip(v => Math.max(0, v - 20))}>Transaksi sebelumnya</button><button className="f-button" disabled={skip + data.orders.length >= data.total_visits || busy} onClick={() => setSkip(v => v + 20)}>Transaksi berikutnya</button></div></div>}</section>
+      <section><h3>Catatan layanan</h3><p className="f-footnote">Catatan staf melengkapi konteks pelanggan dan terpisah dari riwayat transaksi.</p>
+        {notice && <p role="status">{notice}</p>}{noteError && <p className="f-notice f-error" role="alert">{noteError}</p>}
+        <form className="finance-form" onSubmit={saveNote}><label>Jenis catatan<select value={kind} disabled={busy || Boolean(pending)} onChange={e => setKind(e.target.value as 'note' | 'complaint')}><option value="note">Catatan</option><option value="complaint">Keluhan</option></select></label>
+          <label>Catatan baru<textarea required maxLength={500} value={body} disabled={busy || Boolean(pending)} onChange={e => setBody(e.target.value)} /></label>
+          <button className="f-button" disabled={busy || (!body.trim() && !pending?.note)}>{busy ? 'Menyimpan...' : pending?.note ? 'Periksa penyimpanan catatan' : 'Simpan catatan'}</button></form>
+        {data.timeline.length ? <ul className="c-history">{data.timeline.map(n => <li key={n.id}><p className="f-footnote">{n.kind === 'complaint' ? 'Keluhan' : n.kind === 'consent' ? 'Izin promo' : 'Catatan aktivitas'} · {customerDate(n.created_at)} (WIB)</p><p className="c-pre">{n.body}</p></li>)}</ul> : <p>Belum ada catatan layanan.</p>}
+        <p className="f-footnote">Menampilkan paling banyak {data.timeline_limit} aktivitas terakhir.</p></section>
+    </>}
+  </div></InventoryDialog>;
 }

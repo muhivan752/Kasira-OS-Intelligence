@@ -13,6 +13,8 @@ class SyncPayload(BaseModel):
     ingredients: List[Dict[str, Any]] = []
     recipes: List[Dict[str, Any]] = []
     recipe_ingredients: List[Dict[str, Any]] = []
+    # Derived server costs; ignored on push, independently refreshed by dependencies.
+    recipe_hpp: List[Dict[str, Any]] = []
     # Varian produk (Hot/Ice, size). PULL-ONLY: dikelola dari dashboard, kasir
     # nggak bikin varian dari HP. Klien boleh ngirim list ini tapi server
     # mengabaikannya — sengaja, biar nggak ada jalur diam-diam yang bisa ngubah

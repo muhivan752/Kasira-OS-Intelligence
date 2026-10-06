@@ -12,12 +12,14 @@
   POST /finance/expenses/copy-recurring?outlet_id&month   salin template bulanan
 """
 import logging
+import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,6 +29,8 @@ from backend.models.user import User
 from backend.models.outlet import Outlet
 from backend.models.finance import Expense, CashAccount, EXPENSE_CATEGORIES
 from backend.models.event import Event
+from backend.models.audit_log import AuditLog
+from backend.models.purchasing import Supplier
 from backend.schemas.finance import (
     FinanceSummary, CashAccountResponse, CashAccountUpdate,
     ExpenseCreate, ExpenseUpdate, ExpenseResponse,
@@ -44,6 +48,26 @@ async def _outlet(db: AsyncSession, outlet_id: UUID, tenant_id: UUID) -> Outlet:
     if not o or o.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
     return o
+
+
+async def _supplier(db, supplier_id, tenant_id):
+    if supplier_id and not (await db.execute(select(Supplier.id).where(
+        Supplier.id == supplier_id, Supplier.tenant_id == tenant_id,
+        Supplier.deleted_at.is_(None), Supplier.is_active.is_(True),
+    ))).scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Supplier aktif tidak ditemukan")
+
+
+def _expense_account(accounts, method, account_id):
+    if account_id:
+        acc = next((a for a in accounts if a.id == account_id and a.is_active), None)
+        if not acc:
+            raise HTTPException(status_code=400, detail="Pilih akun kas yang masih aktif")
+    else:
+        acc = svc.account_for_method(accounts, method)
+    if not acc:
+        raise HTTPException(status_code=400, detail="Aktifkan akun kas sebelum mencatat pengeluaran")
+    return acc.id
 
 
 def _current_month() -> str:
@@ -86,7 +110,7 @@ async def update_account(
 ) -> Any:
     acc = (await db.execute(select(CashAccount).where(
         CashAccount.id == account_id, CashAccount.tenant_id == current_user.tenant_id, CashAccount.deleted_at.is_(None)
-    ))).scalar_one_or_none()
+    ).with_for_update())).scalar_one_or_none()
     if not acc:
         raise HTTPException(status_code=404, detail="Akun kas tidak ditemukan")
     if acc.row_version != body.row_version:
@@ -95,7 +119,7 @@ async def update_account(
         setattr(acc, k, v)
     acc.row_version += 1
     await log_audit(db=db, action="UPDATE", entity="cash_accounts", entity_id=acc.id,
-                    after_state=body.model_dump(exclude_unset=True), user_id=current_user.id, tenant_id=current_user.tenant_id)
+                    after_state=body.model_dump(mode="json", exclude_unset=True), user_id=current_user.id, tenant_id=current_user.tenant_id)
     await db.commit(); await db.refresh(acc)
     return StandardResponse(success=True, data=CashAccountResponse.model_validate(acc), request_id=request.state.request_id)
 
@@ -115,15 +139,29 @@ async def create_expense(
     request: Request, body: ExpenseCreate,
     db: AsyncSession = Depends(get_db), current_user: User = Depends(deps.get_current_user),
 ) -> Any:
+    fingerprint = hashlib.sha256(json.dumps(body.model_dump(mode="json", exclude={"client_request_id"}),
+                                            sort_keys=True).encode()).hexdigest()
+    if body.client_request_id:
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                         {"key": f"expense:{current_user.tenant_id}:{body.client_request_id}"})
+        prior = (await db.execute(select(AuditLog).where(
+            AuditLog.tenant_id == current_user.tenant_id, AuditLog.entity == "expenses", AuditLog.action == "CREATE",
+            AuditLog.after_state["client_request_id"].astext == str(body.client_request_id),
+        ))).scalar_one_or_none()
+        if prior:
+            if prior.after_state.get("fingerprint") != fingerprint or prior.user_id != current_user.id:
+                raise HTTPException(status_code=409, detail="Permintaan sudah digunakan untuk catatan lain. Muat ulang dahulu.")
+            saved = (await db.execute(select(Expense).options(selectinload(Expense.cash_account), selectinload(Expense.supplier))
+                                     .where(Expense.id == prior.entity_id, Expense.tenant_id == current_user.tenant_id))).scalar_one()
+            if saved.deleted_at:
+                raise HTTPException(status_code=409, detail="Catatan ini sudah dihapus. Muat ulang dahulu.")
+            return StandardResponse(success=True, data=svc.expense_to_response(saved),
+                                    message="Pengeluaran sudah dicatat", request_id=request.state.request_id)
     if body.outlet_id:
         await _outlet(db, body.outlet_id, current_user.tenant_id)
     accounts = await svc.ensure_accounts(db, current_user.tenant_id)
-    acc_id = body.cash_account_id
-    if acc_id and not any(a.id == acc_id for a in accounts):
-        raise HTTPException(status_code=404, detail="Akun kas tidak ditemukan")
-    if not acc_id:
-        acc = svc.account_for_method(accounts, body.payment_method)
-        acc_id = acc.id if acc else None
+    acc_id = _expense_account(accounts, body.payment_method, body.cash_account_id)
+    await _supplier(db, body.supplier_id, current_user.tenant_id)
 
     e = Expense(
         tenant_id=current_user.tenant_id, outlet_id=body.outlet_id, category=body.category,
@@ -139,7 +177,9 @@ async def create_expense(
                         "paid_at": e.paid_at.isoformat(), "user_id": str(current_user.id)},
         ))
     await log_audit(db=db, action="CREATE", entity="expenses", entity_id=e.id,
-                    after_state={"category": e.category, "amount": str(e.amount), "note": e.note},
+                    after_state={"category": e.category, "amount": str(e.amount), "note": e.note,
+                                 "client_request_id": str(body.client_request_id) if body.client_request_id else None,
+                                 "fingerprint": fingerprint},
                     user_id=current_user.id, tenant_id=current_user.tenant_id)
     await db.commit()
     e = (await db.execute(select(Expense).options(selectinload(Expense.cash_account), selectinload(Expense.supplier)).where(Expense.id == e.id))).scalar_one()
@@ -153,16 +193,24 @@ async def update_expense(
 ) -> Any:
     e = (await db.execute(select(Expense).options(selectinload(Expense.cash_account), selectinload(Expense.supplier)).where(
         Expense.id == expense_id, Expense.tenant_id == current_user.tenant_id, Expense.deleted_at.is_(None)
-    ))).scalar_one_or_none()
+    ).with_for_update())).scalar_one_or_none()
     if not e:
         raise HTTPException(status_code=404, detail="Pengeluaran tidak ditemukan")
     if e.row_version != body.row_version:
         raise HTTPException(status_code=409, detail="Data sudah berubah, muat ulang")
+    if e.payment_method == "none":
+        raise HTTPException(status_code=400, detail="Catatan nonkas diperbarui melalui pencatatan stok")
     if e.purchase_id:
         raise HTTPException(status_code=400, detail="Pengeluaran dari nota belanja diubah lewat notanya")
     changes = body.model_dump(exclude_unset=True, exclude={"row_version"})
-    if "category" in changes:
-        changes["category"] = ExpenseCreate.model_validate({"amount": 1, "category": changes["category"]}).category
+    if "supplier_id" in changes and changes["supplier_id"] != e.supplier_id:
+        await _supplier(db, changes["supplier_id"], current_user.tenant_id)
+    if "cash_account_id" in changes or "payment_method" in changes:
+        accounts = await svc.ensure_accounts(db, current_user.tenant_id)
+        method = changes.get("payment_method", e.payment_method)
+        acc_id = changes.get("cash_account_id", None if method != e.payment_method else e.cash_account_id)
+        if acc_id != e.cash_account_id or method != e.payment_method or not any(a.id == acc_id for a in accounts):
+            changes["cash_account_id"] = _expense_account(accounts, method, acc_id)
     before = {"category": e.category, "amount": str(e.amount), "note": e.note}
     for k, v in changes.items():
         setattr(e, k, v)
@@ -171,6 +219,7 @@ async def update_expense(
                     after_state={k: (str(v) if v is not None else None) for k, v in changes.items()},
                     user_id=current_user.id, tenant_id=current_user.tenant_id)
     await db.commit(); await db.refresh(e)
+    await db.refresh(e, attribute_names=["cash_account", "supplier"])
     return StandardResponse(success=True, data=svc.expense_to_response(e), message="Pengeluaran diperbarui", request_id=request.state.request_id)
 
 
@@ -181,9 +230,11 @@ async def delete_expense(
 ) -> Any:
     e = (await db.execute(select(Expense).where(
         Expense.id == expense_id, Expense.tenant_id == current_user.tenant_id, Expense.deleted_at.is_(None)
-    ))).scalar_one_or_none()
+    ).with_for_update())).scalar_one_or_none()
     if not e:
         raise HTTPException(status_code=404, detail="Pengeluaran tidak ditemukan")
+    if e.payment_method == "none":
+        raise HTTPException(status_code=400, detail="Catatan nonkas tidak bisa dihapus melalui pengeluaran")
     if e.purchase_id:
         raise HTTPException(status_code=400, detail="Pengeluaran dari nota belanja nggak bisa dihapus terpisah")
     e.deleted_at = datetime.now(timezone.utc); e.row_version += 1
@@ -200,6 +251,9 @@ async def copy_recurring(
     db: AsyncSession = Depends(get_db), current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     await _outlet(db, outlet_id, current_user.tenant_id)
+    # Global recurring expenses may be visible from several outlets at once.
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                     {"key": f"finance-recurring:{current_user.tenant_id}:{month or _current_month()}"})
     created = await svc.copy_recurring(db, tenant_id=current_user.tenant_id, outlet_id=outlet_id,
                                        month=month or _current_month(), user_id=current_user.id)
     for e in created:

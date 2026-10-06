@@ -69,6 +69,13 @@ export async function registerTenant(phone: string, businessName: string, ownerN
 }
 export async function logout() {
   const store = await cookies();
+  const token = store.get('token')?.value;
+  if (token) {
+    try {
+      const response = await fetch(`${API_URL}/auth/logout`, { method: 'DELETE', cache: 'no-store', signal: AbortSignal.timeout(15000), headers: { Authorization: `Bearer ${token}`, 'X-Tenant-ID': store.get('tenant_id')?.value || '' } });
+      if (!response.ok && response.status !== 401 && response.status !== 403) throw new Error('Logout belum terkonfirmasi. Coba lagi.');
+    } catch { return { success: false as const, message: 'Logout belum terkonfirmasi. Periksa koneksi lalu coba lagi.' }; }
+  }
   for (const name of ['token', 'tenant_id', 'outlet_id']) store.delete(name);
   redirect('/login');
 }

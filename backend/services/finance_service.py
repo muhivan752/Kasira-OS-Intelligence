@@ -28,6 +28,7 @@ pembayaran nota-nya (biar nggak dobel).
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone, timedelta, date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
@@ -35,7 +36,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -50,6 +51,7 @@ from backend.models.product import Product
 from backend.models.purchasing import PurchaseOrder
 from backend.models.shift import Shift, CashActivity, CashActivityType
 from backend.models.tab import Tab
+from backend.models.event import Event
 from backend.schemas.finance import (
     FinanceSummary, CategoryAmount, AccountFlow, MonthPoint, ExpenseResponse,
 )
@@ -68,7 +70,11 @@ def _q2(x) -> Decimal:
 def month_bounds(month: str) -> tuple[datetime, datetime]:
     """'2026-09' → (awal bulan WIB, awal bulan berikutnya WIB) dalam UTC."""
     try:
+        if not re.fullmatch(r"[0-9]{4}-(0[1-9]|1[0-2])", month):
+            raise ValueError("month")
         y, m = (int(p) for p in month.split("-"))
+        if not 2000 <= y <= 9998:
+            raise ValueError("year")
         start = datetime(y, m, 1, tzinfo=WIB)
     except Exception:
         raise HTTPException(status_code=400, detail="Format bulan harus YYYY-MM")
@@ -101,10 +107,14 @@ DEFAULT_ACCOUNTS = [
 
 async def ensure_accounts(db: AsyncSession, tenant_id: UUID) -> list[CashAccount]:
     """Tenant baru langsung punya 3 akun standar — nol setup."""
-    rows = (await db.execute(
-        select(CashAccount).where(CashAccount.tenant_id == tenant_id, CashAccount.deleted_at.is_(None))
-        .order_by(CashAccount.sort_order, CashAccount.name)
-    )).scalars().all()
+    stmt = (select(CashAccount).where(CashAccount.tenant_id == tenant_id, CashAccount.deleted_at.is_(None))
+            .order_by(CashAccount.sort_order, CashAccount.name))
+    rows = (await db.execute(stmt)).scalars().all()
+    if rows:
+        return list(rows)
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                     {"key": f"finance-accounts:{tenant_id}"})
+    rows = (await db.execute(stmt)).scalars().all()
     if rows:
         return list(rows)
     created = []
@@ -117,6 +127,7 @@ async def ensure_accounts(db: AsyncSession, tenant_id: UUID) -> list[CashAccount
 
 
 def account_for_method(accounts: list[CashAccount], method: str) -> Optional[CashAccount]:
+    accounts = [a for a in accounts if a.is_active]
     m = (method or "cash").lower()
     for a in accounts:
         if m in (a.default_for or []):
@@ -130,19 +141,59 @@ def account_for_method(accounts: list[CashAccount], method: str) -> Optional[Cas
 
 # ───────────────────────── HPP per produk ─────────────────────────
 
+def purchase_payments_in_period(purchase, events, start, end):
+    """Reconstruct installments from immutable paid totals, including old overpayment events."""
+    received = sorted((e for e in events if e.event_type == "purchase.received"), key=lambda e: e.created_at)
+    installments = sorted((e for e in events if e.event_type == "purchase.paid"), key=lambda e: (e.created_at, str(e.id)))
+    estimated = not bool(received)
+    if received:
+        initial = _q2(received[0].event_data["paid"])
+    elif installments:
+        first = installments[0].event_data
+        initial = max(Decimal("0"), _q2(first["paid_after"]) - _q2(first["amount"]))
+    else:
+        initial = _q2(purchase.paid_amount)
+    current = _q2(purchase.paid_amount)
+    if initial < 0 or initial > current:
+        raise ValueError("Riwayat pembayaran nota tidak konsisten")
+    movements = [(purchase.received_at or purchase.created_at, initial)]
+    previous = initial
+    for event in installments:
+        after = _q2(event.event_data["paid_after"])
+        if after < previous or after > current:
+            raise ValueError("Riwayat cicilan nota tidak konsisten")
+        movements.append((event.created_at, after - previous))
+        previous = after
+    if previous < current:
+        # Old imports may have a paid balance without a corresponding event.
+        estimated = True
+        movements.append((purchase.received_at or purchase.created_at, current - previous))
+    return _q2(sum((amount for when, amount in movements if start <= when < end), Decimal("0"))), estimated
+
 async def cost_map_for_brand(db: AsyncSession, brand_id: UUID) -> dict[UUID, Decimal]:
     """HPP resep (Pro) di-override-in buy_price kalau resepnya nggak ada."""
-    from backend.services.menu_engineering_service import _get_hpp_map
+    from backend.models.recipe import Recipe, RecipeIngredient
+    from backend.services.recipe_hpp_sync import recipe_hpp_snapshot
     cost: dict[UUID, Decimal] = {}
-    try:
-        cost.update(await _get_hpp_map(db, brand_id))
-    except Exception:
-        logger.warning("hpp map gagal, fallback buy_price", exc_info=True)
+    recipes = (await db.execute(select(Recipe)
+        .options(selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient))
+        .join(Product, Product.id == Recipe.product_id)
+        .where(Product.brand_id == brand_id, Recipe.is_active.is_(True), Recipe.deleted_at.is_(None))
+        .order_by(Recipe.version.desc(), Recipe.row_version.desc(), Recipe.id))).scalars().all()
+    recipe_products = set()
+    for recipe in recipes:
+        if recipe.product_id in recipe_products:
+            continue
+        recipe_products.add(recipe.product_id)
+        snapshot = recipe_hpp_snapshot(recipe)
+        required = [line for line in snapshot["ingredients"] if not line["is_optional"] and Decimal(str(line["quantity"])) > 0]
+        if snapshot["total_cost"] is not None and required:
+            cost[recipe.product_id] = Decimal(snapshot["total_cost"])
     rows = (await db.execute(
         select(Product.id, Product.buy_price).where(Product.brand_id == brand_id, Product.deleted_at.is_(None))
     )).all()
     for pid, buy in rows:
-        if pid not in cost and buy is not None and buy > 0:
+        if pid not in recipe_products and buy is not None and buy > 0:
             cost[pid] = _q2(buy)
     return cost
 
@@ -290,16 +341,31 @@ async def _cash_block(db: AsyncSession, tenant_id: UUID, outlet: Outlet, start: 
     for acc_id, method, amt in exps:
         add(acc_by_id.get(acc_id) or account_for_method(accounts, method), "out", amt)
 
-    # keluar: nota belanja yang dibayar (paid_amount di bulan nota diterima — pendekatan v1)
-    purchases_paid = _q2((await db.execute(
-        select(func.coalesce(func.sum(PurchaseOrder.paid_amount), 0)).where(
+    purchases = list((await db.execute(
+        select(PurchaseOrder).where(
             PurchaseOrder.outlet_id == outlet.id, PurchaseOrder.deleted_at.is_(None),
             PurchaseOrder.status == "received",
-            PurchaseOrder.received_at >= start, PurchaseOrder.received_at < end,
+            PurchaseOrder.paid_amount > 0,
         )
-    )).scalar())
+    )).scalars().all())
+    payment_events = (await db.execute(select(Event).where(
+        Event.outlet_id == outlet.id,
+        Event.stream_id.in_([f"purchase:{p.id}" for p in purchases]),
+        Event.event_type.in_(["purchase.received", "purchase.paid"]),
+    ))).scalars().all() if purchases else []
+    by_stream = {}
+    for event in payment_events:
+        by_stream.setdefault(event.stream_id, []).append(event)
+    purchases_paid = Decimal("0")
+    cash_history_estimated = False
+    for purchase in purchases:
+        amount, estimated = purchase_payments_in_period(purchase, by_stream.get(f"purchase:{purchase.id}", []), start, end)
+        purchases_paid += amount
+        cash_history_estimated |= estimated and amount > 0
     if purchases_paid > 0:
-        add(account_for_method(accounts, "cash"), "out", purchases_paid)
+        # Purchase records do not yet retain the source account; don't claim it was the drawer.
+        flows["purchases"] = {"name": "Pembayaran nota (akun belum dicatat)", "kind": "other",
+                       "in": Decimal("0"), "out": purchases_paid}
 
     # kas kecil shift
     petty = (await db.execute(
@@ -319,12 +385,20 @@ async def _cash_block(db: AsyncSession, tenant_id: UUID, outlet: Outlet, start: 
             PurchaseOrder.status == "received", PurchaseOrder.total_amount > PurchaseOrder.paid_amount,
         )
     )).scalar())
+    payables_overdue = _q2((await db.execute(select(
+        func.coalesce(func.sum(PurchaseOrder.total_amount - PurchaseOrder.paid_amount), 0)
+    ).where(
+        PurchaseOrder.outlet_id == outlet.id, PurchaseOrder.deleted_at.is_(None),
+        PurchaseOrder.status == "received", PurchaseOrder.total_amount > PurchaseOrder.paid_amount,
+        PurchaseOrder.due_at < datetime.now(timezone.utc),
+    ))).scalar())
 
     out = []
     for key, f in flows.items():
-        out.append(AccountFlow(id=key, name=f["name"], kind=f["kind"], inflow=_q2(f["in"]), outflow=_q2(f["out"]), net=_q2(f["in"] - f["out"])))
+        out.append(AccountFlow(id=key if isinstance(key, UUID) else None, name=f["name"], kind=f["kind"], inflow=_q2(f["in"]), outflow=_q2(f["out"]), net=_q2(f["in"] - f["out"])))
     cash_in = sum((f.inflow for f in out), Decimal("0")); cash_out = sum((f.outflow for f in out), Decimal("0"))
-    return {"accounts": out, "in": _q2(cash_in), "out": _q2(cash_out), "purchases_paid": purchases_paid, "payables": payables}
+    return {"accounts": out, "in": _q2(cash_in), "out": _q2(cash_out), "purchases_paid": _q2(purchases_paid),
+            "payables": payables, "payables_overdue": payables_overdue, "cash_history_estimated": cash_history_estimated}
 
 
 # ───────────────────────── ringkasan ─────────────────────────
@@ -332,7 +406,7 @@ async def _cash_block(db: AsyncSession, tenant_id: UUID, outlet: Outlet, start: 
 _ID_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
 
 
-async def summary(db: AsyncSession, *, tenant_id: UUID, outlet: Outlet, month: str) -> FinanceSummary:
+async def summary(db: AsyncSession, *, tenant_id: UUID, outlet: Outlet, month: str, include_trend: bool = True) -> FinanceSummary:
     start, end = month_bounds(month)
     accounts = await ensure_accounts(db, tenant_id)
     cost = await cost_map_for_brand(db, outlet.brand_id) if outlet.brand_id else {}
@@ -357,10 +431,12 @@ async def summary(db: AsyncSession, *, tenant_id: UUID, outlet: Outlet, month: s
     # tren 6 bulan (termasuk bulan ini)
     trend: list[MonthPoint] = []
     y, m = (int(p) for p in month.split("-"))
-    for i in range(5, -1, -1):
+    for i in (range(5, -1, -1) if include_trend else []):
         mm = m - i; yy = y
         while mm <= 0:
             mm += 12; yy -= 1
+        if yy < 2000:
+            continue
         key = f"{yy:04d}-{mm:02d}"
         s, e = month_bounds(key)
         if key == month:
@@ -386,6 +462,8 @@ async def summary(db: AsyncSession, *, tenant_id: UUID, outlet: Outlet, month: s
         cash_in=cash["in"], cash_out=cash["out"], cash_net=_q2(cash["in"] - cash["out"]),
         accounts=cash["accounts"], purchases_paid=cash["purchases_paid"], payables_outstanding=cash["payables"],
         trend=trend, recurring_pending=recurring_pending,
+        generated_at=datetime.now(timezone.utc), cash_history_estimated=cash["cash_history_estimated"],
+        payables_overdue=cash["payables_overdue"],
     )
 
 
@@ -436,7 +514,8 @@ async def count_recurring_pending(db: AsyncSession, tenant_id: UUID, outlet_id: 
         )
     )).all()
     have = {(c, (n or "").strip().lower()) for c, n, _ in cur}
-    return sum(1 for e in prev if (e.category, (e.note or "").strip().lower()) not in have)
+    pending = {(e.category, (e.note or "").strip().lower()) for e in prev} - have
+    return len(pending)
 
 
 async def copy_recurring(db: AsyncSession, *, tenant_id: UUID, outlet_id: UUID, month: str, user_id: UUID) -> list[Expense]:
@@ -475,6 +554,7 @@ async def copy_recurring(db: AsyncSession, *, tenant_id: UUID, outlet_id: UUID, 
             recurring="monthly", recorded_by=user_id,
         )
         db.add(n); created.append(n)
+        have.add((e.category, (e.note or "").strip().lower()))
     await db.flush()
     return created
 

@@ -5194,6 +5194,16 @@ class $IngredientsTable extends Ingredients
       type: DriftSqlType.string,
       requiredDuringInsert: false,
       defaultValue: const Constant('recipe'));
+  static const VerificationMeta _needsReviewMeta =
+      const VerificationMeta('needsReview');
+  @override
+  late final GeneratedColumn<bool> needsReview = GeneratedColumn<bool>(
+      'needs_review', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("needs_review" IN (0, 1))'),
+      defaultValue: const Constant(false));
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -5209,7 +5219,8 @@ class $IngredientsTable extends Ingredients
         buyPrice,
         buyQty,
         costPerBaseUnit,
-        ingredientType
+        ingredientType,
+        needsReview
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5298,6 +5309,12 @@ class $IngredientsTable extends Ingredients
           ingredientType.isAcceptableOrUnknown(
               data['ingredient_type']!, _ingredientTypeMeta));
     }
+    if (data.containsKey('needs_review')) {
+      context.handle(
+          _needsReviewMeta,
+          needsReview.isAcceptableOrUnknown(
+              data['needs_review']!, _needsReviewMeta));
+    }
     return context;
   }
 
@@ -5335,6 +5352,8 @@ class $IngredientsTable extends Ingredients
           DriftSqlType.double, data['${effectivePrefix}cost_per_base_unit'])!,
       ingredientType: attachedDatabase.typeMapping.read(
           DriftSqlType.string, data['${effectivePrefix}ingredient_type'])!,
+      needsReview: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}needs_review'])!,
     );
   }
 
@@ -5359,6 +5378,7 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
   final double buyQty;
   final double costPerBaseUnit;
   final String ingredientType;
+  final bool needsReview;
   const IngredientLocal(
       {required this.id,
       required this.rowVersion,
@@ -5373,7 +5393,8 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
       required this.buyPrice,
       required this.buyQty,
       required this.costPerBaseUnit,
-      required this.ingredientType});
+      required this.ingredientType,
+      required this.needsReview});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -5393,6 +5414,7 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
     map['buy_qty'] = Variable<double>(buyQty);
     map['cost_per_base_unit'] = Variable<double>(costPerBaseUnit);
     map['ingredient_type'] = Variable<String>(ingredientType);
+    map['needs_review'] = Variable<bool>(needsReview);
     return map;
   }
 
@@ -5414,6 +5436,7 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
       buyQty: Value(buyQty),
       costPerBaseUnit: Value(costPerBaseUnit),
       ingredientType: Value(ingredientType),
+      needsReview: Value(needsReview),
     );
   }
 
@@ -5435,6 +5458,7 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
       buyQty: serializer.fromJson<double>(json['buyQty']),
       costPerBaseUnit: serializer.fromJson<double>(json['costPerBaseUnit']),
       ingredientType: serializer.fromJson<String>(json['ingredientType']),
+      needsReview: serializer.fromJson<bool>(json['needsReview']),
     );
   }
   @override
@@ -5455,6 +5479,7 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
       'buyQty': serializer.toJson<double>(buyQty),
       'costPerBaseUnit': serializer.toJson<double>(costPerBaseUnit),
       'ingredientType': serializer.toJson<String>(ingredientType),
+      'needsReview': serializer.toJson<bool>(needsReview),
     };
   }
 
@@ -5472,7 +5497,8 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
           double? buyPrice,
           double? buyQty,
           double? costPerBaseUnit,
-          String? ingredientType}) =>
+          String? ingredientType,
+          bool? needsReview}) =>
       IngredientLocal(
         id: id ?? this.id,
         rowVersion: rowVersion ?? this.rowVersion,
@@ -5490,6 +5516,7 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
         buyQty: buyQty ?? this.buyQty,
         costPerBaseUnit: costPerBaseUnit ?? this.costPerBaseUnit,
         ingredientType: ingredientType ?? this.ingredientType,
+        needsReview: needsReview ?? this.needsReview,
       );
   IngredientLocal copyWithCompanion(IngredientsCompanion data) {
     return IngredientLocal(
@@ -5516,6 +5543,8 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
       ingredientType: data.ingredientType.present
           ? data.ingredientType.value
           : this.ingredientType,
+      needsReview:
+          data.needsReview.present ? data.needsReview.value : this.needsReview,
     );
   }
 
@@ -5535,7 +5564,8 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
           ..write('buyPrice: $buyPrice, ')
           ..write('buyQty: $buyQty, ')
           ..write('costPerBaseUnit: $costPerBaseUnit, ')
-          ..write('ingredientType: $ingredientType')
+          ..write('ingredientType: $ingredientType, ')
+          ..write('needsReview: $needsReview')
           ..write(')'))
         .toString();
   }
@@ -5555,7 +5585,8 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
       buyPrice,
       buyQty,
       costPerBaseUnit,
-      ingredientType);
+      ingredientType,
+      needsReview);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -5573,7 +5604,8 @@ class IngredientLocal extends DataClass implements Insertable<IngredientLocal> {
           other.buyPrice == this.buyPrice &&
           other.buyQty == this.buyQty &&
           other.costPerBaseUnit == this.costPerBaseUnit &&
-          other.ingredientType == this.ingredientType);
+          other.ingredientType == this.ingredientType &&
+          other.needsReview == this.needsReview);
 }
 
 class IngredientsCompanion extends UpdateCompanion<IngredientLocal> {
@@ -5591,6 +5623,7 @@ class IngredientsCompanion extends UpdateCompanion<IngredientLocal> {
   final Value<double> buyQty;
   final Value<double> costPerBaseUnit;
   final Value<String> ingredientType;
+  final Value<bool> needsReview;
   final Value<int> rowid;
   const IngredientsCompanion({
     this.id = const Value.absent(),
@@ -5607,6 +5640,7 @@ class IngredientsCompanion extends UpdateCompanion<IngredientLocal> {
     this.buyQty = const Value.absent(),
     this.costPerBaseUnit = const Value.absent(),
     this.ingredientType = const Value.absent(),
+    this.needsReview = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   IngredientsCompanion.insert({
@@ -5624,6 +5658,7 @@ class IngredientsCompanion extends UpdateCompanion<IngredientLocal> {
     this.buyQty = const Value.absent(),
     this.costPerBaseUnit = const Value.absent(),
     this.ingredientType = const Value.absent(),
+    this.needsReview = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : id = Value(id),
         brandId = Value(brandId),
@@ -5646,6 +5681,7 @@ class IngredientsCompanion extends UpdateCompanion<IngredientLocal> {
     Expression<double>? buyQty,
     Expression<double>? costPerBaseUnit,
     Expression<String>? ingredientType,
+    Expression<bool>? needsReview,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -5663,6 +5699,7 @@ class IngredientsCompanion extends UpdateCompanion<IngredientLocal> {
       if (buyQty != null) 'buy_qty': buyQty,
       if (costPerBaseUnit != null) 'cost_per_base_unit': costPerBaseUnit,
       if (ingredientType != null) 'ingredient_type': ingredientType,
+      if (needsReview != null) 'needs_review': needsReview,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5682,6 +5719,7 @@ class IngredientsCompanion extends UpdateCompanion<IngredientLocal> {
       Value<double>? buyQty,
       Value<double>? costPerBaseUnit,
       Value<String>? ingredientType,
+      Value<bool>? needsReview,
       Value<int>? rowid}) {
     return IngredientsCompanion(
       id: id ?? this.id,
@@ -5698,6 +5736,7 @@ class IngredientsCompanion extends UpdateCompanion<IngredientLocal> {
       buyQty: buyQty ?? this.buyQty,
       costPerBaseUnit: costPerBaseUnit ?? this.costPerBaseUnit,
       ingredientType: ingredientType ?? this.ingredientType,
+      needsReview: needsReview ?? this.needsReview,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5747,6 +5786,9 @@ class IngredientsCompanion extends UpdateCompanion<IngredientLocal> {
     if (ingredientType.present) {
       map['ingredient_type'] = Variable<String>(ingredientType.value);
     }
+    if (needsReview.present) {
+      map['needs_review'] = Variable<bool>(needsReview.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5770,6 +5812,7 @@ class IngredientsCompanion extends UpdateCompanion<IngredientLocal> {
           ..write('buyQty: $buyQty, ')
           ..write('costPerBaseUnit: $costPerBaseUnit, ')
           ..write('ingredientType: $ingredientType, ')
+          ..write('needsReview: $needsReview, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5849,6 +5892,16 @@ class $RecipesTable extends Recipes with TableInfo<$RecipesTable, RecipeLocal> {
   late final GeneratedColumn<String> notes = GeneratedColumn<String>(
       'notes', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _isEstimatedMeta =
+      const VerificationMeta('isEstimated');
+  @override
+  late final GeneratedColumn<bool> isEstimated = GeneratedColumn<bool>(
+      'is_estimated', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("is_estimated" IN (0, 1))'),
+      defaultValue: const Constant(false));
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -5859,7 +5912,8 @@ class $RecipesTable extends Recipes with TableInfo<$RecipesTable, RecipeLocal> {
         productId,
         version,
         isActive,
-        notes
+        notes,
+        isEstimated
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5914,6 +5968,12 @@ class $RecipesTable extends Recipes with TableInfo<$RecipesTable, RecipeLocal> {
       context.handle(
           _notesMeta, notes.isAcceptableOrUnknown(data['notes']!, _notesMeta));
     }
+    if (data.containsKey('is_estimated')) {
+      context.handle(
+          _isEstimatedMeta,
+          isEstimated.isAcceptableOrUnknown(
+              data['is_estimated']!, _isEstimatedMeta));
+    }
     return context;
   }
 
@@ -5941,6 +6001,8 @@ class $RecipesTable extends Recipes with TableInfo<$RecipesTable, RecipeLocal> {
           .read(DriftSqlType.bool, data['${effectivePrefix}is_active'])!,
       notes: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}notes']),
+      isEstimated: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_estimated'])!,
     );
   }
 
@@ -5960,6 +6022,7 @@ class RecipeLocal extends DataClass implements Insertable<RecipeLocal> {
   final int version;
   final bool isActive;
   final String? notes;
+  final bool isEstimated;
   const RecipeLocal(
       {required this.id,
       required this.rowVersion,
@@ -5969,7 +6032,8 @@ class RecipeLocal extends DataClass implements Insertable<RecipeLocal> {
       required this.productId,
       required this.version,
       required this.isActive,
-      this.notes});
+      this.notes,
+      required this.isEstimated});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -5986,6 +6050,7 @@ class RecipeLocal extends DataClass implements Insertable<RecipeLocal> {
     if (!nullToAbsent || notes != null) {
       map['notes'] = Variable<String>(notes);
     }
+    map['is_estimated'] = Variable<bool>(isEstimated);
     return map;
   }
 
@@ -6003,6 +6068,7 @@ class RecipeLocal extends DataClass implements Insertable<RecipeLocal> {
       isActive: Value(isActive),
       notes:
           notes == null && nullToAbsent ? const Value.absent() : Value(notes),
+      isEstimated: Value(isEstimated),
     );
   }
 
@@ -6019,6 +6085,7 @@ class RecipeLocal extends DataClass implements Insertable<RecipeLocal> {
       version: serializer.fromJson<int>(json['version']),
       isActive: serializer.fromJson<bool>(json['isActive']),
       notes: serializer.fromJson<String?>(json['notes']),
+      isEstimated: serializer.fromJson<bool>(json['isEstimated']),
     );
   }
   @override
@@ -6034,6 +6101,7 @@ class RecipeLocal extends DataClass implements Insertable<RecipeLocal> {
       'version': serializer.toJson<int>(version),
       'isActive': serializer.toJson<bool>(isActive),
       'notes': serializer.toJson<String?>(notes),
+      'isEstimated': serializer.toJson<bool>(isEstimated),
     };
   }
 
@@ -6046,7 +6114,8 @@ class RecipeLocal extends DataClass implements Insertable<RecipeLocal> {
           String? productId,
           int? version,
           bool? isActive,
-          Value<String?> notes = const Value.absent()}) =>
+          Value<String?> notes = const Value.absent(),
+          bool? isEstimated}) =>
       RecipeLocal(
         id: id ?? this.id,
         rowVersion: rowVersion ?? this.rowVersion,
@@ -6059,6 +6128,7 @@ class RecipeLocal extends DataClass implements Insertable<RecipeLocal> {
         version: version ?? this.version,
         isActive: isActive ?? this.isActive,
         notes: notes.present ? notes.value : this.notes,
+        isEstimated: isEstimated ?? this.isEstimated,
       );
   RecipeLocal copyWithCompanion(RecipesCompanion data) {
     return RecipeLocal(
@@ -6074,6 +6144,8 @@ class RecipeLocal extends DataClass implements Insertable<RecipeLocal> {
       version: data.version.present ? data.version.value : this.version,
       isActive: data.isActive.present ? data.isActive.value : this.isActive,
       notes: data.notes.present ? data.notes.value : this.notes,
+      isEstimated:
+          data.isEstimated.present ? data.isEstimated.value : this.isEstimated,
     );
   }
 
@@ -6088,14 +6160,15 @@ class RecipeLocal extends DataClass implements Insertable<RecipeLocal> {
           ..write('productId: $productId, ')
           ..write('version: $version, ')
           ..write('isActive: $isActive, ')
-          ..write('notes: $notes')
+          ..write('notes: $notes, ')
+          ..write('isEstimated: $isEstimated')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, rowVersion, isDeleted, lastModifiedHlc,
-      isSynced, productId, version, isActive, notes);
+      isSynced, productId, version, isActive, notes, isEstimated);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -6108,7 +6181,8 @@ class RecipeLocal extends DataClass implements Insertable<RecipeLocal> {
           other.productId == this.productId &&
           other.version == this.version &&
           other.isActive == this.isActive &&
-          other.notes == this.notes);
+          other.notes == this.notes &&
+          other.isEstimated == this.isEstimated);
 }
 
 class RecipesCompanion extends UpdateCompanion<RecipeLocal> {
@@ -6121,6 +6195,7 @@ class RecipesCompanion extends UpdateCompanion<RecipeLocal> {
   final Value<int> version;
   final Value<bool> isActive;
   final Value<String?> notes;
+  final Value<bool> isEstimated;
   final Value<int> rowid;
   const RecipesCompanion({
     this.id = const Value.absent(),
@@ -6132,6 +6207,7 @@ class RecipesCompanion extends UpdateCompanion<RecipeLocal> {
     this.version = const Value.absent(),
     this.isActive = const Value.absent(),
     this.notes = const Value.absent(),
+    this.isEstimated = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   RecipesCompanion.insert({
@@ -6144,6 +6220,7 @@ class RecipesCompanion extends UpdateCompanion<RecipeLocal> {
     this.version = const Value.absent(),
     this.isActive = const Value.absent(),
     this.notes = const Value.absent(),
+    this.isEstimated = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : id = Value(id),
         productId = Value(productId);
@@ -6157,6 +6234,7 @@ class RecipesCompanion extends UpdateCompanion<RecipeLocal> {
     Expression<int>? version,
     Expression<bool>? isActive,
     Expression<String>? notes,
+    Expression<bool>? isEstimated,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -6169,6 +6247,7 @@ class RecipesCompanion extends UpdateCompanion<RecipeLocal> {
       if (version != null) 'version': version,
       if (isActive != null) 'is_active': isActive,
       if (notes != null) 'notes': notes,
+      if (isEstimated != null) 'is_estimated': isEstimated,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -6183,6 +6262,7 @@ class RecipesCompanion extends UpdateCompanion<RecipeLocal> {
       Value<int>? version,
       Value<bool>? isActive,
       Value<String?>? notes,
+      Value<bool>? isEstimated,
       Value<int>? rowid}) {
     return RecipesCompanion(
       id: id ?? this.id,
@@ -6194,6 +6274,7 @@ class RecipesCompanion extends UpdateCompanion<RecipeLocal> {
       version: version ?? this.version,
       isActive: isActive ?? this.isActive,
       notes: notes ?? this.notes,
+      isEstimated: isEstimated ?? this.isEstimated,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -6228,6 +6309,9 @@ class RecipesCompanion extends UpdateCompanion<RecipeLocal> {
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
     }
+    if (isEstimated.present) {
+      map['is_estimated'] = Variable<bool>(isEstimated.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -6246,6 +6330,7 @@ class RecipesCompanion extends UpdateCompanion<RecipeLocal> {
           ..write('version: $version, ')
           ..write('isActive: $isActive, ')
           ..write('notes: $notes, ')
+          ..write('isEstimated: $isEstimated, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7319,6 +7404,199 @@ class OutletStocksCompanion extends UpdateCompanion<OutletStockLocal> {
   }
 }
 
+class $RecipeHppSnapshotsTable extends RecipeHppSnapshots
+    with TableInfo<$RecipeHppSnapshotsTable, RecipeHppLocal> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RecipeHppSnapshotsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _recipeIdMeta =
+      const VerificationMeta('recipeId');
+  @override
+  late final GeneratedColumn<String> recipeId = GeneratedColumn<String>(
+      'recipe_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _snapshotMeta =
+      const VerificationMeta('snapshot');
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+      'snapshot', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [recipeId, snapshot];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'recipe_hpp_snapshots';
+  @override
+  VerificationContext validateIntegrity(Insertable<RecipeHppLocal> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('recipe_id')) {
+      context.handle(_recipeIdMeta,
+          recipeId.isAcceptableOrUnknown(data['recipe_id']!, _recipeIdMeta));
+    } else if (isInserting) {
+      context.missing(_recipeIdMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(_snapshotMeta,
+          snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta));
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {recipeId};
+  @override
+  RecipeHppLocal map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RecipeHppLocal(
+      recipeId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}recipe_id'])!,
+      snapshot: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}snapshot'])!,
+    );
+  }
+
+  @override
+  $RecipeHppSnapshotsTable createAlias(String alias) {
+    return $RecipeHppSnapshotsTable(attachedDatabase, alias);
+  }
+}
+
+class RecipeHppLocal extends DataClass implements Insertable<RecipeHppLocal> {
+  final String recipeId;
+  final String snapshot;
+  const RecipeHppLocal({required this.recipeId, required this.snapshot});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['recipe_id'] = Variable<String>(recipeId);
+    map['snapshot'] = Variable<String>(snapshot);
+    return map;
+  }
+
+  RecipeHppSnapshotsCompanion toCompanion(bool nullToAbsent) {
+    return RecipeHppSnapshotsCompanion(
+      recipeId: Value(recipeId),
+      snapshot: Value(snapshot),
+    );
+  }
+
+  factory RecipeHppLocal.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RecipeHppLocal(
+      recipeId: serializer.fromJson<String>(json['recipeId']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'recipeId': serializer.toJson<String>(recipeId),
+      'snapshot': serializer.toJson<String>(snapshot),
+    };
+  }
+
+  RecipeHppLocal copyWith({String? recipeId, String? snapshot}) =>
+      RecipeHppLocal(
+        recipeId: recipeId ?? this.recipeId,
+        snapshot: snapshot ?? this.snapshot,
+      );
+  RecipeHppLocal copyWithCompanion(RecipeHppSnapshotsCompanion data) {
+    return RecipeHppLocal(
+      recipeId: data.recipeId.present ? data.recipeId.value : this.recipeId,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RecipeHppLocal(')
+          ..write('recipeId: $recipeId, ')
+          ..write('snapshot: $snapshot')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(recipeId, snapshot);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RecipeHppLocal &&
+          other.recipeId == this.recipeId &&
+          other.snapshot == this.snapshot);
+}
+
+class RecipeHppSnapshotsCompanion extends UpdateCompanion<RecipeHppLocal> {
+  final Value<String> recipeId;
+  final Value<String> snapshot;
+  final Value<int> rowid;
+  const RecipeHppSnapshotsCompanion({
+    this.recipeId = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RecipeHppSnapshotsCompanion.insert({
+    required String recipeId,
+    required String snapshot,
+    this.rowid = const Value.absent(),
+  })  : recipeId = Value(recipeId),
+        snapshot = Value(snapshot);
+  static Insertable<RecipeHppLocal> custom({
+    Expression<String>? recipeId,
+    Expression<String>? snapshot,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (recipeId != null) 'recipe_id': recipeId,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RecipeHppSnapshotsCompanion copyWith(
+      {Value<String>? recipeId, Value<String>? snapshot, Value<int>? rowid}) {
+    return RecipeHppSnapshotsCompanion(
+      recipeId: recipeId ?? this.recipeId,
+      snapshot: snapshot ?? this.snapshot,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (recipeId.present) {
+      map['recipe_id'] = Variable<String>(recipeId.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RecipeHppSnapshotsCompanion(')
+          ..write('recipeId: $recipeId, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -7335,6 +7613,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $RecipeIngredientsTable recipeIngredients =
       $RecipeIngredientsTable(this);
   late final $OutletStocksTable outletStocks = $OutletStocksTable(this);
+  late final $RecipeHppSnapshotsTable recipeHppSnapshots =
+      $RecipeHppSnapshotsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7350,7 +7630,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         ingredients,
         recipes,
         recipeIngredients,
-        outletStocks
+        outletStocks,
+        recipeHppSnapshots
       ];
 }
 
@@ -9624,6 +9905,7 @@ typedef $$IngredientsTableCreateCompanionBuilder = IngredientsCompanion
   Value<double> buyQty,
   Value<double> costPerBaseUnit,
   Value<String> ingredientType,
+  Value<bool> needsReview,
   Value<int> rowid,
 });
 typedef $$IngredientsTableUpdateCompanionBuilder = IngredientsCompanion
@@ -9642,6 +9924,7 @@ typedef $$IngredientsTableUpdateCompanionBuilder = IngredientsCompanion
   Value<double> buyQty,
   Value<double> costPerBaseUnit,
   Value<String> ingredientType,
+  Value<bool> needsReview,
   Value<int> rowid,
 });
 
@@ -9698,6 +9981,9 @@ class $$IngredientsTableFilterComposer
   ColumnFilters<String> get ingredientType => $composableBuilder(
       column: $table.ingredientType,
       builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get needsReview => $composableBuilder(
+      column: $table.needsReview, builder: (column) => ColumnFilters(column));
 }
 
 class $$IngredientsTableOrderingComposer
@@ -9754,6 +10040,9 @@ class $$IngredientsTableOrderingComposer
   ColumnOrderings<String> get ingredientType => $composableBuilder(
       column: $table.ingredientType,
       builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get needsReview => $composableBuilder(
+      column: $table.needsReview, builder: (column) => ColumnOrderings(column));
 }
 
 class $$IngredientsTableAnnotationComposer
@@ -9806,6 +10095,9 @@ class $$IngredientsTableAnnotationComposer
 
   GeneratedColumn<String> get ingredientType => $composableBuilder(
       column: $table.ingredientType, builder: (column) => column);
+
+  GeneratedColumn<bool> get needsReview => $composableBuilder(
+      column: $table.needsReview, builder: (column) => column);
 }
 
 class $$IngredientsTableTableManager extends RootTableManager<
@@ -9848,6 +10140,7 @@ class $$IngredientsTableTableManager extends RootTableManager<
             Value<double> buyQty = const Value.absent(),
             Value<double> costPerBaseUnit = const Value.absent(),
             Value<String> ingredientType = const Value.absent(),
+            Value<bool> needsReview = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               IngredientsCompanion(
@@ -9865,6 +10158,7 @@ class $$IngredientsTableTableManager extends RootTableManager<
             buyQty: buyQty,
             costPerBaseUnit: costPerBaseUnit,
             ingredientType: ingredientType,
+            needsReview: needsReview,
             rowid: rowid,
           ),
           createCompanionCallback: ({
@@ -9882,6 +10176,7 @@ class $$IngredientsTableTableManager extends RootTableManager<
             Value<double> buyQty = const Value.absent(),
             Value<double> costPerBaseUnit = const Value.absent(),
             Value<String> ingredientType = const Value.absent(),
+            Value<bool> needsReview = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               IngredientsCompanion.insert(
@@ -9899,6 +10194,7 @@ class $$IngredientsTableTableManager extends RootTableManager<
             buyQty: buyQty,
             costPerBaseUnit: costPerBaseUnit,
             ingredientType: ingredientType,
+            needsReview: needsReview,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
@@ -9933,6 +10229,7 @@ typedef $$RecipesTableCreateCompanionBuilder = RecipesCompanion Function({
   Value<int> version,
   Value<bool> isActive,
   Value<String?> notes,
+  Value<bool> isEstimated,
   Value<int> rowid,
 });
 typedef $$RecipesTableUpdateCompanionBuilder = RecipesCompanion Function({
@@ -9945,6 +10242,7 @@ typedef $$RecipesTableUpdateCompanionBuilder = RecipesCompanion Function({
   Value<int> version,
   Value<bool> isActive,
   Value<String?> notes,
+  Value<bool> isEstimated,
   Value<int> rowid,
 });
 
@@ -9984,6 +10282,9 @@ class $$RecipesTableFilterComposer
 
   ColumnFilters<String> get notes => $composableBuilder(
       column: $table.notes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isEstimated => $composableBuilder(
+      column: $table.isEstimated, builder: (column) => ColumnFilters(column));
 }
 
 class $$RecipesTableOrderingComposer
@@ -10022,6 +10323,9 @@ class $$RecipesTableOrderingComposer
 
   ColumnOrderings<String> get notes => $composableBuilder(
       column: $table.notes, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isEstimated => $composableBuilder(
+      column: $table.isEstimated, builder: (column) => ColumnOrderings(column));
 }
 
 class $$RecipesTableAnnotationComposer
@@ -10059,6 +10363,9 @@ class $$RecipesTableAnnotationComposer
 
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<bool> get isEstimated => $composableBuilder(
+      column: $table.isEstimated, builder: (column) => column);
 }
 
 class $$RecipesTableTableManager extends RootTableManager<
@@ -10093,6 +10400,7 @@ class $$RecipesTableTableManager extends RootTableManager<
             Value<int> version = const Value.absent(),
             Value<bool> isActive = const Value.absent(),
             Value<String?> notes = const Value.absent(),
+            Value<bool> isEstimated = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               RecipesCompanion(
@@ -10105,6 +10413,7 @@ class $$RecipesTableTableManager extends RootTableManager<
             version: version,
             isActive: isActive,
             notes: notes,
+            isEstimated: isEstimated,
             rowid: rowid,
           ),
           createCompanionCallback: ({
@@ -10117,6 +10426,7 @@ class $$RecipesTableTableManager extends RootTableManager<
             Value<int> version = const Value.absent(),
             Value<bool> isActive = const Value.absent(),
             Value<String?> notes = const Value.absent(),
+            Value<bool> isEstimated = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               RecipesCompanion.insert(
@@ -10129,6 +10439,7 @@ class $$RecipesTableTableManager extends RootTableManager<
             version: version,
             isActive: isActive,
             notes: notes,
+            isEstimated: isEstimated,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
@@ -10659,6 +10970,136 @@ typedef $$OutletStocksTableProcessedTableManager = ProcessedTableManager<
     ),
     OutletStockLocal,
     PrefetchHooks Function()>;
+typedef $$RecipeHppSnapshotsTableCreateCompanionBuilder
+    = RecipeHppSnapshotsCompanion Function({
+  required String recipeId,
+  required String snapshot,
+  Value<int> rowid,
+});
+typedef $$RecipeHppSnapshotsTableUpdateCompanionBuilder
+    = RecipeHppSnapshotsCompanion Function({
+  Value<String> recipeId,
+  Value<String> snapshot,
+  Value<int> rowid,
+});
+
+class $$RecipeHppSnapshotsTableFilterComposer
+    extends Composer<_$AppDatabase, $RecipeHppSnapshotsTable> {
+  $$RecipeHppSnapshotsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get recipeId => $composableBuilder(
+      column: $table.recipeId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+      column: $table.snapshot, builder: (column) => ColumnFilters(column));
+}
+
+class $$RecipeHppSnapshotsTableOrderingComposer
+    extends Composer<_$AppDatabase, $RecipeHppSnapshotsTable> {
+  $$RecipeHppSnapshotsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get recipeId => $composableBuilder(
+      column: $table.recipeId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+      column: $table.snapshot, builder: (column) => ColumnOrderings(column));
+}
+
+class $$RecipeHppSnapshotsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RecipeHppSnapshotsTable> {
+  $$RecipeHppSnapshotsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get recipeId =>
+      $composableBuilder(column: $table.recipeId, builder: (column) => column);
+
+  GeneratedColumn<String> get snapshot =>
+      $composableBuilder(column: $table.snapshot, builder: (column) => column);
+}
+
+class $$RecipeHppSnapshotsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $RecipeHppSnapshotsTable,
+    RecipeHppLocal,
+    $$RecipeHppSnapshotsTableFilterComposer,
+    $$RecipeHppSnapshotsTableOrderingComposer,
+    $$RecipeHppSnapshotsTableAnnotationComposer,
+    $$RecipeHppSnapshotsTableCreateCompanionBuilder,
+    $$RecipeHppSnapshotsTableUpdateCompanionBuilder,
+    (
+      RecipeHppLocal,
+      BaseReferences<_$AppDatabase, $RecipeHppSnapshotsTable, RecipeHppLocal>
+    ),
+    RecipeHppLocal,
+    PrefetchHooks Function()> {
+  $$RecipeHppSnapshotsTableTableManager(
+      _$AppDatabase db, $RecipeHppSnapshotsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RecipeHppSnapshotsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RecipeHppSnapshotsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RecipeHppSnapshotsTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> recipeId = const Value.absent(),
+            Value<String> snapshot = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              RecipeHppSnapshotsCompanion(
+            recipeId: recipeId,
+            snapshot: snapshot,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String recipeId,
+            required String snapshot,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              RecipeHppSnapshotsCompanion.insert(
+            recipeId: recipeId,
+            snapshot: snapshot,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$RecipeHppSnapshotsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $RecipeHppSnapshotsTable,
+    RecipeHppLocal,
+    $$RecipeHppSnapshotsTableFilterComposer,
+    $$RecipeHppSnapshotsTableOrderingComposer,
+    $$RecipeHppSnapshotsTableAnnotationComposer,
+    $$RecipeHppSnapshotsTableCreateCompanionBuilder,
+    $$RecipeHppSnapshotsTableUpdateCompanionBuilder,
+    (
+      RecipeHppLocal,
+      BaseReferences<_$AppDatabase, $RecipeHppSnapshotsTable, RecipeHppLocal>
+    ),
+    RecipeHppLocal,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -10685,4 +11126,6 @@ class $AppDatabaseManager {
       $$RecipeIngredientsTableTableManager(_db, _db.recipeIngredients);
   $$OutletStocksTableTableManager get outletStocks =>
       $$OutletStocksTableTableManager(_db, _db.outletStocks);
+  $$RecipeHppSnapshotsTableTableManager get recipeHppSnapshots =>
+      $$RecipeHppSnapshotsTableTableManager(_db, _db.recipeHppSnapshots);
 }

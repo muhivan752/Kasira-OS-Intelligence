@@ -2,7 +2,7 @@ from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -18,9 +18,23 @@ router = APIRouter()
 
 
 class CustomerCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=120)
     phone: Optional[str] = None
     email: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def trimmed_name(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Nama pelanggan wajib diisi")
+        return value
+
+    @field_validator("phone")
+    @classmethod
+    def formatted_phone(cls, value):
+        from backend.schemas.customer_workspace import normalize_phone
+        return normalize_phone(value)
 
 
 class CustomerResponse(BaseModel):
@@ -81,12 +95,13 @@ async def create_customer(
 ) -> Any:
     # Cek duplikat phone
     if customer_in.phone:
+        from backend.services.customer_workspace import canonical_phone_column
         dup_stmt = select(Customer).where(
             Customer.tenant_id == current_user.tenant_id,
-            Customer.phone == customer_in.phone,
+            canonical_phone_column() == customer_in.phone,
             Customer.deleted_at.is_(None),
         )
-        if (await db.execute(dup_stmt)).scalar_one_or_none():
+        if (await db.execute(dup_stmt.limit(1))).scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Pelanggan dengan nomor HP ini sudah terdaftar")
 
     # phone_hmac WAJIB dihitung beneran. Sebelumnya diisi string kosong untuk
@@ -97,15 +112,16 @@ async def create_customer(
     # Rumusnya disamakan dengan payments.py biar nomor yang sama menghasilkan
     # hmac yang sama di kedua jalur.
     import hashlib, hmac as _hmac
+    from uuid import uuid4
     phone_hmac = (
         _hmac.new(b'kasira-phone-key', customer_in.phone.encode(), hashlib.sha256).hexdigest()
-        if customer_in.phone else ''
+        if customer_in.phone else hashlib.sha256(f"no-phone:{uuid4()}".encode()).hexdigest()
     )
 
     customer = Customer(
         tenant_id=current_user.tenant_id,
         name=customer_in.name,
-        phone=customer_in.phone,
+        phone=customer_in.phone or "",
         email=customer_in.email,
         phone_hmac=phone_hmac,
     )
@@ -152,6 +168,7 @@ class CustomerUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     notes: Optional[str] = None
+    row_version: Optional[int] = Field(None, ge=0)
 
 
 def _summary(c: Customer) -> dict:
@@ -358,10 +375,12 @@ async def update_customer(
         Customer.id == customer_id,
         Customer.tenant_id == current_user.tenant_id,
         Customer.deleted_at.is_(None),
-    ))).scalar_one_or_none()
+    ).with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
     if not cust:
         raise HTTPException(status_code=404, detail="Pelanggan tidak ditemukan")
 
+    if body.row_version is not None and body.row_version != (cust.row_version or 0):
+        raise HTTPException(409, "Profil sudah berubah. Muat ulang sebelum menyimpan")
     before = {"name": cust.name, "email": cust.email, "notes": cust.notes}
     if body.name is not None and body.name.strip():
         cust.name = body.name.strip()
@@ -369,6 +388,7 @@ async def update_customer(
         cust.email = body.email.strip() or None
     if body.notes is not None:
         cust.notes = body.notes.strip() or None
+    cust.row_version = (cust.row_version or 0) + 1
     await db.commit()
     await db.refresh(cust)
 
@@ -404,3 +424,7 @@ async def refresh_stats(
         request_id=request.state.request_id,
         message=f"{n} pelanggan dihitung ulang",
     )
+
+
+from backend.api.routes.customer_workspace import router as workspace_router
+router.include_router(workspace_router, prefix="/workspace")

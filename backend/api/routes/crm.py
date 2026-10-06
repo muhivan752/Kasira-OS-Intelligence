@@ -43,10 +43,13 @@ def _q2(x) -> Decimal:
     return Decimal(str(x or 0)).quantize(_Q2, rounding=ROUND_HALF_UP)
 
 
-async def _customer(db: AsyncSession, customer_id: UUID, tenant_id: UUID) -> Customer:
-    c = (await db.execute(select(Customer).where(
+async def _customer(db: AsyncSession, customer_id: UUID, tenant_id: UUID, lock: bool = False) -> Customer:
+    query = select(Customer).where(
         Customer.id == customer_id, Customer.tenant_id == tenant_id, Customer.deleted_at.is_(None)
-    ))).scalar_one_or_none()
+    )
+    if lock:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    c = (await db.execute(query)).scalar_one_or_none()
     if not c:
         raise HTTPException(status_code=404, detail="Pelanggan tidak ditemukan")
     return c
@@ -176,12 +179,15 @@ async def add_note(request: Request, customer_id: UUID, body: NoteIn, db: AsyncS
 class ProfileIn(BaseModel):
     birthday: Optional[date] = None
     wa_marketing_consent: Optional[bool] = None
+    row_version: Optional[int] = Field(None, ge=0)
 
 
 @router.put("/customers/{customer_id}/profile", response_model=StandardResponse[dict])
 async def update_profile(request: Request, customer_id: UUID, body: ProfileIn, db: AsyncSession = Depends(get_db), current_user: User = Depends(deps.get_current_user)) -> Any:
-    c = await _customer(db, customer_id, current_user.tenant_id)
-    changes = body.model_dump(exclude_unset=True)
+    c = await _customer(db, customer_id, current_user.tenant_id, lock=True)
+    if body.row_version is not None and body.row_version != (c.row_version or 0):
+        raise HTTPException(409, "Profil sudah berubah. Muat ulang sebelum menyimpan")
+    changes = body.model_dump(exclude_unset=True, exclude={"row_version"})
     if "birthday" in changes:
         c.birthday = changes["birthday"]
     if "wa_marketing_consent" in changes and changes["wa_marketing_consent"] is not None:

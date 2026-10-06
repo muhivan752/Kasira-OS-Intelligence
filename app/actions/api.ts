@@ -4,6 +4,8 @@ import { cookies } from 'next/headers';
 import type { HppIngredient, HppProduct, HppRecipe } from '@/lib/hpp';
 import type { InventoryIngredient } from '@/lib/ingredient-inventory';
 import type { HppChatMode, HppChatSession, HppChatListItem, HppChatResult } from '@/lib/hpp-chat';
+import type { FinanceSummary, FinanceExpense, FinanceAccount, FinanceCategory, FinanceSetup, FinanceResult } from '@/lib/finance';
+import type { PurchaseResult, PurchaseSetup, PurchaseData, PurchaseTarget, PurchaseFilters, Purchase, Supplier, PurchaseSummary } from '@/lib/purchasing';
 
 async function hppChatRequest<T>(path: string, options: RequestInit = {}): Promise<HppChatResult<T>> {
   try {
@@ -58,6 +60,7 @@ const API_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_
 function extractError(data: any, fallback = 'Terjadi kesalahan'): string {
   if (data?.message && typeof data.message === 'string') return data.message;
   if (typeof data?.detail === 'string') return data.detail;
+  if (typeof data?.detail?.message === 'string') return data.detail.message;
   if (Array.isArray(data?.detail)) return data.detail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join(', ');
   return fallback;
 }
@@ -985,25 +988,14 @@ export async function getSuppliers(includeInactive = false) {
   } catch { return []; }
 }
 
-export async function createSupplier(payload: { name: string; phone?: string; address?: string; notes?: string; payment_terms_days?: number }) {
-  const res = await fetchWithAuth('/suppliers', { method: 'POST', body: JSON.stringify(payload) });
-  const data = await res.json();
-  if (!res.ok) throw new Error(extractError(data, 'Gagal menambah supplier'));
-  return data.data;
-}
+export async function createSupplier(payload: Record<string, unknown>) { return purchaseWrite<Supplier>('/suppliers', 'POST', payload); }
 
 export async function updateSupplier(id: string, payload: Record<string, unknown>) {
-  const res = await fetchWithAuth(`/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-  const data = await res.json();
-  if (!res.ok) throw new Error(extractError(data, 'Gagal mengubah supplier'));
-  return data.data;
+  return purchaseWrite<Supplier>(`/suppliers/${encodeURIComponent(id)}`, 'PUT', payload);
 }
 
 export async function deleteSupplier(id: string) {
-  const res = await fetchWithAuth(`/suppliers/${id}`, { method: 'DELETE' });
-  const data = await res.json();
-  if (!res.ok) throw new Error(extractError(data, 'Gagal menghapus supplier'));
-  return true;
+  return purchaseWrite<{ ok: boolean }>(`/suppliers/${encodeURIComponent(id)}`, 'DELETE');
 }
 
 export async function getPurchaseSummary(outletId: string) {
@@ -1026,46 +1018,153 @@ export async function getPurchases(outletId: string, opts?: { unpaidOnly?: boole
 }
 
 export async function createPurchase(payload: Record<string, unknown>) {
-  const res = await fetchWithAuth('/purchases', { method: 'POST', body: JSON.stringify(payload) });
-  const data = await res.json();
-  if (!res.ok) throw new Error(extractError(data, 'Gagal mencatat nota'));
-  return data.data;
+  return purchaseWrite<Purchase>('/purchases', 'POST', payload);
 }
 
-export async function payPurchase(id: string, amount: number, rowVersion: number) {
-  const res = await fetchWithAuth(`/purchases/${id}/pay`, {
-    method: 'POST',
-    body: JSON.stringify({ amount, row_version: rowVersion }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(extractError(data, 'Gagal mencatat pembayaran'));
-  return data.data;
+export async function payPurchase(id: string, payload: Record<string, unknown>) {
+  return purchaseWrite<Purchase>(`/purchases/${encodeURIComponent(id)}/pay`, 'POST', payload);
+}
+
+async function purchaseRead<T>(path: string): Promise<T> {
+  const res = await fetchWithAuth(path, { cache: 'no-store' });
+  const body = await res.json();
+  if (!res.ok || body.success === false || body.data == null) throw new Error(res.status >= 500
+    ? 'Data pembelian belum bisa dimuat. Coba lagi.' : extractError(body, 'Data pembelian belum bisa dimuat.'));
+  return body.data as T;
+}
+
+function purchaseError(error: unknown) {
+  if (error instanceof Error && ['SESSION_EXPIRED', 'Unauthorized'].includes(error.message)) return 'Sesi berakhir. Masuk kembali untuk membuka pembelian.';
+  return error instanceof Error && !/fetch failed|ECONN|ENOTFOUND|Unexpected token/i.test(error.message)
+    ? error.message : 'Data pembelian belum bisa dimuat. Periksa koneksi lalu coba lagi.';
+}
+
+async function purchaseWrite<T>(path: string, method: string, payload?: Record<string, unknown>): Promise<PurchaseResult<T>> {
+  try {
+    const res = await fetchWithAuth(path, { method, body: payload ? JSON.stringify(payload) : undefined });
+    const body = await res.json();
+    if (!res.ok || body.success === false || body.data == null) return { success: false, uncertain: res.status >= 500,
+      message: res.status >= 500 ? 'Hasil penyimpanan belum pasti. Coba periksa permintaan yang sama sebelum membuat catatan baru.' : extractError(body, 'Pembelian belum bisa disimpan.') };
+    return { success: true, data: body.data as T, message: body.message };
+  } catch (error) {
+    const expired = error instanceof Error && ['SESSION_EXPIRED', 'Unauthorized'].includes(error.message);
+    return { success: false, uncertain: !expired, message: expired ? purchaseError(error) : 'Koneksi terputus. Hasil penyimpanan belum pasti; periksa permintaan yang sama.' };
+  }
+}
+
+export async function getPurchasingSetup(): Promise<PurchaseResult<PurchaseSetup>> {
+  try {
+    const [outlets, user] = await Promise.all([purchaseRead<PurchaseSetup['outlets']>('/outlets'), purchaseRead<{ subscription_tier: string }>('/users/me')]);
+    return { success: true, data: { outlets, selectedOutletId: (await cookies()).get('outlet_id')?.value,
+      isPro: ['pro', 'business', 'enterprise'].includes(user.subscription_tier) } };
+  } catch (error) { return { success: false, message: purchaseError(error) }; }
+}
+
+export async function getPurchasingData(outletId: string, reportMonth: string, filters: PurchaseFilters): Promise<PurchaseResult<PurchaseData>> {
+  try {
+    const query = new URLSearchParams({ outlet_id: outletId, limit: '51', skip: String(filters.skip || 0) });
+    if (filters.month) query.set('month', filters.month);
+    if (filters.unpaidOnly) query.set('unpaid_only', 'true');
+    if (filters.search) query.set('search', filters.search);
+    const [summary, rows, suppliers] = await Promise.all([
+      purchaseRead<PurchaseSummary>(`/purchases/summary?outlet_id=${encodeURIComponent(outletId)}&month=${encodeURIComponent(reportMonth)}`),
+      purchaseRead<Purchase[]>(`/purchases?${query}`),
+      purchaseRead<Supplier[]>(`/suppliers?include_inactive=true&outlet_id=${encodeURIComponent(outletId)}`),
+    ]);
+    return { success: true, data: { summary, purchases: rows.slice(0, 50), hasNext: rows.length > 50, suppliers } };
+  } catch (error) { return { success: false, message: purchaseError(error) }; }
+}
+
+export async function getPurchaseDetail(id: string): Promise<PurchaseResult<Purchase>> {
+  try { return { success: true, data: await purchaseRead<Purchase>(`/purchases/${encodeURIComponent(id)}`) }; }
+  catch (error) { return { success: false, message: purchaseError(error) }; }
+}
+
+export async function getPurchaseTargets(outletId: string, brandId: string, isPro: boolean): Promise<PurchaseResult<PurchaseTarget[]>> {
+  try {
+    const [products, ingredients] = await Promise.all([
+      purchaseReadAll<{id: string; name: string; stock_enabled: boolean}>(`/products?brand_id=${encodeURIComponent(brandId)}`),
+      isPro ? purchaseReadAll<{id: string; name: string; base_unit: string; ingredient_type?: string}>(`/ingredients?brand_id=${encodeURIComponent(brandId)}&outlet_id=${encodeURIComponent(outletId)}`) : Promise.resolve([]),
+    ]);
+    return { success: true, data: [
+      ...ingredients.filter(i => i.ingredient_type !== 'overhead').map(i => ({key:`i:${i.id}`,id:i.id,name:i.name,kind:'ingredient' as const,unit:i.base_unit})),
+      ...products.map(p => ({key:`p:${p.id}`,id:p.id,name:p.name,kind:'product' as const,unit:'pcs',stockEnabled:p.stock_enabled})),
+    ] };
+  } catch (error) { return { success: false, message: purchaseError(error) }; }
+}
+
+async function purchaseReadAll<T extends { id: string }>(path: string): Promise<T[]> {
+  const rows: T[] = [], seen = new Set<string>();
+  for (let skip = 0; ; skip += 200) {
+    const batch = await purchaseRead<T[]>(`${path}&skip=${skip}&limit=200`);
+    if (!Array.isArray(batch) || batch.some(row => seen.has(row.id))) throw new Error('Daftar barang berubah saat dimuat. Coba muat barang lagi.');
+    batch.forEach(row => seen.add(row.id)); rows.push(...batch);
+    if (batch.length < 200) return rows;
+  }
 }
 
 /** Foto nota → baris terisi (Claude Vision). Endpoint lama /invoice-ocr/scan dipakai ulang. */
-export async function scanInvoice(formData: FormData) {
+export async function scanInvoice(formData: FormData, outletId?: string) {
+  try {
   const token = await getAuthToken();
   const cookieStore = await cookies();
   const tenantId = cookieStore.get('tenant_id')?.value;
   const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (tenantId) headers['X-Tenant-ID'] = tenantId;
-  const res = await fetch(`${API_URL}/invoice-ocr/scan`, { method: 'POST', headers, body: formData });
+  const res = await fetch(`${API_URL}/invoice-ocr/scan${outletId ? `?outlet_id=${encodeURIComponent(outletId)}` : ''}`, { method: 'POST', headers, body: formData });
   const data = await res.json();
   if (!res.ok || data.success === false) {
-    return { success: false, message: extractError(data, 'Nota tidak terbaca'), data: null };
+    return { success: false, message: res.status >= 500 ? 'Foto nota belum bisa dibaca. Isi manual atau coba lagi.' : extractError(data, 'Nota tidak terbaca'), data: null };
   }
   return { success: true, message: data.message, data: data.data };
+  } catch { return { success: false, message: 'Koneksi terputus saat membaca foto. Catatan belum disimpan.', data: null }; }
 }
 
 // ── Keuangan (laba rugi, arus kas, pengeluaran) ───────────────────────
 
-export async function getFinanceSummary(outletId: string, month: string) {
+async function financeData<T>(path: string): Promise<T> {
   try {
-    const res = await fetchWithAuth(`/finance/summary?outlet_id=${outletId}&month=${month}`);
+    const res = await fetchWithAuth(path, { cache: 'no-store' });
     const data = await res.json();
-    return data.data;
-  } catch { return null; }
+    if (!res.ok || data.success === false || data.data == null) throw new Error(res.status < 500
+      ? extractError(data, 'Data keuangan belum bisa dimuat.') : 'Data keuangan belum bisa dimuat. Coba lagi.');
+    return data.data as T;
+  } catch (error) {
+    if (error instanceof Error && ['SESSION_EXPIRED', 'Unauthorized'].includes(error.message)) {
+      throw new Error('Sesi berakhir. Masuk kembali untuk membuka keuangan.');
+    }
+    throw error;
+  }
+}
+
+export async function getFinanceSetup(): Promise<FinanceResult<FinanceSetup>> {
+  try {
+  const [outlets, categories, accounts, suppliers] = await Promise.all([
+    financeData<{ id: string; name: string }[]>('/outlets'),
+    financeData<FinanceCategory[]>('/finance/categories'),
+    financeData<FinanceAccount[]>('/finance/accounts'),
+    financeData<{ id: string; name: string; is_active: boolean }[]>('/suppliers'),
+  ]);
+  const selectedOutletId = (await cookies()).get('outlet_id')?.value;
+  return { success: true, data: { outlets, categories, accounts, suppliers: suppliers.filter(s => s.is_active), selectedOutletId } };
+  } catch (error) { return { success: false, message: financeError(error) }; }
+}
+
+function financeError(error: unknown): string {
+  return error instanceof Error && !/fetch failed|ECONN|ENOTFOUND|Unexpected token/i.test(error.message)
+    ? error.message : 'Data keuangan belum bisa dimuat. Periksa koneksi lalu coba lagi.';
+}
+
+export async function getFinanceReport(outletId: string, month: string): Promise<FinanceResult<{ summary: FinanceSummary; expenses: FinanceExpense[] }>> {
+  try {
+    const [summary, expenses] = await Promise.all([getFinanceSummary(outletId, month), getExpenses(outletId, month)]);
+    return { success: true, data: { summary, expenses } };
+  } catch (error) { return { success: false, message: financeError(error) }; }
+}
+
+export async function getFinanceSummary(outletId: string, month: string) {
+  return financeData<FinanceSummary>(`/finance/summary?outlet_id=${encodeURIComponent(outletId)}&month=${encodeURIComponent(month)}`);
 }
 
 export async function getFinanceCategories() {
@@ -1077,38 +1176,36 @@ export async function getCashAccounts() {
 }
 
 export async function getExpenses(outletId: string, month: string) {
-  try {
-    const res = await fetchWithAuth(`/finance/expenses?outlet_id=${outletId}&month=${month}`);
-    return (await res.json()).data || [];
-  } catch { return []; }
+  return financeData<FinanceExpense[]>(`/finance/expenses?outlet_id=${encodeURIComponent(outletId)}&month=${encodeURIComponent(month)}`);
 }
 
 export async function createExpense(payload: Record<string, unknown>) {
-  const res = await fetchWithAuth('/finance/expenses', { method: 'POST', body: JSON.stringify(payload) });
-  const data = await res.json();
-  if (!res.ok) throw new Error(extractError(data, 'Gagal mencatat pengeluaran'));
-  return data.data;
+  return financeWrite<FinanceExpense>('/finance/expenses', 'POST', payload);
 }
 
 export async function updateExpense(id: string, payload: Record<string, unknown>) {
-  const res = await fetchWithAuth(`/finance/expenses/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-  const data = await res.json();
-  if (!res.ok) throw new Error(extractError(data, 'Gagal mengubah pengeluaran'));
-  return data.data;
+  return financeWrite<FinanceExpense>(`/finance/expenses/${encodeURIComponent(id)}`, 'PUT', payload);
+}
+
+async function financeWrite<T>(path: string, method: string, payload?: Record<string, unknown>): Promise<FinanceResult<T>> {
+  try {
+    const res = await fetchWithAuth(path, { method, body: payload ? JSON.stringify(payload) : undefined });
+    const data = await res.json();
+    if (!res.ok || data.success === false) return { success: false, uncertain: res.status >= 500,
+      message: res.status >= 500 ? 'Penyimpanan belum bisa dipastikan. Periksa hasil sebelum membuat catatan baru.' : extractError(data, 'Pengeluaran belum bisa disimpan.') };
+    return { success: true, data: data.data as T, message: data.message };
+  } catch (error) {
+    const expired = error instanceof Error && ['SESSION_EXPIRED', 'Unauthorized'].includes(error.message);
+    return { success: false, uncertain: !expired, message: expired ? 'Sesi berakhir. Masuk kembali untuk melanjutkan.' : 'Koneksi terputus. Hasil penyimpanan belum bisa dipastikan.' };
+  }
 }
 
 export async function deleteExpense(id: string) {
-  const res = await fetchWithAuth(`/finance/expenses/${id}`, { method: 'DELETE' });
-  const data = await res.json();
-  if (!res.ok) throw new Error(extractError(data, 'Gagal menghapus pengeluaran'));
-  return true;
+  return financeWrite<{ ok: boolean }>(`/finance/expenses/${encodeURIComponent(id)}`, 'DELETE');
 }
 
 export async function copyRecurringExpenses(outletId: string, month: string) {
-  const res = await fetchWithAuth(`/finance/expenses/copy-recurring?outlet_id=${outletId}&month=${month}`, { method: 'POST' });
-  const data = await res.json();
-  if (!res.ok) throw new Error(extractError(data, 'Gagal menyalin'));
-  return { items: data.data || [], message: data.message };
+  return financeWrite<FinanceExpense[]>(`/finance/expenses/copy-recurring?outlet_id=${encodeURIComponent(outletId)}&month=${encodeURIComponent(month)}`, 'POST');
 }
 
 // ── WhatsApp toko (token Fonnte per outlet — promo dikirim dari nomor toko) ──

@@ -62,6 +62,20 @@ harga pembelian terakhir). Hasil write 500/network tidak pasti dimuat ulang tanp
 auto-retry, terutama karena restock belum mempunyai idempotency key. UI melarang
 hapus bahan yang masih dipakai di resep. Backend stock/HPP/audit/CRDT unchanged.
 
+### Web: Pembelian (6 Oktober 2026)
+
+Pembelian web (6 Oktober 2026) menerima barang melalui helper stok existing.
+Nota/cicilan memakai UUID permintaan, audit fingerprint dan advisory lock;
+replay nota tidak mengulangi restock dan replay bayar tidak menambah pembayaran.
+Receiver mengunci target berurutan, memakai total aktual baris untuk cost,
+dan flush sebelum target berulang berikutnya. Produk COUNT dikonversi ke pcs,
+bahan ke base_unit melalui UNIT_ALIASES; quantity resep/deduct tetap mentah.
+Snapshot perubahan modal dan pembayaran berasal dari event existing. Riwayat
+lama tidak lengkap ditandai, bukan diisi angka rekaan. Supplier/target sesuai
+tenant dan brand outlet; akun asal pembayaran nota belum disimpan. Foto menjadi
+draft untuk diperiksa, penerimaan stok hanya saat pengguna menyimpan nota.
+Rincian dan bukti pengujian di `docs/PURCHASING_REVIEW.md`.
+
 ### Web: persiapan HPP (4 Oktober 2026)
 
 `/dashboard/hpp` mulai dari produk, harga pembelian bahan, dan takaran untuk satu
@@ -640,6 +654,20 @@ Semua stock mutation WAJIB append event ke `events` table:
 
 ---
 
+## Fakta pelanggan untuk dashboard dan konteks AI berikutnya
+
+`GET /customers/workspace` dan `GET /customers/workspace/{id}` memakai
+`backend/services/customer_workspace.py` untuk membaca fakta order langsung,
+scope tenant dan outlet, tanpa bergantung pada cached Customer counters.
+Order biasa memerlukan Payment paid; order tab memerlukan Tab paid.
+DTO Decimal2 menyatakan basis paid_orders_gross, scope tenant_all_outlets,
+timezone dan generated_at. Nilai nota belum dikurangi refund, bukan arus kas.
+Kontak/preferensi, catatan staf/keluhan dan riwayat nota adalah data terpisah
+yang bisa dipakai integrasi AI berikutnya; belum diteruskan ke chat utama.
+Mutasi profil/catatan memakai UUID/fingerprint/advisory lock/audit existing,
+edit row lock/version, dan pending browser per tenant/user. Tidak migrasi
+atau mengubah stock/payment flows. Kontrak dan batas di docs/CUSTOMERS_REVIEW.md.
+
 ## Bugs yang Pernah Ditemukan dan Diperbaiki
 
 Daftar ini supaya gak terulang:
@@ -654,3 +682,43 @@ Daftar ini supaya gak terulang:
 | Flutter gak tau recipe mode | `stock_mode` gak disimpan di Flutter | Save dari login response + sync response | 2026-04-13 |
 | Flutter offline gak deduct ingredients | Cart provider cuma deduct product CRDT | Add `_deductIngredientStockOffline()` | 2026-04-13 |
 | Storefront hide semua produk stok 0 | Filter `s > 0` exclude valid products | Show all, use `is_available` flag | 2026-04-13 |
+
+
+## HRIS web tahap pertama (6 Oktober 2026)
+
+HrEmployee bukan User atau Shift kas. Relasi optional user_id unik per tenant
+memungkinkan self punch melalui dashboard web. HrSchedule dan HrAttendance
+mengacu composite tenant/employee; outlet divalidasi tenant dan aktif.
+Satu jadwal/absensi per tanggal kerja, satu hadir terbuka, waktu TZ outlet;
+jadwal malam memberi tanggal kerja saat masuk sesudah tengah malam dan
+saat koreksi. Attendance status bukan hasil inferensi dari jadwal kosong.
+Owner/Role hris_manage:true mengelola; staf hanya dirinya, tanpa private
+profile notes/contact. Pada tahap pertama profil nonaktif masih boleh
+menyelesaikan punch terbuka. Fondasi akses pada source berikutnya menolaknya
+dan menggunakan koreksi oleh pengelola untuk menutup absensi.
+Migration113 menambah3tabel FORCE RLS dan privilege app role terbatas3tabel.
+Writes UUID/fingerprint + request/employee advisory locks, version/audit
+atomik, soft void; tanpa pengubahan stock, POS login, Shift kas atau expense.
+GET setup/workspace/employee-choices memberikan metadata konteks faktual.
+Belum HRIS native/offline/payroll/reminder atau hook ke chat utama.
+Detail kontrak, batas dan Delivery Gate: docs/HRIS_REVIEW.md.
+
+## Fondasi izin server pada source 6 Oktober 2026
+
+backend/services/access.py menghitung akses tenant/user/role/status HRIS,
+outlet dan izin canonical. GET /auth/access menyediakan manifest dan hash
+access_version; hash ini belum identitas sesi/versi JWT. HRIS memakai izin
+profil/jadwal/absensi/self terpisah dengan scope outlet dan replay.
+Managed policy version1 menggantikan fallback legacy dan membatasi scope
+tenant/brand/outlet. Handler authenticated yang belum mendukung managed,
+termasuk sync dan AI, ditolak lewat endpoint identity+method. Legacy di luar
+HRIS tetap mengikuti aturan existing. Belum enforcement AI/cache/history/
+worker granular atau GPS/foto. Tahap akun berikutnya pada source menambah
+username/password, migrasi legacy tanpa gantiUUID, editor jabatan/akun HRIS
+owner-only, sesi sid/cv dan challenge sekali pakai. Migrasi114 melengkapi
+sessions existing dengan tenant langsung+FORCE RLS. Penonaktifan staf
+mencabut sesi permanen; reaktivasi memerlukan login baru. Native mengganti
+identitas lewatUUID dan membatalkan sync tanpa menghapus SQLite/antrean.
+Role managed baru tetap HRIS-only; kontrak/QA docs/ACCOUNT_ACCESS_REVIEW.md.
+Source dan QA selesai tetapi belum deploy/migrasi policy produksi/APK;
+rincian penerapan dan hasil uji docs/ACCESS_REVIEW.md.

@@ -25,7 +25,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -120,13 +120,16 @@ async def next_po_number(db: AsyncSession, outlet_id: UUID, when: datetime) -> s
     """NB-20260902-003 — urut per outlet per hari. Unique index (outlet_id, po_number)."""
     day = when.astimezone(timezone(timedelta(hours=7))).strftime("%Y%m%d")
     prefix = f"NB-{day}-"
-    count = (await db.execute(
-        select(func.count(PurchaseOrder.id)).where(
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                     {"key": f"purchase-number:{outlet_id}:{day}"})
+    numbers = (await db.execute(
+        select(PurchaseOrder.po_number).where(
             PurchaseOrder.outlet_id == outlet_id,
             PurchaseOrder.po_number.like(f"{prefix}%"),
         )
-    )).scalar() or 0
-    return f"{prefix}{count + 1:03d}"
+    )).scalars().all()
+    last = max((int(n[len(prefix):]) for n in numbers if n[len(prefix):].isdigit()), default=0)
+    return f"{prefix}{last + 1:03d}"
 
 
 async def resolve_supplier(
@@ -139,10 +142,11 @@ async def resolve_supplier(
                 Supplier.id == supplier_id,
                 Supplier.tenant_id == tenant_id,
                 Supplier.deleted_at.is_(None),
+                Supplier.is_active.is_(True),
             )
         )).scalar_one_or_none()
         if not sup:
-            raise HTTPException(status_code=404, detail="Supplier tidak ditemukan")
+            raise HTTPException(status_code=404, detail="Supplier aktif tidak ditemukan")
         return sup
     name = (supplier_name or "").strip()
     if not name:
@@ -155,6 +159,8 @@ async def resolve_supplier(
         )
     )).scalar_one_or_none()
     if sup:
+        if not sup.is_active:
+            raise HTTPException(status_code=400, detail="Supplier ini nonaktif. Aktifkan kembali di daftar supplier.")
         return sup
     sup = Supplier(tenant_id=tenant_id, name=name)
     db.add(sup)
@@ -191,6 +197,18 @@ async def receive_purchase(
         raise HTTPException(status_code=404, detail="Outlet tidak ditemukan")
 
     brand_ids = await _brand_ids_for_tenant(db, tenant_id)
+    if outlet.brand_id:
+        if outlet.brand_id not in brand_ids:
+            raise HTTPException(status_code=404, detail="Brand outlet tidak ditemukan")
+        brand_ids = [outlet.brand_id]
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                     {"key": f"purchase-receive:{tenant_id}"})
+    # Lock targets in a stable order before updating stock and shared prices.
+    for model, ids in ((Ingredient, [l.ingredient_id for l in lines if l.ingredient_id]),
+                       (Product, [l.product_id for l in lines if l.product_id])):
+        if ids:
+            await db.execute(select(model).where(model.id.in_(ids), model.brand_id.in_(brand_ids))
+                             .order_by(model.id).with_for_update().execution_options(populate_existing=True))
     now = datetime.now(timezone.utc)
     received_at = received_at or now
 
@@ -219,6 +237,8 @@ async def receive_purchase(
         qty = float(line.quantity)
         unit_price = _q2(line.unit_price)
         line_total = _q2(line.total_price) if line.total_price is not None else _q2(Decimal(str(qty)) * unit_price)
+        if line_total >= Decimal('10000000000'):
+            raise HTTPException(status_code=400, detail="Nominal baris melampaui batas")
         total += line_total
 
         # ── "Lainnya": gas, plastik, tisu — gak nyentuh stok, cuma ikut total ──
@@ -322,10 +342,12 @@ async def receive_purchase(
                     Ingredient.id == ingredient_id,
                     Ingredient.brand_id.in_(brand_ids),
                     Ingredient.deleted_at.is_(None),
-                )
+                ).with_for_update()
             )).scalar_one_or_none()
             if not ing:
                 raise HTTPException(status_code=404, detail="Bahan baku tidak ditemukan")
+            if ing.ingredient_type == 'overhead':
+                raise HTTPException(status_code=400, detail="Biaya operasional dicatat sebagai baris biaya, bukan stok bahan")
 
             qty_base = qty_to_base_unit(qty, line.unit, ing.base_unit)
             if qty_base is None or qty_base <= 0:
@@ -392,11 +414,13 @@ async def receive_purchase(
             )).scalar_one_or_none()
             if not prod:
                 raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
-            if qty != int(qty):
+            qty_base = qty_to_base_unit(qty, line.unit, 'pcs')
+            if qty_base is None or qty_base != int(qty_base) or qty_base > 2147483647:
                 raise HTTPException(status_code=400, detail=f"Jumlah produk {prod.name} harus bilangan bulat")
 
             cost_before = _q2(prod.buy_price or 0)
-            cost_after = moving_average(prod.stock_qty if prod.stock_enabled else 0, cost_before, qty, unit_price)
+            cost_after = moving_average(prod.stock_qty if prod.stock_enabled else 0, cost_before,
+                                        qty_base, line_total / Decimal(str(qty_base)))
 
             if prod.stock_enabled:
                 # Jalur restock produk yang udah ada (event stock.restock +
@@ -405,7 +429,7 @@ async def receive_purchase(
                 prod = await restock_product(
                     db,
                     product=prod,
-                    quantity=int(qty),
+                    quantity=int(qty_base),
                     outlet_id=outlet_id,
                     user_id=user_id,
                     notes=f"Nota {po.po_number}",
@@ -423,7 +447,7 @@ async def receive_purchase(
                 name_snapshot=prod.name,
                 quantity=qty,
                 unit=(line.unit or "pcs"),
-                qty_base=qty,
+                qty_base=qty_base,
                 unit_price=unit_price,
                 total_price=line_total,
                 received_quantity=qty,
@@ -432,10 +456,16 @@ async def receive_purchase(
                 "name": prod.name, "cost_before": cost_before, "cost_after": cost_after, "unit": "pcs",
             })
             event_lines.append({
-                "product_id": str(prod.id), "name": prod.name, "qty": qty,
+                "product_id": str(prod.id), "name": prod.name, "qty": qty_base,
                 "total": str(line_total), "cost_before": str(cost_before), "cost_after": str(cost_after),
             })
 
+        await db.flush()
+
+    if total >= Decimal('10000000000'):
+        raise HTTPException(status_code=400, detail="Total nota melampaui batas nominal")
+    if paid_amount is not None and paid_amount > total:
+        raise HTTPException(status_code=400, detail="Pembayaran awal tidak boleh melebihi total nota")
     po.total_amount = _q2(total)
     paid = _q2(total) if paid_amount is None else _q2(min(paid_amount, total))
     po.paid_amount = paid
