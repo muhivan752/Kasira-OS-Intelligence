@@ -64,3 +64,24 @@ Bukti privat `/tmp/selaris-staff-{http.log,legacy.log,unit.log,typescript.log,
 build.log,browser.log,accounts-browser.log,frontend-manifest.json,mobile.png,
 browser-trace.zip}`. Uji autentikasi memakai data sintetis; belum memakai
 perangkat fisik atau mengubah akun/password Irfan di toko live.
+
+Rilis live 6 Oktober 2026, source `9f86d34d4cc42db5b09a44406d40111be399cb79`
+dipush ke main dan SHA remote diverifikasi. Backup privat
+`/tmp/selaris-staff-release-backup` memuat archive DB tervalidasi, seluruh312
+source Python existing, versi dan image IDs. Rollback web tersimpan sebagai
+`selaris-frontend-before-staff:20261006` (image697b1f…ac1).
+
+Preflight membandingkan seluruh hotfix live dengan backup dan tidak menemukan
+HPP pending aktif. Sembilan file backend dicopy ke container existing lalu
+restart;304 source Python lain tetap, seluruh313 hash cocok. Backend image
+160766…31a dipertahankan dan schema tetap115; tidak ada migrasi DB. Frontend
+dipasang memakai image final di atas dengan `--no-deps`; enam hash runtime
+live cocok dengan source/image QA. DB dan Redis tidak direstart.
+
+Empat service healthy; health API melaporkan DB ok/background healthy. Smoke
+HTTPS24 auth states, keyboard, toggle, legacy route dan download PASS tanpa
+pageerror. Receipt HRIS tanpa token mendapat401. Version API tetap1.6.34,
+opsional; native/version/workflow tidak berubah. Uji autentikasi fungsional
+hanya di QA sintetis. Log deployment/public dan manifest hash disimpan sebagai
+`/tmp/selaris-staff-{deploy-backend.log,deploy-frontend.log,live-state.json,
+live-state.log,public-browser.log,live-backend-hashes.json}`.

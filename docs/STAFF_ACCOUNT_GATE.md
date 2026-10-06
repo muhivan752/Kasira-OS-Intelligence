@@ -70,3 +70,8 @@ untuk receipt yang sudah tersimpan.
 Layoutmobile supplement PASS: empat lebar/dua tema dan200% diuji; input dan
 toggle password membungkus secara alami; dialog dapat digulir tanpa
 overflow horizontal, tanpa hover-only control atau nav baru.
+
+Rilis tambahan PASS: source9f86d34/remote sama, frontend ec2599c…0e09 sama
+dengan image QA, enam hash frontend dan313 hash backend live cocok. Schema115
+dan empat service healthy. Smoke HTTPS24 auth states/keyboard/legacy/download
+tanpa pageerror; endpoint receipt tanpa token401. Tidak menulis merchant saat QA.

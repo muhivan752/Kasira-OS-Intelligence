@@ -1527,3 +1527,23 @@ d1cf96c chore: update version.json → v1.0.51 (CI auto)
 1. ⏳ Ivan re-test APK v1.0.51 — repro tab cappucino → bayar sebagian → harus sukses
 2. ⏳ Tunggu sweep agent 2026-05-03 → review GitHub issue kalau ada findings
 3. ⏳ Lanjut yg masih open (pre-existing): Fonnte device pisah, onboard cafe pilot pertama Starter, BYOK live merchant 1 onboard
+## SELESAI - FORM KARYAWAN DAN AKUN SATU SIMPAN, 2026-10-06
+
+Owner/manager berizin membuat profil sekaligus login nomor HP/username dan
+password awal dari Tim & absensi. Akun lama dapat dipakai tanpa memecah UUID/
+riwayat. Manager perlu hris.accounts.manage + employees.manage, terbatas izin/
+outlet dan target yang aman; default hanya absensi pribadi. Tidak mengklaim
+User.phone OTP, tidak menyimpan plaintext password di audit/sessionStorage.
+Receipt actor/outlet memastikan retry setelah reload tidak membuat duplikat.
+
+Source9f86d34/remote verified; frontend ec2599c…0e09 live dengan enam hashQA,
+backend9file+restart imageexisting160766…31a/313hash/304source lain tetap,
+schema115 dan4service sehat. DB/Redis/APK tidak berubah. Backup privat
+/tmp/selaris-staff-release-backup; rollback web selaris-frontend-before-staff:20261006.
+HTTP/JWT/RLS8groups,legacyHRIS/account,unit64 (1skip),TS/build,staffbrowser5groups
+empat lebar/2tema/200%/AA/44px/keyboard/reload,akunregression dan smokeHTTPS24
+states PASS. Receipt unauth401; tidak mengubah akun/password merchant. APK
+1.6.34+201 menerima nomor pada Username akun; form pengelola baru di web.
+Review/gate docs/STAFF_ACCOUNT_FORM.md dan docs/STAFF_ACCOUNT_GATE.md; bukti
+/tmp/selaris-staff-*. Next: user mengisi akun karyawannya lewat form;
+GPS/foto/offline/radius/retensi/OTP menunggu keputusan terpisah.

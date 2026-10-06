@@ -1,7 +1,40 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## TERKINI - FORM USERNAME DAN TAMPILKAN PASSWORD LIVE, 2026-10-06
+## TERKINI - FORM KARYAWAN DAN AKUN SATU SIMPAN LIVE, 2026-10-06
+
+- Ivan meminta owner/manager membuat akun langsung dari Tim & absensi memakai
+  nomor HP atau username. Form kini profil saja / akun lama / akun baru;
+  password awal8+toggle+konfirmasi dan role dipilih, satu transaksi/Simpan.
+  Akun Irfan existing tetap UUID/role/history, pengaturan login eksplisit.
+  Default akun baru hanya absensi pribadi pada outlet penempatan.
+- Manager perlu hris.accounts.manage bersama employees.manage dari owner;
+  role/izin/outlet subset pengelola, tidak mengubah owner/self/legacy broad.
+  Console role/activation/recovery owner tetap existing. No auto-migration.
+- Nomor login sebagai login_username tenant, menerima08/62/+62; tidak menulis
+  User.phone OTP/Google atau mengklaim nomor existing. Alias collision ditolak;
+  alias legacy ambigu fail closed, username angka panjang lama tetap bisa login.
+- Password tidak dipangkas/ditulis audit/storage browser. HMAC audit/replay,
+  row version profil/akun, fresh actor/role/profile/session/scope locks,
+  sesi diperiksa setelah hash. Pending receipt actor/outlet setelah reload;
+  saved tanpa kirim PW lagi, unknown perlu isi PW ulang denganUUID yang sama.
+- Source9f86d34 push+remote sama; frontend ec2599c…0e09 live (enam hash samaQA).
+  Backend copy9file+restart existing image160766…31a,304 hotfix lain tetap;
+  seluruh313 hash cocok /tmp/selaris-staff-live-backend-hashes.json. Schema115
+  tetap,4healthy,DB/background sehat,DB/Redis tidak direstart,HPP pending0.
+- Backup /tmp/selaris-staff-release-backup privat DB archive+312Pythonbaseline,
+  versi/image. Rollback web tag selaris-frontend-before-staff:20261006 (697b1f…ac1).
+  Review+gate docs/STAFF_ACCOUNT_FORM.md, docs/STAFF_ACCOUNT_GATE.md.
+- QA delapan kelompok HTTP/JWT/forcedRLS PASS; dua legacy suites PASS;
+  unit64 (63PASS+1optional skip),TypeScript/build PASS. Browser newform5groups,
+  empat lebar/dua tema/200%/AA/44px/keyboard/reload/noPWstorage PASS; akun/auth
+  regression PASS termasuk grant manager. Smoke publik24auth states+401receipt
+  PASS; tidak mengubah akun/password Irfan merchant. Belum perangkat fisik.
+- APK1.6.34+201 tetap; nomor login dapat dimasukkan di kolom Username akun
+  existing. Form pengelola baru web. Log/trace/manifest /tmp/selaris-staff-*.
+  Berikutnya GPS/foto/offline tetap perlu keputusan sesuai task sebelumnya.
+
+## SEBELUMNYA - FORM USERNAME DAN TAMPILKAN PASSWORD LIVE, 2026-10-06
 
 - Ivan gagal migrasi password karena mengisi username toko “Kasira Coffee”.
   Form Akun saya kini menjelaskan username tanpa spasi (contoh kasira_coffee),
