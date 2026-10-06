@@ -16,7 +16,9 @@ AccessContext dan GET /auth/access memakai user/role/status HRIS/outlet/izin
 canonical. Managed role mendukung HRIS, POS, stok dan sync pull-only, ditambah
 Keuangan/Pembelian/CRM/HPP dan tahap 3 AI web live, QA image final PASS.
 Registry endpoint identity+method menolak handler yang belum mendukung managed. Owner aktual
-mengatur akun/jabatan; legacy tidak dimigrasikan otomatis. Role baru dapat
+mengatur jabatan dan console akun; manager dengan hris.accounts.manage bersama
+hris.employees.manage dapat membuat/mengatur akun dari form Tim & absensi,
+sebatas izin dan outlet sendiri. Legacy tidak dimigrasikan otomatis. Role baru dapat
 memilih outlet atau seluruh bisnis. HPP manual butuh manage+approve; editor
 web juga memerlukan harga supplier. AI memerlukan ai.chat dan grant data modul;
 cache/history per tenant/user/outlet/access_version, RAG scoped, worker dan
@@ -41,7 +43,11 @@ Jangan recreate backend image lama: seluruh hotfix harus dipertahankan.
 
 ## HRIS web tahap pertama (6 Oktober 2026)
 
-`/dashboard/hris` Tim & absensi aktif: profil karyawan terpisah akun POS,
+`/dashboard/hris` Tim & absensi aktif: profil karyawan berelasi ke akun POS;
+form yang sama dapat membuat akun memakai nomor HP atau username dan password
+awal, atau tetap memakai akun lama. Nomor login tidak menulis User.phone OTP.
+Default hanya absensi pribadi; hak kasir dipilih dari jabatan. Kontrak dan QA
+docs/STAFF_ACCOUNT_FORM.md. Profil saja tetap tersedia. Fitur HRIS lainnya:
 penempatan outlet, jadwal malam dan hadir/izin/sakit/cuti/libur. Owner atau
 Role permission hris_manage:true mengelola; staf terhubung hanya datanya
 sendiri dan punch di web. Shift kas bukan absensi. Migrasi113 FORCE RLS dan

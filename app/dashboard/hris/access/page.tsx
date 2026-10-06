@@ -10,6 +10,7 @@ import '../hris.css';
 const labels: Record<string, string> = {
   'hris.self': 'Lihat jadwal dan catat kehadiran sendiri', 'hris.employees.manage': 'Kelola profil karyawan',
   'hris.schedules.manage': 'Kelola jadwal kerja', 'hris.attendance.manage': 'Kelola dan koreksi absensi',
+  'hris.accounts.manage': 'Buat dan atur akun karyawan sesuai izin dan outlet pengelola',
   'pos.sell': 'Buat pesanan dan terima pembayaran', 'pos.refund': 'Ajukan refund',
   'pos.refund.approve': 'Setujui atau tolak refund', 'pos.discount.override': 'Ubah harga transaksi dan diskon di atas 20%',
   'pos.shift.manage': 'Buka, jeda dan hitung sesi kas', 'pos.cash.manage': 'Catat kas masuk dan keluar',
@@ -65,7 +66,7 @@ export default function TeamAccess() {
     {error && <div className="f-notice f-error" role="alert"><p>{error}</p><button className="f-button" disabled={busy} onClick={() => { setError(''); void load(); }}>Muat ulang</button></div>}{notice && <p className="f-notice" role="status">{notice}</p>}
     {!setup ? <p role="status">{error ? 'Akses belum dapat dimuat.' : 'Memuat akun tim…'}</p> : <>
       <AccountSettings onSaved={() => { void load(); }} />
-      <section className="f-panel"><h2>Jabatan dengan pengaturan izin</h2><p>Pilih hak lihat dan tindakan secara terpisah. Akun staf memakai POS saat online. Pelanggan dan supplier dipakai bersama bisnis; laporan mengikuti outlet. Bahan dan resep dipakai bersama brand. Menyimpan bahan/resep langsung membutuhkan hak kelola dan persetujuan; mencatat nota barang membutuhkan hak penerimaan stok. Percakapan AI belum tersedia. Antrean lama tetap disimpan.</p>
+      <section className="f-panel"><h2>Jabatan dengan pengaturan izin</h2><p>Pilih hak lihat dan tindakan secara terpisah. Akun staf memakai POS saat online. Pelanggan dan supplier dipakai bersama bisnis; laporan mengikuti outlet. Bahan dan resep dipakai bersama brand. Menyimpan bahan/resep langsung membutuhkan hak kelola dan persetujuan; mencatat nota barang membutuhkan hak penerimaan stok. AI mengikuti izin data akun. Izin mengatur akun karyawan juga memerlukan izin kelola profil; manager hanya dapat memberi hak akses dan outlet yang dimilikinya. Antrean lama tetap disimpan.</p>
         <label className="finance-form">Pilih jabatan<select value={roleId} onChange={e => { setRoleId(e.target.value); roleUuid.current = ''; }}><option value="">Buat jabatan baru</option>{setup.roles.filter((r: any) => r.editable).map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
         <form key={roleId} className="finance-form" onSubmit={roleSubmit} aria-busy={busy}><label>Nama jabatan<input name="name" defaultValue={role?.name || ''} required minLength={2} maxLength={100} /></label>
           <label>Cakupan akses<select name="scope" defaultValue={role?.scope || 'outlet'}><option value="outlet">Outlet yang dipilih</option><option value="tenant">Seluruh bisnis, termasuk outlet baru</option></select></label>

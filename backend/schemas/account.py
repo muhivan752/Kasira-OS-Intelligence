@@ -24,6 +24,17 @@ class UsernameBody(AccountBody):
 class PasswordLogin(UsernameBody):
     password: str = Field(min_length=1, max_length=128)
 
+    @field_validator("username", mode="before")
+    @classmethod
+    def phone_login(cls, value):
+        if isinstance(value, str) and re.fullmatch(r"[+\d ()-]{3,40}", value.strip()):
+            from backend.schemas.customer_workspace import normalize_phone
+            try:
+                return normalize_phone(value)
+            except ValueError:
+                return value
+        return value
+
 
 class NewPassword(UsernameBody):
     password: str = Field(min_length=8, max_length=128)
@@ -58,7 +69,7 @@ class AccountRequest(AccountBody):
     client_request_id: UUID
 
 
-HRIS_PERMISSIONS = frozenset({"hris.self", "hris.employees.manage", "hris.schedules.manage", "hris.attendance.manage"})
+HRIS_PERMISSIONS = frozenset({"hris.self", "hris.employees.manage", "hris.schedules.manage", "hris.attendance.manage", "hris.accounts.manage"})
 from backend.schemas.access import POS_PERMISSIONS, BUSINESS_PERMISSIONS
 SUPPORTED_ROLE_PERMISSIONS = HRIS_PERMISSIONS | POS_PERMISSIONS | BUSINESS_PERMISSIONS | {"ai.chat"}
 
@@ -106,3 +117,22 @@ class EmployeeAccountSave(AccountRequest):
         if value == "owner":
             raise ValueError("Username owner khusus pemilik")
         return value
+
+
+class EmployeeLoginSetup(AccountBody):
+    use_phone: StrictBool = False
+    username: str | None = Field(default=None, min_length=3, max_length=64)
+    role_id: UUID | None = None
+    user_row_version: Annotated[int, Field(strict=True, ge=1)] | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+
+    @field_validator("username")
+    @classmethod
+    def staff_username(cls, value):
+        return EmployeeAccountSave.staff_username(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def identifier(self):
+        if not self.use_phone and not self.username:
+            raise ValueError("Isi username akun atau gunakan nomor HP")
+        return self

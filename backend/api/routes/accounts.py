@@ -38,7 +38,7 @@ async def payload(db, user):
 async def owner(db, user):
     context = await resolve_access(db, user)
     context.require("access.manage")
-    # Delegated access administrators are deliberately not enabled yet.
+    # The role console remains owner-only; delegated staff writes use the HRIS form.
     if not user.is_superuser:
         raise HTTPException(403, "Pengaturan akun saat ini dikelola pemilik usaha")
     await svc.lock(db, f"tenant:{user.tenant_id}")
@@ -303,6 +303,7 @@ async def save_employee_account(employee_id: UUID, body: EmployeeAccountSave, us
         if role.scope == "outlet" and str(employee.outlet_id) not in policy["outlet_ids"]:
             raise HTTPException(422, "Outlet utama karyawan harus termasuk dalam jabatan")
     try:
+        await svc.require_available_username(db, user.tenant_id, body.username, employee.user_id)
         if employee.user_id:
             account = await fresh_user(db, employee.user_id, user.tenant_id)
             if account.is_superuser:

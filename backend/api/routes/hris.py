@@ -41,6 +41,12 @@ async def workspace(request: Request, outlet_id: UUID, start: date, end: date,
     return response(request, await svc.workspace(db, user, outlet_id, start, end, kind, search, active, skip, limit))
 
 
+@router.get("/requests/{client_request_id}")
+async def request_status(client_request_id: UUID, request: Request,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return response(request, await svc.request_status(db, user, client_request_id))
+
+
 @router.get("/employee-choices")
 async def choices(request: Request, search: str = Query("", max_length=120), skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100), db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):

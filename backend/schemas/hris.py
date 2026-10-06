@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from backend.schemas.customer_workspace import normalize_phone
+from backend.schemas.account import EmployeeLoginSetup
 
 
 class Write(BaseModel):
@@ -22,6 +23,7 @@ class EmployeeSave(Write):
     ended_on: date | None = None
     is_active: bool = True
     notes: str | None = Field(default=None, max_length=2000)
+    account: EmployeeLoginSetup | None = None
 
     @field_validator("phone")
     @classmethod

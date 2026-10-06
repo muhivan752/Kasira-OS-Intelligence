@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import hmac
+import re
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
@@ -122,9 +123,29 @@ async def challenge(db, user, request_id, purpose):
 
 
 async def identity(db, shop, username):
-    return await db.scalar(select(User).join(Tenant, User.tenant_id == Tenant.id).where(
-        Tenant.login_username == shop, Tenant.deleted_at.is_(None), User.login_username == username,
-        User.deleted_at.is_(None)))
+    rows = (await db.scalars(select(User).join(Tenant, User.tenant_id == Tenant.id).where(
+        Tenant.login_username == shop, Tenant.deleted_at.is_(None), User.login_username.in_(username_aliases(username)),
+        User.deleted_at.is_(None)))).all()
+    return rows[0] if len(rows) == 1 else None
+
+
+def username_aliases(username):
+    aliases = {username}
+    if re.fullmatch(r"\d+", username):
+        if username.startswith("0") and 8 <= len(username) + 1 <= 15:
+            aliases.add("62" + username[1:])
+        elif username.startswith("62") and 8 <= len(username) <= 15:
+            aliases.add("0" + username[2:])
+    return aliases
+
+
+async def require_available_username(db, tenant_id, username, exclude_id=None):
+    query = select(User.id).where(User.tenant_id == tenant_id, User.deleted_at.is_(None),
+        User.login_username.in_(username_aliases(username)))
+    if exclude_id:
+        query = query.where(User.id != exclude_id)
+    if await db.scalar(query):
+        raise HTTPException(409, "Username atau nomor HP sudah dipakai oleh akun lain dalam bisnis ini")
 
 
 async def password_matches(user, password):

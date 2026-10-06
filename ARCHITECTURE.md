@@ -716,7 +716,13 @@ terintegrasi melalui registry; managed sync pull-only. Legacy di luar
 HRIS tetap mengikuti aturan existing. Tahap 3 AI/cache/history/worker granular
 sudah live; GPS/foto belum dibuat. Tahap akun pada source menambah
 username/password, migrasi legacy tanpa gantiUUID, editor jabatan/akun HRIS
-owner-only, sesi sid/cv dan challenge sekali pakai. Migrasi114 melengkapi
+owner-only, sesi sid/cv dan challenge sekali pakai. Form profil kini membuat akun
+dan password dalam transaksi yang sama; manager memerlukan hris.accounts.manage
+serta employees.manage, dengan subset izin/outlet dan target akun terlindungi.
+Nomor HP login menjadi login_username tenant, tanpa mengklaim User.phone OTP.
+Retry berpassword memakai HMAC audit dan receipt actor/outlet; storage browser
+tanpa password. Tidak memerlukan migrasi baru; docs/STAFF_ACCOUNT_FORM.md.
+Migrasi114 melengkapi
 sessions existing dengan tenant langsung+FORCE RLS. Penonaktifan staf
 mencabut sesi permanen; reaktivasi memerlukan login baru. Native mengganti
 identitas lewatUUID dan membatalkan sync tanpa menghapus SQLite/antrean.

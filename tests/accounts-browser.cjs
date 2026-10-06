@@ -160,9 +160,13 @@ async function passwordVisibility(page, label) {
     await page.getByLabel('Cakupan akses').selectOption('tenant');
     await page.getByLabel('Gunakan AI sesuai izin data akun', { exact: true }).check();
     await page.getByLabel('Gunakan AI sesuai izin data akun', { exact: true }).uncheck();
+    await page.getByLabel('Buat dan atur akun karyawan sesuai izin dan outlet pengelola', { exact: true }).check();
+    await page.getByLabel('Buat dan atur akun karyawan sesuai izin dan outlet pengelola', { exact: true }).uncheck();
+    await page.getByLabel('Buat dan atur akun karyawan sesuai izin dan outlet pengelola', { exact: true }).check();
     await page.getByLabel('Nama jabatan').fill('QA staf updated'); await page.getByRole('button', { name: 'Simpan jabatan' }).click();
     await page.waitForFunction(() => document.querySelector('select')?.textContent.includes('QA staf updated'));
     assert.equal(roles[0].scope, 'tenant'); assert.deepEqual(roles[0].policy.outlet_ids, []);
+    assert.equal(roles[0].policy.permissions['hris.accounts.manage'], true);
     console.log('PASS eleven business permission controls and explicit tenant-scope role submission');
     await page.getByLabel('Pilih karyawan').selectOption(eid); await page.getByLabel('Username karyawan').fill('staff'); await page.getByLabel('Jabatan akses').selectOption(roles[0].id); await page.getByRole('button', { name: 'Buat akun karyawan' }).click();
     await page.getByRole('button', { name: 'Simpan akun karyawan' }).waitFor(); await page.getByLabel('Akun boleh masuk').uncheck(); await page.getByLabel('Akun boleh masuk').check(); await page.getByRole('button', { name: 'Simpan akun karyawan' }).click();

@@ -1,8 +1,9 @@
 import hashlib
+import hmac
 import json
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import func, or_, select, text
@@ -88,8 +89,16 @@ def record_data(row, employee_name=None):
 
 
 async def replay(db, user, body, action, entity_id):
-    fingerprint = hashlib.sha256(json.dumps({"action": action, "entity_id": str(entity_id), "user": str(user.id),
-        "body": body.model_dump(mode="json")}, sort_keys=True).encode()).hexdigest()
+    data = body.model_dump(mode="json")
+    if data.get("account") is None:
+        data.pop("account", None)
+    encoded = json.dumps({"action": action, "entity_id": str(entity_id), "user": str(user.id),
+        "body": data}, sort_keys=True).encode()
+    if data.get("account"):
+        from backend.core.config import settings
+        fingerprint = hmac.new(settings.SECRET_KEY.encode(), encoded, hashlib.sha256).hexdigest()
+    else:
+        fingerprint = hashlib.sha256(encoded).hexdigest()
     await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
                      {"key": f"hr-request:{user.tenant_id}:{body.client_request_id}"})
     prior = await db.scalar(select(AuditLog).where(AuditLog.tenant_id == user.tenant_id, AuditLog.entity == "hris",
@@ -105,9 +114,9 @@ async def replay(db, user, body, action, entity_id):
     return fingerprint, None
 
 
-async def finish(db, request, user, body, fingerprint, action, row, before=None):
+async def finish(db, request, user, body, fingerprint, action, row, before=None, result_extra=None):
     await db.flush()
-    result = {"id": str(row.id), "row_version": row.row_version}
+    result = {"id": str(row.id), "row_version": row.row_version, **(result_extra or {})}
     after = employee_data(row) if isinstance(row, HrEmployee) else record_data(row)
     db.add(AuditLog(tenant_id=user.tenant_id, user_id=user.id, action=action, entity="hris", entity_id=row.id,
         request_id=request.state.request_id, before_state=before, after_state={"client_request_id": str(body.client_request_id),
@@ -143,7 +152,12 @@ def validate_attendance(body, zone, current=None, scheduled_window=None):
 
 
 async def save_employee(db, request, user, body, employee_id=None):
+    from backend.services import accounts, staff_accounts
+    await accounts.lock(db, f"tenant:{user.tenant_id}")
     context = await require_manager(db, user)
+    tenant = None
+    if body.account:
+        context, tenant = await staff_accounts.fresh_actor(db, request, user)
     action = "hr_employee_update" if employee_id else "hr_employee_create"
     fp, prior = await replay(db, user, body, action, employee_id)
     if prior:
@@ -166,10 +180,14 @@ async def save_employee(db, request, user, body, employee_id=None):
                          {"key": f"hr-code:{user.tenant_id}"})
         codes = (await db.scalars(select(HrEmployee.code).where(HrEmployee.tenant_id == user.tenant_id))).all()
         sequence = max([int(c.split("-")[1]) for c in codes if c.startswith("KRY-") and c[4:].isdigit()], default=0) + 1
-        row = HrEmployee(tenant_id=user.tenant_id, code=f"KRY-{sequence:04d}", row_version=0)
+        row = HrEmployee(id=uuid4(), tenant_id=user.tenant_id, code=f"KRY-{sequence:04d}", row_version=0)
         db.add(row)
     if context.mode == "managed" and row.user_id != body.user_id:
-        context.require("access.manage")
+        context, tenant = await staff_accounts.fresh_actor(db, request, user)
+        if row.user_id:
+            await staff_accounts.target(db, user, context, row.user_id)
+        if body.user_id:
+            await staff_accounts.target(db, user, context, body.user_id, body.outlet_id)
     if body.user_id:
         linked = await db.scalar(select(User).where(User.id == body.user_id, User.tenant_id == user.tenant_id,
             User.deleted_at.is_(None)))
@@ -186,7 +204,21 @@ async def save_employee(db, request, user, body, employee_id=None):
     for key in ("name", "position", "outlet_id", "user_id", "phone", "started_on", "ended_on", "is_active", "notes"):
         setattr(row, key, getattr(body, key))
     row.row_version += 1
-    return await finish(db, request, user, body, fp, action, row, before)
+    result = await staff_accounts.configure(db, request, user, context, tenant, row, body.account) if body.account else None
+    return await finish(db, request, user, body, fp, action, row, before, result)
+
+
+async def request_status(db, user, client_request_id):
+    context = await require_manager(db, user)
+    prior = await db.scalar(select(AuditLog).where(AuditLog.tenant_id == user.tenant_id,
+        AuditLog.user_id == user.id, AuditLog.entity == "hris",
+        AuditLog.after_state["client_request_id"].astext == str(client_request_id)))
+    if not prior:
+        return {"state": "unknown"}
+    context.require_outlet(UUID(prior.after_state["record"]["outlet_id"]))
+    if prior.after_state["result"].get("account_configured"):
+        context.require("hris.accounts.manage")
+    return {"state": "saved", "result": prior.after_state["result"]}
 
 
 async def get_record(db, user, model, record_id):
@@ -345,19 +377,19 @@ async def setup(db, user):
     outlets = sorted(context.outlets, key=lambda o: (o.name, o.id))
     for out in outlets:
         tz(out)
-    accounts = (await db.scalars(select(User).where(User.tenant_id == user.tenant_id,
-        User.deleted_at.is_(None), User.is_active.is_(True)).order_by(User.full_name, User.id))).all() if context.allows("hris.employees.manage") and context.mode != "managed" else []
+    from backend.services.staff_accounts import options
+    account_options = await options(db, user, context)
     open_record = await db.scalar(select(HrAttendance).where(HrAttendance.tenant_id == user.tenant_id,
         HrAttendance.employee_id == employee.id, HrAttendance.deleted_at.is_(None),
         HrAttendance.outlet_id.in_(context.outlet_ids), HrAttendance.status == "hadir",
         HrAttendance.clock_out.is_(None))) if employee and context.allows("hris.self") else None
-    return {"is_manager": manager, "permissions": sorted(context.permissions & (HRIS_MANAGE | {"hris.self"})),
+    return {"is_manager": manager, "permissions": sorted(context.permissions & (HRIS_MANAGE | {"hris.self", "hris.accounts.manage", "access.manage"})),
         "access_version": context.version,
         "self_employee": employee_data(employee, False) if employee and context.allows("hris.self") else None,
         "open_attendance": record_data(open_record, employee.name) if open_record else None,
         "workspace_key": hashlib.sha256(f"{user.tenant_id}:{user.id}".encode()).hexdigest(),
         "outlets": [{"id": str(o.id), "name": o.name, "timezone": o.timezone} for o in outlets],
-        "accounts": [{"id": str(u.id), "name": u.full_name} for u in accounts], "generated_at": now().isoformat()}
+        **account_options, "generated_at": now().isoformat()}
 
 
 async def workspace(db, user, outlet_id, start, end, kind, search, active, skip, limit):

@@ -25,7 +25,7 @@ PERMISSIONS = frozenset({
     "supplier.price.view", "finance.view", "finance.manage", "customers.lookup",
     "customers.view", "customers.manage", "customers.export", "hris.self",
     "hris.employees.manage", "hris.schedules.manage", "hris.attendance.manage",
-    "hris.exceptions.approve", "access.manage", "ai.chat",
+    "hris.exceptions.approve", "hris.accounts.manage", "access.manage", "ai.chat",
 })
 HRIS_MANAGE = frozenset({"hris.employees.manage", "hris.schedules.manage", "hris.attendance.manage"})
 

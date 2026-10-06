@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { InventoryDialog } from '@/components/inventory-dialog';
-import { getHrEmployeeChoices, getHrSetup, getHrWorkspace, writeHr } from '@/app/actions/hris';
+import { checkHrRequest, getHrEmployeeChoices, getHrSetup, getHrWorkspace, writeHr } from '@/app/actions/hris';
+import { PasswordInput } from '@/components/auth/password-input';
 import { addDays, hrDay, hrTime, localTime, outletDate, zonedIso, zoneLabel } from '@/lib/hris';
 import type { HrEmployee, HrFilters, HrKind, HrPending, HrRecord, HrSetup, HrWorkspace } from '@/lib/hris';
 import '../keuangan/finance.css';
@@ -20,12 +21,13 @@ export default function HrisPage() {
   const [revision, setRevision] = useState(0), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [dialog, setDialog] = useState<Dialog | null>(null), [pending, setPending] = useState<HrPending | null>(null), [busy, setBusy] = useState(false), [saveError, setSaveError] = useState('');
   const key = useRef<string | null>(null), writing = useRef(false);
+  const [retryPassword, setRetryPassword] = useState(''), [needsPassword, setNeedsPassword] = useState(false);
   useEffect(() => {
     let current = true; setLoading(true); setError(''); setSetup(null); setData(null);
     getHrSetup().then(result => { if (!current) return;
       if (!result.success) { setError(result.message); setLoading(false); return; }
       const value = result.data, storage = `selaris-hris-pending:${value.workspace_key}`;
-      if (key.current !== storage) { key.current = storage; setPending(null); setDialog(null);
+      if (key.current !== storage) { key.current = storage; setPending(null); setDialog(null); setRetryPassword(''); setNeedsPassword(false);
         try { const raw = sessionStorage.getItem(storage); if (raw) { const p = JSON.parse(raw); if (p.payload?.client_request_id && p.path && p.method) setPending(p); } } catch { /* Keep requests in memory when browser storage is unavailable. */ }
       }
       setSetup(value);
@@ -42,7 +44,35 @@ export default function HrisPage() {
     getHrWorkspace(filters).then(result => { if (!current) return; if (result.success) setData(result.data); else setError(result.message); setLoading(false); }).catch(() => { if (current) { setError('Data tim belum bisa dimuat. Periksa koneksi lalu coba lagi.'); setLoading(false); } });
     return () => { current = false; };
   }, [setup, filters]);
-  const persist = (value: HrPending | null) => { setPending(value); try { if (key.current) { if (value) sessionStorage.setItem(key.current, JSON.stringify(value)); else sessionStorage.removeItem(key.current); } } catch { /* The current page still retains the request. */ } };
+  const persist = (value: HrPending | null) => {
+    setPending(value);
+    if (!value) { setRetryPassword(''); setNeedsPassword(false); }
+    try { if (key.current) {
+      if (value) {
+        const account = value.payload.account as Record<string, unknown> | undefined;
+        const stored = account ? { ...value, password_required: value.password_required || Boolean(account.password), payload: { ...value.payload, account: { ...account, password: undefined } } } : value;
+        sessionStorage.setItem(key.current, JSON.stringify(stored));
+      } else sessionStorage.removeItem(key.current);
+    } } catch { /* The current page still retains the request. */ }
+  };
+  const retry = async (request: HrPending) => {
+    if (busy || writing.current) return false;
+    const account = request.payload.account as Record<string, unknown> | undefined;
+    if (account) {
+      setBusy(true); setSaveError('');
+      try {
+        const receipt = await checkHrRequest(request);
+        if (!receipt.success) { setSaveError(receipt.message); return false; }
+        if (receipt.data.state === 'saved') { persist(null); setNotice('Profil dan akun karyawan sudah tersimpan'); setRevision(v => v + 1); return true; }
+        if (request.password_required && !account.password) {
+          setNeedsPassword(true);
+          if (retryPassword.length < 8) { setDialog(null); setSaveError('Belum tersimpan. Masukkan kembali password awal untuk melanjutkan permintaan yang sama.'); return false; }
+          request = { ...request, payload: { ...request.payload, account: { ...account, password: retryPassword } } };
+        }
+      } finally { setBusy(false); }
+    }
+    return submit(request);
+  };
   const submit = async (request: HrPending) => {
     if (writing.current || !setup) return false;
     writing.current = true;
@@ -65,7 +95,7 @@ export default function HrisPage() {
       {manager && <button className="f-button f-primary" disabled={mutationDisabled || !selected} onClick={() => open({ kind: filters.kind })}>{actions[filters.kind]}</button>}</div>
     <p className="f-footnote">Satu jadwal dan satu catatan kehadiran per karyawan per tanggal kerja. Jam mengikuti zona waktu outlet.</p>
     {setup?.permissions?.includes('access.manage') && <Link className="f-button" href="/dashboard/hris/access">Atur akun dan akses tim</Link>}
-    {pending && <div className="f-notice" role="status"><p>Penyimpanan belum selesai: {pending.title}. Periksa permintaan yang sama sebelum mencatat lagi.</p><button className="f-button" disabled={busy || !setup} onClick={async () => { if (await submit(pending)) setDialog(null); }}>{busy ? 'Memeriksa...' : 'Periksa penyimpanan'}</button></div>}
+    {pending && <div className="f-notice"><p role="status">Penyimpanan belum selesai: {pending.title}. Periksa permintaan yang sama sebelum mencatat lagi.</p>{needsPassword && <PasswordInput label="Password awal untuk melanjutkan" minLength={8} maxLength={128} autoComplete="new-password" value={retryPassword} disabled={busy} onChange={e => setRetryPassword(e.target.value)} />}<button className="f-button" disabled={busy || !setup} onClick={async () => { if (await retry(pending)) setDialog(null); }}>{busy ? 'Memeriksa...' : 'Periksa penyimpanan'}</button></div>}
     {notice && <p className="f-notice" role="status">{notice}</p>}
     {saveError && !dialog && <p className="f-notice f-error" role="alert">{saveError}</p>}
     {setup && !manager && !setup.self_employee && <p className="f-notice">Akun ini belum terhubung ke profil karyawan. Minta pemilik menambahkan profil dan menghubungkan akunmu.</p>}
@@ -98,7 +128,7 @@ export default function HrisPage() {
               {manager && <div className="hr-actions"><button className="f-button" disabled={mutationDisabled} aria-label={`Edit ${labels[filters.kind]} ${(item as HrRecord).employee_name}`} onClick={() => open({ kind: filters.kind, row: item })}>{filters.kind === 'attendance' ? 'Koreksi' : 'Edit jadwal'}</button><button className="f-button" disabled={mutationDisabled} onClick={() => open({ kind: 'void', collection: filters.kind as 'schedules' | 'attendance', row: item as HrRecord })}>Batalkan</button></div>}</li>)}</ul>}
         {data.total > 0 && <div className="hr-pager"><p>{data.skip + (data.items.length ? 1 : 0)} sampai {data.skip + data.items.length} dari {data.total}</p><div className="hr-actions"><button className="f-button" disabled={filters.skip === 0} onClick={() => setFilters(v => ({ ...v, skip: Math.max(0, v.skip - 50) }))}>Sebelumnya</button><button className="f-button" disabled={data.skip + data.items.length >= data.total} onClick={() => setFilters(v => ({ ...v, skip: v.skip + 50 }))}>Berikutnya</button></div></div>}</section>
     </>}
-    {dialog && setup && selected && <HrForm key={`${dialog.kind}:${'row' in dialog ? dialog.row?.id || 'new' : 'action' in dialog ? dialog.action : 'new'}`} dialog={dialog} setup={setup} outletId={selected.id} day={filters.start} zone={zone} pending={pending} busy={busy} error={saveError} submit={submit} close={() => setDialog(null)} />}
+    {dialog && setup && selected && <HrForm key={`${dialog.kind}:${'row' in dialog ? dialog.row?.id || 'new' : 'action' in dialog ? dialog.action : 'new'}`} dialog={dialog} setup={setup} outletId={selected.id} day={filters.start} zone={zone} pending={pending} busy={busy} error={saveError} submit={submit} retry={retry} close={() => setDialog(null)} />}
   </div>;
 }
 
@@ -114,20 +144,31 @@ function EmployeeChoice({ row, frozen }: { row?: HrRecord; frozen: boolean }) {
   </div>;
 }
 
-function HrForm({ dialog, setup, outletId, day, zone, pending, busy, error, submit, close }: { dialog: Dialog; setup: HrSetup; outletId: string; day: string; zone: string; pending: HrPending | null; busy: boolean; error: string; submit: (request: HrPending) => Promise<boolean>; close: () => void }) {
+function HrForm({ dialog, setup, outletId, day, zone, pending, busy, error, submit, retry, close }: { dialog: Dialog; setup: HrSetup; outletId: string; day: string; zone: string; pending: HrPending | null; busy: boolean; error: string; submit: (request: HrPending) => Promise<boolean>; retry: (request: HrPending) => Promise<boolean>; close: () => void }) {
   const employee = dialog.kind === 'employees' ? dialog.row as HrEmployee | undefined : undefined;
   const record = dialog.kind === 'schedules' || dialog.kind === 'attendance' ? dialog.row as HrRecord | undefined : undefined;
   const [status, setStatus] = useState(record?.status || 'hadir'), [localError, setLocalError] = useState('');
+  const [accountMode, setAccountMode] = useState(employee?.user_id ? 'existing' : setup.account_admin && setup.shop_username ? 'new' : 'profile');
+  const [accountId, setAccountId] = useState(employee?.user_id || ''), [placement, setPlacement] = useState(employee?.outlet_id || outletId);
+  const [configureAccount, setConfigureAccount] = useState(false), [loginKind, setLoginKind] = useState('phone'), [resetPassword, setResetPassword] = useState(false);
+  const linkedAccount = setup.accounts.find(a => a.id === accountId), newAccount = accountMode === 'new';
+  const loginFields = setup.account_admin && (newAccount || accountMode === 'existing' && configureAccount && linkedAccount);
+  const passwordNeeded = newAccount || !linkedAccount?.password_enabled || resetPassword;
   const frozen = Boolean(pending), title = dialog.kind === 'void' ? 'Batalkan catatan' : dialog.kind === 'punch' ? dialog.action === 'in' ? 'Catat masuk sekarang' : 'Catat pulang sekarang' : dialog.row ? dialog.kind === 'attendance' ? 'Koreksi kehadiran' : dialog.kind === 'employees' ? 'Edit profil karyawan' : 'Edit jadwal' : actions[dialog.kind];
   const save = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (busy) return; setLocalError('');
-    if (pending) { if (await submit(pending)) close(); return; }
+    if (pending) { if (await retry(pending)) close(); return; }
     const f = new FormData(event.currentTarget), value = (key: string) => String(f.get(key) || '').trim();
     try {
       const payload: HrPending['payload'] = { client_request_id: crypto.randomUUID() };
       let path = '', method: 'POST' | 'PUT' = 'POST';
       if (dialog.kind === 'employees') {
         Object.assign(payload, { name: value('name'), position: value('position'), phone: value('phone') || null, outlet_id: value('outlet_id'), user_id: value('user_id') || null, started_on: value('started_on'), ended_on: value('ended_on') || null, is_active: value('is_active') === 'true', notes: value('notes') || null, row_version: employee?.row_version });
+        if (loginFields) {
+          const password = String(f.get('password') || '');
+          if (passwordNeeded && password !== String(f.get('password_confirm') || '')) throw new Error('Ulangi password harus sama dengan password awal');
+          payload.account = { use_phone: loginKind === 'phone', username: loginKind === 'username' ? value('username') : null, role_id: value('role_id') || null, user_row_version: linkedAccount?.row_version || null, password: passwordNeeded ? password : null };
+        }
         path = employee ? `/employees/${employee.id}` : '/employees'; method = employee ? 'PUT' : 'POST';
       } else if (dialog.kind === 'void') { path = `/${dialog.collection}/${dialog.row.id}/void`; Object.assign(payload, { row_version: dialog.row.row_version, reason: value('reason') }); }
       else if (dialog.kind === 'punch') { path = '/punch'; Object.assign(payload, { action: dialog.action, outlet_id: dialog.action === 'out' ? setup.open_attendance?.outlet_id : outletId }); }
@@ -146,9 +187,22 @@ function HrForm({ dialog, setup, outletId, day, zone, pending, busy, error, subm
     <fieldset disabled={busy || frozen}>
       {dialog.kind === 'employees' ? <>
         <label>Nama karyawan<input name="name" autoFocus required maxLength={120} defaultValue={employee?.name || ''} /></label><label>Jabatan / tugas<input name="position" required maxLength={100} defaultValue={employee?.position || ''} placeholder="Misalnya kasir atau barista" /></label>
-        <label>Outlet penempatan<select name="outlet_id" required defaultValue={employee?.outlet_id || outletId}>{setup.outlets.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
-        <label>Hubungkan akun kasir<select name="user_id" defaultValue={employee?.user_id || ''}><option value="">Belum dihubungkan</option>{employee?.user_id && !setup.accounts.some(a => a.id === employee.user_id) && <option value={employee.user_id}>Akun tidak aktif (tetap terhubung)</option>}{setup.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label><p className="f-footnote">Akun yang dihubungkan bisa mencatat masuk dan pulang dari halaman ini. Satu akun untuk satu karyawan. Profil baru tidak membuat akun kasir.</p>
-        <label>Nomor HP<input name="phone" type="tel" maxLength={40} defaultValue={employee?.phone || ''} placeholder="08 atau +62" /></label><div className="f-field-grid"><label>Tanggal mulai kerja<input name="started_on" type="date" required defaultValue={employee?.started_on || day} /></label><label>Tanggal selesai kerja<input name="ended_on" type="date" defaultValue={employee?.ended_on || ''} /></label></div>
+        <label>Outlet penempatan<select name="outlet_id" required value={placement} onChange={e => setPlacement(e.target.value)}>{setup.outlets.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+        <label>Nomor HP<input name="phone" type="tel" required={Boolean(loginFields && loginKind === 'phone')} maxLength={40} defaultValue={employee?.phone || ''} placeholder="08 atau +62" /></label>
+        {setup.account_admin && setup.shop_username ? <>
+          <label>Akun karyawan<select aria-label="Akun karyawan" value={accountMode} onChange={e => { setAccountMode(e.target.value); setConfigureAccount(false); }}><option value="profile">Profil saja</option><option value="existing">Gunakan akun yang sudah ada</option>{!employee?.user_id && <option value="new">Buat akun baru</option>}</select></label>
+          {accountMode === 'existing' && <><label>Hubungkan akun kasir<select name="user_id" required value={accountId} onChange={e => { setAccountId(e.target.value); setConfigureAccount(false); setResetPassword(false); }}><option value="">Pilih akun</option>{employee?.user_id && !linkedAccount && <option value={employee.user_id}>Akun terhubung (izin akun tidak dapat diatur)</option>}{setup.accounts.filter(a => !a.employee_id || a.employee_id === employee?.id).map(a => <option key={a.id} value={a.id}>{a.name}{a.username ? ` · ${a.username}` : ''}</option>)}</select></label>{linkedAccount && <label>Pengaturan login<select value={configureAccount ? 'configure' : 'keep'} onChange={e => setConfigureAccount(e.target.value === 'configure')}><option value="keep">Pertahankan login dan hak akses</option><option value="configure">Atur login akun ini</option></select></label>}<p className="f-footnote">Akun dan riwayat yang sudah ada tetap dipakai.</p></>}
+          {accountMode !== 'existing' && <input type="hidden" name="user_id" value={accountMode === 'profile' ? employee?.user_id || '' : ''} />}
+          {loginFields && <div className="hr-account-fields"><h3>Login karyawan</h3><p className="f-footnote">Username toko: {setup.shop_username}. Profil dan akun disimpan bersama.</p>
+            <label>Masuk menggunakan<select aria-label="Masuk menggunakan" value={loginKind} onChange={e => setLoginKind(e.target.value)}><option value="phone">Nomor HP karyawan</option><option value="username">Username akun</option></select></label>
+            {loginKind === 'username' && <><label>Username akun<input name="username" required minLength={3} maxLength={64} pattern="[A-Za-z0-9](?:[A-Za-z0-9_]|-){2,63}" defaultValue={linkedAccount?.username || ''} autoCapitalize="none" autoCorrect="off" spellCheck={false} /></label><p className="f-footnote">Minimal 3 karakter, tanpa spasi. Contoh: irfan.</p></>}
+            <label>Hak akses<select aria-label="Hak akses" name="role_id" key={`${accountId}:${placement}`} defaultValue=""><option value="">{newAccount ? 'Absensi pribadi' : 'Pertahankan hak akses akun'}</option>{(setup.roles || []).filter(r => r.scope === 'tenant' || r.outlet_ids.includes(placement)).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+            <p className="f-footnote">Absensi pribadi hanya memberi akses jadwal dan kehadiran sendiri. Pilih jabatan yang diberi akses kasir jika karyawan perlu bertransaksi.</p>
+            {!newAccount && linkedAccount?.password_enabled && <label>Password<select aria-label="Password" value={resetPassword ? 'reset' : 'keep'} onChange={e => setResetPassword(e.target.value === 'reset')}><option value="keep">Pertahankan password</option><option value="reset">Tetapkan password baru</option></select></label>}
+            {passwordNeeded && <><PasswordInput label="Password awal" name="password" required minLength={8} maxLength={128} autoComplete="new-password" /><PasswordInput label="Ulangi password awal" name="password_confirm" required minLength={8} maxLength={128} autoComplete="new-password" /><p className="f-footnote">Minimal 8 karakter. Berikan username toko, nomor HP atau username akun, dan password awal kepada karyawan.</p></>}
+          </div>}
+        </> : <><label>Hubungkan akun kasir<select name="user_id" defaultValue={employee?.user_id || ''} disabled={!setup.accounts.length}><option value="">Belum dihubungkan</option>{employee?.user_id && !setup.accounts.some(a => a.id === employee.user_id) && <option value={employee.user_id}>Akun terhubung</option>}{setup.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>{!setup.accounts.length && <input type="hidden" name="user_id" value={employee?.user_id || ''} />}<p className="f-footnote">{setup.account_admin ? <>Tetapkan username toko di <Link href="/dashboard/hris/access">Akun saya</Link> untuk membuat akun dari form ini.</> : 'Profil dapat disimpan. Pembuatan akun memerlukan izin dari pemilik.'}</p></>}
+        <div className="f-field-grid"><label>Tanggal mulai kerja<input name="started_on" type="date" required defaultValue={employee?.started_on || day} /></label><label>Tanggal selesai kerja<input name="ended_on" type="date" defaultValue={employee?.ended_on || ''} /></label></div>
         <label>Status karyawan<select name="is_active" defaultValue={employee?.is_active === false ? 'false' : 'true'}><option value="true">Aktif</option><option value="false">Nonaktif</option></select></label><p className="f-footnote">Menonaktifkan profil tetap menyimpan riwayat. Hak masuk akun kasir diatur di pengaturan akun.</p><label>Catatan pengelola<textarea name="notes" maxLength={2000} defaultValue={employee?.notes || ''} /></label>
       </> : dialog.kind === 'void' ? <><p>{dialog.row.employee_name} · {hrDay(dialog.row.work_date)}. Catatan akan dibatalkan dan riwayat koreksinya tetap disimpan.</p><label>Alasan pembatalan<textarea name="reason" autoFocus required maxLength={500} /></label></>
         : dialog.kind === 'punch' ? <><p>{setup.self_employee?.name} · {setup.outlets.find(o => o.id === (dialog.action === 'out' ? setup.open_attendance?.outlet_id : outletId))?.name}</p><p>Waktu {dialog.action === 'in' ? 'masuk' : 'pulang'} dicatat ketika tombol simpan ditekan. Periksa outlet sebelum menyimpan.</p></>
