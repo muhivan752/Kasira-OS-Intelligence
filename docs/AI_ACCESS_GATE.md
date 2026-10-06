@@ -60,3 +60,16 @@ UI supplement PASS: palette/accent/type dari brand; tanpa emoji/pill/grid/glass/
 Human supplement PASS: kontras dan label/fokus/keyboard/dialog diperiksa; status menggunakan teks; 200%/viewport pendek dan textarea yang dapat digulir diuji.
 
 Layoutmobile supplement PASS: layar menyusun kontrol menjadi baris terpisah di mobile; tablet/laptop/desktop diperiksa; grid tidak bertabrakan; target 44px; tanpa hover-only action atau fixed nav yang menutup composer.
+
+Follow-up form akun, 6 Oktober 2026: arah visual existing dan dials1/1/1 tetap. Tidak ada aset baru. Semua R-01 sampai R-38, C-1 sampai C-5, Liveliness dan supplement di atas diperiksa kembali pada diff form: status PASS tetap. Bukti tambahan image697b1f…ac1, lima source hash, TypeScript/production build, tests/accounts-browser.cjs dan smoke HTTPS publik.
+
+- R-03 PASS tambahan: helper/error username dan password controls pada320/768/1440, dua tema,200% tidak overflow.
+- R-25 PASS tambahan: formula WCAG memeriksa label/helper/error/tombol pada kedua tema.
+- R-26 PASS tambahan: Tampilkan/Sembunyikan punya handler, type=button, nilai bertahan tanpa submit; input username dengan spasi ditolak lokal, perbaikan username dapat claim.
+- R-27 PASS tambahan: server422 menamai Username toko; loading/retry/claim/recovery existing lulus ulang.
+- R-32 PASS tambahan: label via useId/htmlFor, aria-controls/pressed, target44px dan Space hide diuji.
+- R-34 PASS tambahan: empat route auth empat lebar+dua tema; form migrasi tiga lebar+dua tema.
+- R-35 PASS tambahan: image produksi diuji end-to-end, kemudian image sama live;24 auth states HTTPS dan toggle tanpa pageerror.
+- R-38 PASS tambahan: kasira_coffee ditandai contoh username; fixture bertanda QA, tidak menulis akun/password merchant.
+
+Bukti /tmp/selaris-username-{accounts-browser.log,public-browser.log,typescript.log,build-final.log,frontend-manifest.json,live-state.json,error-mobile.png}. Release follow-up: ACCOUNT_FORM_FIX.md.

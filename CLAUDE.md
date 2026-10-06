@@ -32,7 +32,9 @@ Backend/web live migration115; APK1.6.34+201 resmi dirilis
 sesuai izin deploy/rilis sebelumnya. Deployment docs/POS_ACCESS_RELEASE.md;
 Tahap 2 dan 3 backend/web live; deployment docs/BUSINESS_ACCESS_RELEASE.md
 dan docs/AI_ACCESS_RELEASE.md. Minimum username3/password8 di API/web/native;
-login lama tetap menerima password existing. Native managed AI tetap tertutup.
+login lama tetap menerima password existing. Web form memvalidasi username
+tanpa spasi dan menyediakan Tampilkan/Sembunyikan password; deployment
+docs/ACCOUNT_FORM_FIX.md. Native managed AI tetap tertutup.
 Berikutnya GPS/foto absensi; offline/radius/retensi/OTP perlu keputusan.
 Status juga di MEMORY.md/SESSION.md.
 Jangan recreate backend image lama: seluruh hotfix harus dipertahankan.

@@ -4,7 +4,26 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
-## UPDATE TERAKHIR - TAHAP 3 AI LIVE DAN APK 1.6.34+201, 2026-10-06
+## UPDATE TERAKHIR - FORM USERNAME DAN TAMPILKAN PASSWORD LIVE, 2026-10-06
+
+- Ivan gagal migrasi password karena mengisi username toko “Kasira Coffee”.
+  Form Akun saya kini menjelaskan username tanpa spasi (contoh kasira_coffee),
+  memvalidasi format sebelum kirim, dan error API menyebut kolom username.
+  Pattern HTML juga diperbaiki agar valid pada browser dengan regex v flag.
+- Ivan meminta password bisa dilihat. Web login/daftar/aktivasi/pemulihan/Akun
+  saya memakai tombol Tampilkan/Sembunyikan per kolom; awalnya tertutup,
+  nilai tetap, keyboard Space bekerja dan tombol tidak submit form.
+- Source a2d8849 dipush/remote cocok; frontend-only --no-deps live image697b1f…ac1,
+  lima runtime hash cocok. Backend312 hash tetap; schema115/empat service sehat.
+  TypeScript/build, browser seluruh flow akun+32 auth states, error migrasi
+  tiga lebar/dua tema/200%, toggle44px/keyboard PASS. Smoke publik24 auth
+  states+toggle/legacy/download tanpa pageerror PASS. QA hanya fixture lokal.
+- Rollback frontend tag selaris-frontend-before-username:20261006 (image742368…66e2)
+  tersimpan. Preview QA tugas dihentikan; bukti /tmp/selaris-username*.
+  Review docs/ACCOUNT_FORM_FIX.md, gate docs/AI_ACCESS_GATE.md. Minimum3/8,
+  APK1.6.34+201 tetap. Berikutnya GPS/foto; offline/radius/retensi/OTP perlu keputusan.
+
+## UPDATE SEBELUMNYA - TAHAP 3 AI LIVE DAN APK 1.6.34+201, 2026-10-06
 
 - Ivan melanjutkan tahap 3 dengan “gas”, lalu meminta minimum username/password
   lebih pendek. Minimum username3/password8 diterapkan API/web/native; login
