@@ -28,7 +28,8 @@ const fixture = http.createServer(async (req, res) => {
   const path = url.pathname.replace(/\/$/, '');
   calls.push({ path, method: req.method, body, search: url.search });
   let data = [], status = 200, detail;
-  if (path.endsWith('/users/me')) data = { id, full_name: 'Pemilik fixture', subscription_tier: starter ? 'starter' : 'pro', subscription_status: 'active' };
+  if (path.endsWith('/auth/access')) data = { enforcement_mode: 'owner', permissions: [], scope: 'tenant', outlets: [], access_version: 'owner-fixture' };
+  else if (path.endsWith('/users/me')) data = { id, full_name: 'Pemilik fixture', subscription_tier: starter ? 'starter' : 'pro', subscription_status: 'active' };
   else if (path.endsWith('/outlets')) data = [{ id, brand_id: id, name: 'Toko fixture', slug: 'fixture', stock_mode: 'simple' }];
   else if (loadFailure && req.method === 'GET' && /\/(products|recipes|ingredients)$/.test(path)) { status = 500; detail = 'INTERNAL LOAD SECRET'; }
   else if (path.endsWith('/products')) data = empty ? [] : products.slice(Number(url.searchParams.get('skip') || 0), Number(url.searchParams.get('skip') || 0) + Number(url.searchParams.get('limit') || 100));
@@ -79,7 +80,7 @@ async function checkAppearance(page, label) {
 }
 
 (async () => {
-  await new Promise(resolve => fixture.listen(8186, '127.0.0.1', resolve));
+  await new Promise(resolve => fixture.listen(Number(process.env.FIXTURE_PORT || 8186), '127.0.0.1', resolve));
   const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });

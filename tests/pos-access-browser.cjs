@@ -1,6 +1,7 @@
 const http = require('node:http');
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
+const base = process.env.BROWSER_BASE_URL || 'http://127.0.0.1:3188';
 const id = '11111111-1111-4111-8111-111111111111';
 const recipeId = '22222222-2222-4222-8222-222222222222';
 let permissions = ['stock.view'], fail = false, uncertain = false, empty = false;
@@ -13,7 +14,7 @@ const fixture = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://qa'), path = url.pathname.replace(/\/$/, '');
   calls.push({ path, method: req.method, body, query: url.searchParams });
   let data = [], status = 200;
-  if (path.endsWith('/auth/access')) data = { enforcement_mode: 'managed', permissions, outlets, user_id: id, tenant_id: id };
+  if (path.endsWith('/auth/access')) data = { enforcement_mode: 'managed', scope: 'outlet', permissions, outlets, user_id: id, tenant_id: id };
   else if (path.endsWith('/users/me')) data = { id, full_name: 'QA staff', subscription_tier: 'pro' };
   else if (path.includes('/outlets/')) data = outlets.find(o => path.endsWith(o.id));
   else if (path.endsWith('/products')) {
@@ -50,7 +51,7 @@ async function check(page, label) {
   console.log(`PASS ${label}: layout and contrast`);
 }
 (async () => {
-  await new Promise(resolve => fixture.listen(8188, '127.0.0.1', resolve));
+  await new Promise(resolve => fixture.listen(Number(process.env.FIXTURE_PORT || 8188), '127.0.0.1', resolve));
   const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
   const context = await browser.newContext({ viewport: { width: 320, height: 760 } });
   await context.tracing.start({ screenshots: true, snapshots: true });
@@ -59,7 +60,7 @@ async function check(page, label) {
   page.on('pageerror', e => errors.push(e.message));
   page.setDefaultTimeout(10000);
   try {
-    await page.goto('http://127.0.0.1:3188/dashboard/operasional');
+    await page.goto(`${base}/dashboard/operasional`);
     await page.getByRole('heading', { name: 'Stok QA outlet', exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: /Terima barang/ }).count(), 0);
     assert.equal(await page.getByRole('button', { name: /Stok opname/ }).count(), 0);
@@ -102,13 +103,13 @@ async function check(page, label) {
     await page.keyboard.press('Escape'); await page.waitForTimeout(400);
     await page.screenshot({ path: '/tmp/selaris-pos-access-stock.png', fullPage: true });
     await page.getByRole('link', { name: 'Unduh aplikasi POS' }).click(); await page.waitForURL('**/download');
-    await page.goto('http://127.0.0.1:3188/dashboard/operasional');
+    await page.goto(`${base}/dashboard/operasional`);
     fail = true; await page.getByRole('button', { name: 'Muat ulang akses dan stok' }).click(); await page.locator('.finance-workspace [role=alert]').waitFor();
     fail = false; empty = true; await page.getByRole('button', { name: 'Muat ulang akses dan stok' }).click(); await page.getByText('Belum ada barang untuk outlet ini.').waitFor();
     empty = false; permissions = ['hris.self']; await page.getByRole('button', { name: 'Muat ulang akses dan stok' }).click(); await page.getByText('Izin melihat stok belum diberikan untuk akun ini.').waitFor();
     assert.equal(await page.getByRole('button', { name: /Terima barang/ }).count(), 0);
     assert.equal(await page.getByRole('link', { name: 'Unduh aplikasi POS' }).count(), 0);
-    permissions = ['pos.cash.manage']; await page.goto('http://127.0.0.1:3188/dashboard/operasional'); await page.getByRole('link', { name: 'Unduh aplikasi POS' }).waitFor();
+    permissions = ['pos.cash.manage']; await page.goto(`${base}/dashboard/operasional`); await page.getByRole('link', { name: 'Unduh aplikasi POS' }).waitFor();
     assert.equal(await page.getByRole('button', {name: /Terima barang/}).count(), 0);
     await page.getByRole('button', { name: 'Muat ulang akses dan stok' }).focus(); await page.keyboard.press('Tab');
     assert(await page.evaluate(() => document.activeElement.tagName !== 'BODY' && getComputedStyle(document.activeElement).outlineStyle !== 'none'));

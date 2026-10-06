@@ -93,7 +93,7 @@ async def main():
             saved_role = await call("POST", "/hris/access/roles", role, owner_token)
             assert saved_role["row_version"] == 1
             assert await call("POST", "/hris/access/roles", role, owner_token) == saved_role
-            await call("POST", "/hris/access/roles", {**role, "id": str(uuid4()), "client_request_id": str(uuid4()), "permissions": {"finance.manage": True}}, owner_token, status=422)
+            await call("POST", "/hris/access/roles", {**role, "id": str(uuid4()), "client_request_id": str(uuid4()), "permissions": {"ai.chat": True}}, owner_token, status=422)
             await call("POST", "/hris/access/roles", {**role, "id": str(uuid4()), "client_request_id": str(uuid4()), "outlet_ids": [str(uuid4())]}, owner_token, status=404)
             async with Admin() as db:
                 employee = HrEmployee(id=uuid4(), tenant_id=tid, outlet_id=oid, code="QA-KRY", name="QA staff",

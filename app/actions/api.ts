@@ -1,11 +1,21 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import { validAccountAccess } from '@/lib/account-access';
 import type { HppIngredient, HppProduct, HppRecipe } from '@/lib/hpp';
 import type { InventoryIngredient } from '@/lib/ingredient-inventory';
 import type { HppChatMode, HppChatSession, HppChatListItem, HppChatResult } from '@/lib/hpp-chat';
 import type { FinanceSummary, FinanceExpense, FinanceAccount, FinanceCategory, FinanceSetup, FinanceResult } from '@/lib/finance';
 import type { PurchaseResult, PurchaseSetup, PurchaseData, PurchaseTarget, PurchaseFilters, Purchase, Supplier, PurchaseSummary } from '@/lib/purchasing';
+
+async function businessAccess() {
+  const response = await fetchWithAuth('/auth/access', { cache: 'no-store' });
+  const body = await response.json();
+  if (!response.ok || !validAccountAccess(body.data)) throw new Error(extractError(body, 'Akses akun belum dapat dimuat.'));
+  const managed = body.data.enforcement_mode === 'managed';
+  const allows = (permission: string) => !managed || body.data.permissions.includes(permission);
+  return { managed, allows, includeGlobal: !managed || body.data.scope === 'tenant' };
+}
 
 async function hppChatRequest<T>(path: string, options: RequestInit = {}): Promise<HppChatResult<T>> {
   try {
@@ -716,24 +726,32 @@ function hppError(error: unknown) {
   return 'Belum berhasil. Periksa koneksi lalu coba lagi.';
 }
 
-export async function loadHppProducts() {
+export async function loadHppProducts(outletId?: string) {
   try {
     const outlets = await readHppData('/outlets');
-    const outlet = outlets[0];
+    const chosen = outletId || (await cookies()).get('outlet_id')?.value;
+    const outlet = outlets.find((o: any) => o.id === chosen) || outlets[0];
     if (!outlet) return { success: false as const, message: 'Buat outlet terlebih dahulu di Pengaturan.' };
     const brand = encodeURIComponent(outlet.brand_id);
     const [products, recipes] = await Promise.all([
-      readAllHppData(`/products?brand_id=${brand}`), readHppData(`/recipes?brand_id=${brand}`),
+      readAllHppData(`/products?brand_id=${brand}&outlet_id=${encodeURIComponent(outlet.id)}`), readHppData(`/recipes?brand_id=${brand}`),
     ]);
+    const access = await businessAccess();
     return { success: true as const, brandId: outlet.brand_id as string, stockMode: outlet.stock_mode as string,
+      outlets: outlets.map((o: any) => ({ id: o.id as string, name: o.name as string })), outletId: outlet.id as string,
+      managed: access.managed, canManage: access.allows('hpp.manage') && access.allows('hpp.approve') && access.allows('supplier.price.view'),
       products: products as HppProduct[], recipes: recipes as HppRecipe[] };
   } catch (error) { return { success: false as const, message: hppError(error) }; }
 }
 
 export async function loadHppRecipe(brandId: string, productId: string) {
   try {
+    const outlets = await readHppData('/outlets');
+    const chosen = (await cookies()).get('outlet_id')?.value;
+    const outlet = outlets.find((o: any) => o.id === chosen && o.brand_id === brandId) || outlets.find((o: any) => o.brand_id === brandId);
+    if (!outlet) throw new Error('Data HPP belum bisa dimuat. Coba lagi.');
     const [ingredients, recipes] = await Promise.all([
-      readAllHppData(`/ingredients?brand_id=${encodeURIComponent(brandId)}`),
+      readAllHppData(`/ingredients?brand_id=${encodeURIComponent(brandId)}&outlet_id=${encodeURIComponent(outlet.id)}`),
       readHppData(`/recipes?product_id=${encodeURIComponent(productId)}`),
     ]);
     return { success: true as const, ingredients: ingredients as HppIngredient[], recipe: (recipes[0] || null) as HppRecipe | null };
@@ -1055,7 +1073,11 @@ async function purchaseWrite<T>(path: string, method: string, payload?: Record<s
 export async function getPurchasingSetup(): Promise<PurchaseResult<PurchaseSetup>> {
   try {
     const [outlets, user] = await Promise.all([purchaseRead<PurchaseSetup['outlets']>('/outlets'), purchaseRead<{ subscription_tier: string }>('/users/me')]);
-    return { success: true, data: { outlets, selectedOutletId: (await cookies()).get('outlet_id')?.value,
+    const access = await businessAccess();
+    return { success: true, data: { outlets, managed: access.managed,
+      canManage: access.allows('purchasing.manage'), canRecord: access.allows('purchasing.manage') && access.allows('supplier.price.view'),
+      canReceive: access.allows('stock.receive'), canCreateIngredient: access.allows('hpp.manage') && access.allows('hpp.approve'),
+      selectedOutletId: (await cookies()).get('outlet_id')?.value,
       isPro: ['pro', 'business', 'enterprise'].includes(user.subscription_tier) } };
   } catch (error) { return { success: false, message: purchaseError(error) }; }
 }
@@ -1083,7 +1105,7 @@ export async function getPurchaseDetail(id: string): Promise<PurchaseResult<Purc
 export async function getPurchaseTargets(outletId: string, brandId: string, isPro: boolean): Promise<PurchaseResult<PurchaseTarget[]>> {
   try {
     const [products, ingredients] = await Promise.all([
-      purchaseReadAll<{id: string; name: string; stock_enabled: boolean}>(`/products?brand_id=${encodeURIComponent(brandId)}`),
+      purchaseReadAll<{id: string; name: string; stock_enabled: boolean}>(`/products?brand_id=${encodeURIComponent(brandId)}&outlet_id=${encodeURIComponent(outletId)}`),
       isPro ? purchaseReadAll<{id: string; name: string; base_unit: string; ingredient_type?: string}>(`/ingredients?brand_id=${encodeURIComponent(brandId)}&outlet_id=${encodeURIComponent(outletId)}`) : Promise.resolve([]),
     ]);
     return { success: true, data: [
@@ -1140,6 +1162,7 @@ async function financeData<T>(path: string): Promise<T> {
 
 export async function getFinanceSetup(): Promise<FinanceResult<FinanceSetup>> {
   try {
+  const access = await businessAccess();
   const [outlets, categories, accounts, suppliers] = await Promise.all([
     financeData<{ id: string; name: string }[]>('/outlets'),
     financeData<FinanceCategory[]>('/finance/categories'),
@@ -1147,7 +1170,8 @@ export async function getFinanceSetup(): Promise<FinanceResult<FinanceSetup>> {
     financeData<{ id: string; name: string; is_active: boolean }[]>('/suppliers'),
   ]);
   const selectedOutletId = (await cookies()).get('outlet_id')?.value;
-  return { success: true, data: { outlets, categories, accounts, suppliers: suppliers.filter(s => s.is_active), selectedOutletId } };
+  return { success: true, data: { outlets, categories, accounts, suppliers: suppliers.filter(s => s.is_active), selectedOutletId,
+    canManage: access.allows('finance.manage'), managed: access.managed, includeGlobal: access.includeGlobal } };
   } catch (error) { return { success: false, message: financeError(error) }; }
 }
 

@@ -3,6 +3,7 @@ export type FinanceResult<T> = { success: true; data: T; message?: string } | { 
 export interface FinanceSetup {
   outlets: { id: string; name: string }[]; categories: FinanceCategory[]; accounts: FinanceAccount[];
   suppliers: { id: string; name: string; is_active: boolean }[]; selectedOutletId?: string;
+  canManage?: boolean; managed?: boolean; includeGlobal?: boolean;
 }
 export interface FinanceAccount { id: string; name: string; kind: string; default_for: string[]; is_active: boolean }
 export interface FinanceExpense {
@@ -22,7 +23,7 @@ export interface FinanceSummary {
   recurring_pending: number; generated_at?: string; report_timezone?: string; cash_history_estimated?: boolean;
 }
 
-export const money = (value: number | string) => new Intl.NumberFormat('id-ID', {
+export const money = (value: number | string | null | undefined) => value == null ? 'Tidak diizinkan' : new Intl.NumberFormat('id-ID', {
   style: 'currency', currency: 'IDR', minimumFractionDigits: 2, maximumFractionDigits: 2,
 }).format(Number(value));
 

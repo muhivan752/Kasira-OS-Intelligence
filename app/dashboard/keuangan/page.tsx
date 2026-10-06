@@ -91,9 +91,9 @@ export default function KeuanganPage() {
   return <div className="finance-workspace">
     <header className="finance-heading">
       <div><h1>Keuangan</h1><p>Periksa hasil usaha, uang masuk dan keluar, serta pengeluaran toko.</p></div>
-      <button className="f-button f-primary" disabled={!setup || !outletId || loading || !!error || !!form || mutating} onClick={() => setForm({ category: 'lainnya', payment_method: 'cash', recurring: 'none' })}>
+      {setup?.canManage !== false && <button className="f-button f-primary" disabled={!setup || !outletId || loading || !!error || !!form || mutating} onClick={() => setForm({ category: 'lainnya', payment_method: 'cash', recurring: 'none' })}>
         <Plus size={18} aria-hidden="true" /> Catat pengeluaran
-      </button>
+      </button>}
     </header>
     {initialLoading ? <p role="status" className="f-panel">Memuat akun dan outlet…</p> : <>
       {setup && setup.outlets.length > 0 && <div className="finance-toolbar">
@@ -149,19 +149,19 @@ export default function KeuanganPage() {
             {!summary.expenses_by_category.length ? <p>Belum ada pengeluaran tercatat pada bulan ini.</p> : <dl className="f-calculation">{summary.expenses_by_category.map(c => <Amount key={c.key} label={`${c.label} (${c.count} catatan)`} value={c.amount} />)}</dl>}
           </section>
         </div>
-        {summary.recurring_pending > 0 && <div className="f-notice f-recurring"><div><strong>{summary.recurring_pending} pembayaran bulanan bisa disalin</strong><p>Periksa dahulu apakah sewa, gaji, atau tagihan lainnya sudah benar-benar dibayar.</p></div><button className="f-button" disabled={mutating} onClick={() => setConfirming('recurring')}>Periksa sebelum mencatat</button></div>}
+        {setup?.canManage !== false && summary.recurring_pending > 0 && <div className="f-notice f-recurring"><div><strong>{summary.recurring_pending} pembayaran bulanan bisa disalin</strong><p>Periksa dahulu apakah sewa, gaji, atau tagihan lainnya sudah benar-benar dibayar.</p></div><button className="f-button" disabled={mutating} onClick={() => setConfirming('recurring')}>Periksa sebelum mencatat</button></div>}
         <section className="f-panel" aria-labelledby="expenses-heading"><div className="f-report-title"><h2 id="expenses-heading">Catatan pengeluaran</h2><span>{expenses.length} catatan</span></div>
           {!expenses.length ? <p className="f-empty">Belum ada pengeluaran pada {monthName(month)}. Catat pembayaran listrik, sewa, gaji, atau biaya toko lainnya setelah dibayar.</p> : <ul className="f-expense-list">{expenses.map(e => <li key={e.id}>
             <div className="f-expense-detail"><time dateTime={e.paid_at}>{jakartaDate(new Date(e.paid_at))}</time><h3>{e.category_label}</h3>{e.note && <p>{e.note}</p>}<p>{e.cash_account_name || METHODS.find(([key]) => key === e.payment_method)?.[1] || 'Nonkas'}{e.supplier_name ? ` · ${e.supplier_name}` : ''}{e.recurring === 'monthly' ? ' · template bulanan' : ''}</p></div>
             <strong className="f-expense-amount">{money(e.amount)}</strong>
-            <div className="f-expense-actions">{e.purchase_id ? <Link className="f-button" href="/dashboard/pembelian">Lihat nota</Link> : e.payment_method === 'none' ? <span>Catatan nonkas dari stok</span> : <>
+            <div className="f-expense-actions">{e.purchase_id ? <span>Catatan dari nota pembelian</span> : e.payment_method === 'none' ? <span>Catatan nonkas dari stok</span> : setup?.canManage !== false ? <>
               <button className="f-button" aria-label={`Ubah ${e.category_label}${e.note ? ` ${e.note}` : ''}`} onClick={() => setForm(e)}><Pencil size={16} aria-hidden="true" /> Ubah</button>
               <button className="f-button f-delete" aria-label={`Hapus ${e.category_label}${e.note ? ` ${e.note}` : ''}`} onClick={() => { setError(''); setConfirming(e); }}><Trash2 size={16} aria-hidden="true" /> Hapus</button>
-            </>}</div>
+            </> : <span>Akses baca</span>}</div>
           </li>)}</ul>}
         </section>
         <section className="f-panel"><h2>Perbandingan enam bulan</h2><p>Semua bulan memakai HPP terkini dan biaya yang sudah dicatat.</p><div className="f-trend">{summary.trend.map(t => <div key={t.month}><h3>{monthName(t.month)}</h3><p>Penjualan {money(t.revenue)}</p><p>Laba perkiraan <strong className={Number(t.net) < 0 ? 'f-negative' : ''}>{money(t.net)}</strong></p></div>)}</div></section>
-        <p className="f-footnote">Periode laporan memakai WIB. Biaya tanpa outlet juga ikut ditampilkan. {summary.generated_at && <>Diperbarui {new Date(summary.generated_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.</>}</p>
+        <p className="f-footnote">Periode laporan memakai WIB. {setup?.includeGlobal !== false ? 'Biaya tanpa outlet juga ikut ditampilkan.' : 'Laporan hanya mencakup outlet terpilih; biaya bersama tanpa outlet tidak disertakan.'} {summary.generated_at && <>Diperbarui {new Date(summary.generated_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.</>}</p>
       </>}
     </>}
     {form && setup && <ExpenseForm initial={form} setup={setup} outletId={outletId} outletName={outletName} onClose={() => setForm(null)} onSaved={async message => { setForm(null); setNotice(message); await reload(); }} />}

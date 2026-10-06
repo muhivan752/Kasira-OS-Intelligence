@@ -720,8 +720,11 @@ owner-only, sesi sid/cv dan challenge sekali pakai. Migrasi114 melengkapi
 sessions existing dengan tenant langsung+FORCE RLS. Penonaktifan staf
 mencabut sesi permanen; reaktivasi memerlukan login baru. Native mengganti
 identitas lewatUUID dan membatalkan sync tanpa menghapus SQLite/antrean.
-Role managed baru mendukung HRIS/POS/stok; kontrak/QA
-docs/POS_ACCESS_REVIEW.md. Harga modal/keuangan/AI managed tetap tertutup.
+Role managed mendukung HRIS/POS/stok dan tahap 2 Keuangan/Pembelian/CRM/HPP.
+Registry business callable+method, parent/tenant/brand/outlet, redaction harga,
+shared profil CRM/supplier dan katalog brand terdokumentasi di
+docs/BUSINESS_ACCESS_REVIEW.md. Cakupan baru outlet/tenant eksplisit; manual
+HPP persist membutuhkan manage+approve. Seluruh AI/OCR masih tertutup.
 Managed native online-only, cache/cursor per identitas/versi akses dan queue
 serta dependency dipertahankan saat revoke/switch; tidak push/mark synced.
 Algoritme stok simple bersama brand dan resep per outlet tetap existing.

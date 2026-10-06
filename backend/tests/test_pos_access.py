@@ -34,7 +34,13 @@ class PosAccessTests(unittest.TestCase):
         self.assertIsNone(value['buy_price']); self.assertIsNone(value['sold_total'])
         self.assertIsNone(value['nested']['cost_per_base_unit']); self.assertNotIn('xendit_raw', value['nested'])
         self.assertEqual(source['data'][0]['buy_price'], 100)
-        value = redact(source, self.context('hpp.view', 'sales.detail.view'), 'products')['data'][0]
+        hpp_only = redact(source, self.context('hpp.view'), 'products')['data'][0]
+        self.assertIsNone(hpp_only['buy_price'])
+        self.assertEqual(hpp_only['nested']['cost_per_base_unit'], 7)
+        price_only = redact(source, self.context('supplier.price.view'), 'products')['data'][0]
+        self.assertEqual(price_only['buy_price'], 100)
+        self.assertIsNone(price_only['nested']['cost_per_base_unit'])
+        value = redact(source, self.context('hpp.view', 'supplier.price.view', 'sales.detail.view'), 'products')['data'][0]
         self.assertEqual(value['buy_price'], 100); self.assertEqual(value['sold_total'], 99)
         self.assertNotIn('xendit_raw', value['nested'])
 
@@ -47,9 +53,18 @@ class PosAccessTests(unittest.TestCase):
         self.assertEqual(value['cash_payments'], []); self.assertEqual(value['review'], [])
         self.assertTrue(value['blind_close']); self.assertFalse(value['is_owner'])
 
-    def test_role_grants_are_strict_and_future_modules_remain_unavailable(self):
+    def test_role_grants_are_strict_and_ai_remains_unavailable(self):
         body = dict(id=uuid4(), client_request_id=uuid4(), name='Cashier', outlet_ids=[uuid4()])
         RoleSave(**body, permissions={'pos.sell': True, 'stock.receive': False})
-        for permissions in ({'pos.sell': 1}, {'pos.sell': 'true'}, {'finance.manage': True}, {'hpp.view': True}):
+        RoleSave(**body, permissions={'finance.manage': True, 'hpp.view': True, 'customers.export': True})
+        for permissions in ({'pos.sell': 1}, {'pos.sell': 'true'}, {'ai.chat': True}, {'unknown.view': True}):
             with self.subTest(permissions=permissions), self.assertRaises(ValidationError):
                 RoleSave(**body, permissions=permissions)
+
+    def test_tenant_scope_is_explicit_and_outlet_scope_cannot_be_empty(self):
+        body = dict(id=uuid4(), client_request_id=uuid4(), name='Finance', permissions={'finance.view': True})
+        RoleSave(**body, scope='tenant', outlet_ids=[])
+        RoleSave(**body, scope='outlet', outlet_ids=[uuid4()])
+        for scope, outlets in [('outlet', []), ('tenant', [uuid4()]), ('brand', [])]:
+            with self.subTest(scope=scope), self.assertRaises(ValidationError):
+                RoleSave(**body, scope=scope, outlet_ids=outlets)

@@ -212,7 +212,7 @@ def role_data(row):
     except ValidationError:
         policy = None
     return {"id": str(row.id), "name": row.name, "row_version": row.row_version,
-        "editable": bool(policy and not row.is_system), "policy": policy}
+        "editable": bool(policy and not row.is_system), "scope": row.scope, "policy": policy}
 
 
 def user_data(row):
@@ -257,6 +257,7 @@ async def save_role(body: RoleSave, user: User = Depends(get_current_user), db: 
         version(row, body)
         row.row_version += 1
     row.name = body.name.strip()
+    row.scope = body.scope
     row.permissions = {"access_policy": {"version": 1, "permissions": body.permissions,
         "outlet_ids": [str(i) for i in body.outlet_ids], "brand_ids": []}}
     try:
@@ -293,11 +294,13 @@ async def save_employee_account(employee_id: UUID, body: EmployeeAccountSave, us
         raise HTTPException(422, "Pilih jabatan untuk akun baru")
     if role:
         policy = role_data(role)["policy"]
-        if not policy or role.scope != "outlet" or policy["brand_ids"]:
+        if not policy or role.scope not in {"outlet", "tenant"} or policy["brand_ids"]:
             raise HTTPException(422, "Pilih jabatan dengan pengaturan izin dan outlet yang valid")
         for outlet_id in policy["outlet_ids"]:
             context.require_outlet(UUID(outlet_id))
-        if str(employee.outlet_id) not in policy["outlet_ids"]:
+        if role.scope == "tenant" and policy["outlet_ids"]:
+            raise HTTPException(422, "Jabatan seluruh bisnis tidak memakai daftar outlet terpisah")
+        if role.scope == "outlet" and str(employee.outlet_id) not in policy["outlet_ids"]:
             raise HTTPException(422, "Outlet utama karyawan harus termasuk dalam jabatan")
     try:
         if employee.user_id:

@@ -10,8 +10,10 @@ export interface CustomerList {
   items: Customer[]; total: number; skip: number; limit: number;
   summary: { total: number; repeat: number; spent: string; consented: number };
   generated_at: string; scope: string; timezone: string; basis: string; history_note: string; workspace_key: string;
+  can_manage?: boolean; can_export?: boolean;
 }
 export interface CustomerDetail extends Customer {
+  can_manage?: boolean; scope?: string;
   orders: { id: string; order_number: string; created_at: string; total_amount: string; items: { name: string; qty: number }[] }[];
   history_skip: number; history_limit: number; favourites: { id: string; name: string; qty: number }[];
   timeline: { id: string; kind: string; body: string; created_at: string }[]; timeline_limit: number;
@@ -28,7 +30,7 @@ export const customerDate = (value: string | null) => value ? new Intl.DateTimeF
 
 export function customerCsv(data: CustomerList): string {
   const rows: (string | number)[][] = [
-    ['Data pelanggan', 'Halaman yang sedang ditampilkan'], ['Cakupan', 'Semua outlet dalam bisnis'],
+    ['Data pelanggan', 'Halaman yang sedang ditampilkan'], ['Cakupan', data.scope === 'allowed_outlets' ? 'Outlet yang diizinkan' : 'Semua outlet dalam bisnis'],
     ['Dibuat pada', data.generated_at], ['Dasar belanja', data.history_note],
     ['Hasil filter', data.total], ['Baris awal', data.skip + 1], [],
     ['Nama', 'HP', 'Email', 'Transaksi lunas', 'Total nota (IDR)', 'Terakhir belanja (WIB)', 'Izin promo WA', 'Tanggal lahir', 'Preferensi / catatan'],

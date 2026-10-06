@@ -20,7 +20,8 @@ const fixture = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://fixture'), path = url.pathname.replace(/\/$/, '');
   calls.push({ path, method: req.method, body, params: Object.fromEntries(url.searchParams) });
   let data = [], status = 200, detail;
-  if (path.endsWith('/users/me')) data = { id, full_name: 'Pemilik fixture', subscription_tier: 'pro', subscription_status: 'active' };
+  if (path.endsWith('/auth/access')) data = { enforcement_mode: 'owner', permissions: [], scope: 'tenant', outlets: [], access_version: 'owner-fixture' };
+  else if (path.endsWith('/users/me')) data = { id, full_name: 'Pemilik fixture', subscription_tier: 'pro', subscription_status: 'active' };
   else if (path.endsWith('/outlets')) data = [{ id, name: 'Toko A fixture' }, { id: second, name: 'Toko B fixture' }];
   else if (path.endsWith('/finance/accounts')) data = accounts;
   else if (path.endsWith('/finance/categories')) data = categories;
@@ -78,8 +79,8 @@ async function appearance(page, label) {
 }
 
 (async () => {
-  await new Promise(resolve => fixture.listen(8193, '127.0.0.1', resolve));
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  await new Promise(resolve => fixture.listen(Number(process.env.FIXTURE_PORT || 8193), '127.0.0.1', resolve));
+  const browser = await chromium.launch({executablePath: process.env.CHROMIUM_EXECUTABLE,  headless: true, args: ['--no-sandbox'] });
   let debugPage;
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: 'America/Los_Angeles' });

@@ -1,4 +1,5 @@
 import uuid
+import logging
 from typing import Any, List, Optional
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -21,7 +22,9 @@ from backend.schemas.recipe import (
 from backend.schemas.response import StandardResponse
 from backend.services.audit import log_audit
 
-router = APIRouter(dependencies=[Depends(deps.require_pro_tier)])
+from backend.services.pos_access import PosAccessRoute
+router = APIRouter(route_class=PosAccessRoute, dependencies=[Depends(deps.require_pro_tier)])
+logger = logging.getLogger(__name__)
 
 
 def _build_recipe_response(recipe: Recipe) -> RecipeResponse:
@@ -114,8 +117,11 @@ async def list_recipes(
     )
     if product_id:
         stmt = stmt.where(Recipe.product_id == product_id)
+    stmt = stmt.join(Product)
     if brand_id:
-        stmt = stmt.join(Product).where(Product.brand_id == brand_id)
+        stmt = stmt.where(Product.brand_id == brand_id)
+    if request.state.access.mode == "managed":
+        stmt = stmt.where(Product.brand_id.in_({o.brand_id for o in request.state.access.outlets}), Product.deleted_at.is_(None))
 
     result = await db.execute(stmt)
     recipes = result.scalars().all()

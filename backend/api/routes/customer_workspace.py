@@ -23,7 +23,21 @@ from backend.schemas.customer_workspace import CustomerSave, CustomerNote
 from backend.schemas.response import StandardResponse
 from backend.services import customer_workspace as svc
 
-router = APIRouter()
+from backend.services.pos_access import PosAccessRoute
+router = APIRouter(route_class=PosAccessRoute)
+
+
+def access_metadata(request):
+    context = getattr(request.state, "access", None)
+    managed = context is not None and context.mode == "managed"
+    return {"can_manage": not managed or context.allows("customers.manage"),
+            "can_export": not managed or context.allows("customers.export"),
+            "scope": "allowed_outlets" if managed else "tenant_all_outlets"}
+
+
+def allowed_outlets(request):
+    context = getattr(request.state, "access", None)
+    return context.outlet_ids if context and context.mode == "managed" else None
 
 
 def response(request, data, message=None):
@@ -66,7 +80,8 @@ async def listing(request: Request, search: str = Query("", max_length=120),
                   sort: Literal["last_visit", "spent", "visits", "newest", "name"] = "last_visit",
                   skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
                   db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    data = await svc.list_facts(db, user.tenant_id, search, segment, sort, skip, limit)
+    data = await svc.list_facts(db, user.tenant_id, search, segment, sort, skip, limit, allowed_outlets(request))
+    data.update(access_metadata(request))
     data["workspace_key"] = hashlib.sha256(f"{user.tenant_id}:{user.id}".encode()).hexdigest()
     return response(request, data)
 
@@ -75,8 +90,8 @@ async def listing(request: Request, search: str = Query("", max_length=120),
 async def detail(request: Request, customer_id: UUID, skip: int = Query(0, ge=0),
                  db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     c = await customer(db, user.tenant_id, customer_id)
-    facts = await svc.customer_facts(db, user.tenant_id, c.id)
-    query = select(Order).where(Order.customer_id == c.id, *svc.paid_scope(user.tenant_id))
+    facts = await svc.customer_facts(db, user.tenant_id, c.id, allowed_outlets(request))
+    query = select(Order).where(Order.customer_id == c.id, *svc.paid_scope(user.tenant_id, allowed_outlets(request)))
     orders = (await db.execute(query.options(selectinload(Order.items).selectinload(OrderItem.product))
                .order_by(Order.created_at.desc(), Order.id).offset(skip).limit(20))).scalars().all()
     timeline = (await db.execute(select(CustomerTimeline).where(CustomerTimeline.customer_id == c.id,
@@ -84,7 +99,7 @@ async def detail(request: Request, customer_id: UUID, skip: int = Query(0, ge=0)
         .order_by(CustomerTimeline.created_at.desc(), CustomerTimeline.id).limit(100))).scalars().all()
     favourites = (await db.execute(select(Product.id, Product.name, func.sum(OrderItem.quantity))
         .join(OrderItem, OrderItem.product_id == Product.id).join(Order, Order.id == OrderItem.order_id)
-        .where(Order.customer_id == c.id, *svc.paid_scope(user.tenant_id), OrderItem.deleted_at.is_(None))
+        .where(Order.customer_id == c.id, *svc.paid_scope(user.tenant_id, allowed_outlets(request)), OrderItem.deleted_at.is_(None))
         .group_by(Product.id, Product.name).order_by(func.sum(OrderItem.quantity).desc(), Product.id).limit(5))).all()
     return response(request, {**facts, "orders": [{"id": str(o.id), "order_number": o.order_number,
         "created_at": o.created_at.isoformat(), "total_amount": svc.amount(o.total_amount),
@@ -94,7 +109,7 @@ async def detail(request: Request, customer_id: UUID, skip: int = Query(0, ge=0)
         "favourites": [{"id": str(pid), "name": name, "qty": int(qty)} for pid, name, qty in favourites],
         "timeline": [{"id": str(n.id), "kind": n.kind, "body": n.body, "created_at": n.created_at.isoformat()} for n in timeline],
         "timeline_limit": 100, "generated_at": datetime.now(timezone.utc).isoformat(),
-        "scope": "tenant_all_outlets", "basis": "paid_orders_gross"})
+        **access_metadata(request), "basis": "paid_orders_gross"})
 
 
 async def save(request, body, db, user, customer_id=None):

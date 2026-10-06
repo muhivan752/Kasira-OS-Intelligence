@@ -16,6 +16,14 @@ const labels: Record<string, string> = {
   'pos.kitchen': 'Lihat pesanan dan ubah status dapur', 'sales.detail.view': 'Lihat riwayat seluruh kasir dan rincian penjualan',
   'stock.view': 'Lihat stok', 'stock.receive': 'Terima barang dan tambah stok', 'stock.adjust': 'Catat hasil stok opname',
   'customers.lookup': 'Cari pelanggan untuk transaksi (nama dan nomor tersamar)',
+  'finance.view': 'Lihat laporan keuangan outlet, termasuk ringkasan HPP dan laba',
+  'finance.manage': 'Catat, ubah dan hapus pengeluaran',
+  'purchasing.view': 'Lihat nota dan supplier', 'purchasing.manage': 'Kelola supplier, catat nota dan pembayaran',
+  'supplier.price.view': 'Lihat harga pembelian dan nominal nota supplier',
+  'customers.view': 'Lihat profil bersama bisnis dan riwayat belanja outlet yang diizinkan',
+  'customers.manage': 'Kelola profil dan catatan pelanggan bersama bisnis', 'customers.export': 'Ekspor halaman pelanggan ke CSV',
+  'hpp.view': 'Lihat resep dan harga modal katalog bersama brand',
+  'hpp.manage': 'Kelola bahan dan resep', 'hpp.approve': 'Setujui penyimpanan langsung bahan dan resep',
 };
 
 export default function TeamAccess() {
@@ -41,7 +49,8 @@ export default function TeamAccess() {
     event.preventDefault(); const form = new FormData(event.currentTarget);
     if (!roleUuid.current) roleUuid.current = crypto.randomUUID();
     const body = { id: roleId || roleUuid.current, name: form.get('name'), row_version: role?.row_version || 0,
-      outlet_ids: form.getAll('outlet_ids'), permissions: Object.fromEntries(Object.keys(labels).map(p => [p, form.getAll('permissions').includes(p)])) };
+      scope: form.get('scope'), outlet_ids: form.get('scope') === 'tenant' ? [] : form.getAll('outlet_ids'),
+      permissions: Object.fromEntries(Object.keys(labels).map(p => [p, form.getAll('permissions').includes(p)])) };
     const result = await write(body, client_request_id => saveAccessRole({ ...body, client_request_id }));
     if (result) { setRoleId(result.id); roleUuid.current = ''; }
   }
@@ -55,9 +64,11 @@ export default function TeamAccess() {
     {error && <div className="f-notice f-error" role="alert"><p>{error}</p><button className="f-button" disabled={busy} onClick={() => { setError(''); void load(); }}>Muat ulang</button></div>}{notice && <p className="f-notice" role="status">{notice}</p>}
     {!setup ? <p role="status">{error ? 'Akses belum dapat dimuat.' : 'Memuat akun tim…'}</p> : <>
       <AccountSettings onSaved={() => { void load(); }} />
-      <section className="f-panel"><h2>Jabatan dengan pengaturan izin</h2><p>Pilih hak lihat dan tindakan secara terpisah. Akun staf dengan izin baru memakai POS saat online. Transaksi lama yang belum tersinkron tetap disimpan untuk diselesaikan pemilik. Harga modal, pengaturan menu, keuangan dan AI belum tersedia untuk jabatan ini.</p>
+      <section className="f-panel"><h2>Jabatan dengan pengaturan izin</h2><p>Pilih hak lihat dan tindakan secara terpisah. Akun staf memakai POS saat online. Pelanggan dan supplier dipakai bersama bisnis; laporan mengikuti outlet. Bahan dan resep dipakai bersama brand. Menyimpan bahan/resep langsung membutuhkan hak kelola dan persetujuan; mencatat nota barang membutuhkan hak penerimaan stok. Percakapan AI belum tersedia. Antrean lama tetap disimpan.</p>
         <label className="finance-form">Pilih jabatan<select value={roleId} onChange={e => { setRoleId(e.target.value); roleUuid.current = ''; }}><option value="">Buat jabatan baru</option>{setup.roles.filter((r: any) => r.editable).map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
         <form key={roleId} className="finance-form" onSubmit={roleSubmit} aria-busy={busy}><label>Nama jabatan<input name="name" defaultValue={role?.name || ''} required minLength={2} maxLength={100} /></label>
+          <label>Cakupan akses<select name="scope" defaultValue={role?.scope || 'outlet'}><option value="outlet">Outlet yang dipilih</option><option value="tenant">Seluruh bisnis, termasuk outlet baru</option></select></label>
+          <p>Cakupan seluruh bisnis juga mencakup biaya tanpa outlet dan perubahan akun kas bersama. Untuk cakupan outlet, pilih minimal satu outlet di bawah.</p>
           <fieldset><legend>Outlet yang diizinkan</legend>{setup.outlets.map((o: any) => <label className="account-option" key={o.id}><input type="checkbox" name="outlet_ids" value={o.id} defaultChecked={role?.policy.outlet_ids.includes(o.id)} />{o.name}</label>)}</fieldset>
           <fieldset><legend>Hak lihat dan tindakan</legend>{Object.entries(labels).map(([p, text]) => <label className="account-option" key={p}><input type="checkbox" name="permissions" value={p} defaultChecked={role ? role.policy.permissions[p] === true : p === 'hris.self'} />{text}</label>)}</fieldset>
           <button className="f-button f-primary" disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan jabatan'}</button>

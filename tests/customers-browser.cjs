@@ -10,7 +10,8 @@ let timeline=[];
 const fixture=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://fixture'),path=url.pathname.replace(/\/+$/,'');let raw='';for await(const chunk of req)raw+=chunk;
   const body=raw?JSON.parse(raw):{};calls.push({path,method:req.method,params:Object.fromEntries(url.searchParams),body});let data={},status=200;
-  if(path.endsWith('/users/me'))data={id:a,subscription_tier:'pro'};
+  if (path.endsWith('/auth/access')) data = { enforcement_mode: 'owner', permissions: [], scope: 'tenant', outlets: [], access_version: 'owner-fixture' };
+  else if(path.endsWith('/users/me'))data={id:a,subscription_tier:'pro'};
   else if(path.endsWith('/outlets'))data=[{id:a,name:'Outlet fixture',brand_id:a}];
   else if(path.endsWith('/customers/workspace')&&req.method==='GET'){
     if(failRead)status=500;
@@ -58,8 +59,8 @@ async function appearance(page,label){
 }
 
 (async()=>{
-  await new Promise(resolve=>fixture.listen(8395,'127.0.0.1',resolve));
-  const browser=await chromium.launch({headless:true,args:['--no-sandbox']});let page;
+  await new Promise(resolve=>fixture.listen(Number(process.env.FIXTURE_PORT || 8395),'127.0.0.1',resolve));
+  const browser=await chromium.launch({executablePath: process.env.CHROMIUM_EXECUTABLE, headless:true,args:['--no-sandbox']});let page;
   try{
     const context=await browser.newContext({viewport:{width:1440,height:1000},timezoneId:'America/Los_Angeles'});
     await context.addCookies(Object.entries({token:'fixture-token',tenant_id:a,outlet_id:a}).map(([name,value])=>({name,value,url:base})));

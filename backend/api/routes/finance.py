@@ -40,7 +40,9 @@ from backend.services.audit import log_audit
 from backend.services import finance_service as svc
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+from backend.services.pos_access import PosAccessRoute
+from backend.services.business_access import include_global
+router = APIRouter(route_class=PosAccessRoute)
 
 
 async def _outlet(db: AsyncSession, outlet_id: UUID, tenant_id: UUID) -> Outlet:
@@ -83,7 +85,9 @@ async def finance_summary(
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     outlet = await _outlet(db, outlet_id, current_user.tenant_id)
-    data = await svc.summary(db, tenant_id=current_user.tenant_id, outlet=outlet, month=month or _current_month())
+    context = getattr(request.state, "access", None)
+    data = await svc.summary(db, tenant_id=current_user.tenant_id, outlet=outlet, month=month or _current_month(),
+                             include_global=include_global(context), access=context)
     await db.commit()  # ensure_accounts bisa nge-seed
     return StandardResponse(success=True, data=data, request_id=request.state.request_id)
 
@@ -98,7 +102,8 @@ async def categories(request: Request, current_user: User = Depends(deps.get_cur
 
 @router.get("/accounts", response_model=StandardResponse[List[CashAccountResponse]])
 async def list_accounts(request: Request, db: AsyncSession = Depends(get_db), current_user: User = Depends(deps.get_current_user)) -> Any:
-    accs = await svc.ensure_accounts(db, current_user.tenant_id)
+    context = getattr(request.state, "access", None)
+    accs = await svc.ensure_accounts(db, current_user.tenant_id, access=context)
     await db.commit()
     return StandardResponse(success=True, data=[CashAccountResponse.model_validate(a) for a in accs], request_id=request.state.request_id)
 
@@ -130,7 +135,8 @@ async def list_expenses(
     db: AsyncSession = Depends(get_db), current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     await _outlet(db, outlet_id, current_user.tenant_id)
-    rows = await svc.list_expenses(db, tenant_id=current_user.tenant_id, outlet_id=outlet_id, month=month or _current_month())
+    rows = await svc.list_expenses(db, tenant_id=current_user.tenant_id, outlet_id=outlet_id, month=month or _current_month(),
+                                   include_global=include_global(getattr(request.state, "access", None)))
     return StandardResponse(success=True, data=[svc.expense_to_response(e) for e in rows], request_id=request.state.request_id)
 
 
@@ -159,7 +165,7 @@ async def create_expense(
                                     message="Pengeluaran sudah dicatat", request_id=request.state.request_id)
     if body.outlet_id:
         await _outlet(db, body.outlet_id, current_user.tenant_id)
-    accounts = await svc.ensure_accounts(db, current_user.tenant_id)
+    accounts = await svc.ensure_accounts(db, current_user.tenant_id, access=getattr(request.state, "access", None))
     acc_id = _expense_account(accounts, body.payment_method, body.cash_account_id)
     await _supplier(db, body.supplier_id, current_user.tenant_id)
 
@@ -206,7 +212,7 @@ async def update_expense(
     if "supplier_id" in changes and changes["supplier_id"] != e.supplier_id:
         await _supplier(db, changes["supplier_id"], current_user.tenant_id)
     if "cash_account_id" in changes or "payment_method" in changes:
-        accounts = await svc.ensure_accounts(db, current_user.tenant_id)
+        accounts = await svc.ensure_accounts(db, current_user.tenant_id, access=getattr(request.state, "access", None))
         method = changes.get("payment_method", e.payment_method)
         acc_id = changes.get("cash_account_id", None if method != e.payment_method else e.cash_account_id)
         if acc_id != e.cash_account_id or method != e.payment_method or not any(a.id == acc_id for a in accounts):
@@ -255,7 +261,8 @@ async def copy_recurring(
     await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
                      {"key": f"finance-recurring:{current_user.tenant_id}:{month or _current_month()}"})
     created = await svc.copy_recurring(db, tenant_id=current_user.tenant_id, outlet_id=outlet_id,
-                                       month=month or _current_month(), user_id=current_user.id)
+                                       month=month or _current_month(), user_id=current_user.id,
+                                       include_global=include_global(getattr(request.state, "access", None)))
     for e in created:
         await log_audit(db=db, action="CREATE", entity="expenses", entity_id=e.id,
                         after_state={"category": e.category, "amount": str(e.amount), "note": e.note, "copied": True},

@@ -13,7 +13,8 @@ const fixture=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://fixture'), path=url.pathname.replace(/\/+$/,''); let raw=''; for await(const chunk of req) raw+=chunk;
   const body=raw && req.headers['content-type']?.includes('application/json') ? JSON.parse(raw) : {};
   calls.push({path,method:req.method,params:Object.fromEntries(url.searchParams),body}); let data={}, status=200;
-  if(path.endsWith('/users/me')) data={id:a,subscription_tier:'pro'};
+  if (path.endsWith('/auth/access')) data = { enforcement_mode: 'owner', permissions: [], scope: 'tenant', outlets: [], access_version: 'owner-fixture' };
+  else if(path.endsWith('/users/me')) data={id:a,subscription_tier:'pro'};
   else if(path.endsWith('/outlets')) data=[{id:a,brand_id:a,name:'Outlet A fixture'},{id:b,brand_id:b,name:'Outlet B fixture'}];
   else if(path.endsWith('/products')) data=[{id:a,name:'Produk fixture',stock_enabled:true}];
   else if(path.endsWith('/ingredients')) data=[{id:a,name:'Gula fixture',base_unit:'gram',ingredient_type:'recipe'}];
@@ -56,8 +57,8 @@ async function appearance(page,label){
   });assert.deepEqual(issues,[],label);
 }
 (async()=>{
-  await new Promise(resolve=>fixture.listen(8295,'127.0.0.1',resolve));
-  const browser=await chromium.launch({headless:true,args:['--no-sandbox']});let page;
+  await new Promise(resolve=>fixture.listen(Number(process.env.FIXTURE_PORT || 8295),'127.0.0.1',resolve));
+  const browser=await chromium.launch({executablePath: process.env.CHROMIUM_EXECUTABLE, headless:true,args:['--no-sandbox']});let page;
   try{
     const context=await browser.newContext({viewport:{width:1440,height:1000},timezoneId:'America/Los_Angeles'});
     await context.addCookies(Object.entries({token:'fixture-token',tenant_id:a,outlet_id:b}).map(([name,value])=>({name,value,url:base})));

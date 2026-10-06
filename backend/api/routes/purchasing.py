@@ -39,8 +39,9 @@ from backend.services import purchasing_service as svc
 
 logger = logging.getLogger(__name__)
 
-suppliers_router = APIRouter()
-purchases_router = APIRouter()
+from backend.services.pos_access import PosAccessRoute
+suppliers_router = APIRouter(route_class=PosAccessRoute)
+purchases_router = APIRouter(route_class=PosAccessRoute)
 
 
 async def _invalidate_received(db, outlet_id, tenant_id):
@@ -200,7 +201,8 @@ async def list_suppliers(
     if suppliers:
         if outlet_id:
             await _outlet_of_tenant(db, outlet_id, current_user.tenant_id)
-        outlet_ids = [outlet_id] if outlet_id else await _tenant_outlet_ids(db, current_user.tenant_id)
+        context = getattr(request.state, "access", None)
+        outlet_ids = [outlet_id] if outlet_id else list(context.outlet_ids) if context and context.mode == "managed" else await _tenant_outlet_ids(db, current_user.tenant_id)
         rows = (await db.execute(
             select(
                 PurchaseOrder.supplier_id,

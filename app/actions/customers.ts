@@ -30,8 +30,8 @@ async function call<T>(path: string, method = 'GET', payload?: unknown): Promise
   }
 }
 
-export async function getCustomerWorkspace(filters: CustomerFilters) {
-  return call<CustomerList>(`?${new URLSearchParams({ ...filters, skip: String(filters.skip), limit: '50' })}`);
+export async function getCustomerWorkspace(filters: CustomerFilters, exporting = false) {
+  return call<CustomerList>(`?${new URLSearchParams({ ...filters, skip: String(filters.skip), limit: '50', ...(exporting ? { export: 'true' } : {}) })}`);
 }
 export async function getCustomerWorkspaceDetail(id: string, skip = 0) {
   return call<CustomerDetail>(`/${encodeURIComponent(id)}?skip=${skip}`);

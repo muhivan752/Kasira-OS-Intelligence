@@ -21,7 +21,7 @@ interface DraftLine { key: string; target: string; name: string; quantity: strin
 const blankLine = (): DraftLine => ({key:crypto.randomUUID(),target:'',name:'',quantity:'1',unit:'',price:'',total:'',base:'',sell:''});
 const amountOf = (line: DraftLine) => line.total !== '' ? Number(line.total) : Math.round(Number(line.quantity) * Number(line.price) * 100) / 100;
 
-export function PurchaseForm({outlet,isPro,suppliers,onClose,onSaved}:{outlet:PurchaseSetup['outlets'][number];isPro:boolean;suppliers:Supplier[];onClose:()=>void;onSaved:(p:Purchase)=>void}) {
+export function PurchaseForm({outlet,isPro,suppliers,onClose,onSaved,managed=false,canReceive=true,canCreateIngredient=true}:{outlet:PurchaseSetup['outlets'][number];isPro:boolean;suppliers:Supplier[];onClose:()=>void;onSaved:(p:Purchase)=>void;managed?:boolean;canReceive?:boolean;canCreateIngredient?:boolean}) {
   const [targets,setTargets] = useState<PurchaseTarget[] | null>(null), [targetError,setTargetError] = useState(''), [reload,setReload] = useState(0);
   const [lines,setLines] = useState<DraftLine[]>(() => [blankLine()]);
   const [fields,setFields] = useState({supplier:'',supplierName:'',date:jakartaDate(),invoice:'',notes:'',mode:'paid',paid:'0',due:''});
@@ -98,7 +98,7 @@ export function PurchaseForm({outlet,isPro,suppliers,onClose,onSaved}:{outlet:Pu
       {!targets && !targetError && <p role="status">Memuat daftar barang…</p>}
       {targetError && <div className="f-notice f-error" role="alert"><p>{targetError}</p><button className="f-button" type="button" onClick={() => setReload(n => n + 1)}>Coba muat barang lagi</button></div>}
       <fieldset disabled={locked || !targets} className="p-fields">
-        <label className="p-upload">Foto nota (opsional)<input aria-label="Foto nota" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={e => { const file=e.target.files?.[0]; if (file) void scan(file); e.target.value=''; }} /><span>JPG, PNG, WebP; maksimal 8 MB. Foto mengisi draf untuk Anda periksa.</span></label>
+        {!managed && <label className="p-upload">Foto nota (opsional)<input aria-label="Foto nota" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={e => { const file=e.target.files?.[0]; if (file) void scan(file); e.target.value=''; }} /><span>JPG, PNG, WebP; maksimal 8 MB. Foto mengisi draf untuk Anda periksa.</span></label>}
         {scanning && <p role="status">Membaca foto nota…</p>}{scanNote && <p className="f-notice" role="status">{scanNote}</p>}
         <div className="f-field-grid"><label>Supplier<select aria-label="Supplier" value={fields.supplier} onChange={e => field('supplier',e.target.value)}><option value="">Tanpa supplier</option>{suppliers.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}<option value="__new">Supplier baru</option></select></label>
           <label>Tanggal barang diterima<input aria-label="Tanggal barang diterima" type="date" max={jakartaDate()} required value={fields.date} onChange={e => field('date',e.target.value)} /></label>
@@ -108,9 +108,9 @@ export function PurchaseForm({outlet,isPro,suppliers,onClose,onSaved}:{outlet:Pu
         {lines.map((line,index) => { const target=targets?.find(t => t.key === line.target), product=target?.kind === 'product' || line.target === '__product'; return <fieldset className="p-line" key={line.key}><legend>Baris {index + 1}</legend>
           {line.raw && <p className="f-explanation">Terbaca di foto: {line.raw}. Periksa barang, satuan, dan harga.</p>}
           <label>Barang atau biaya<select aria-label={`Barang baris ${index + 1}`} required value={line.target} onChange={e => { const next=targets?.find(t => t.key === e.target.value); update(line.key,{target:e.target.value,unit:next?.unit || (e.target.value === '__product' ? 'pcs' : '')}); }}><option value="">Pilih barang atau biaya</option>
-            <optgroup label="Bahan baku">{targets?.filter(t => t.kind === 'ingredient').map(t => <option key={t.key} value={t.key}>{t.name} · stok {t.unit}</option>)}</optgroup>
-            <optgroup label="Produk jadi">{targets?.filter(t => t.kind === 'product').map(t => <option key={t.key} value={t.key}>{t.name}{!t.stockEnabled ? ' · stok tidak dicatat' : ''}</option>)}</optgroup>
-            <optgroup label="Catatan baru">{isPro && <option value="__ingredient">Bahan baku baru</option>}<option value="__product">Produk jadi baru</option><option value="__other">Biaya, tanpa stok</option></optgroup></select></label>
+            {canReceive && <optgroup label="Bahan baku">{targets?.filter(t => t.kind === 'ingredient').map(t => <option key={t.key} value={t.key}>{t.name} · stok {t.unit}</option>)}</optgroup>}
+            {canReceive && <optgroup label="Produk jadi">{targets?.filter(t => t.kind === 'product').map(t => <option key={t.key} value={t.key}>{t.name}{!t.stockEnabled ? ' · stok tidak dicatat' : ''}</option>)}</optgroup>}
+            <optgroup label="Catatan baru">{isPro && canReceive && canCreateIngredient && <option value="__ingredient">Bahan baku baru</option>}{!managed && <option value="__product">Produk jadi baru</option>}<option value="__other">Biaya, tanpa stok</option></optgroup></select></label>
           {line.target.startsWith('__') && <label>Nama<input aria-label={`Nama baris ${index + 1}`} required maxLength={120} value={line.name} onChange={e => update(line.key,{name:e.target.value})} /></label>}
           <div className="p-line-grid"><label>Jumlah<input aria-label={`Jumlah baris ${index + 1}`} required type="number" min="0.00000001" max="1000000000" step={product ? '1' : 'any'} value={line.quantity} onChange={e => update(line.key,{quantity:e.target.value})} /></label>
             <label>Satuan<select aria-label={`Satuan baris ${index + 1}`} value={line.unit} onChange={e => update(line.key,{unit:e.target.value})}><option value="">Ikut satuan stok</option>{(product ? ['pcs'] : Array.from(new Set([target?.unit || '', 'gram','kg','ons','ml','liter','galon','pcs','butir','botol','lembar','dus','lusin','tray','bungkus','sachet','pak']))).filter(Boolean).map(u => <option key={u} value={u}>{u}</option>)}</select></label>
@@ -135,7 +135,7 @@ export function PurchaseForm({outlet,isPro,suppliers,onClose,onSaved}:{outlet:Pu
   </form></InventoryDialog>;
 }
 
-export function PurchaseDetail({id,onClose,onSaved}:{id:string;onClose:()=>void;onSaved:()=>void}) {
+export function PurchaseDetail({id,onClose,onSaved,canPay=true}:{id:string;onClose:()=>void;onSaved:()=>void;canPay?:boolean}) {
   const [purchase,setPurchase] = useState<Purchase | null>(null), [error,setError] = useState(''), [loading,setLoading] = useState(true), [busy,setBusy] = useState(false), [refresh,setRefresh] = useState(0);
   const [amount,setAmount] = useState(''), [pending,setPending] = useState<Payload | null>(null), key=pendingKey('pay',id);
   useEffect(() => { setPending(readPending(key)); }, [key]);
@@ -153,9 +153,9 @@ export function PurchaseDetail({id,onClose,onSaved}:{id:string;onClose:()=>void;
       <ul className="p-detail-lines">{purchase.items.map(i => <li key={i.id}><div><strong>{i.name}</strong><p>{quantityLabel(i.quantity)} {i.unit || ''} × {money(i.unit_price)}</p>{i.qty_base != null && i.qty_base !== i.quantity && <p>Jumlah stok masuk: {quantityLabel(i.qty_base)} dalam satuan stok</p>}{i.is_other && <p>Biaya operasional, tanpa stok</p>}
         {i.cost_before != null && i.cost_after != null && <p>Harga modal per {i.base_unit || 'satuan stok'} saat nota: {unitCost(i.cost_before)} menjadi {unitCost(i.cost_after)}</p>}</div><strong>{money(i.total_price)}</strong></li>)}</ul>
       <dl className="f-calculation"><div><dt>Total nota</dt><dd>{money(purchase.total_amount)}</dd></div><div><dt>Sudah dibayar</dt><dd>{money(purchase.paid_amount)}</dd></div><div className="f-total"><dt>Sisa utang</dt><dd>{money(purchase.outstanding_amount)}</dd></div>{Number(purchase.outstanding_amount) > 0 && <div><dt>Jatuh tempo</dt><dd>{purchaseDate(purchase.due_at)}</dd></div>}</dl>
-      <section><h3>Riwayat pembayaran</h3>{purchase.payments?.length ? <ul className="p-payments">{purchase.payments.map(p => <li key={p.id}><span>{purchaseDate(p.paid_at)} · {p.kind === 'initial' ? 'Pembayaran awal' : 'Cicilan'}</span><strong>{money(p.amount)}</strong></li>)}</ul> : <p>Belum ada riwayat pembayaran.</p>}
-        {(purchase.payment_history_incomplete || Math.abs((purchase.payments || []).reduce((sum,p) => sum + Number(p.amount),0) - Number(purchase.paid_amount)) > .009) && <p className="f-notice">Riwayat lama belum lengkap. Total pembayaran di atas tetap mengikuti catatan nota.</p>}</section>
-      {(Number(purchase.outstanding_amount) > 0 || pending) && <form className="finance-form p-payment" onSubmit={submit}><h3>Catat pembayaran utang</h3><p>Catat setelah supplier menerima pembayaran. Tombol ini menyimpan catatan pembayaran dan tidak mentransfer uang.</p>
+      <section><h3>Riwayat pembayaran</h3>{purchase.paid_amount == null ? <p>Nominal dan riwayat pembayaran tidak diizinkan untuk akun ini.</p> : purchase.payments?.length ? <ul className="p-payments">{purchase.payments.map(p => <li key={p.id}><span>{purchaseDate(p.paid_at)} · {p.kind === 'initial' ? 'Pembayaran awal' : 'Cicilan'}</span><strong>{money(p.amount)}</strong></li>)}</ul> : <p>Belum ada riwayat pembayaran.</p>}
+        {purchase.paid_amount != null && (purchase.payment_history_incomplete || Math.abs((purchase.payments || []).reduce((sum,p) => sum + Number(p.amount),0) - Number(purchase.paid_amount)) > .009) && <p className="f-notice">Riwayat lama belum lengkap. Total pembayaran di atas tetap mengikuti catatan nota.</p>}</section>
+      {canPay && (Number(purchase.outstanding_amount) > 0 || pending) && <form className="finance-form p-payment" onSubmit={submit}><h3>Catat pembayaran utang</h3><p>Catat setelah supplier menerima pembayaran. Tombol ini menyimpan catatan pembayaran dan tidak mentransfer uang.</p>
         {pending ? <p className="f-notice">Periksa pembayaran {money(String(pending.amount))} dari permintaan sebelumnya supaya tidak tercatat dua kali.</p> : <label>Nominal pembayaran<input aria-label="Nominal pembayaran" required type="number" min="0.01" step="0.01" max={purchase.outstanding_amount} value={amount} onChange={e => setAmount(e.target.value)} disabled={busy} /></label>}
         <button className="f-button f-primary" type="submit" disabled={busy}>{busy ? 'Memeriksa…' : pending ? 'Periksa pembayaran sebelumnya' : 'Sudah dibayar, catat pembayaran'}</button></form>}
     </>}

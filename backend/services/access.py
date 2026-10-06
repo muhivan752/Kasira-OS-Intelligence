@@ -19,7 +19,7 @@ LEGACY_FLAGS = {
     "can_refund": "pos.refund", "can_approve_refund": "pos.refund.approve",
     "can_discount_override": "pos.discount.override",
 }
-ENFORCED_MODULES = ("hris", "pos", "stock", "sync")
+ENFORCED_MODULES = ("hris", "pos", "stock", "sync", "finance", "purchasing", "customers", "hpp")
 
 
 def denied(code, message):
@@ -35,6 +35,7 @@ class AccessContext:
     employee: HrEmployee | None
     mode: str
     version: str
+    scope: str = "tenant"
 
     @property
     def outlet_ids(self):
@@ -60,6 +61,7 @@ class AccessContext:
             "employee_id": str(self.employee.id) if self.employee else None,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "offline_pos_allowed": self.mode != "managed",
+            "scope": self.scope,
         }
 
 
@@ -107,6 +109,8 @@ async def resolve_access(db, user):
     query = select(Outlet).where(Outlet.tenant_id == user.tenant_id, Outlet.deleted_at.is_(None),
         Outlet.is_active.is_(True)).order_by(Outlet.created_at, Outlet.id)
     if policy:
+        query = query.join(Brand, Brand.id == Outlet.brand_id).where(
+            Brand.tenant_id == user.tenant_id, Brand.deleted_at.is_(None), Brand.is_active.is_(True))
         if role.scope == "outlet":
             if policy.brand_ids:
                 denied("ACCESS_POLICY_INVALID", "Pengaturan akses outlet tidak sesuai")
@@ -114,7 +118,7 @@ async def resolve_access(db, user):
         elif role.scope == "brand":
             if policy.outlet_ids:
                 denied("ACCESS_POLICY_INVALID", "Pengaturan akses brand tidak sesuai")
-            query = query.join(Brand, Brand.id == Outlet.brand_id).where(Outlet.brand_id.in_(policy.brand_ids),
+            query = query.where(Outlet.brand_id.in_(policy.brand_ids),
                 Brand.tenant_id == user.tenant_id, Brand.deleted_at.is_(None), Brand.is_active.is_(True))
         elif role.scope != "tenant" or policy.outlet_ids or policy.brand_ids:
             denied("ACCESS_POLICY_INVALID", "Pengaturan cakupan akses tidak sesuai")
@@ -128,7 +132,8 @@ async def resolve_access(db, user):
         "outlets": [[str(o.id), o.row_version] for o in outlets],
     }
     version = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()
-    return AccessContext(user.id, user.tenant_id, permissions, outlets, employee, mode, version)
+    return AccessContext(user.id, user.tenant_id, permissions, outlets, employee, mode, version,
+                         role.scope if policy else "tenant")
 
 
 def validate_tenant_header(request, tenant_id):
@@ -159,5 +164,6 @@ def enforce_route(request, context):
     }
     # FastAPI has resolved endpoint identity before dependencies, even without scope['route'].
     from backend.services.pos_access import supported_route
-    if (request.method, request.scope.get("endpoint")) not in allowed and not supported_route(request):
+    from backend.services.business_access import supported_route as business_route
+    if (request.method, request.scope.get("endpoint")) not in allowed and not supported_route(request) and not business_route(request):
         denied("ACCESS_ROUTE_NOT_READY", "Fitur ini belum tersedia untuk akun dengan pengaturan akses baru")

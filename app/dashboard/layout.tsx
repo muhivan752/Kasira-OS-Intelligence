@@ -68,14 +68,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   useEffect(() => {
+    let active = true, revision = 0;
     async function loadData() {
+      const current = ++revision;
       try {
         const access = await getAccountAccess();
-        if (!access.success) { router.push('/login'); return; }
+        if (!active || current !== revision) return;
+        if (!access.success) { setAccessMode(null); setAccessPermissions([]); router.push('/login'); return; }
         setAccessMode(access.data.enforcement_mode);
         setAccessPermissions(access.data.permissions);
         const user = await getCurrentUser();
+        if (!active || current !== revision) return;
         if (!user) {
+          setAccessMode(null); setAccessPermissions([]);
           router.push('/login');
           return;
         }
@@ -88,6 +93,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           setOutletName('Belum ada Outlet');
         }
       } catch (error: any) {
+        if (!active || current !== revision) return;
+        setAccessMode(null); setAccessPermissions([]);
         if (error?.message === 'SESSION_EXPIRED' || error?.message === 'Unauthorized') {
           router.push('/login');
           return;
@@ -96,7 +103,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
     }
     loadData();
-  }, [router]);
+    window.addEventListener('focus', loadData);
+    return () => { active = false; window.removeEventListener('focus', loadData); };
+  }, [router, pathname]);
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -115,6 +124,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Build navigation based on tier
   const mainNav = accessMode === 'managed' ? [
     ...(accessPermissions.some(p => POS_WORKSPACE_PERMISSIONS.includes(p)) ? [{ name: 'Operasional', href: '/dashboard/operasional', icon: Store }] : []),
+    ...(accessPermissions.includes('customers.view') ? [{ name: 'Pelanggan', href: '/dashboard/pelanggan', icon: Users }] : []),
+    ...(accessPermissions.includes('purchasing.view') ? [{ name: 'Pembelian', href: '/dashboard/pembelian', icon: ShoppingCart }] : []),
+    ...(accessPermissions.includes('finance.view') ? [{ name: 'Keuangan', href: '/dashboard/keuangan', icon: Wallet }] : []),
     { name: 'Tim & absensi', href: '/dashboard/hris', icon: Users },
   ] : [
     { name: 'Beranda', href: '/dashboard', icon: LayoutDashboard },
@@ -129,7 +141,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Laporan', href: '/dashboard/laporan', icon: BarChart3 },
   ];
 
-  const proNav = accessMode === 'managed' ? [] : [
+  const proNav = accessMode === 'managed' ? [
+    ...(accessPermissions.includes('hpp.view') ? [{ name: 'HPP', href: '/dashboard/hpp', icon: Calculator }] : []),
+  ] : [
     { name: 'Atur HPP', href: '/dashboard/hpp', icon: Calculator },
     { name: 'Bahan Baku', href: '/dashboard/bahan-baku', icon: Package },
     { name: 'Reservasi', href: '/dashboard/reservasi', icon: CalendarDays },
@@ -144,6 +158,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Pengaturan', href: '/dashboard/settings', icon: Settings },
     ]),
   ];
+
+  const managedPaths = ['/dashboard/hris', '/dashboard/account',
+    ...(accessPermissions.some(p => POS_WORKSPACE_PERMISSIONS.includes(p)) ? ['/dashboard/operasional'] : []),
+    ...(accessPermissions.includes('finance.view') ? ['/dashboard/keuangan'] : []),
+    ...(accessPermissions.includes('purchasing.view') ? ['/dashboard/pembelian'] : []),
+    ...(accessPermissions.includes('customers.view') ? ['/dashboard/pelanggan'] : []),
+    ...(accessPermissions.includes('hpp.view') ? ['/dashboard/hpp'] : [])];
 
   const renderNavItem = (item: { name: string; href: string; icon: any }, locked = false) => {
     const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
@@ -324,7 +345,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
           {logoutError && <p role="alert" className="mb-4 text-[var(--danger)]">{logoutError}</p>}
-          {!accessMode ? <p role="status">Memuat akses akun…</p> : accessMode === 'managed' && !['/dashboard/hris', '/dashboard/account', ...(accessPermissions.some(p => POS_WORKSPACE_PERMISSIONS.includes(p)) ? ['/dashboard/operasional'] : [])].includes(pathname) ? <div><p>Fitur ini belum tersedia untuk pengaturan akses akun Anda.</p><Link href="/dashboard/hris">Buka tim dan absensi</Link></div> : children}
+          {!accessMode ? <p role="status">Memuat akses akun…</p> : accessMode === 'managed' && !managedPaths.includes(pathname) ? <div><p>Fitur ini belum tersedia untuk pengaturan akses akun Anda.</p><Link href="/dashboard/hris">Buka tim dan absensi</Link></div> : children}
         </main>
       </div>
     </div>

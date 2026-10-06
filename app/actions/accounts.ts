@@ -1,6 +1,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import { validAccountAccess } from '@/lib/account-access';
 
 export type AccountResult<T = any> = { success: true; data: T } | { success: false; message: string };
 const base = (process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1').replace(/\/$/, '');
@@ -37,7 +38,11 @@ export async function registerPassword(body: unknown) { return save(await call('
 export async function consumeAccountCode(body: unknown) { return save(await call('/auth/password/challenge', 'POST', body, false)); }
 export async function claimPassword(body: unknown) { return save(await call('/auth/password/claim', 'POST', body)); }
 export async function getAccountInfo() { return call('/auth/account'); }
-export async function getAccountAccess() { return call('/auth/access'); }
+export async function getAccountAccess(): Promise<AccountResult> {
+  const result = await call('/auth/access');
+  return result.success && !validAccountAccess(result.data)
+    ? { success: false, message: 'Pengaturan akses belum dapat dimuat. Masuk kembali.' } : result;
+}
 export async function getAccountSessions() { return call('/auth/sessions'); }
 export async function revokeAccountSessions(body: unknown) {
   const result = await call('/auth/sessions/revoke-all', 'POST', body);

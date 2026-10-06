@@ -22,19 +22,19 @@ def canonical_phone_column():
     return case((digits.like("0%"), func.concat("62", func.substr(digits, 2))), else_=digits)
 
 
-def paid_scope(tenant_id: UUID):
+def paid_scope(tenant_id: UUID, outlet_ids=None):
     return (
-        Order.outlet_id.in_(select(Outlet.id).where(Outlet.tenant_id == tenant_id)),
+        Order.outlet_id.in_(select(Outlet.id).where(Outlet.tenant_id == tenant_id)) if outlet_ids is None else Order.outlet_id.in_(outlet_ids),
         Order.deleted_at.is_(None), Order.status != "cancelled", _paid_order_filter(),
     )
 
 
-def facts_query(tenant_id: UUID):
+def facts_query(tenant_id: UUID, outlet_ids=None):
     stats = select(
         Order.customer_id.label("customer_id"), func.count(Order.id).label("visits"),
         func.sum(Order.total_amount).label("spent"), func.min(Order.created_at).label("first_at"),
         func.max(Order.created_at).label("last_at"),
-    ).where(*paid_scope(tenant_id)).group_by(Order.customer_id).subquery()
+    ).where(*paid_scope(tenant_id, outlet_ids)).group_by(Order.customer_id).subquery()
     return select(Customer, func.coalesce(stats.c.visits, 0).label("visits"),
                   func.coalesce(stats.c.spent, 0).label("spent"), stats.c.first_at, stats.c.last_at).outerjoin(
         stats, stats.c.customer_id == Customer.id
@@ -54,15 +54,15 @@ def customer_out(c, visits=0, spent=0, first_at=None, last_at=None):
     }
 
 
-async def customer_facts(db: AsyncSession, tenant_id: UUID, customer_id: UUID):
-    query, _ = facts_query(tenant_id)
+async def customer_facts(db: AsyncSession, tenant_id: UUID, customer_id: UUID, outlet_ids=None):
+    query, _ = facts_query(tenant_id, outlet_ids)
     row = (await db.execute(query.where(Customer.id == customer_id))).first()
     return customer_out(*row) if row else None
 
 
-async def list_facts(db: AsyncSession, tenant_id: UUID, search: str, segment: str, sort: str, skip: int, limit: int):
+async def list_facts(db: AsyncSession, tenant_id: UUID, search: str, segment: str, sort: str, skip: int, limit: int, outlet_ids=None):
     now = datetime.now(timezone.utc)
-    query, stats = facts_query(tenant_id)
+    query, stats = facts_query(tenant_id, outlet_ids)
     visits = func.coalesce(stats.c.visits, 0)
     if search.strip():
         pattern = "%" + search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
@@ -89,7 +89,7 @@ async def list_facts(db: AsyncSession, tenant_id: UUID, search: str, segment: st
     count = await db.scalar(select(func.count()).select_from(filtered))
     rows = (await db.execute(query.order_by(order_by, Customer.id).offset(skip).limit(limit))).all()
     # Global summary deliberately stays independent of search and the selected segment.
-    whole, _ = facts_query(tenant_id)
+    whole, _ = facts_query(tenant_id, outlet_ids)
     source = whole.subquery()
     summary = (await db.execute(select(func.count(), func.count().filter(source.c.visits > 1),
         func.coalesce(func.sum(source.c.spent), 0),
@@ -97,5 +97,5 @@ async def list_facts(db: AsyncSession, tenant_id: UUID, search: str, segment: st
     ).select_from(source))).one()
     return {"items": [customer_out(*row) for row in rows], "total": int(count), "skip": skip, "limit": limit,
             "summary": {"total": summary[0], "repeat": summary[1], "spent": amount(summary[2]), "consented": summary[3]},
-            "generated_at": now.isoformat(), "scope": "tenant_all_outlets", "timezone": "Asia/Jakarta",
+            "generated_at": now.isoformat(), "scope": "allowed_outlets" if outlet_ids is not None else "tenant_all_outlets", "timezone": "Asia/Jakarta",
             "basis": "paid_orders_gross", "history_note": "Nilai nota berstatus lunas, sebelum pengurangan refund. Satu nota dihitung satu transaksi."}

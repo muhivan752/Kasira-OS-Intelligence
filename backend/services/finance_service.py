@@ -105,12 +105,14 @@ DEFAULT_ACCOUNTS = [
 ]
 
 
-async def ensure_accounts(db: AsyncSession, tenant_id: UUID) -> list[CashAccount]:
+async def ensure_accounts(db: AsyncSession, tenant_id: UUID, access=None) -> list[CashAccount]:
     """Tenant baru langsung punya 3 akun standar — nol setup."""
     stmt = (select(CashAccount).where(CashAccount.tenant_id == tenant_id, CashAccount.deleted_at.is_(None))
             .order_by(CashAccount.sort_order, CashAccount.name))
+    if access and access.mode == "managed":
+        stmt = stmt.where(or_(CashAccount.outlet_id.is_(None), CashAccount.outlet_id.in_(access.outlet_ids)))
     rows = (await db.execute(stmt)).scalars().all()
-    if rows:
+    if rows or (access and access.mode == "managed"):
         return list(rows)
     await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
                      {"key": f"finance-accounts:{tenant_id}"})
@@ -254,13 +256,17 @@ async def _pnl_block(db: AsyncSession, outlet: Outlet, start: datetime, end: dat
     }
 
 
-async def _expense_block(db: AsyncSession, tenant_id: UUID, outlet: Outlet, start: datetime, end: datetime) -> dict:
+def expense_scope(outlet_id, include_global=True):
+    return or_(Expense.outlet_id == outlet_id, Expense.outlet_id.is_(None)) if include_global else Expense.outlet_id == outlet_id
+
+
+async def _expense_block(db: AsyncSession, tenant_id: UUID, outlet: Outlet, start: datetime, end: datetime, include_global=True) -> dict:
     rows = (await db.execute(
         select(Expense.category, func.coalesce(func.sum(Expense.amount), 0), func.count(Expense.id))
         .where(
             Expense.tenant_id == tenant_id,
             Expense.deleted_at.is_(None),
-            or_(Expense.outlet_id == outlet.id, Expense.outlet_id.is_(None)),
+            expense_scope(outlet.id, include_global),
             Expense.paid_at >= start, Expense.paid_at < end,
         ).group_by(Expense.category)
     )).all()
@@ -288,7 +294,7 @@ async def _expense_block(db: AsyncSession, tenant_id: UUID, outlet: Outlet, star
 
 
 async def _cash_block(db: AsyncSession, tenant_id: UUID, outlet: Outlet, start: datetime, end: datetime,
-                      accounts: list[CashAccount]) -> dict:
+                      accounts: list[CashAccount], include_global=True) -> dict:
     flows: dict[Optional[UUID], dict] = {
         a.id: {"name": a.name, "kind": a.kind, "in": Decimal("0"), "out": Decimal("0")} for a in accounts
     }
@@ -333,7 +339,7 @@ async def _cash_block(db: AsyncSession, tenant_id: UUID, outlet: Outlet, start: 
             # 'none' = beban non-kas (selisih stok dari opname): masuk laba rugi,
             # bukan arus kas — nggak ada uang yang keluar dari laci.
             Expense.payment_method != "none",
-            or_(Expense.outlet_id == outlet.id, Expense.outlet_id.is_(None)),
+            expense_scope(outlet.id, include_global),
             Expense.paid_at >= start, Expense.paid_at < end,
         ).group_by(Expense.cash_account_id, Expense.payment_method)
     )).all()
@@ -406,14 +412,15 @@ async def _cash_block(db: AsyncSession, tenant_id: UUID, outlet: Outlet, start: 
 _ID_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
 
 
-async def summary(db: AsyncSession, *, tenant_id: UUID, outlet: Outlet, month: str, include_trend: bool = True) -> FinanceSummary:
+async def summary(db: AsyncSession, *, tenant_id: UUID, outlet: Outlet, month: str, include_trend: bool = True,
+                  include_global: bool = True, access=None) -> FinanceSummary:
     start, end = month_bounds(month)
-    accounts = await ensure_accounts(db, tenant_id)
+    accounts = await ensure_accounts(db, tenant_id, access=access)
     cost = await cost_map_for_brand(db, outlet.brand_id) if outlet.brand_id else {}
 
     pnl = await _pnl_block(db, outlet, start, end, cost)
-    exp = await _expense_block(db, tenant_id, outlet, start, end)
-    cash = await _cash_block(db, tenant_id, outlet, start, end, accounts)
+    exp = await _expense_block(db, tenant_id, outlet, start, end, include_global)
+    cash = await _cash_block(db, tenant_id, outlet, start, end, accounts, include_global)
 
     net_revenue = pnl["revenue"] - pnl["refunds"]
     # Ongkir masuk pendapatan, terpisah dari penjualan barang, supaya margin
@@ -443,12 +450,12 @@ async def summary(db: AsyncSession, *, tenant_id: UUID, outlet: Outlet, month: s
             p, x = pnl, exp
         else:
             p = await _pnl_block(db, outlet, s, e, cost)
-            x = await _expense_block(db, tenant_id, outlet, s, e)
+            x = await _expense_block(db, tenant_id, outlet, s, e, include_global)
         rev = p["revenue"] - p["refunds"] + p["delivery_fees"]; ex = x["total"] + x["petty_out"]
         trend.append(MonthPoint(month=key, label=_ID_MONTHS[mm - 1], revenue=_q2(rev), cogs=p["cogs"],
                                 expenses=_q2(ex), net=_q2(rev - p["cogs"] - ex)))
 
-    recurring_pending = await count_recurring_pending(db, tenant_id, outlet.id, month)
+    recurring_pending = await count_recurring_pending(db, tenant_id, outlet.id, month, include_global)
 
     return FinanceSummary(
         month=month, outlet_id=outlet.id,
@@ -480,27 +487,27 @@ def expense_to_response(e: Expense) -> ExpenseResponse:
     )
 
 
-async def list_expenses(db: AsyncSession, *, tenant_id: UUID, outlet_id: UUID, month: str) -> list[Expense]:
+async def list_expenses(db: AsyncSession, *, tenant_id: UUID, outlet_id: UUID, month: str, include_global=True) -> list[Expense]:
     start, end = month_bounds(month)
     return list((await db.execute(
         select(Expense)
         .options(selectinload(Expense.cash_account), selectinload(Expense.supplier))
         .where(
             Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None),
-            or_(Expense.outlet_id == outlet_id, Expense.outlet_id.is_(None)),
+            expense_scope(outlet_id, include_global),
             Expense.paid_at >= start, Expense.paid_at < end,
         ).order_by(Expense.paid_at.desc(), Expense.created_at.desc())
     )).scalars().all())
 
 
-async def count_recurring_pending(db: AsyncSession, tenant_id: UUID, outlet_id: UUID, month: str) -> int:
+async def count_recurring_pending(db: AsyncSession, tenant_id: UUID, outlet_id: UUID, month: str, include_global=True) -> int:
     """Template bulanan (recurring=monthly) bulan LALU yang belum ada padanannya bulan ini."""
     start, end = month_bounds(month)
     prev_end = start; prev_start = (start.astimezone(WIB) - timedelta(days=1)).replace(day=1).astimezone(timezone.utc)
     prev = (await db.execute(
         select(Expense).where(
             Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None), Expense.recurring == "monthly",
-            or_(Expense.outlet_id == outlet_id, Expense.outlet_id.is_(None)),
+            expense_scope(outlet_id, include_global),
             Expense.paid_at >= prev_start, Expense.paid_at < prev_end,
         )
     )).scalars().all()
@@ -509,7 +516,7 @@ async def count_recurring_pending(db: AsyncSession, tenant_id: UUID, outlet_id: 
     cur = (await db.execute(
         select(Expense.category, Expense.note, Expense.amount).where(
             Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None),
-            or_(Expense.outlet_id == outlet_id, Expense.outlet_id.is_(None)),
+            expense_scope(outlet_id, include_global),
             Expense.paid_at >= start, Expense.paid_at < end,
         )
     )).all()
@@ -518,21 +525,21 @@ async def count_recurring_pending(db: AsyncSession, tenant_id: UUID, outlet_id: 
     return len(pending)
 
 
-async def copy_recurring(db: AsyncSession, *, tenant_id: UUID, outlet_id: UUID, month: str, user_id: UUID) -> list[Expense]:
+async def copy_recurring(db: AsyncSession, *, tenant_id: UUID, outlet_id: UUID, month: str, user_id: UUID, include_global=True) -> list[Expense]:
     """Salin template bulanan dari bulan lalu ke bulan ini (yang belum ada)."""
     start, end = month_bounds(month)
     prev_end = start; prev_start = (start.astimezone(WIB) - timedelta(days=1)).replace(day=1).astimezone(timezone.utc)
     prev = (await db.execute(
         select(Expense).where(
             Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None), Expense.recurring == "monthly",
-            or_(Expense.outlet_id == outlet_id, Expense.outlet_id.is_(None)),
+            expense_scope(outlet_id, include_global),
             Expense.paid_at >= prev_start, Expense.paid_at < prev_end,
         )
     )).scalars().all()
     cur = (await db.execute(
         select(Expense.category, Expense.note).where(
             Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None),
-            or_(Expense.outlet_id == outlet_id, Expense.outlet_id.is_(None)),
+            expense_scope(outlet_id, include_global),
             Expense.paid_at >= start, Expense.paid_at < end,
         )
     )).all()

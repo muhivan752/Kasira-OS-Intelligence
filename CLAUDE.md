@@ -13,10 +13,13 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 ## Fondasi akses server live 6 Oktober 2026
 
 AccessContext dan GET /auth/access memakai user/role/status HRIS/outlet/izin
-canonical. Managed role sekarang mendukung HRIS, POS, stok dan sync pull-only.
+canonical. Managed role mendukung HRIS, POS, stok dan sync pull-only, ditambah
+tahap 2 Keuangan/Pembelian/CRM/HPP pada source dan QA.
 Registry endpoint identity+method menolak modul lain, termasuk AI. Owner aktual
-mengatur akun/jabatan; legacy tidak dimigrasikan otomatis. Pengaturan harga
-modal/menu/keuangan/AI managed belum dibuka. Review docs/POS_ACCESS_REVIEW.md.
+mengatur akun/jabatan; legacy tidak dimigrasikan otomatis. Role baru dapat
+memilih outlet atau seluruh bisnis. HPP manual butuh manage+approve; editor
+web juga memerlukan harga supplier. AI/OCR tetap tertutup. Review
+docs/POS_ACCESS_REVIEW.md dan docs/BUSINESS_ACCESS_REVIEW.md.
 Staf nonaktif/sesi dicabut ditolak server. Managed native bertransaksi online;
 cold manifest, cache/history dan sync mengikuti izin/outlet. Antrean SQLite,
 pending retry key dan parent transaksi dipertahankan saat revoke/switch;

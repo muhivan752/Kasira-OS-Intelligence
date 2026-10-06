@@ -23,6 +23,7 @@ export interface PurchaseSummary {
 }
 export interface PurchaseSetup {
   outlets: { id: string; name: string; brand_id: string }[]; selectedOutletId?: string; isPro: boolean;
+  canManage?: boolean; canRecord?: boolean; canReceive?: boolean; canCreateIngredient?: boolean; managed?: boolean;
 }
 export interface PurchaseTarget { key: string; id: string; kind: 'ingredient' | 'product'; name: string; unit: string; stockEnabled?: boolean }
 export interface PurchaseFilters { month?: string; unpaidOnly?: boolean; search?: string; skip?: number }

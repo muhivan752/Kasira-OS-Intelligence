@@ -74,6 +74,8 @@ async def get_current_user(
     request.state.auth_token = token.credentials
     enforce_route(request, access)
     request.state.access = access
+    from backend.services.business_access import authorize as authorize_business
+    await authorize_business(request, db, access)
     from backend.services.pos_access import authorize
     await authorize(request, db, access)
     return user

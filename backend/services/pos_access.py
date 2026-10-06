@@ -53,6 +53,13 @@ def route_rules():
     add(sync, "POST", "sync_data", "pos.sell stock.view sales.detail.view")
     add(couriers, "GET", "list_couriers", "pos.sell")
     add(customers, "GET", "lookup_customer_for_pos", "customers.lookup")
+    from backend.schemas.access import BUSINESS_PERMISSIONS
+    for endpoint in (outlets.read_outlets, outlets.read_outlet):
+        rules["GET", endpoint] += tuple(BUSINESS_PERMISSIONS)
+    for endpoint in (products.read_products, products.read_product, categories.read_categories, categories.read_category):
+        rules["GET", endpoint] += ("hpp.view", "purchasing.view", "purchasing.manage")
+    for endpoint in (ingredients.list_ingredients, ingredients.get_ingredient):
+        rules["GET", endpoint] += ("hpp.view", "purchasing.view", "purchasing.manage")
     return rules
 
 
@@ -232,6 +239,8 @@ def redact(value, context, module):
             result[key] = None
         elif module == "shifts" and key in {"total_cash_sales", "total_qris_sales", "net_amount", "change_amount", "sales_count", "order_count"} and not context.allows("sales.detail.view"):
             result[key] = None
+        elif key == "buy_price":
+            result[key] = item if context.allows("supplier.price.view") else None
         elif key in COST_FIELDS and not context.allows("hpp.view"):
             result[key] = None
         elif key in SALES_COUNTERS and not context.allows("sales.detail.view"):
@@ -282,7 +291,10 @@ class PosAccessRoute(APIRoute):
             response = await handler(request)
             context = getattr(request.state, "access", None)
             if context and context.mode == "managed" and response.headers.get("content-type", "").startswith("application/json"):
-                payload = redact(json.loads(response.body), context, self.endpoint.__module__.rsplit(".", 1)[-1])
+                module = self.endpoint.__module__.rsplit(".", 1)[-1]
+                payload = redact(json.loads(response.body), context, module)
+                from backend.services.business_access import redact as redact_business
+                payload = redact_business(payload, context, module)
                 if self.endpoint.__name__ == "get_shift_review" and not context.allows("sales.detail.view"):
                     payload["data"] = []
                 if self.endpoint.__name__ == "close_shift" and not context.allows("sales.detail.view"):

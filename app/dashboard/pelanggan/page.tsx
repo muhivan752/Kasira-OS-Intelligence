@@ -40,14 +40,16 @@ export default function CustomersPage() {
   const persist = (value: Pending | null) => { setPending(value); try { if (storageKey.current) { if (value) sessionStorage.setItem(storageKey.current, JSON.stringify(value)); else sessionStorage.removeItem(storageKey.current); } } catch { /* Retain the request in memory for this page. */ } };
   const saved = (message: string) => { persist(null); setNotice(message); setRevision(v => v + 1); };
   const change = (key: 'segment' | 'sort', value: string) => setFilters(v => ({ ...v, [key]: value, skip: 0 }));
-  const exportPage = () => { if (!data) return; const url = URL.createObjectURL(new Blob([customerCsv(data)], { type: 'text/csv;charset=utf-8;' }));
+  const exportPage = async () => { if (!data) return; const result = await getCustomerWorkspace(filters, true);
+    if (!result.success) { setError(result.message); return; }
+    const url = URL.createObjectURL(new Blob([customerCsv(result.data)], { type: 'text/csv;charset=utf-8;' }));
     const link = document.createElement('a'); link.href = url; link.download = `pelanggan-halaman-${Math.floor(data.skip / 50) + 1}-${jakartaDate()}.csv`; link.click(); URL.revokeObjectURL(url); };
   return <div className="finance-workspace customer-workspace">
     <div className="finance-heading"><div><h1>Data pelanggan</h1><p className="f-explanation">Kontak, kebiasaan belanja, dan catatan layanan dalam satu profil.</p></div>
-      <button className="f-button f-primary" data-inventory-add disabled={Boolean(pending) || !storageKey.current} onClick={() => setCreating(true)}>Tambah pelanggan</button></div>
-    <p className="f-footnote">Cakupan: semua outlet dalam bisnis ini. Transaksi tanpa pelanggan terpilih tidak masuk riwayat pelanggan.</p>
+      {data?.can_manage !== false && <button className="f-button f-primary" data-inventory-add disabled={Boolean(pending) || !storageKey.current} onClick={() => setCreating(true)}>Tambah pelanggan</button>}</div>
+    <p className="f-footnote">Profil dan catatan pelanggan dipakai bersama bisnis. {data?.scope === 'allowed_outlets' ? 'Riwayat dan nilai belanja hanya dari outlet yang diizinkan.' : 'Riwayat dari semua outlet bisnis.'} Transaksi tanpa pelanggan terpilih tidak masuk riwayat pelanggan.</p>
     {pending && <div className="f-notice" role="status"><p>Ada permintaan penyimpanan yang belum selesai. Periksa permintaan yang sama agar tidak tercatat dua kali.</p>
-      <button className="f-button" onClick={() => { if (pending.id) setSelected(pending.id); else setCreating(true); }}>Lanjutkan penyimpanan</button></div>}
+      {data?.can_manage !== false && <button className="f-button" onClick={() => { if (pending.id) setSelected(pending.id); else setCreating(true); }}>Lanjutkan penyimpanan</button>}</div>}
     {notice && <p className="f-notice" role="status">{notice}</p>}
     <div className="finance-toolbar"><label>Cari pelanggan<input type="search" maxLength={120} placeholder="Nama, nomor HP, atau email" value={search} onChange={e => setSearch(e.target.value)} /></label>
       <label>Kelompok pelanggan<select value={filters.segment} onChange={e => change('segment', e.target.value)}>{segments.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
@@ -57,7 +59,7 @@ export default function CustomersPage() {
       <section className="f-panel"><h2>Ringkasan bisnis</h2><p className="f-footnote">Semua pelanggan, terlepas dari filter daftar.</p>
         <div className="c-summary"><div><p>Pelanggan tercatat</p><strong>{data.summary.total}</strong></div><div><p>Belanja berulang</p><strong>{data.summary.repeat}</strong></div><div><p>Total nota lunas</p><strong>{money(data.summary.spent)}</strong></div><div><p>Setuju promo WA</p><strong>{data.summary.consented}</strong></div></div>
         <p className="f-footnote">{data.history_note} Diperbarui {customerDate(data.generated_at)} (WIB).</p></section>
-      <section className="f-panel"><div className="f-report-title"><div><h2>Daftar pelanggan</h2><p>{data.total} pelanggan sesuai filter.</p></div><button className="f-button" disabled={!data.items.length} onClick={exportPage}>Ekspor halaman CSV</button></div>
+      <section className="f-panel"><div className="f-report-title"><div><h2>Daftar pelanggan</h2><p>{data.total} pelanggan sesuai filter.</p></div>{data.can_export !== false && <button className="f-button" disabled={!data.items.length} onClick={() => void exportPage()}>Ekspor halaman CSV</button>}</div>
         {!data.items.length ? <div className="f-empty"><h3>{data.summary.total ? 'Tidak ada pelanggan sesuai filter' : 'Belum ada pelanggan tercatat'}</h3><p>Tambahkan kontak, atau pilih pelanggan saat kasir mencatat transaksi.</p>
           {(search || filters.segment) && <button className="f-button" onClick={() => { setSearch(''); setFilters(initialFilters); }}>Reset filter</button>}</div>
           : <ul className="c-list">{data.items.map(c => <li key={c.id}><div><h3>{c.name}</h3><p>{c.phone || 'Nomor HP belum diisi'}</p><p className="f-footnote">{c.wa_marketing_consent ? 'Setuju promo WA' : 'Belum ada izin promo WA'}{c.email ? ` · ${c.email}` : ''}</p></div>
@@ -117,22 +119,22 @@ function CustomerProfile({ id, pending, onPending, onClose, onSaved }: { id: str
     if (result.success) { onPending(null); setBody(''); setNotice('Catatan pelanggan disimpan'); setRevision(v => v + 1); onSaved('Catatan pelanggan disimpan'); }
     else { setNoteError(result.message); if (!result.uncertain) onPending(null); }
   };
-  if (editing && data) return <ProfileForm customer={data} pending={pending} onPending={onPending} onClose={() => { if (pending?.profile) onClose(); else setEditing(false); }} onSaved={message => { setEditing(false); setRevision(v => v + 1); onSaved(message); }} />;
+  if (editing && data && data.can_manage !== false) return <ProfileForm customer={data} pending={pending} onPending={onPending} onClose={() => { if (pending?.profile) onClose(); else setEditing(false); }} onSaved={message => { setEditing(false); setRevision(v => v + 1); onSaved(message); }} />;
   return <InventoryDialog title="Profil pelanggan" busy={busy} onClose={onClose}><div className="finance-form c-profile">
     {loading ? <p role="status">Memuat profil pelanggan...</p> : error ? <div className="f-notice f-error" role="alert"><p>{error}</p><button className="f-button" onClick={load}>Coba lagi</button></div> : data && <>
-      <section><div className="f-report-title"><div><h3>{data.name}</h3><p>{data.phone || 'Nomor HP belum diisi'}</p>{data.email && <p>{data.email}</p>}</div><button className="f-button" disabled={Boolean(pending)} onClick={() => setEditing(true)}>Edit profil</button></div>
+      <section><div className="f-report-title"><div><h3>{data.name}</h3><p>{data.phone || 'Nomor HP belum diisi'}</p>{data.email && <p>{data.email}</p>}</div>{data.can_manage !== false && <button className="f-button" disabled={Boolean(pending)} onClick={() => setEditing(true)}>Edit profil</button>}</div>
         <p>Tanggal lahir: {customerDate(data.birthday)}</p><p>{data.wa_marketing_consent ? `Setuju promo WA · dicatat ${customerDate(data.consent_given_at)}` : 'Belum ada izin promo WA'}</p>
         {data.notes && <p className="f-notice c-pre">{data.notes}</p>}
         <div className="c-summary"><div><p>Transaksi lunas</p><strong>{data.total_visits}</strong></div><div><p>Total nota lunas</p><strong>{money(data.total_spent)}</strong></div><div><p>Rata-rata nota</p><strong>{money(data.avg_spent)}</strong></div><div><p>Terakhir belanja</p><strong>{customerDate(data.last_visit_at)}</strong></div></div>
-        <p className="f-footnote">Semua outlet bisnis. Nilai nota berstatus lunas sebelum pengurangan refund; satu nota dihitung satu transaksi.</p></section>
+        <p className="f-footnote">{data.scope === 'allowed_outlets' ? 'Outlet yang diizinkan.' : 'Semua outlet bisnis.'} Nilai nota berstatus lunas sebelum pengurangan refund; satu nota dihitung satu transaksi.</p></section>
       <section><h3>Produk yang sering dibeli</h3>{data.favourites.length ? <ul>{data.favourites.map(f => <li key={f.id}>{f.name} · {f.qty} pcs</li>)}</ul> : <p>Belum ada produk tercatat dari transaksi lunas.</p>}<p className="f-footnote">Berdasarkan jumlah item di seluruh riwayat nota lunas. Nama mengikuti katalog produk saat ini.</p></section>
       <section><h3>Riwayat transaksi lunas</h3>{data.orders.length ? <ul className="c-history">{data.orders.map(o => <li key={o.id}><p>{o.order_number} · {customerDate(o.created_at)} (WIB)</p><p>{o.items.map(i => `${i.name} ×${i.qty}`).join(', ') || 'Item tidak tersedia'}</p><strong>{money(o.total_amount)}</strong></li>)}</ul> : <p>Belum ada transaksi lunas di halaman ini.</p>}
         {data.total_visits > 20 && <div className="c-pager"><p>{skip + (data.orders.length ? 1 : 0)} sampai {skip + data.orders.length} dari {data.total_visits}</p><div><button className="f-button" disabled={!skip || busy} onClick={() => setSkip(v => Math.max(0, v - 20))}>Transaksi sebelumnya</button><button className="f-button" disabled={skip + data.orders.length >= data.total_visits || busy} onClick={() => setSkip(v => v + 20)}>Transaksi berikutnya</button></div></div>}</section>
       <section><h3>Catatan layanan</h3><p className="f-footnote">Catatan staf melengkapi konteks pelanggan dan terpisah dari riwayat transaksi.</p>
         {notice && <p role="status">{notice}</p>}{noteError && <p className="f-notice f-error" role="alert">{noteError}</p>}
-        <form className="finance-form" onSubmit={saveNote}><label>Jenis catatan<select value={kind} disabled={busy || Boolean(pending)} onChange={e => setKind(e.target.value as 'note' | 'complaint')}><option value="note">Catatan</option><option value="complaint">Keluhan</option></select></label>
+        {data.can_manage !== false && <form className="finance-form" onSubmit={saveNote}><label>Jenis catatan<select value={kind} disabled={busy || Boolean(pending)} onChange={e => setKind(e.target.value as 'note' | 'complaint')}><option value="note">Catatan</option><option value="complaint">Keluhan</option></select></label>
           <label>Catatan baru<textarea required maxLength={500} value={body} disabled={busy || Boolean(pending)} onChange={e => setBody(e.target.value)} /></label>
-          <button className="f-button" disabled={busy || (!body.trim() && !pending?.note)}>{busy ? 'Menyimpan...' : pending?.note ? 'Periksa penyimpanan catatan' : 'Simpan catatan'}</button></form>
+          <button className="f-button" disabled={busy || (!body.trim() && !pending?.note)}>{busy ? 'Menyimpan...' : pending?.note ? 'Periksa penyimpanan catatan' : 'Simpan catatan'}</button></form>}
         {data.timeline.length ? <ul className="c-history">{data.timeline.map(n => <li key={n.id}><p className="f-footnote">{n.kind === 'complaint' ? 'Keluhan' : n.kind === 'consent' ? 'Izin promo' : 'Catatan aktivitas'} · {customerDate(n.created_at)} (WIB)</p><p className="c-pre">{n.body}</p></li>)}</ul> : <p>Belum ada catatan layanan.</p>}
         <p className="f-footnote">Menampilkan paling banyak {data.timeline_limit} aktivitas terakhir.</p></section>
     </>}

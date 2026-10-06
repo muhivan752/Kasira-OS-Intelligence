@@ -10,6 +10,12 @@ POS_PERMISSIONS = frozenset({
     "stock.view", "stock.receive", "stock.adjust", "customers.lookup",
 })
 
+BUSINESS_PERMISSIONS = frozenset({
+    "finance.view", "finance.manage", "purchasing.view", "purchasing.manage",
+    "supplier.price.view", "customers.view", "customers.manage", "customers.export",
+    "hpp.view", "hpp.manage", "hpp.approve",
+})
+
 
 PERMISSIONS = frozenset({
     "pos.sell", "pos.refund", "pos.refund.approve", "pos.discount.override",

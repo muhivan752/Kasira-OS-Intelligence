@@ -1,6 +1,7 @@
 const http = require('node:http');
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
+const base = process.env.BROWSER_BASE_URL || 'http://127.0.0.1:3188';
 const id = '11111111-1111-4111-8111-111111111111';
 const eid = '22222222-2222-4222-8222-222222222222';
 const calls = [];
@@ -9,7 +10,7 @@ let failLogout = false;
 let failSetup = false, failAccount = false;
 const roles = [], accounts = [];
 const employee = { id: eid, name: 'QA staf', user_id: null, outlet_id: id, row_version: 1, is_active: true };
-const manifest = staff => ({ user_id: staff ? eid : id, tenant_id: id, enforcement_mode: staff ? 'managed' : 'owner', permissions: staff ? ['hris.self'] : ['hris.self', 'hris.employees.manage', 'hris.schedules.manage', 'hris.attendance.manage', 'access.manage'], outlets: [{ id, name: 'QA outlet', timezone: 'Asia/Jakarta' }] });
+const manifest = staff => ({ user_id: staff ? eid : id, tenant_id: id, enforcement_mode: staff ? 'managed' : 'owner', scope: staff ? 'outlet' : 'tenant', permissions: staff ? ['hris.self'] : ['hris.self', 'hris.employees.manage', 'hris.schedules.manage', 'hris.attendance.manage', 'access.manage'], outlets: [{ id, name: 'QA outlet', timezone: 'Asia/Jakarta' }] });
 const session = staff => ({ access_token: staff ? 'fixture-staff' : 'fixture-owner', user_id: staff ? eid : id, tenant_id: id, outlet_id: id, subscription_tier: 'starter', stock_mode: 'simple', access: manifest(staff) });
 const fixture = http.createServer(async (req, res) => {
   let text = ''; for await (const chunk of req) text += chunk;
@@ -57,7 +58,7 @@ async function layout(page, title) {
 }
 
 (async () => {
-  await new Promise(resolve => fixture.listen(8188, '127.0.0.1', resolve));
+  await new Promise(resolve => fixture.listen(Number(process.env.FIXTURE_PORT || 8188), '127.0.0.1', resolve));
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'], ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
   let debugPage;
   try {
@@ -66,13 +67,13 @@ async function layout(page, title) {
     for (const width of process.env.QA_QUICK ? [320] : [320, 375, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       for (const route of ['login', 'register', 'activate', 'recover']) {
-        await page.goto(`http://127.0.0.1:3188/${route}`, { waitUntil: 'networkidle' }); await layout(page, `${route} ${width} light`);
+        await page.goto(`${base}/${route}`, { waitUntil: 'networkidle' }); await layout(page, `${route} ${width} light`);
         await page.getByRole('button', { name: 'Gunakan tema gelap' }).click(); await layout(page, `${route} ${width} dark`);
         await page.getByRole('button', { name: 'Gunakan tema terang' }).click();
       }
     }
     await page.setViewportSize({ width: 320, height: 760 });
-    await page.goto('http://127.0.0.1:3188/register');
+    await page.goto(`${base}/register`);
     await page.getByLabel('Username toko', { exact: true }).fill('qa-shop'); await page.getByLabel('Nama pemilik').fill('QA owner'); await page.getByLabel('Nama usaha').fill('QA shop');
     await page.getByLabel('Password baru', { exact: true }).fill('qa strong password'); await page.getByLabel('Ulangi password').fill('qa wrong password'); await page.getByRole('button', { name: 'Buat usaha', exact: true }).click();
     await page.getByRole('alert').filter({ hasText: 'Konfirmasi' }).waitFor();
@@ -80,33 +81,36 @@ async function layout(page, title) {
     await page.getByLabel('Kode pemulihan', { exact: true }).waitFor(); await layout(page, 'Recovery code 320');
     assert(await page.getByRole('button', { name: 'Lanjut ke usaha' }).isDisabled()); await page.getByLabel('Saya sudah menyimpan kode ini').check(); await page.getByRole('button', { name: 'Lanjut ke usaha' }).click(); await page.waitForURL('**/onboarding');
     assert(calls.some(c => c.path.endsWith('/auth/password/register') && c.body.client_request_id));
-    await context.clearCookies(); await page.goto('http://127.0.0.1:3188/login');
+    await context.clearCookies(); await page.goto(`${base}/login`);
     await page.getByLabel('Username toko', { exact: true }).fill('qa-shop'); await page.getByLabel('Password', { exact: true }).fill('wrong'); await page.getByRole('button', { name: 'Masuk ke usaha', exact: true }).click(); await page.getByRole('alert').filter({ hasText: 'Password tidak sesuai' }).waitFor();
     await page.getByLabel('Saya masuk sebagai karyawan').check(); await page.getByLabel('Username akun', { exact: true }).fill('staff'); await page.getByLabel('Password', { exact: true }).fill('qa strong password'); await page.getByRole('button', { name: 'Masuk ke usaha', exact: true }).click(); await page.waitForURL('**/dashboard/hris');
     await page.getByText('Tidak diizinkan', { exact: true }).waitFor(); await layout(page, 'Staff HRIS 320');
     assert(await page.getByRole('link', { name: 'Keuangan', exact: true }).count() === 0);
     await page.getByRole('button', { name: 'Buka menu', exact: true }).click(); await page.keyboard.press('Escape');
     assert.equal(await page.getByRole('button', { name: 'Buka menu', exact: true }).getAttribute('aria-expanded'), 'false');
-    await page.goto('http://127.0.0.1:3188/dashboard/keuangan'); await page.getByText('Fitur ini belum tersedia', { exact: false }).waitFor();
+    await page.goto(`${base}/dashboard/keuangan`); await page.getByText('Fitur ini belum tersedia', { exact: false }).waitFor();
     console.log('PASS registration, recovery acknowledgement, failed login, individual staff landing and restricted navigation');
 
     await context.clearCookies(); passwordEnabled = false;
     await context.addCookies([{ name: 'token', value: 'fixture-owner', domain: '127.0.0.1', path: '/' }, { name: 'tenant_id', value: id, domain: '127.0.0.1', path: '/' }]);
     failSetup = true;
-    await page.goto('http://127.0.0.1:3188/dashboard/hris/access'); await page.getByRole('button', { name: 'Muat ulang' }).waitFor();
+    await page.goto(`${base}/dashboard/hris/access`); await page.getByRole('button', { name: 'Muat ulang' }).waitFor();
     failSetup = false; failAccount = true;
     await page.getByRole('button', { name: 'Muat ulang' }).click(); await page.getByRole('button', { name: 'Coba lagi', exact: true }).waitFor();
     failAccount = false; await page.getByRole('button', { name: 'Coba lagi', exact: true }).click();
-    await page.goto('http://127.0.0.1:3188/dashboard/hris/access', { waitUntil: 'networkidle' }); await page.getByLabel('Username toko', { exact: true }).waitFor(); await layout(page, 'Access setup 320 light');
+    await page.goto(`${base}/dashboard/hris/access`, { waitUntil: 'networkidle' }); await page.getByLabel('Username toko', { exact: true }).waitFor(); await layout(page, 'Access setup 320 light');
     await page.getByLabel('Username toko', { exact: true }).fill('qa-shop'); await page.getByLabel('Password baru', { exact: true }).fill('qa strong password'); await page.getByLabel('Ulangi password').fill('qa strong password'); await page.getByRole('button', { name: 'Tetapkan username dan password' }).click();
     await page.getByLabel('Kode pemulihan baru').waitFor(); await page.getByRole('button', { name: 'Saya sudah menyimpan kode' }).click();
     await page.getByLabel('Password saat ini').fill('qa strong password'); await page.getByLabel('Password baru', { exact: true }).fill('qa changed password'); await page.getByLabel('Ulangi password').fill('qa changed password'); await page.getByRole('button', { name: 'Ganti password', exact: true }).click();
     await page.getByLabel('Kode pemulihan baru').waitFor(); await page.getByRole('button', { name: 'Saya sudah menyimpan kode' }).click();
     await page.getByLabel('Nama jabatan').fill('QA staf'); await page.getByLabel('QA outlet', { exact: true }).check(); await page.getByRole('button', { name: 'Simpan jabatan' }).click(); await page.getByRole('status').filter({ hasText: 'Perubahan tersimpan' }).waitFor();
     await page.getByLabel('Pilih jabatan').selectOption(roles[0].id);
-    for (const label of ['Kelola profil karyawan', 'Kelola jadwal kerja', 'Kelola dan koreksi absensi', 'Buat pesanan dan terima pembayaran', 'Ajukan refund', 'Setujui atau tolak refund', 'Ubah harga transaksi dan diskon di atas 20%', 'Buka, jeda dan hitung sesi kas', 'Catat kas masuk dan keluar', 'Lihat pesanan dan ubah status dapur', 'Lihat riwayat seluruh kasir dan rincian penjualan', 'Lihat stok', 'Terima barang dan tambah stok', 'Catat hasil stok opname', 'Cari pelanggan untuk transaksi (nama dan nomor tersamar)']) { await page.getByLabel(label, { exact: true }).check(); await page.getByLabel(label, { exact: true }).uncheck(); }
+    for (const label of ['Kelola profil karyawan', 'Kelola jadwal kerja', 'Kelola dan koreksi absensi', 'Buat pesanan dan terima pembayaran', 'Ajukan refund', 'Setujui atau tolak refund', 'Ubah harga transaksi dan diskon di atas 20%', 'Buka, jeda dan hitung sesi kas', 'Catat kas masuk dan keluar', 'Lihat pesanan dan ubah status dapur', 'Lihat riwayat seluruh kasir dan rincian penjualan', 'Lihat stok', 'Terima barang dan tambah stok', 'Catat hasil stok opname', 'Cari pelanggan untuk transaksi (nama dan nomor tersamar)', 'Lihat laporan keuangan outlet, termasuk ringkasan HPP dan laba', 'Catat, ubah dan hapus pengeluaran', 'Lihat nota dan supplier', 'Kelola supplier, catat nota dan pembayaran', 'Lihat harga pembelian dan nominal nota supplier', 'Lihat profil bersama bisnis dan riwayat belanja outlet yang diizinkan', 'Kelola profil dan catatan pelanggan bersama bisnis', 'Ekspor halaman pelanggan ke CSV', 'Lihat resep dan harga modal katalog bersama brand', 'Kelola bahan dan resep', 'Setujui penyimpanan langsung bahan dan resep']) { await page.getByLabel(label, { exact: true }).check(); await page.getByLabel(label, { exact: true }).uncheck(); }
+    await page.getByLabel('Cakupan akses').selectOption('tenant');
     await page.getByLabel('Nama jabatan').fill('QA staf updated'); await page.getByRole('button', { name: 'Simpan jabatan' }).click();
     await page.waitForFunction(() => document.querySelector('select')?.textContent.includes('QA staf updated'));
+    assert.equal(roles[0].scope, 'tenant'); assert.deepEqual(roles[0].policy.outlet_ids, []);
+    console.log('PASS eleven business permission controls and explicit tenant-scope role submission');
     await page.getByLabel('Pilih karyawan').selectOption(eid); await page.getByLabel('Username karyawan').fill('staff'); await page.getByLabel('Jabatan akses').selectOption(roles[0].id); await page.getByRole('button', { name: 'Buat akun karyawan' }).click();
     await page.getByRole('button', { name: 'Simpan akun karyawan' }).waitFor(); await page.getByLabel('Akun boleh masuk').uncheck(); await page.getByLabel('Akun boleh masuk').check(); await page.getByRole('button', { name: 'Simpan akun karyawan' }).click();
     await page.getByRole('button', { name: 'Buat kode aktivasi atau reset password' }).click(); await page.getByLabel('Kode aktivasi', { exact: true }).waitFor(); await layout(page, 'Activation result 320');
@@ -114,7 +118,7 @@ async function layout(page, title) {
     await page.screenshot({ path: '/tmp/selaris-account-access-light.png', fullPage: true });
     await page.getByRole('button', { name: 'Gunakan tema gelap' }).click(); await layout(page, 'Access setup 320 dark'); await page.getByRole('button', { name: 'Gunakan tema terang' }).click();
     await page.evaluate(() => document.documentElement.style.fontSize = '200%'); await layout(page, 'Access setup 200%'); await page.evaluate(() => document.documentElement.style.fontSize = '');
-    await page.goto('http://127.0.0.1:3188/activate'); await page.getByLabel('Username toko', { exact: true }).fill('qa-shop'); await page.getByLabel('Username akun', { exact: true }).fill('staff'); await page.getByLabel('Kode aktivasi dari pemilik').fill('0'.repeat(64)); await page.getByLabel('Password baru', { exact: true }).fill('qa strong password'); await page.getByLabel('Ulangi password').fill('qa strong password'); await page.getByRole('button', { name: 'Simpan password' }).click(); await page.getByRole('alert').filter({ hasText: 'Kode tidak sesuai' }).waitFor();
+    await page.goto(`${base}/activate`); await page.getByLabel('Username toko', { exact: true }).fill('qa-shop'); await page.getByLabel('Username akun', { exact: true }).fill('staff'); await page.getByLabel('Kode aktivasi dari pemilik').fill('0'.repeat(64)); await page.getByLabel('Password baru', { exact: true }).fill('qa strong password'); await page.getByLabel('Ulangi password').fill('qa strong password'); await page.getByRole('button', { name: 'Simpan password' }).click(); await page.getByRole('alert').filter({ hasText: 'Kode tidak sesuai' }).waitFor();
     await page.getByLabel('Kode aktivasi dari pemilik').fill('b'.repeat(64)); await page.getByRole('button', { name: 'Simpan password' }).click(); await page.waitForURL('**/dashboard/hris');
     failLogout = true;
     await page.getByRole('button', { name: 'Keluar', exact: true }).filter({ visible: true }).click();
@@ -127,10 +131,10 @@ async function layout(page, title) {
     await page.getByRole('link', { name: 'Lupa password', exact: true }).click(); await page.waitForURL('**/recover');
     await page.getByLabel('Username toko', { exact: true }).fill('qa-shop'); await page.getByLabel('Kode pemulihan', { exact: true }).fill('a'.repeat(64)); await page.getByLabel('Password baru', { exact: true }).fill('qa recovered password'); await page.getByLabel('Ulangi password').fill('qa recovered password'); await page.getByRole('button', { name: 'Simpan password' }).click();
     await page.getByLabel('Saya sudah menyimpan kode ini').check(); await page.getByRole('button', { name: 'Lanjut ke usaha' }).click(); await page.waitForURL('**/dashboard');
-    await context.clearCookies(); await page.goto('http://127.0.0.1:3188/login/legacy'); await page.getByRole('button', { name: 'Gunakan kode Sefrekuensi' }).click(); await page.getByLabel('Nomor HP', { exact: true }).fill('08111111111'); await page.getByRole('button', { name: 'Kirim kode ke Sefrekuensi' }).click(); await page.getByLabel('Kode verifikasi').fill('123456'); await page.getByRole('button', { name: 'Verifikasi dan lanjut' }).click(); await page.waitForURL('**/dashboard');
-    await page.goto('http://127.0.0.1:3188/dashboard/account'); await page.getByRole('button', { name: 'Keluar semua perangkat' }).click(); await page.waitForURL('**/login');
+    await context.clearCookies(); await page.goto(`${base}/login/legacy`); await page.getByRole('button', { name: 'Gunakan kode Sefrekuensi' }).click(); await page.getByLabel('Nomor HP', { exact: true }).fill('08111111111'); await page.getByRole('button', { name: 'Kirim kode ke Sefrekuensi' }).click(); await page.getByLabel('Kode verifikasi').fill('123456'); await page.getByRole('button', { name: 'Verifikasi dan lanjut' }).click(); await page.waitForURL('**/dashboard');
+    await page.goto(`${base}/dashboard/account`); await page.getByRole('button', { name: 'Keluar semua perangkat' }).click(); await page.waitForURL('**/login');
     await context.addCookies([{ name: 'token', value: 'fixture-owner', domain: '127.0.0.1', path: '/' }, { name: 'tenant_id', value: id, domain: '127.0.0.1', path: '/' }]);
-    await page.setViewportSize({ width: 1440, height: 900 }); await page.goto('http://127.0.0.1:3188/superadmin');
+    await page.setViewportSize({ width: 1440, height: 900 }); await page.goto(`${base}/superadmin`);
     failLogout = true; await page.getByRole('button', { name: 'Keluar', exact: true }).click(); await page.getByRole('alert').filter({ hasText: 'Logout belum terkonfirmasi' }).waitFor();
     failLogout = false; await page.getByRole('button', { name: 'Keluar', exact: true }).click(); await page.waitForURL('**/login'); await page.setViewportSize({ width: 320, height: 760 });
     await page.getByLabel('Username toko', { exact: true }).focus(); await page.keyboard.press('Tab'); assert(await page.evaluate(() => document.activeElement.tagName) !== 'BODY');

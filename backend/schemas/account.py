@@ -1,7 +1,7 @@
 import re
 from typing import Annotated, Literal
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 
 class AccountBody(BaseModel):
@@ -59,22 +59,29 @@ class AccountRequest(AccountBody):
 
 
 HRIS_PERMISSIONS = frozenset({"hris.self", "hris.employees.manage", "hris.schedules.manage", "hris.attendance.manage"})
-from backend.schemas.access import POS_PERMISSIONS
-SUPPORTED_ROLE_PERMISSIONS = HRIS_PERMISSIONS | POS_PERMISSIONS
+from backend.schemas.access import POS_PERMISSIONS, BUSINESS_PERMISSIONS
+SUPPORTED_ROLE_PERMISSIONS = HRIS_PERMISSIONS | POS_PERMISSIONS | BUSINESS_PERMISSIONS
 
 
 class RoleSave(AccountRequest):
     id: UUID
     name: str = Field(min_length=2, max_length=100)
     row_version: Annotated[int, Field(strict=True, ge=0)] = 0
-    outlet_ids: list[UUID] = Field(min_length=1, max_length=100)
+    scope: Literal["outlet", "tenant"] = "outlet"
+    outlet_ids: list[UUID] = Field(max_length=100)
     permissions: dict[str, StrictBool]
+
+    @model_validator(mode="after")
+    def scope_targets(self):
+        if (self.scope == "outlet" and not self.outlet_ids) or (self.scope == "tenant" and self.outlet_ids):
+            raise ValueError("Pilih outlet untuk cakupan outlet; cakupan bisnis tidak memakai daftar outlet")
+        return self
 
     @field_validator("permissions")
     @classmethod
     def supported_permissions(cls, value):
         if set(value) - SUPPORTED_ROLE_PERMISSIONS:
-            raise ValueError("Pengaturan jabatan mendukung izin Tim, POS dan stok")
+            raise ValueError("Izin jabatan belum didukung")
         return value
 
     @field_validator("outlet_ids")
