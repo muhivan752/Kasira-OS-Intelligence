@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.6.33",
+    "version": "1.6.34",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.33/selaris-pos-v1.6.33.apk",
-    "release_notes": "POS: izin kasir, stok, sesi kas, catatan kas, refund dan dapur mengikuti akun serta outlet. Harga modal dan riwayat kasir lain dibatasi. Akun staf dengan izin baru bertransaksi online; sync hanya menarik data dan menjaga antrean lama saat akses berubah. Stok dan opname tersedia di web. Dapur pendamping tetap memakai login PIN existing. Masa izin offline baru, akses keuangan/HPP/AI dan GPS/foto absensi belum termasuk."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.34/selaris-pos-v1.6.34.apk",
+    "release_notes": "Minimum password akun menjadi 8 karakter; username minimum 3 karakter. Pembaruan ini berlaku untuk pendaftaran, aktivasi dan pemulihan akun. Akses AI managed tersedia melalui web sesuai izin akun."
   },
   "dapur": {
-    "version": "1.6.33",
+    "version": "1.6.34",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.33/selaris-dapur-v1.6.33.apk",
-    "release_notes": "POS: izin kasir, stok, sesi kas, catatan kas, refund dan dapur mengikuti akun serta outlet. Harga modal dan riwayat kasir lain dibatasi. Akun staf dengan izin baru bertransaksi online; sync hanya menarik data dan menjaga antrean lama saat akses berubah. Stok dan opname tersedia di web. Dapur pendamping tetap memakai login PIN existing. Masa izin offline baru, akses keuangan/HPP/AI dan GPS/foto absensi belum termasuk."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.34/selaris-dapur-v1.6.34.apk",
+    "release_notes": "Minimum password akun menjadi 8 karakter; username minimum 3 karakter. Pembaruan ini berlaku untuk pendaftaran, aktivasi dan pemulihan akun. Akses AI managed tersedia melalui web sesuai izin akun."
   }
 }
