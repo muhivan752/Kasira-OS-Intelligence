@@ -4,7 +4,23 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
-## UPDATE TERAKHIR - FORM USERNAME DAN TAMPILKAN PASSWORD LIVE, 2026-10-06
+## UPDATE TERAKHIR - FORM KARYAWAN DAN AKUN SATU SIMPAN LIVE, 2026-10-06
+
+Owner/manager berizin sekarang membuat profil dan akun nomor HP/username dari
+Tim & absensi, dengan password awal dan role, atau memakai akun lama. Default
+hanya absensi pribadi; manager memerlukan accounts.manage + employees.manage
+dan tidak bisa memberi akses/outlet melebihi dirinya. Nomor login tidak
+mengklaim identitas OTP. Pending receipt/reload tanpa password di storage.
+
+Source9f86d34 dipush dan live; frontend ec2599c…0e09, backend313hash,
+schema115/4healthy. QA HTTP/JWT/RLS, legacy, unit/TS/build, browser/tema/200%
+dan smoke publik PASS. APK1.6.34+201 tetap. Detail rilis/bukti di MEMORY.md,
+docs/STAFF_ACCOUNT_FORM.md dan docs/STAFF_ACCOUNT_GATE.md; handoff lengkap
+“SELESAI - FORM KARYAWAN DAN AKUN SATU SIMPAN” ada di akhir file.
+QA container/network tugas sudah dibersihkan, backup/log tetap /tmp/selaris-staff-*.
+Next: user mengisi akun karyawannya lewat form; GPS/foto/offline menunggu keputusan.
+
+## SEBELUMNYA - FORM USERNAME DAN TAMPILKAN PASSWORD LIVE, 2026-10-06
 
 - Ivan gagal migrasi password karena mengisi username toko “Kasira Coffee”.
   Form Akun saya kini menjelaskan username tanpa spasi (contoh kasira_coffee),
