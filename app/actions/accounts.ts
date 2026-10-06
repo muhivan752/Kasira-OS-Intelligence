@@ -16,7 +16,12 @@ async function call(path: string, method = 'GET', body?: unknown, authenticated 
       ...(body ? { body: JSON.stringify(body) } : {}) });
     const value = await result.json();
     if (!result.ok) return { success: false, message: typeof value.detail === 'string' ? value.detail
-      : Array.isArray(value.detail) ? value.detail.map((v: { msg: string }) => v.msg).join('. ')
+      : Array.isArray(value.detail) ? value.detail.map((v: { msg: string; loc?: (string | number)[] }) => {
+        const field = v.loc?.at(-1);
+        const label = field === 'shop_username' ? 'Username toko' : field === 'username' ? 'Username akun' : null;
+        const message = v.msg.replace(/^Value error,\s*/, '');
+        return label ? `${label}: ${message}` : message;
+      }).join('. ')
       : value.detail?.message || 'Permintaan gagal. Coba lagi.' };
     return { success: true, data: value.data };
   } catch { return { success: false, message: method === 'GET' ? 'Data belum dapat dimuat. Coba lagi.' : 'Hasil permintaan belum pasti. Coba lagi dengan data yang sama.' }; }

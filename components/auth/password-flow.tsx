@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { consumeAccountCode, loginPassword, registerPassword } from '@/app/actions/accounts';
 import { AuthShell } from './auth-shell';
+import { PasswordInput } from './password-input';
 
 export function PasswordFlow({ mode }: { mode: 'login' | 'register' | 'activation' | 'recovery' }) {
   const router = useRouter();
@@ -43,13 +44,13 @@ export function PasswordFlow({ mode }: { mode: 'login' | 'register' | 'activatio
     {error && <p className="auth-error" role="alert">{error}</p>}
     {recovery ? <div className="auth-form"><label htmlFor="owner-recovery">Kode pemulihan</label><textarea id="owner-recovery" readOnly value={recovery} rows={3} /><label className="account-check"><input type="checkbox" checked={saved} onChange={e => setSaved(e.target.checked)} />Saya sudah menyimpan kode ini</label><button className="ks-btn ks-btn-lg" disabled={!saved} onClick={() => { setRecovery(''); router.push(target); router.refresh(); }}>Lanjut ke usaha</button></div>
     : <form className="auth-form" onSubmit={submit} aria-busy={busy}>
-      <label>Username toko<input name="shop_username" autoComplete="organization" autoCapitalize="none" spellCheck={false} pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,63}" minLength={3} maxLength={64} required /></label>
+      <label>Username toko<input name="shop_username" autoComplete="organization" autoCapitalize="none" spellCheck={false} pattern="[A-Za-z0-9](?:[A-Za-z0-9_]|-){2,63}" minLength={3} maxLength={64} required /></label>
       {mode === 'login' && <label className="account-check"><input type="checkbox" checked={staff} onChange={e => setStaff(e.target.checked)} />Saya masuk sebagai karyawan</label>}
       {(staff || isCode) && <label>Username akun<input name="username" defaultValue={isCode ? 'owner' : ''} autoComplete="username" autoCapitalize="none" spellCheck={false} minLength={3} maxLength={64} required /></label>}
       {isCode && <label>{mode === 'activation' ? 'Kode aktivasi dari pemilik' : 'Kode pemulihan'}<textarea name="code" autoComplete="off" required minLength={32} maxLength={128} rows={3} /></label>}
       {mode === 'register' && <><label>Nama pemilik<input name="owner_name" autoComplete="name" minLength={2} maxLength={120} required /></label><label>Nama usaha<input name="business_name" minLength={2} maxLength={100} required /></label><label>Jenis usaha<select name="business_type"><option value="cafe">Kafe</option><option value="warung">Warung</option><option value="resto">Restoran</option><option value="other">Usaha lain</option></select></label></>}
-      <label>{mode === 'login' ? 'Password' : 'Password baru'}<input name="password" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'login' ? 1 : 8} maxLength={128} required /></label>
-      {mode !== 'login' && <><p className="auth-note">Minimal 8 karakter. Password boleh berupa rangkaian kata.</p><label>Ulangi password<input name="confirm" type="password" autoComplete="new-password" minLength={8} maxLength={128} required /></label></>}
+      <PasswordInput label={mode === 'login' ? 'Password' : 'Password baru'} name="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'login' ? 1 : 8} maxLength={128} required />
+      {mode !== 'login' && <><p className="auth-note">Minimal 8 karakter. Password boleh berupa rangkaian kata.</p><PasswordInput label="Ulangi password" name="confirm" autoComplete="new-password" minLength={8} maxLength={128} required /></>}
       <button className="ks-btn ks-btn-lg" disabled={busy}>{busy ? 'Memproses…' : mode === 'login' ? 'Masuk ke usaha' : mode === 'register' ? 'Buat usaha' : 'Simpan password'}</button>
       {mode === 'login' && <><Link className="auth-text-button" href="/recover">Lupa password</Link><Link className="auth-text-button" href="/activate">Aktivasi akun karyawan</Link><Link className="auth-text-button" href="/login/legacy">Masuk akun lama dengan kode atau Google</Link></>}
       <p className="auth-switch">{mode === 'register' ? 'Sudah punya akun?' : 'Belum punya usaha?'} <Link href={mode === 'register' ? '/login' : '/register'}>{mode === 'register' ? 'Masuk' : 'Daftarkan usaha'}</Link></p>
