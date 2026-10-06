@@ -97,6 +97,12 @@ export default function AIChatPage() {
   const allowed = useProGuard('AI Asisten');
   const [accessMode, setAccessMode] = useState<string>();
   useEffect(() => { let active = true; void getAccountAccess().then(result => { if (active && result.success) setAccessMode(result.data.enforcement_mode); }); return () => { active = false; }; }, []);
+  if (!allowed || !accessMode) return <p role="status">Memuat akses AI…</p>;
+  return accessMode === 'managed' ? <ScopedAIChat /> : <LegacyAIChatPage />;
+}
+
+function LegacyAIChatPage() {
+  const allowed = useProGuard('AI Asisten');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -506,8 +512,6 @@ export default function AIChatPage() {
     return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
   }
 
-  if (!accessMode) return <p role="status">Memuat akses AI…</p>;
-  if (accessMode === 'managed') return <ScopedAIChat />;
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] lg:h-[calc(100vh-6rem)] max-w-3xl mx-auto">
       {/* Header */}
