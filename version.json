@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.6.31",
+    "version": "1.6.32",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.31/selaris-pos-v1.6.31.apk",
-    "release_notes": "Perbaikan sinkronisasi: DP reservasi tanpa pesanan tidak lagi membatalkan sync, seluruh halaman data ditarik, dan checkpoint disimpan setelah proses selesai. Update dari 1.6.30 bisa dipasang langsung tanpa uninstall."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.32/selaris-pos-v1.6.32.apk",
+    "release_notes": "POS: login username toko dan password, aktivasi akun karyawan, migrasi akun lama, pemulihan owner, dan pencabutan sesi perangkat. Tim mendukung absensi pribadi online; pengaturan akun dan jabatan melalui web. Perbaikan HPP APK memakai hasil server dan memperbarui rincian resep setelah sync tanpa menghapus antrean transaksi. Dapur: build pendamping dengan sesi login server yang dapat dicabut. GPS/foto absensi dan akses seluruh modul/AI belum termasuk."
   },
   "dapur": {
-    "version": "1.6.31",
+    "version": "1.6.32",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.31/selaris-dapur-v1.6.31.apk",
-    "release_notes": "Build pendamping POS 1.6.31. Login PIN Dapur tetap tersedia. Update dari 1.6.30 bisa dipasang langsung tanpa uninstall."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.32/selaris-dapur-v1.6.32.apk",
+    "release_notes": "POS: login username toko dan password, aktivasi akun karyawan, migrasi akun lama, pemulihan owner, dan pencabutan sesi perangkat. Tim mendukung absensi pribadi online; pengaturan akun dan jabatan melalui web. Perbaikan HPP APK memakai hasil server dan memperbarui rincian resep setelah sync tanpa menghapus antrean transaksi. Dapur: build pendamping dengan sesi login server yang dapat dicabut. GPS/foto absensi dan akses seluruh modul/AI belum termasuk."
   }
 }
