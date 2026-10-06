@@ -1,6 +1,6 @@
 # Rencana akun akses karyawan dan absensi Selaris
 
-Tanggal: 6 Oktober 2026. Status: fondasi izin dan tahap akun/sesi sudah diimplementasikan pada source dan QA; belum deploy/rilis.
+Tanggal: 6 Oktober 2026. Status: fondasi izin dan tahap akun/sesi telah diimplementasikan, diuji dan dirilis pada backend/web serta APK 1.6.32+199; [review deployment](ACCOUNT_ACCESS_RELEASE.md).
 
 Fondasi izin server/HRIS dan tahap username/password, migrasi legacy, pengaturan akun/jabatan HRIS, sesi perangkat serta native self/punch online sudah diimplementasikan pada source dan diuji di QA. Batasnya ada di [review fondasi akses](ACCESS_REVIEW.md) dan [review akun](ACCOUNT_ACCESS_REVIEW.md). Role baru hanya HRIS; domain lain/AI dan GPS/foto masih pekerjaan berikutnya. Rencana dan inventaris awal di bawah merekam kondisi sebelum implementasi; rincian yang belum diputuskan tetap usulan.
 

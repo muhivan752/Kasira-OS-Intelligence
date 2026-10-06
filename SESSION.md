@@ -4,7 +4,32 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
-## UPDATE TERAKHIR - Akun password, HRIS access dan sesi selesai, 6 Oktober 2026
+## UPDATE TERAKHIR - Akun live dan APK 1.6.32+199 dirilis, 6 Oktober 2026
+
+- Ivan "deploy dan rilis apk" mengotorisasi main/native. Source 66ddd59 dipush,
+  SHA main diverifikasi, CI #199/run37451765808 sukses. Deployment review:
+  docs/ACCOUNT_ACCESS_RELEASE.md. Metadata CI d03e595 diambil fast-forward.
+- Backend/web live migration 114. Hanya 17 file akun/akses berbeda dari live;
+  docker cp/restart existing backend, hotfix lain tetap. Backup privat DB/source/
+  image/APK 1.6.31 di /tmp/selaris-accounts-release-backup. Jangan recreate
+  image backend lama 160766…31a tanpa membawa seluruh hotfix existing.
+- Release v1.6.32 berisi signed POS/Dapur APK+AAB, build 199; signer sama
+  dengan 1.6.31 dan Firebase kedua app ada. Hash empat artifact cocok release.
+  Host APK diganti atomik, download HTTPS kedua app cocok artifact resmi;
+  API versi 1.6.32 opsional dan frontend metadata download dibuild ulang.
+- Native 35 PASS + 2 fixture opsional skip; CI test/signing PASS. Smoke HTTPS
+  24 keadaan auth light/dark 320/768/1440, keyboard/legacy/download tanpa
+  pageerror; delapan route tanpa kredensial 422/401. Semua service/health sehat,
+  domain API lama tetap aktif. Logs /tmp/selaris-release-*; belum uji/install HP.
+- Push 118 file sempat ditolak auto-review lalu diterima setelah bukti scope
+  live/test. JWT langsung owner demo ditolak dan tidak dibuat; fungsi akun
+  memakai QA terisolasi, smoke produksi publik. Tidak write merchant untuk QA.
+- Owner mengatur migrasi legacy sendiri. Role baru hanya HRIS; native POS
+  password/aktivasi/pemulihan/self punch/HPP server, Dapur PIN existing.
+  Berikutnya enforcement domain/AI, lalu GPS/foto owner. Offline/OTP/radius/
+  retensi masih perlu keputusan sebelum fitur terkait.
+
+## UPDATE SEBELUMNYA - Akun password, HRIS access dan sesi selesai, 6 Oktober 2026
 
 - Ivan "gas lgsung" melanjutkan roadmap dari memory. Source/QA selesai;
   belum deploy/commit/push/rilis. docs/ACCOUNT_ACCESS_REVIEW.md menjadi acuan

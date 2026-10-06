@@ -720,5 +720,7 @@ sessions existing dengan tenant langsung+FORCE RLS. Penonaktifan staf
 mencabut sesi permanen; reaktivasi memerlukan login baru. Native mengganti
 identitas lewatUUID dan membatalkan sync tanpa menghapus SQLite/antrean.
 Role managed baru tetap HRIS-only; kontrak/QA docs/ACCOUNT_ACCESS_REVIEW.md.
-Source dan QA selesai tetapi belum deploy/migrasi policy produksi/APK;
-rincian penerapan dan hasil uji docs/ACCESS_REVIEW.md.
+Fondasi dan tahap akun sudah deploy ke backend/web dengan migrasi114 dan
+APK1.6.32+199 setelah izin rilis Ivan. Tidak mengubah role POS existing menjadi
+managed. Rincian penerapan/QA docs/ACCESS_REVIEW.md, deployment
+docs/ACCOUNT_ACCESS_RELEASE.md.

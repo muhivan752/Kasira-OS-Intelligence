@@ -1,7 +1,39 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## TERKINI - AKUN PASSWORD, AKSES HRIS DAN SESI SELESAI DI SOURCE/QA, 2026-10-06
+## TERKINI - AKUN LIVE DAN APK 1.6.32+199 DIRILIS, 2026-10-06
+
+- Ivan eksplisit "deploy dan rilis apk"; publikasi main/native yang sebelumnya
+  pending kini diotorisasi. Source 66ddd59 dipush dan SHA diverifikasi sebelum
+  CI #199/run37451765808. Review docs/ACCOUNT_ACCESS_RELEASE.md.
+- Backend/web live, migrasi 114. Backup privat DB custom tervalidasi, seluruh
+  source/hotfix backend, image frontend dan APK 1.6.31 tersedia di
+  /tmp/selaris-accounts-release-backup. Tidak ada HPP pending aktif saat deploy.
+- Hanya 17 file backend akun/akses berbeda dari produksi; docker cp/restart
+  existing container, seluruh hotfix lain tetap. Hash 17 file cocok source.
+  Backend/image tidak direcreate. Frontend-only compose --no-deps; mount APK tetap.
+- CI sukses dari 66ddd59; version.json auto-commit d03e595. Release GitHub
+  v1.6.32 berisi APK/AAB POS dan Dapur, build 199. Package ID, signature APK/AAB
+  dan signer sama dengan 1.6.31, bukan debug; Firebase kedua app tersedia.
+  Hash/ukuran keempat artifact cocok dengan digest GitHub release.
+- APK host dipasang rename atomik. HTTPS /api/download/pos dan /dapur hash
+  cocok artifact resmi. Backend version.json dan API update kedua app 1.6.32,
+  opsional/is_mandatory=false. Frontend metadata download dibuild ulang.
+  Bisa update menimpa 1.6.31; tidak mengklaim sudah terpasang pada HP Ivan.
+- Native 35 PASS + 2 fixture opsional skip; CI test/signing PASS. Smoke HTTPS
+  publik 24 keadaan auth/tema/lebar, keyboard/legacy/download tanpa pageerror;
+  delapan route API tanpa kredensial memberi 422/401. Domain kasira.online
+  tetap tersedia. Empat service healthy; health DB/background sehat.
+  Logs /tmp/selaris-release-*; tidak ada write akun/status/password merchant.
+- Auto-review menolak push besar, kemudian menerima retry setelah bukti scope
+  source live dan test. JWT langsung owner demo ditolak; tidak bypass. Smoke
+  produksi tanpa kredensial, fungsi akun memakai QA terisolasi sebelumnya.
+- Owner memigrasikan legacy sendiri melalui akun/HRIS. Role baru HRIS-only.
+  Native POS akun password/kode/punch online dan HPP server; Dapur pendamping
+  PIN existing. Berikutnya enforcement domain/AI/cache/history/RAG/worker/write,
+  lalu GPS/foto pilihan owner. OTP/offline/radius/retensi masih perlu keputusan.
+
+## SEBELUMNYA - AKUN PASSWORD, AKSES HRIS DAN SESI SELESAI DI SOURCE/QA, 2026-10-06
 
 - Ivan meminta baca memory lalu berulang "gas", terakhir "gas lgsung".
   Tahap akun/migrasi/HRIS/sesi selesai pada source dan QA; belum deploy,

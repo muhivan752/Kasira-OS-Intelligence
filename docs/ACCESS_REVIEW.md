@@ -1,6 +1,6 @@
 # Fondasi izin server Selaris
 
-Tanggal: 6 Oktober 2026. Status: implementasi source dan QA terisolasi, belum dipasang ke produksi.
+Tanggal: 6 Oktober 2026. Dokumen merekam implementasi fondasi source/QA. Fondasi ini kemudian dipasang bersama tahap akun dan APK 1.6.32+199; [review deployment](ACCOUNT_ACCESS_RELEASE.md).
 
 Server sekarang menghitung akses dari identitas user, role, status pegawai dan outlet. HRIS memakai pemeriksaan yang sama untuk izin profil, jadwal, absensi dan akses diri sendiri. Akun staf dengan profil HRIS nonaktif ditolak pada permintaan berikutnya dan ketika mencoba login kembali. Kontrak `GET /api/v1/auth/access` tersedia untuk integrasi web dan APK berikutnya.
 

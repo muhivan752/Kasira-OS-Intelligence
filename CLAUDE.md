@@ -22,8 +22,10 @@ perangkat sekarang selesai pada source/QA; docs/ACCOUNT_ACCESS_REVIEW.md.
 Role baru HRIS-only; pengaturan akun hanya owner aktual. Nonaktif HRIS kini
 mencabut sesi, reaktivasi memerlukan login baru. GPS/foto dan seluruh domain/
 AI belum terintegrasi. Fondasi detail docs/ACCESS_REVIEW.md.
-Source belum dipasang produksi atau dirilis ke APK;
-jangan mengira status source ini sudah live atau mengaktifkan policy POS lama.
+Backend/web dipasang produksi pada 6 Oktober, migrasi114; APK signed POS/Dapur
+1.6.32+199 sudah dirilis setelah Ivan "deploy dan rilis apk". Review deployment
+docs/ACCOUNT_ACCESS_RELEASE.md. Role baru tetap HRIS-only, jangan mengaktifkan
+policy POS lama sebagai managed sebelum domain terintegrasi.
 
 ## HRIS web tahap pertama (6 Oktober 2026)
 
@@ -35,10 +37,10 @@ UUID/audit/version, pending per tenant/user, timezone mengikuti outlet.
 Masuk setelah tengah malam dalam jadwal tetap memakai tanggal mulai jadwal,
 termasuk ketika dikoreksi owner. Payroll/reminder/native/offline/integrasi
 HRIS ke chat utama belum dibuat. Native self/punch online ada pada source
-tahap akun; belum live dan belum GPS/foto/offline. Source dan hasil uji di
+tahap akun dan rilis1.6.32; belum GPS/foto/offline. Source dan hasil uji di
 docs/HRIS_REVIEW.md serta docs/ACCOUNT_ACCESS_REVIEW.md.
 Backend existing hotfix dipasang docker cp; jangan recreateimage160766…31a.
-Frontend live9eae7…bcd9. APK/main release sebelumnya masih belum disetujui.
+Publikasi main/APK telah disetujui pada permintaan rilis terakhir; APK1.6.32+199.
 
 ## CRM web terbaru (6 Oktober 2026)
 

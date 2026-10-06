@@ -1,6 +1,6 @@
 # Akun username dan akses tim Selaris
 
-Tanggal: 6 Oktober 2026. Status: source dan QA terisolasi; belum deploy, commit, push atau rilis APK.
+Tanggal: 6 Oktober 2026. Dokumen ini merekam source dan QA tahap akun. Setelah Ivan meminta deployment/rilis, backend/web dan APK 1.6.32+199 dipublikasikan; [review deployment](ACCOUNT_ACCESS_RELEASE.md) menjadi acuan status produksi terbaru.
 
 Owner dapat mendaftar dengan username toko dan password, memakai akun bisnis yang sama di web dan APK, serta memigrasikan akun lama tanpa mengganti UUID, nomor telepon, tenant atau hubungan transaksi. Owner mengatur jabatan HRIS, outlet dan akun individual karyawan. Perubahan password, aktivasi ulang, perubahan akun dan penonaktifan profil staf mencabut sesi terdahulu. Mengaktifkan profil kembali memerlukan login baru.
 
@@ -52,7 +52,7 @@ Semua database QA memakai salinan schema saja dan data sintetis, role app Postgr
 | Analyzer native | Tujuh file diperiksa, tanpa error; satu info existing `withOpacity` pada PIN lama; `/tmp/selaris-account-native-analyze-final.log`. |
 | Build | Next production build dan Flutter debug APK PASS; `/tmp/selaris-account-web-build-final.log`, `/tmp/selaris-account-debug-apk-final.log`. |
 
-Build web QA memakai respons font offline yang menunjuk berkas font asli dari frontend existing karena DNS Google Fonts tidak tersedia. Source font tidak diubah. APK hanya artifact debug lokal, bukan signed release atau pengujian perangkat fisik. APK/backend/frontend produksi belum diperbarui; versi produksi terakhir tetap 1.6.31+198. Jangan recreate image backend lama karena hotfix existing dipasang melalui `docker cp`.
+Build web QA memakai respons font offline yang menunjuk berkas font asli dari frontend existing karena DNS Google Fonts tidak tersedia. Source font tidak diubah. Saat tahap QA ini, APK hanya artifact debug lokal dan produksi masih 1.6.31+198. Deployment berikutnya memakai Docker production build dan CI signed APK/AAB 1.6.32+199; rincian ada pada review deployment. Pengujian perangkat fisik belum dilakukan. Jangan recreate image backend lama karena hotfix existing dipasang melalui `docker cp`.
 
 Preview, database/Redis dan jaringan QA sudah dihentikan/dihapus. Salinan schema, harness adaptasi, mock dan salinan font sementara dibersihkan; log/screenshot dan APK debug lokal disimpan. Inspect read-only backend produksi tetap `running healthy`.
 
