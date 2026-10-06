@@ -710,11 +710,11 @@ outlet dan izin canonical. GET /auth/access menyediakan manifest dan hash
 access_version; hash ini belum identitas sesi/versi JWT. HRIS memakai izin
 profil/jadwal/absensi/self terpisah dengan scope outlet dan replay.
 Managed policy version1 menggantikan fallback legacy dan membatasi scope
-tenant/brand/outlet. Handler authenticated yang belum mendukung managed,
-termasuk AI, ditolak lewat endpoint identity+method. POS/stok/sync kini
+tenant/brand/outlet. Handler authenticated yang belum mendukung managed
+ditolak lewat endpoint identity+method. POS/stok/sync kini
 terintegrasi melalui registry; managed sync pull-only. Legacy di luar
-HRIS tetap mengikuti aturan existing. Belum enforcement AI/cache/history/
-worker granular atau GPS/foto. Tahap akun berikutnya pada source menambah
+HRIS tetap mengikuti aturan existing. Tahap 3 AI/cache/history/worker granular
+sudah live; GPS/foto belum dibuat. Tahap akun pada source menambah
 username/password, migrasi legacy tanpa gantiUUID, editor jabatan/akun HRIS
 owner-only, sesi sid/cv dan challenge sekali pakai. Migrasi114 melengkapi
 sessions existing dengan tenant langsung+FORCE RLS. Penonaktifan staf
@@ -724,14 +724,25 @@ Role managed mendukung HRIS/POS/stok dan tahap 2 Keuangan/Pembelian/CRM/HPP.
 Registry business callable+method, parent/tenant/brand/outlet, redaction harga,
 shared profil CRM/supplier dan katalog brand terdokumentasi di
 docs/BUSINESS_ACCESS_REVIEW.md. Cakupan baru outlet/tenant eksplisit; manual
-HPP persist membutuhkan manage+approve. Seluruh AI/OCR masih tertutup.
+HPP persist membutuhkan manage+approve. Tahap 3 menambah ai.chat; konteks hanya
+data modul yang diizinkan pada outlet terpilih. Cache managed TTL60 detik dan
+history TTL30 menit memakai tenant/user/outlet/access_version; key legacy
+tidak dibaca. Retrieval pgvector hanya produk brand yang sudah diizinkan.
+SSE dibuffer sampai pemeriksaan ulang izin/sesi; worker memeriksa sebelum
+provider dan sebelum persist. Row lock izin/sesi ditahan sampai commit mutasi.
+Migrasi115 menambahkan versi akses sesi HPP; managed hanya membaca percakapan
+milik akun pada versi izin kini. Draft membutuhkan manage, simpan juga approve.
+OCR scan/apply memerlukan grant terpisah dan outlet; chat managed tidak restock
+atau apply menu massal. Review docs/AI_ACCESS_REVIEW.md.
 Managed native online-only, cache/cursor per identitas/versi akses dan queue
 serta dependency dipertahankan saat revoke/switch; tidak push/mark synced.
 Algoritme stok simple bersama brand dan resep per outlet tetap existing.
-Fondasi dan tahap akun sudah deploy ke backend/web dengan migrasi114 dan
-APK1.6.33+200 setelah izin rilis Ivan. Tahap POS/stok/sync sudah live;
+Fondasi dan tahap akun sudah deploy ke backend/web; schema terkini115 dan
+APK1.6.34+201 setelah izin rilis Ivan. Minimum username3/password8 di semua
+form baru, login password lama tetap existing. Tahap POS/stok/sync sudah live;
 deployment docs/POS_ACCESS_RELEASE.md. Tidak mengubah role POS existing menjadi
-managed. Tahap 2 backend/web live, APK tetap1.6.33+200; deployment
-docs/BUSINESS_ACCESS_RELEASE.md. Berikutnya seluruh AI/context/cache/history/
-RAG/worker/write. Rincian fondasi docs/ACCESS_REVIEW.md, deployment
+managed. Tahap 2 dan 3 backend/web live; native managed AI tetap tertutup.
+Deployment docs/BUSINESS_ACCESS_RELEASE.md dan docs/AI_ACCESS_RELEASE.md.
+Berikutnya GPS/foto; offline/radius/retensi/OTP memerlukan keputusan.
+Rincian fondasi docs/ACCESS_REVIEW.md, deployment
 docs/ACCOUNT_ACCESS_RELEASE.md.

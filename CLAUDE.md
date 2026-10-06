@@ -14,22 +14,27 @@ Owner: Ivan — solo dev, bahasa casual Indonesian, langsung fix+deploy tanpa ba
 
 AccessContext dan GET /auth/access memakai user/role/status HRIS/outlet/izin
 canonical. Managed role mendukung HRIS, POS, stok dan sync pull-only, ditambah
-tahap 2 Keuangan/Pembelian/CRM/HPP live, QA image final PASS.
-Registry endpoint identity+method menolak modul lain, termasuk AI. Owner aktual
+Keuangan/Pembelian/CRM/HPP dan tahap 3 AI web live, QA image final PASS.
+Registry endpoint identity+method menolak handler yang belum mendukung managed. Owner aktual
 mengatur akun/jabatan; legacy tidak dimigrasikan otomatis. Role baru dapat
 memilih outlet atau seluruh bisnis. HPP manual butuh manage+approve; editor
-web juga memerlukan harga supplier. AI/OCR tetap tertutup. Review
-docs/POS_ACCESS_REVIEW.md dan docs/BUSINESS_ACCESS_REVIEW.md.
+web juga memerlukan harga supplier. AI memerlukan ai.chat dan grant data modul;
+cache/history per tenant/user/outlet/access_version, RAG scoped, worker dan
+hasil provider diperiksa ulang sebelum dipakai/disimpan. HPP draft dan approve
+terpisah; OCR scan/apply memerlukan grant serta outlet eksplisit. Review
+docs/AI_ACCESS_REVIEW.md, docs/POS_ACCESS_REVIEW.md dan docs/BUSINESS_ACCESS_REVIEW.md.
 Staf nonaktif/sesi dicabut ditolak server. Managed native bertransaksi online;
 cold manifest, cache/history dan sync mengikuti izin/outlet. Antrean SQLite,
 pending retry key dan parent transaksi dipertahankan saat revoke/switch;
 sync tidak mengirim push atau menandai queue synced untuk managed. Legacy
 POS offline tetap existing. Masa izin offline baru belum ditetapkan.
-Backend/web POS/stok/sync live migration114; APK1.6.33+200 resmi dirilis
+Backend/web live migration115; APK1.6.34+201 resmi dirilis
 sesuai izin deploy/rilis sebelumnya. Deployment docs/POS_ACCESS_RELEASE.md;
-Tahap 2 backend/web live, APK tetap1.6.33+200; deployment
-docs/BUSINESS_ACCESS_RELEASE.md. Berikutnya seluruh AI/context/cache/history/
-RAG/worker/write. Status juga di MEMORY.md/SESSION.md.
+Tahap 2 dan 3 backend/web live; deployment docs/BUSINESS_ACCESS_RELEASE.md
+dan docs/AI_ACCESS_RELEASE.md. Minimum username3/password8 di API/web/native;
+login lama tetap menerima password existing. Native managed AI tetap tertutup.
+Berikutnya GPS/foto absensi; offline/radius/retensi/OTP perlu keputusan.
+Status juga di MEMORY.md/SESSION.md.
 Jangan recreate backend image lama: seluruh hotfix harus dipertahankan.
 
 ## HRIS web tahap pertama (6 Oktober 2026)
@@ -45,7 +50,7 @@ HRIS ke chat utama belum dibuat. Native self/punch online ada pada source
 tahap akun dan rilis1.6.32; belum GPS/foto/offline. Source dan hasil uji di
 docs/HRIS_REVIEW.md serta docs/ACCOUNT_ACCESS_REVIEW.md.
 Backend existing hotfix dipasang docker cp; jangan recreateimage160766…31a.
-Publikasi main/APK telah disetujui; rilis terbaru APK1.6.33+200.
+Publikasi main/APK telah disetujui; rilis terbaru APK1.6.34+201, opsional.
 
 ## CRM web terbaru (6 Oktober 2026)
 

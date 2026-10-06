@@ -1,7 +1,50 @@
 # KASIRA — Long-Term Memory
 # Update ini setiap selesai satu task!
 
-## TERKINI - TAHAP 2 AKSES BISNIS LIVE, 2026-10-06
+## TERKINI - TAHAP 3 AI LIVE DAN APK 1.6.34+201, 2026-10-06
+
+- Ivan melanjutkan tahap 3 dengan “gas”, lalu meminta minimum username/password
+  lebih pendek. Minimum username3/password8 diterapkan API/web/native; login
+  password lama tetap existing. Source runtime4f30484 dan metadata07d8fdf
+  dipush/remote diverifikasi. Review docs/AI_ACCESS_REVIEW.md, Delivery Gate
+  docs/AI_ACCESS_GATE.md, deployment docs/AI_ACCESS_RELEASE.md.
+- Managed ai.chat tidak memberi data modul lain. Konteks harga/stok/penjualan/
+  pembelian/CRM/finance/HPP mengikuti grant dan outlet. RAG hanya produk brand
+  yang diizinkan, tanpa metadata KG bebas. Cache TTL60 detik dan history
+  TTL30 menit per tenant/user/outlet/access_version; key legacy tidak dibaca.
+- Jawaban dibuffer sampai fresh izin/sesi. HPP worker memeriksa sebelum provider
+  dan persist; revoke JWT/sid/cv/izin membatalkan hasil/draft. Row lock sampai
+  commit persetujuan. HPP draft perlu manage, simpan juga approve; OCR scan/apply
+  terpisah, outlet eksplisit dan nested ingredient dibatasi brand. Chat managed
+  tidak restock/apply menu massal. History HPP hanya milik akun+versi izin kini.
+- Web AI managed dan draft/review mengikuti grant; outlet HPP dipertahankan
+  lewat link/actions. Foreground revoke me-remount data lama. Owner/legacy
+  tetap existing. Native managed AI masih tertutup; APK berubah minimum password.
+- Backend live schema115: copy11 file ke container existing, 301 source Python
+  lainnya tetap, seluruh312 hash cocok. Image160766…31a tidak direcreate.
+  Backup privat /tmp/selaris-ai-access-release-backup (DB custom tervalidasi,
+  310 source baseline, versi/image/APK lama). Tidak ada HPP pending saat restart.
+- Frontend-only --no-deps live image742368…66e2, 18 hash source+version cocok.
+  Empat layanan/DB/background sehat. DB/Redis tidak direstart. Snapshot image
+  frontend lama tidak tersedia; rollback web perlu rebuild source tahap2.
+- CI #201/run37473100415 sukses dari85abad5; native/workflow tidak berubah
+  sampai07d8fdf (git diff kosong). Release1.6.34+201 POS/Dapur APK+AAB: signer
+  sama existing, package/version/Firebase/hash/size valid; APK+metadata atomik,
+  update opsional. HTTPS kedua APK hash/Content-Length cocok; label/API1.6.34.
+- QA10 kelompok HTTP/JWT/PG/forced-RLS/pgvector PASS; 63 unit PASS+1 skip;
+  business/HPP/6 legacy suite PASS, migrasi115 upgrade/downgrade/upgrade PASS.
+  TypeScript/build/4 native account tests PASS. Flutter analyze232 issue lama,
+  0 error; CI analyze dan enam critical suites lulus. Provider palsu, tanpa
+  panggilan berbayar atau write merchant; belum uji perangkat fisik.
+- AI final image+HPP browser PASS, tujuh browser regresi PASS pada build feature
+  dengan hash sama. Mobile/tema/AA/44px/200%/keyboard/revoke diuji. Publik24
+  keadaan auth/keyboard/legacy/download tanpa pageerror, minimum3/8 lewat
+  body register tidak lengkap (422, tanpa membuat akun);23 API protected401.
+- QA container/network tugas dihentikan; log/trace/backup /tmp/selaris-ai*
+  disimpan. Berikutnya GPS/foto absensi; offline/radius/retensi/OTP perlu
+  keputusan sebelum implementasi. Tidak auto-migrasi role legacy.
+
+## SEBELUMNYA - TAHAP 2 AKSES BISNIS LIVE, 2026-10-06
 
 - Ivan “gas tahap 2”, lalu melanjutkan turn yang terhenti. Otorisasi deploy
   sebelumnya tetap; source runtime 4f1cd8f dipush/remote diverifikasi dan live.
@@ -1213,7 +1256,7 @@ Prioritas temuan: selaraskan distribusi APK/endpoint versi dengan keputusan migr
 - Dapur App: entry point terpisah main_dapur.dart, polling 8 detik, dark UI theme
 - PIN Login: `/auth/pin/verify` untuk dapur (phone+PIN tanpa OTP)
 - AI Model: Haiku default, Sonnet hanya Pro+/complex task — via get_model_for_tier()
-- AI Context cache: Redis key ai:context:{outlet_id}, TTL sampai 00.00 WIB
+- AI cache legacy owner per outlet; managed tenant/user/outlet/access_version/hash pertanyaan TTL60 detik. History per identitas/outlet/versi TTL30 menit.
 - AI SSE format: {type: chunk/done/error, content, intent, tokens_used, model}
 
 ## Branch Git
