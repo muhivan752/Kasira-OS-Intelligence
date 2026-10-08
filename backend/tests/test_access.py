@@ -143,7 +143,8 @@ class AccessTests(unittest.TestCase):
         for endpoint, method in ((orders.create_order, "POST"), (payments.create_payment, "POST"),
                                  (sync.sync_data, "POST"), (tabs.pay_tab_full, "POST"), (shifts.open_shift, "POST"),
                                  (products.read_products, "GET"), (products.restock_product, "POST"),
-                                 (outlets.read_outlet, "GET"), (reports.get_daily_report, "GET")):
+                                 (outlets.read_outlet, "GET"), (reports.get_daily_report, "GET"),
+                                 (products.update_product, "PUT")):
             with self.subTest(endpoint=endpoint.__name__):
                 enforce_route(self.endpoint_request(endpoint, method), staff)
         for endpoint, method, code in ((outlets.update_outlet, "PUT", "OWNER_ONLY"),
@@ -172,3 +173,16 @@ class AccessTests(unittest.TestCase):
         self.assertFalse(public["offline_pos_allowed"])
         self.assertNotIn("PRIVATE", str(public))
         self.assertNotIn("access_policy", public)
+
+
+class DefaultRoleTests(unittest.TestCase):
+    def test_templates_are_valid_managed_policies(self):
+        from backend.services.default_roles import TEMPLATES
+        names = set()
+        for name, key, perms in TEMPLATES:
+            policy = AccessPolicy.model_validate({"version": 1, "permissions": {p: True for p in perms}, "outlet_ids": [], "brand_ids": []})
+            self.assertIn("hris.self", policy.permissions)
+            self.assertNotIn("access.manage", perms)
+            self.assertNotIn("hris.accounts.manage", perms)
+            names.add(name)
+        self.assertEqual(names, {"Kasir", "Barista", "Kepala toko"})

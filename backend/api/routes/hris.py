@@ -30,6 +30,8 @@ async def write(request, db, coroutine, message):
 
 @router.get("/setup")
 async def setup(request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    from backend.services.default_roles import ensure_default_roles
+    await ensure_default_roles(db, user)
     return response(request, await svc.setup(db, user))
 
 

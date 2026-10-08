@@ -224,6 +224,8 @@ def user_data(row):
 @hris_router.get("/access/setup")
 async def access_setup(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     context = await owner(db, user)
+    from backend.services.default_roles import ensure_default_roles
+    await ensure_default_roles(db, user)
     tenant = await db.get(Tenant, user.tenant_id)
     roles = (await db.scalars(select(Role).where(Role.tenant_id == user.tenant_id, Role.deleted_at.is_(None)).order_by(Role.name))).all()
     accounts = (await db.scalars(select(User).where(User.tenant_id == user.tenant_id, User.deleted_at.is_(None)).order_by(User.full_name))).all()

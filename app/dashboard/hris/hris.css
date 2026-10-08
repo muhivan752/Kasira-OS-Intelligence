@@ -19,10 +19,17 @@
 @media (max-width: 374px) { .hr-summary { grid-template-columns: 1fr; } }
 
 .hr-form textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
-.finance-form .account-option { display: flex; align-items: center; gap: 12px; min-height: 44px; }
-.finance-form .account-option input[type='checkbox'] { width: 20px; height: 20px; min-height: 20px; margin: 0; accent-color: var(--brand-primary); }
+.finance-form label.account-option { display: flex; flex-direction: row; align-items: center; font-weight: 500; gap: 12px; min-height: 44px; }
+.finance-form .account-option input[type='checkbox'] { width: 20px; height: 20px; min-height: 20px; margin: 0; flex-shrink: 0; accent-color: var(--brand-primary); }
 .finance-form fieldset { border: 1px solid var(--control-border); padding: 12px; border-radius: 12px; }
 .hr-account-fields { display: grid; gap: 16px; padding-block: 16px; border-block: 1px solid var(--border-default); }
 .hr-account-fields h3, .hr-account-fields p { margin: 0; }
 .hr-form .account-password-field, .hris-workspace .account-password-field { flex-wrap: wrap; }
 .hr-form .account-password-field input, .hris-workspace .account-password-field input { flex: 1 1 160px; min-width: 44px; }
+.access-groups { display: grid; gap: 12px; }
+.access-groups fieldset { display: grid; gap: 0; }
+.access-groups legend { font-weight: 600; padding-inline: 4px; }
+.access-groups .f-footnote { margin: 0 0 4px; }
+.hr-handoff dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
+.hr-handoff dt { color: var(--text-muted); }
+.hr-handoff dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }

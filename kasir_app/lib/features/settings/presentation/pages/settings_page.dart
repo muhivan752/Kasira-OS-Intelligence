@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/auth/logout_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/session_cache.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import 'payment_methods_settings_page.dart';
 import 'printer_settings_page.dart';
@@ -17,6 +18,7 @@ class SettingsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isOwner = SessionCache.instance.accessMode == 'owner';
     return Scaffold(
       backgroundColor: KasiraDS.bgBase,
       body: Column(
@@ -88,6 +90,8 @@ class SettingsPage extends ConsumerWidget {
                 //   onTap: () {},
                 // ),
 
+                // Pengaturan toko cuma buat pemilik; server menolaknya (OWNER_ONLY).
+                if (isOwner) ...[
                 const SizedBox(height: 32),
                 _buildSectionTitle('Pembayaran'),
                 _buildSettingTile(
@@ -104,6 +108,7 @@ class SettingsPage extends ConsumerWidget {
                   },
                 ),
 
+                ],
                 const SizedBox(height: 32),
                 _buildSectionTitle('Sistem & Data'),
                 _buildSettingTile(
@@ -136,6 +141,7 @@ class SettingsPage extends ConsumerWidget {
 
                 const SizedBox(height: 32),
                 _buildSectionTitle('Tim & Akun'),
+                if (isOwner)
                 _buildSettingTile(
                   icon: LucideIcons.users,
                   title: 'Manajemen Kasir',

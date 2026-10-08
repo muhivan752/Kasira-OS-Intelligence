@@ -156,7 +156,8 @@ LEGACY_OWNER_MODULES = frozenset({"campaigns", "crm", "billing", "analytics", "k
 LEGACY_OWNER_ENDPOINTS = {
     "outlets": {"create_outlet", "update_outlet", "setup_payment", "setup_payment_own_key", "remove_payment_own_key",
                 "setup_whatsapp", "get_payment_status", "update_stock_mode", "update_tax_config", "update_outlet_location"},
-    "products": {"create_product", "update_product", "delete_product", "set_product_variants"},
+    # update_product sengaja tidak di sini: kasir boleh menandai habis (lihat products.update_product).
+    "products": {"create_product", "delete_product", "set_product_variants"},
     "categories": {"create_category", "update_category", "delete_category"},
     "tables": {"create_table", "update_table", "delete_table"},
     "couriers": {"create_courier", "update_courier", "delete_courier"},

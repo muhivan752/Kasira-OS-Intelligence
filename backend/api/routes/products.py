@@ -478,6 +478,12 @@ async def update_product(
     """
     Update a product with optimistic locking.
     """
+    # Staf legacy cuma boleh menandai habis/tersedia; ubah harga, nama, stok = pemilik.
+    access = getattr(request.state, "access", None)
+    if access is not None and access.mode == "legacy" and product_in.model_fields_set - {"is_active", "row_version"}:
+        from backend.services.access import denied
+        denied("OWNER_ONLY", "Kasir hanya bisa menandai produk habis atau tersedia. Ubah lainnya lewat akun pemilik")
+
     # 1. Fetch current product with tenant validation
     product = await validate_product_ownership(db, product_id, current_user.tenant_id)
         
