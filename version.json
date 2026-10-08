@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.6.34",
+    "version": "1.6.35",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.34/selaris-pos-v1.6.34.apk",
-    "release_notes": "Minimum password akun menjadi 8 karakter; username minimum 3 karakter. Pembaruan ini berlaku untuk pendaftaran, aktivasi dan pemulihan akun. Akses AI managed tersedia melalui web sesuai izin akun."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.35/selaris-pos-v1.6.35.apk",
+    "release_notes": "Menu pengaturan toko disembunyikan untuk akun kasir. Perbaikan kecil."
   },
   "dapur": {
-    "version": "1.6.34",
+    "version": "1.6.35",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.34/selaris-dapur-v1.6.34.apk",
-    "release_notes": "Minimum password akun menjadi 8 karakter; username minimum 3 karakter. Pembaruan ini berlaku untuk pendaftaran, aktivasi dan pemulihan akun. Akses AI managed tersedia melalui web sesuai izin akun."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.35/selaris-dapur-v1.6.35.apk",
+    "release_notes": "Menu pengaturan toko disembunyikan untuk akun kasir. Perbaikan kecil."
   }
 }
