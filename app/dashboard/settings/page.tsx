@@ -1184,10 +1184,9 @@ export default function SettingsPage() {
 }
 
 
-/** Kartu token Fonnte. Promo/campaign WA (menu Pelanggan) dikirim dari nomor
- *  WhatsApp toko sendiri lewat Fonnte — bukan dari nomor Selaris. Token
- *  dicek ke Fonnte waktu disimpan, jadi token salah ketahuan di sini, bukan
- *  waktu promo pertama gagal senyap. */
+/** Kartu token Fonnte. Kabar pesanan online ke pelanggan dikirim dari nomor
+ *  WhatsApp toko sendiri kalau token ada (fallback nomor Selaris). Token
+ *  dicek ke Fonnte waktu disimpan, jadi token salah ketahuan di sini. */
 function WhatsAppTokenCard({ outletId, connected, onChanged }: { outletId?: string; connected: boolean; onChanged: (v: boolean) => void }) {
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1210,7 +1209,7 @@ function WhatsAppTokenCard({ outletId, connected, onChanged }: { outletId?: stri
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <MessageCircle className="w-5 h-5 text-gray-500" />
-          <h2 className="text-lg font-bold text-gray-900">WhatsApp Toko untuk Promo</h2>
+          <h2 className="text-lg font-bold text-gray-900">WhatsApp Toko</h2>
         </div>
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
           {connected ? 'Tersambung' : 'Belum tersambung'}
@@ -1218,7 +1217,7 @@ function WhatsAppTokenCard({ outletId, connected, onChanged }: { outletId?: stri
       </div>
       <div className="p-6 space-y-3">
         <p className="text-sm text-gray-600">
-          Promo dan pesan ke pelanggan (menu Pelanggan) dikirim dari <b>nomor WhatsApp toko Anda sendiri</b>, bukan dari Selaris.
+          Opsional. Kabar pesanan online ke pelanggan bisa dikirim dari <b>nomor WhatsApp toko Anda sendiri</b>. Tanpa ini, kabar tetap terkirim dari nomor Selaris.
           Caranya: daftar di <a href="https://fonnte.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">fonnte.com</a>,
           hubungkan nomor WA toko (scan QR), lalu salin <b>Token</b> dari dashboard Fonnte ke sini. Struk & OTP tetap lewat Selaris.
         </p>
@@ -1239,7 +1238,7 @@ function WhatsAppTokenCard({ outletId, connected, onChanged }: { outletId?: stri
         ) : (
           <div className="flex gap-2">
             <button onClick={() => setOpen(true)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">Ganti token</button>
-            <button onClick={() => { if (confirm('Putuskan WhatsApp toko? Promo tidak bisa dikirim sampai disambungkan lagi.')) save(''); }} disabled={busy} className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg">Putus</button>
+            <button onClick={() => { if (confirm('Putuskan WhatsApp toko? Kabar pesanan akan dikirim dari nomor Selaris.')) save(''); }} disabled={busy} className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg">Putus</button>
           </div>
         )}
       </div>

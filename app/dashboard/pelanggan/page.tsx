@@ -10,7 +10,7 @@ import '../keuangan/finance.css';
 import './customers.css';
 
 const initialFilters: CustomerFilters = { search: '', segment: '', sort: 'last_visit', skip: 0 };
-const segments = [['', 'Semua pelanggan'], ['repeat', 'Belanja berulang'], ['lapse', 'Tidak belanja 30 hari'], ['new', 'Belanja pertama 30 hari'], ['unspent', 'Belum belanja'], ['consent', 'Setuju promo WA']];
+const segments = [['', 'Semua pelanggan'], ['repeat', 'Belanja berulang'], ['lapse', 'Tidak belanja 30 hari'], ['new', 'Belanja pertama 30 hari'], ['unspent', 'Belum belanja']];
 const sorts = [['last_visit', 'Terakhir belanja'], ['spent', 'Total belanja terbesar'], ['visits', 'Transaksi terbanyak'], ['newest', 'Terbaru dicatat'], ['name', 'Nama A sampai Z']];
 type Pending = { id?: string; profile?: CustomerSave; note?: CustomerNote };
 const pendingKey = 'selaris-customer-pending';
@@ -57,12 +57,12 @@ export default function CustomersPage() {
       <button className="f-button" disabled={loading} onClick={() => setRevision(v => v + 1)}>Muat ulang</button></div>
     {loading ? <p className="f-notice" role="status">Memuat data pelanggan...</p> : error ? <div className="f-notice f-error" role="alert"><p>{error}</p><button className="f-button" data-inventory-retry onClick={() => setRevision(v => v + 1)}>Coba lagi</button></div> : data && <>
       <section className="f-panel"><h2>Ringkasan bisnis</h2><p className="f-footnote">Semua pelanggan, terlepas dari filter daftar.</p>
-        <div className="c-summary"><div><p>Pelanggan tercatat</p><strong>{data.summary.total}</strong></div><div><p>Belanja berulang</p><strong>{data.summary.repeat}</strong></div><div><p>Total nota lunas</p><strong>{money(data.summary.spent)}</strong></div><div><p>Setuju promo WA</p><strong>{data.summary.consented}</strong></div></div>
+        <div className="c-summary"><div><p>Pelanggan tercatat</p><strong>{data.summary.total}</strong></div><div><p>Belanja berulang</p><strong>{data.summary.repeat}</strong></div><div><p>Total nota lunas</p><strong>{money(data.summary.spent)}</strong></div></div>
         <p className="f-footnote">{data.history_note} Diperbarui {customerDate(data.generated_at)} (WIB).</p></section>
       <section className="f-panel"><div className="f-report-title"><div><h2>Daftar pelanggan</h2><p>{data.total} pelanggan sesuai filter.</p></div>{data.can_export !== false && <button className="f-button" disabled={!data.items.length} onClick={() => void exportPage()}>Ekspor halaman CSV</button>}</div>
         {!data.items.length ? <div className="f-empty"><h3>{data.summary.total ? 'Tidak ada pelanggan sesuai filter' : 'Belum ada pelanggan tercatat'}</h3><p>Tambahkan kontak, atau pilih pelanggan saat kasir mencatat transaksi.</p>
           {(search || filters.segment) && <button className="f-button" onClick={() => { setSearch(''); setFilters(initialFilters); }}>Reset filter</button>}</div>
-          : <ul className="c-list">{data.items.map(c => <li key={c.id}><div><h3>{c.name}</h3><p>{c.phone || 'Nomor HP belum diisi'}</p><p className="f-footnote">{c.wa_marketing_consent ? 'Setuju promo WA' : 'Belum ada izin promo WA'}{c.email ? ` · ${c.email}` : ''}</p></div>
+          : <ul className="c-list">{data.items.map(c => <li key={c.id}><div><h3>{c.name}</h3><p>{c.phone || 'Nomor HP belum diisi'}</p>{c.email && <p className="f-footnote">{c.email}</p>}</div>
             <div className="c-value"><p>{c.total_visits} transaksi lunas · {money(c.total_spent)}</p><p className="f-footnote">Terakhir: {customerDate(c.last_visit_at)}</p></div>
             <button className="f-button" disabled={Boolean(pending && pending.id !== c.id)} onClick={() => setSelected(c.id)} aria-label={`Buka profil ${c.name}`}>Buka profil</button></li>)}</ul>}
         {data.total > 0 && <div className="c-pager"><p>{data.skip + (data.items.length ? 1 : 0)} sampai {data.skip + data.items.length} dari {data.total}</p><div>
@@ -77,12 +77,12 @@ export default function CustomersPage() {
 function ProfileForm({ customer, pending, onPending, onClose, onSaved }: { customer?: CustomerDetail; pending: Pending | null; onPending: (value: Pending | null) => void; onClose: () => void; onSaved: (message: string) => void }) {
   const preset = pending?.profile || customer;
   const [name, setName] = useState(preset?.name || ''), [phone, setPhone] = useState(preset?.phone || ''), [email, setEmail] = useState(preset?.email || '');
-  const [notes, setNotes] = useState(preset?.notes || ''), [birthday, setBirthday] = useState(preset?.birthday || ''), [consent, setConsent] = useState(preset?.wa_marketing_consent || false);
+  const [notes, setNotes] = useState(preset?.notes || ''), [birthday, setBirthday] = useState(preset?.birthday || '');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const frozen = Boolean(pending?.profile);
   const submit = async (event: React.FormEvent) => { event.preventDefault(); if (busy) return; setBusy(true); setError('');
     const payload: CustomerSave = pending?.profile || { client_request_id: crypto.randomUUID(), row_version: customer?.row_version,
-      name: name.trim(), phone: phone.trim() || null, email: email.trim() || null, notes: notes.trim() || null, birthday: birthday || null, wa_marketing_consent: consent };
+      name: name.trim(), phone: phone.trim() || null, email: email.trim() || null, notes: notes.trim() || null, birthday: birthday || null, wa_marketing_consent: Boolean(preset?.wa_marketing_consent) && phone.trim() === (preset?.phone || '').trim() };
     onPending({ id: customer?.id, profile: payload });
     const result = await saveCustomerWorkspace(payload, customer?.id);
     setBusy(false); if (result.success) onSaved(result.message || 'Profil pelanggan disimpan'); else { setError(result.message); if (!result.uncertain) onPending(null); }
@@ -92,11 +92,11 @@ function ProfileForm({ customer, pending, onPending, onClose, onSaved }: { custo
       {frozen && <p className="f-notice">Periksa penyimpanan data yang sama sebelum mengubah isinya.</p>}
       {error && <p className="f-notice f-error" role="alert">{error}</p>}
       <label>Nama pelanggan<input autoFocus required maxLength={120} value={name} disabled={busy || frozen} onChange={e => setName(e.target.value)} /></label>
-      <div className="f-field-grid"><label>Nomor HP<input type="tel" maxLength={40} placeholder="08 atau +62" value={phone} disabled={busy || frozen} onChange={e => { setPhone(e.target.value); setConsent(false); }} /></label>
+      <div className="f-field-grid"><label>Nomor HP<input type="tel" maxLength={40} placeholder="08 atau +62" value={phone} disabled={busy || frozen} onChange={e => setPhone(e.target.value)} /></label>
         <label>Email<input type="email" maxLength={254} value={email} disabled={busy || frozen} onChange={e => setEmail(e.target.value)} /></label></div>
       <label>Tanggal lahir<input type="date" max={jakartaDate()} value={birthday} disabled={busy || frozen} onChange={e => setBirthday(e.target.value)} /></label>
       <label>Preferensi / catatan profil<textarea maxLength={2000} value={notes} disabled={busy || frozen} onChange={e => setNotes(e.target.value)} /></label>
-      <label className="f-checkbox"><input type="checkbox" checked={consent} disabled={busy || frozen || !phone.trim()} onChange={e => setConsent(e.target.checked)} />Pelanggan sudah menyetujui promo WhatsApp ke nomor ini</label>
+
       <p className="f-footnote">Menyimpan izin ini tidak mengirim pesan. Perubahan nomor perlu persetujuan kembali.</p>
       <div className="f-form-actions"><button type="button" className="f-button" disabled={busy} onClick={onClose}>Tutup</button><button className="f-button f-primary" disabled={busy}>{busy ? 'Menyimpan...' : frozen ? 'Periksa penyimpanan profil' : 'Simpan profil'}</button></div>
     </form></InventoryDialog>;
@@ -123,7 +123,7 @@ function CustomerProfile({ id, pending, onPending, onClose, onSaved }: { id: str
   return <InventoryDialog title="Profil pelanggan" busy={busy} onClose={onClose}><div className="finance-form c-profile">
     {loading ? <p role="status">Memuat profil pelanggan...</p> : error ? <div className="f-notice f-error" role="alert"><p>{error}</p><button className="f-button" onClick={load}>Coba lagi</button></div> : data && <>
       <section><div className="f-report-title"><div><h3>{data.name}</h3><p>{data.phone || 'Nomor HP belum diisi'}</p>{data.email && <p>{data.email}</p>}</div>{data.can_manage !== false && <button className="f-button" disabled={Boolean(pending)} onClick={() => setEditing(true)}>Edit profil</button>}</div>
-        <p>Tanggal lahir: {customerDate(data.birthday)}</p><p>{data.wa_marketing_consent ? `Setuju promo WA · dicatat ${customerDate(data.consent_given_at)}` : 'Belum ada izin promo WA'}</p>
+        <p>Tanggal lahir: {customerDate(data.birthday)}</p>
         {data.notes && <p className="f-notice c-pre">{data.notes}</p>}
         <div className="c-summary"><div><p>Transaksi lunas</p><strong>{data.total_visits}</strong></div><div><p>Total nota lunas</p><strong>{money(data.total_spent)}</strong></div><div><p>Rata-rata nota</p><strong>{money(data.avg_spent)}</strong></div><div><p>Terakhir belanja</p><strong>{customerDate(data.last_visit_at)}</strong></div></div>
         <p className="f-footnote">{data.scope === 'allowed_outlets' ? 'Outlet yang diizinkan.' : 'Semua outlet bisnis.'} Nilai nota berstatus lunas sebelum pengurangan refund; satu nota dihitung satu transaksi.</p></section>

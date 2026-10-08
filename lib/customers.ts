@@ -33,9 +33,9 @@ export function customerCsv(data: CustomerList): string {
     ['Data pelanggan', 'Halaman yang sedang ditampilkan'], ['Cakupan', data.scope === 'allowed_outlets' ? 'Outlet yang diizinkan' : 'Semua outlet dalam bisnis'],
     ['Dibuat pada', data.generated_at], ['Dasar belanja', data.history_note],
     ['Hasil filter', data.total], ['Baris awal', data.skip + 1], [],
-    ['Nama', 'HP', 'Email', 'Transaksi lunas', 'Total nota (IDR)', 'Terakhir belanja (WIB)', 'Izin promo WA', 'Tanggal lahir', 'Preferensi / catatan'],
+    ['Nama', 'HP', 'Email', 'Transaksi lunas', 'Total nota (IDR)', 'Terakhir belanja (WIB)', 'Tanggal lahir', 'Preferensi / catatan'],
     ...data.items.map(c => [c.name, c.phone || '', c.email || '', c.total_visits, c.total_spent,
-      customerDate(c.last_visit_at), c.wa_marketing_consent ? 'Setuju' : 'Tidak', c.birthday || '', c.notes || '']),
+      customerDate(c.last_visit_at), c.birthday || '', c.notes || '']),
   ];
   return '\uFEFF' + rows.map(row => row.map(value => {
     const text = String(value);

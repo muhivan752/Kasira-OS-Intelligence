@@ -150,9 +150,9 @@ def validate_tenant_header(request, tenant_id):
 
 # Staf legacy (akun lama tanpa access_policy) tetap boleh semua jalur APK kasir,
 # termasuk offline. Yang ditutup hanya pekerjaan pemilik: pengaturan outlet dan
-# pembayaran, katalog, promo, laporan bisnis, langganan. Daftar ini sengaja
+# pembayaran, katalog, CRM, laporan bisnis, langganan. Daftar ini sengaja
 # daftar-tolak, bukan daftar-izin: APK legacy memanggil puluhan endpoint kasir.
-LEGACY_OWNER_MODULES = frozenset({"campaigns", "crm", "billing", "analytics", "knowledge_graph", "referrals"})
+LEGACY_OWNER_MODULES = frozenset({"crm", "billing", "analytics", "knowledge_graph", "referrals"})
 LEGACY_OWNER_ENDPOINTS = {
     "outlets": {"create_outlet", "update_outlet", "setup_payment", "setup_payment_own_key", "remove_payment_own_key",
                 "setup_whatsapp", "get_payment_status", "update_stock_mode", "update_tax_config", "update_outlet_location"},

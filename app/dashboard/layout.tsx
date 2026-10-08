@@ -141,7 +141,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Pembelian', href: '/dashboard/pembelian', icon: ShoppingCart },
     { name: 'Keuangan', href: '/dashboard/keuangan', icon: Wallet },
     { name: 'Tim & absensi', href: '/dashboard/hris', icon: Users },
-    { name: 'Promo WA', href: '/dashboard/promo', icon: MessageCircle },
     { name: 'Laporan', href: '/dashboard/laporan', icon: BarChart3 },
   ];
 

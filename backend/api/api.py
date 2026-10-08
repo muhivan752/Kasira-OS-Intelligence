@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from backend.api.routes import hpp_setup
 from backend.api.routes import hris
 from backend.api.routes import accounts
-from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect, ai, reservations, loyalty, media, customers, tables, tabs, webhook, ingredients, recipes, knowledge_graph, superadmin, billing, referrals, platform, embeddings, analytics, invoice_ocr, waitlist, landing, purchasing, finance, campaigns, crm, couriers, devices
+from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect, ai, reservations, loyalty, media, customers, tables, tabs, webhook, ingredients, recipes, knowledge_graph, superadmin, billing, referrals, platform, embeddings, analytics, invoice_ocr, waitlist, landing, purchasing, finance, crm, couriers, devices
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -47,7 +47,6 @@ api_router.include_router(waitlist.router, prefix="/waitlist", tags=["waitlist"]
 api_router.include_router(purchasing.suppliers_router, prefix="/suppliers", tags=["purchasing"])
 api_router.include_router(purchasing.purchases_router, prefix="/purchases", tags=["purchasing"])
 api_router.include_router(finance.router, prefix="/finance", tags=["finance"])
-api_router.include_router(campaigns.router, prefix="/campaigns", tags=["campaigns"])
 api_router.include_router(crm.router, prefix="/crm", tags=["crm"])
 api_router.include_router(couriers.router, prefix="/couriers", tags=["delivery"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])

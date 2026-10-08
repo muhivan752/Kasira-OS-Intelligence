@@ -1,7 +1,7 @@
 'use server';
 
 /**
- * CRM gelombang 3 + promo WhatsApp. Dipisah dari api.ts biar file itu nggak
+ * CRM gelombang 3. Dipisah dari api.ts biar file itu nggak
  * makin gendut. Pola sama: cookie token + X-Tenant-ID lewat fetchWithAuth.
  */
 import { cookies } from 'next/headers';
@@ -78,25 +78,4 @@ export async function updateVoucher(id: string, payload: Record<string, unknown>
 }
 export async function deleteVoucher(id: string) {
   await call(`/crm/vouchers/${id}`, { method: 'DELETE' }); return true;
-}
-
-// ── Promo WA (campaign) ──
-export async function getCampaigns(outletId: string) {
-  try { return (await call(`/campaigns/?outlet_id=${outletId}`)).data || []; } catch { return []; }
-}
-export async function previewCampaign(payload: { outlet_id: string; name: string; template: string; target: string }) {
-  return (await call('/campaigns/preview', { method: 'POST', body: JSON.stringify(payload) })).data;
-}
-export async function createCampaign(payload: { outlet_id: string; name: string; template: string; target: string }) {
-  return (await call('/campaigns/', { method: 'POST', body: JSON.stringify(payload) })).data;
-}
-export async function sendCampaign(id: string) {
-  const d = await call(`/campaigns/${id}/send`, { method: 'POST' });
-  return { data: d.data, message: d.message as string };
-}
-export async function getCampaign(id: string) {
-  try { return (await call(`/campaigns/${id}`)).data; } catch { return null; }
-}
-export async function deleteCampaign(id: string) {
-  await call(`/campaigns/${id}`, { method: 'DELETE' }); return true;
 }

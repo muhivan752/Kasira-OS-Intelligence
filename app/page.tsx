@@ -10,7 +10,7 @@ const modules = [
   ['Stok & resep', 'Kelola stok produk jadi. Pada paket Pro, gunakan resep untuk menghitung pemakaian bahan dan HPP.'],
   ['Pembelian', 'Catat pembelian, supplier, tagihan, dan jatuh tempo. Unggah nota untuk membantu pengisian data belanja.'],
   ['Keuangan & laporan', 'Periksa penjualan, laba rugi, arus kas, dan pengeluaran dari dashboard pemilik.'],
-  ['Pelanggan & promo', 'Simpan riwayat pelanggan. Kelola loyalitas dan promo WhatsApp sesuai paket dan konfigurasi toko.'],
+  ['Pelanggan & loyalitas', 'Simpan riwayat pelanggan dan kelola poin loyalitas sesuai paket toko.'],
   ['Toko online', 'Bagikan halaman menu, terima pesanan, dan pantau statusnya. Pelanggan memesan melalui browser.'],
 ];
 

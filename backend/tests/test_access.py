@@ -136,7 +136,7 @@ class AccessTests(unittest.TestCase):
         return Request({"type": "http", "method": method, "path": "/", "headers": [], "endpoint": endpoint})
 
     def test_legacy_staff_keeps_cashier_routes_but_not_owner_work(self):
-        from backend.api.routes import (campaigns, categories, finance, orders, outlets, payments, products,
+        from backend.api.routes import (crm, categories, finance, orders, outlets, payments, products,
             reports, shifts, sync, tabs)
         from backend.services.access import LEGACY_BASE
         staff = self.context(mode="legacy", permissions=LEGACY_BASE)
@@ -151,7 +151,7 @@ class AccessTests(unittest.TestCase):
                                        (outlets.setup_payment_own_key, "POST", "OWNER_ONLY"),
                                        (products.delete_product, "DELETE", "OWNER_ONLY"),
                                        (categories.create_category, "POST", "OWNER_ONLY"),
-                                       (campaigns.list_campaigns, "GET", "OWNER_ONLY"),
+                                       (crm.segments_summary, "GET", "OWNER_ONLY"),
                                        (reports.get_report_summary, "GET", "PERMISSION_DENIED"),
                                        (finance.finance_summary, "GET", "PERMISSION_DENIED")):
             with self.subTest(endpoint=endpoint.__name__), self.assertRaises(HTTPException) as rejected:
@@ -161,7 +161,7 @@ class AccessTests(unittest.TestCase):
         enforce_route(self.endpoint_request(finance.finance_summary, "GET"), granted)
         enforce_route(self.endpoint_request(reports.get_report_summary, "GET"), granted)
         owner = self.context(mode="owner", permissions=PERMISSIONS)
-        for endpoint, method in ((outlets.update_outlet, "PUT"), (campaigns.list_campaigns, "GET")):
+        for endpoint, method in ((outlets.update_outlet, "PUT"), (crm.segments_summary, "GET")):
             enforce_route(self.endpoint_request(endpoint, method), owner)
 
     def test_public_contract_excludes_private_profile_and_role_contents(self):
