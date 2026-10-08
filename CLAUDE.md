@@ -609,7 +609,7 @@ async with AsyncSessionLocal() as db:
 ### 🔐 AUTH
 | # | Rule |
 |---|------|
-| 11 | Auth WAJIB via OTP WA — tidak ada email+password |
+| 11 | Pemilik masuk/daftar lewat **Google atau kode Sefrekuensi** (cadangan WA), web `/login` `/register` = `AuthFlow`, APK default `AuthStep.inputPhone` (8 Okt 2026). Username toko + password = karyawan (dan pemilik yang sudah bikin password), di `/login/password`. `/login/legacy` redirect ke `/login`. Google: Firebase `selaris-74eeb`, Web client ID di workflow `--dart-define=GOOGLE_SERVER_CLIENT_ID`, kunci web `GOOGLE_FIREBASE_*` di env backend. Rilis lewat Play Store = sidik jari App Signing Google WAJIB ditambah di Firebase. |
 | 12 | JWT: httpOnly cookie (web), Flutter SecureStorage (mobile) |
 | 13 | OTP expire 5 menit, max 3x resend per 15 menit |
 

@@ -1,5 +1,6 @@
-import { Suspense } from 'react';
-import { AuthFlow } from '@/components/auth/auth-flow';
+import { redirect } from 'next/navigation';
+
+// Link lama "Masuk akun lama dengan kode atau Google" sekarang jadi halaman masuk utama.
 export default function LegacyLogin() {
-  return <Suspense fallback={<p role="status">Memuat akun lama…</p>}><AuthFlow mode="login" /></Suspense>;
+  redirect('/login');
 }

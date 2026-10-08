@@ -124,10 +124,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (savedPin != null && savedPin.isNotEmpty) {
         state = state.copyWith(step: AuthStep.pinLogin, isLoading: false);
       } else {
-        state = state.copyWith(step: AuthStep.inputPassword, isLoading: false);
+        state = state.copyWith(step: AuthStep.inputPhone, isLoading: false);
       }
     } catch (e) {
-      state = state.copyWith(step: AuthStep.inputPassword, isLoading: false);
+      state = state.copyWith(step: AuthStep.inputPhone, isLoading: false);
     }
   }
 
@@ -772,7 +772,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           onPressed: state.isLoading
               ? null
               : () => ref.read(authProvider.notifier).useOtpInstead(),
-          child: const Text('Masuk akun lama dengan kode atau Google')),
+          child: const Text('Masuk dengan Google atau kode Sefrekuensi')),
     ]));
   }
 
@@ -821,7 +821,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         Text('Nomor HP Anda',
             style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
         const SizedBox(height: 6),
-        Text('Kode masuk akun lama dikirim ke WhatsApp atau $kSefrekuensiName.',
+        Text('Kode masuk dikirim ke $kSefrekuensiName, atau WhatsApp sebagai cadangan.',
             style: KasiraDS.sans(size: 13.5, color: KasiraDS.textMuted)),
         const SizedBox(height: 20),
         Text('NOMOR HP', style: KasiraDS.eyebrow()),
@@ -923,6 +923,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     .sendOtp(channel: 'whatsapp'),
             child: const Text('Gunakan WhatsApp'),
           ),
+        const SizedBox(height: 4),
+        TextButton(
+          onPressed: (state.isLoading || state.sefreLoading)
+              ? null
+              : () => ref.read(authProvider.notifier).usePasswordInstead(),
+          child: const Text('Karyawan, atau punya password? Masuk dengan username'),
+        ),
       ],
     );
   }

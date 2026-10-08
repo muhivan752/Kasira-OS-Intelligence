@@ -323,15 +323,20 @@ jobs:
       # `namespace` (paket kode) SENGAJA dibiarkan `com.selaris.selaris_pos`:
       # yang dilihat Play itu applicationId, dan mengubah namespace berarti
       # mindahin MainActivity.kt juga.
+      # GOOGLE_SERVER_CLIENT_ID = Web client OAuth proyek Firebase selaris-74eeb.
+      # Bukan rahasia (ikut ketanam di app). Tanpa ini Google Sign-In di
+      # Android nggak ngasih idToken, jadi login Google gagal di APK.
       - name: Build POS (APK + AAB)
+        env:
+          GOOGLE_SERVER_CLIENT_ID: 119091502990-5sg17of37f5o5b2qmarov5gpdblg16fp.apps.googleusercontent.com
         run: |
           VERSION="${{ github.event.inputs.version }}"
           sed -i 's/^\( *applicationId = \).*/\1"com.selaris.pos"/' android/app/build.gradle.kts
           grep -n 'applicationId' android/app/build.gradle.kts
-          flutter build apk --release --target lib/main.dart
+          flutter build apk --release --target lib/main.dart --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID
           mv build/app/outputs/flutter-apk/app-release.apk \
              build/app/outputs/flutter-apk/selaris-pos-v${VERSION}.apk
-          flutter build appbundle --release --target lib/main.dart
+          flutter build appbundle --release --target lib/main.dart --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID
           mv build/app/outputs/bundle/release/app-release.aab \
              build/app/outputs/bundle/release/selaris-pos-v${VERSION}.aab
         working-directory: kasir_app

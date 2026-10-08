@@ -135,6 +135,7 @@ export function AuthFlow({ mode }: { mode: 'login' | 'register' }) {
       <div className="auth-divider"><span>atau</span></div>
       <button className="ks-btn ks-btn-outline" type="button" onClick={() => { setError(''); setStep('phone'); }} disabled={busy}>Gunakan kode Sefrekuensi</button>
       <p className="auth-note">Kode datang sebagai pesan di aplikasi Sefrekuensi.</p>
+      {mode === 'login' && <Link className="auth-text-button" href="/login/password">Karyawan, atau punya password? Masuk dengan username</Link>}
       <p className="auth-switch">{mode === 'login' ? 'Belum punya usaha di Selaris?' : 'Sudah punya akun?'} <Link href={mode === 'login' ? '/register' : '/login'}>{mode === 'login' ? 'Daftarkan usaha' : 'Masuk'}</Link></p>
     </div>}
     {step === 'phone' && <form className="auth-form" onSubmit={event => { event.preventDefault(); void send('sefrekuensi'); }}>

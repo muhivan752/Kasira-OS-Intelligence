@@ -52,7 +52,7 @@ export function PasswordFlow({ mode }: { mode: 'login' | 'register' | 'activatio
       <PasswordInput label={mode === 'login' ? 'Password' : 'Password baru'} name="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'login' ? 1 : 8} maxLength={128} required />
       {mode !== 'login' && <><p className="auth-note">Minimal 8 karakter. Password boleh berupa rangkaian kata.</p><PasswordInput label="Ulangi password" name="confirm" autoComplete="new-password" minLength={8} maxLength={128} required /></>}
       <button className="ks-btn ks-btn-lg" disabled={busy}>{busy ? 'Memproses…' : mode === 'login' ? 'Masuk ke usaha' : mode === 'register' ? 'Buat usaha' : 'Simpan password'}</button>
-      {mode === 'login' && <><Link className="auth-text-button" href="/recover">Lupa password</Link><Link className="auth-text-button" href="/activate">Aktivasi akun karyawan</Link><Link className="auth-text-button" href="/login/legacy">Masuk akun lama dengan kode atau Google</Link></>}
+      {mode === 'login' && <><Link className="auth-text-button" href="/recover">Lupa password</Link><Link className="auth-text-button" href="/activate">Aktivasi akun karyawan</Link><Link className="auth-text-button" href="/login">Masuk dengan Google atau kode Sefrekuensi</Link></>}
       <p className="auth-switch">{mode === 'register' ? 'Sudah punya akun?' : 'Belum punya usaha?'} <Link href={mode === 'register' ? '/login' : '/register'}>{mode === 'register' ? 'Masuk' : 'Daftarkan usaha'}</Link></p>
       {isCode && <Link className="auth-text-button" href="/login">Kembali ke halaman masuk</Link>}
     </form>}
