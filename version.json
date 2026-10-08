@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.6.35",
+    "version": "1.6.36",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.35/selaris-pos-v1.6.35.apk",
-    "release_notes": "Menu pengaturan toko disembunyikan untuk akun kasir. Perbaikan kecil."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.36/selaris-pos-v1.6.36.apk",
+    "release_notes": "Masuk dan daftar lewat Google atau kode Sefrekuensi. Karyawan masuk dengan username."
   },
   "dapur": {
-    "version": "1.6.35",
+    "version": "1.6.36",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.35/selaris-dapur-v1.6.35.apk",
-    "release_notes": "Menu pengaturan toko disembunyikan untuk akun kasir. Perbaikan kecil."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.36/selaris-dapur-v1.6.36.apk",
+    "release_notes": "Masuk dan daftar lewat Google atau kode Sefrekuensi. Karyawan masuk dengan username."
   }
 }
