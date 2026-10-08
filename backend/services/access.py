@@ -148,7 +148,57 @@ def validate_tenant_header(request, tenant_id):
         denied("TENANT_MISMATCH", "Pilihan bisnis tidak sesuai dengan akun yang masuk")
 
 
+# Staf legacy (akun lama tanpa access_policy) tetap boleh semua jalur APK kasir,
+# termasuk offline. Yang ditutup hanya pekerjaan pemilik: pengaturan outlet dan
+# pembayaran, katalog, promo, laporan bisnis, langganan. Daftar ini sengaja
+# daftar-tolak, bukan daftar-izin: APK legacy memanggil puluhan endpoint kasir.
+LEGACY_OWNER_MODULES = frozenset({"campaigns", "crm", "billing", "analytics", "knowledge_graph", "referrals"})
+LEGACY_OWNER_ENDPOINTS = {
+    "outlets": {"create_outlet", "update_outlet", "setup_payment", "setup_payment_own_key", "remove_payment_own_key",
+                "setup_whatsapp", "get_payment_status", "update_stock_mode", "update_tax_config", "update_outlet_location"},
+    "products": {"create_product", "update_product", "delete_product", "set_product_variants"},
+    "categories": {"create_category", "update_category", "delete_category"},
+    "tables": {"create_table", "update_table", "delete_table"},
+    "couriers": {"create_courier", "update_courier", "delete_courier"},
+    "reservations": {"update_reservation_settings"},
+    "customers": {"crm_list", "customer_detail", "refresh_stats"},
+    "embeddings": {"generate_all_embeddings"},
+    "ai": {"apply_recipe_proposal", "apply_menu_batch", "classify_domain"},
+    "tenants": {"create_tenant"},
+}
+LEGACY_GRANTED_ENDPOINTS = {("reports", "get_report_summary"): ("sales.detail.view",)}
+
+
+def enforce_legacy_staff(request, context):
+    endpoint = request.scope.get("endpoint")
+    if endpoint is None:
+        return
+    key = (request.method, endpoint)
+    # Modul yang sudah punya izin (keuangan, pembelian, HPP, AI) memakai izin yang
+    # sama dengan akun managed, termasuk izin lama dari flag jabatan.
+    from backend.services.ai_access import route_rules as ai_rules
+    from backend.services.business_access import route_rules as business_rules
+    grants = ai_rules().get(key)
+    if grants is not None:
+        for permission in grants:
+            context.require(permission)
+        return
+    grants = business_rules().get(key)
+    if grants is not None:
+        if not any(context.allows(p) for p in grants):
+            denied("PERMISSION_DENIED", "Akses ini belum diberikan oleh pemilik usaha")
+        return
+    module, name = getattr(endpoint, "__module__", "").rsplit(".", 1)[-1], getattr(endpoint, "__name__", "")
+    if module in LEGACY_OWNER_MODULES or name in LEGACY_OWNER_ENDPOINTS.get(module, ()):
+        denied("OWNER_ONLY", "Fitur ini khusus pemilik usaha")
+    grants = LEGACY_GRANTED_ENDPOINTS.get((module, name))
+    if grants and not any(context.allows(p) for p in grants):
+        denied("PERMISSION_DENIED", "Akses ini belum diberikan oleh pemilik usaha")
+
+
 def enforce_route(request, context):
+    if context.mode == "legacy":
+        return enforce_legacy_staff(request, context)
     if context.mode != "managed":
         return
     from backend.api.routes import auth, hris, users, accounts

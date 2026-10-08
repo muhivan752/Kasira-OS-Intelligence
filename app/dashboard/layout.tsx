@@ -123,8 +123,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
+  // Staf (managed maupun legacy) melihat menu sesuai izin; menu penuh hanya pemilik.
+  const scoped = accessMode === 'managed' || accessMode === 'legacy';
   // Build navigation based on tier
-  const mainNav = accessMode === 'managed' ? [
+  const mainNav = scoped ? [
     ...(accessPermissions.some(p => POS_WORKSPACE_PERMISSIONS.includes(p)) ? [{ name: 'Operasional', href: '/dashboard/operasional', icon: Store }] : []),
     ...(accessPermissions.includes('customers.view') ? [{ name: 'Pelanggan', href: '/dashboard/pelanggan', icon: Users }] : []),
     ...(accessPermissions.includes('purchasing.view') ? [{ name: 'Pembelian', href: '/dashboard/pembelian', icon: ShoppingCart }] : []),
@@ -143,7 +145,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Laporan', href: '/dashboard/laporan', icon: BarChart3 },
   ];
 
-  const proNav = accessMode === 'managed' ? [
+  const proNav = scoped ? [
     ...(accessPermissions.includes('hpp.view') ? [{ name: 'HPP', href: '/dashboard/hpp', icon: Calculator }] : []),
     ...(accessPermissions.includes('ai.chat') ? [{ name: 'AI Asisten', href: '/dashboard/ai', icon: MessageCircle }] : []),
   ] : [
@@ -158,8 +160,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ...(accessMode === 'managed' ? [] : [
     { name: 'Download POS', href: '/download', icon: Smartphone },
     ...(isPro ? [{ name: 'Download Dapur', href: '/download', icon: ChefHat }] : []),
-    { name: 'Pengaturan', href: '/dashboard/settings', icon: Settings },
     ]),
+    ...(scoped ? [] : [{ name: 'Pengaturan', href: '/dashboard/settings', icon: Settings }]),
   ];
 
   const managedPaths = ['/dashboard/hris', '/dashboard/account',
@@ -170,6 +172,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ...(accessPermissions.includes('hpp.view') ? ['/dashboard/hpp'] : []),
     ...(accessPermissions.includes('ai.chat') ? ['/dashboard/ai'] : []),
     ...(['ai.chat', 'hpp.view', 'hpp.manage', 'supplier.price.view'].every(p => accessPermissions.includes(p)) ? ['/dashboard/hpp/chat'] : [])];
+
+  const staffHome = managedPaths.includes('/dashboard/operasional') ? '/dashboard/operasional' : '/dashboard/hris';
+  useEffect(() => {
+    if (scoped && pathname === '/dashboard') router.replace(staffHome);
+  }, [scoped, pathname, staffHome, router]);
 
   const renderNavItem = (item: { name: string; href: string; icon: any }, locked = false) => {
     const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
@@ -350,7 +357,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
           {logoutError && <p role="alert" className="mb-4 text-[var(--danger)]">{logoutError}</p>}
-          {!accessMode ? <p role="status">Memuat akses akun…</p> : accessMode === 'managed' && !managedPaths.includes(pathname) ? <div><p>Fitur ini belum tersedia untuk pengaturan akses akun Anda.</p><Link href="/dashboard/hris">Buka tim dan absensi</Link></div> : <Fragment key={accessVersion}>{children}</Fragment>}
+          {!accessMode ? <p role="status">Memuat akses akun…</p> : scoped && !managedPaths.includes(pathname) ? <div><p>Halaman ini belum dibuka untuk akun Anda. Minta pemilik usaha menambahkan izinnya kalau Anda memerlukannya.</p><Link href={staffHome}>Kembali ke halaman saya</Link></div> : <Fragment key={accessVersion}>{children}</Fragment>}
         </main>
       </div>
     </div>

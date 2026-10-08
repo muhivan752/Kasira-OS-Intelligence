@@ -339,6 +339,12 @@ NOT NULL + HMAC unik, API null. Detail di docs/CUSTOMERS_REVIEW.md.
     - **Buktiin build lokal sebelum bakar CI** (SDK ada di `/home/linuxuser/toolchain/android-sdk`, `ANDROID_HOME` perlu di-set manual). Urutannya WAJIB `dart run build_runner build` DULU baru `flutter build`: percobaan pertama gagal justru karena itu, persis gotcha #28. Batasi `org.gradle.jvmargs` ke 2 GB, VPS ini juga ngelayanin produksi.
     - **Pindah package + ganti tanda tangan = app baru NGGAK bisa nimpa yang lama.** Merchant harus sinkron dulu, uninstall, baru install. Uninstall ngapus Drift, jadi transaksi offline yang belum tersinkron HILANG kalau urutan itu dilanggar. Dikerjain sekarang mumpung baru 4 tenant beneran.
 
+57. **Staf LEGACY juga dibatasi, bukan cuma managed (8 Okt 2026).** Sebelumnya `enforce_route` langsung lolos kalau mode bukan `managed`, dan menu web cuma disaring buat managed. Akibatnya kasir lama (tanpa `access_policy`, 24 akun di prod saat itu) dapat menu owner penuh di web dan backend nerima ubah outlet/kunci Xendit, hapus produk, promo WA, laporan bisnis.
+    - Backend `services/access.py:enforce_legacy_staff`: route yang ada di registry `ai_access`/`business_access` pakai izin yang sama dengan managed (izin lama dari flag jabatan tetap dihormati). Sisanya DAFTAR-TOLAK `LEGACY_OWNER_MODULES` + `LEGACY_OWNER_ENDPOINTS` (403 `OWNER_ONLY`), BUKAN daftar-izin: APK legacy manggil puluhan endpoint kasir (order, bayar, sync, tab, shift, reservasi, `reports/daily`) dan harus tetap jalan offline. Endpoint owner baru WAJIB ditambah ke daftar itu.
+    - Web: `app/dashboard/layout.tsx` `scoped` = managed ATAU legacy → menu dari izin, `/dashboard` diarahkan ke Operasional/Tim. Legacy tetap dapat Download POS.
+    - Owner = `is_superuser` SAJA di sini. Tenant tanpa superuser aktif (Warung Demo, `_loadtest_tenant`) kehilangan pengaturan owner.
+    - Layar owner di APK (metode bayar, edit produk, meja, lokasi) sekarang 403 buat kasir legacy; disembunyikan di APK berikutnya.
+
 28. **`flutter analyze` di VPS SELALU keluar 9 error `productVariants` — itu BUKAN bug.** `lib/core/database/app_database.g.dart` (drift generated) belum di-regenerate lokal sejak kerjaan varian. CI jalanin `dart run build_runner build` di step 49 **sebelum** `flutter analyze` di step 122, jadi di CI bersih. Flutter ADA di VPS (`/opt/flutter/bin`) — analyze lokal dulu sebelum bakar CI run, tapi saring dulu:
     ```bash
     /opt/flutter/bin/flutter analyze 2>&1 | grep 'error •' \

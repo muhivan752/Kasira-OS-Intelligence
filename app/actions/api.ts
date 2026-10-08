@@ -13,7 +13,9 @@ async function businessAccess() {
   const body = await response.json();
   if (!response.ok || !validAccountAccess(body.data)) throw new Error(extractError(body, 'Akses akun belum dapat dimuat.'));
   const managed = body.data.enforcement_mode === 'managed';
-  const allows = (permission: string) => !managed || body.data.permissions.includes(permission);
+  // Staf legacy juga dibatasi izin; cakupan outlet-nya tetap seluruh bisnis.
+  const owner = body.data.enforcement_mode === 'owner';
+  const allows = (permission: string) => owner || body.data.permissions.includes(permission);
   return { managed, allows, includeGlobal: !managed || body.data.scope === 'tenant' };
 }
 
