@@ -22,6 +22,7 @@ import {
   ChefHat,
   ShoppingCart,
   Wallet,
+  Banknote,
   MessageCircle,
   Calculator,
 } from 'lucide-react';
@@ -136,7 +137,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Beranda', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Menu', href: '/dashboard/menu', icon: MenuIcon },
     { name: 'Toko Online', href: '/dashboard/toko', icon: Globe },
-    { name: 'Kasir', href: '/dashboard/kasir', icon: Store },
+    { name: 'Kas harian', href: '/dashboard/kasir', icon: Banknote },
     { name: 'Pelanggan', href: '/dashboard/pelanggan', icon: Users },
     { name: 'Pembelian', href: '/dashboard/pembelian', icon: ShoppingCart },
     { name: 'Keuangan', href: '/dashboard/keuangan', icon: Wallet },
