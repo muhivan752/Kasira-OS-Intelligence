@@ -1067,7 +1067,7 @@ async def update_order_status(
     # ditandai lunas, supaya laporan (yang cuma menghitung order lunas) melihatnya.
     if is_storefront and status_in.status == OrderStatus.completed:
         from backend.services.order_lifecycle import settle_cod_payment
-        await settle_cod_payment(db, order)
+        await settle_cod_payment(db, order, actor_user_id=current_user.id)
 
     # Efek samping lewat order_lifecycle (satu pintu bersama tolak/janitor pesanan online).
     if status_in.status == OrderStatus.cancelled:
