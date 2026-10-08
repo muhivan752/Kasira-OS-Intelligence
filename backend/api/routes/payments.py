@@ -1639,14 +1639,42 @@ async def _settle_refund(db: AsyncSession, refund, actor_user_id, now):
     if not payment:
         return None, False
 
+    from backend.services import shift_service
+    from backend.models.payment_refund import PaymentRefund
     refund_amt = D(str(refund.amount))
-    is_full = refund_amt >= D(str(payment.amount_paid))
+    net = shift_service.payment_net(payment)
+    prior = D(str((await db.execute(
+        select(func.coalesce(func.sum(PaymentRefund.amount), 0)).where(
+            PaymentRefund.payment_id == payment.id,
+            PaymentRefund.status == 'completed',
+            PaymentRefund.deleted_at.is_(None),
+            PaymentRefund.id != refund.id,
+        )
+    )).scalar() or 0))
+    # Stok balik cuma kalau refund INI sendirian mengembalikan seluruh uang
+    # bersih (dibayar − kembalian). Refund bertahap = itikad baik, barang
+    # tetap di pelanggan. Dulu dibandingkan dengan amount_paid kotor, jadi
+    # refund penuh atas pembayaran yang ada kembaliannya kebaca "sebagian".
+    is_full = prior == 0 and refund_amt >= net
 
     payment.refunded_at = now
-    payment.refund_amount = refund_amt
+    payment.refund_amount = prior + refund_amt  # kumulatif
     payment.row_version += 1
-    if is_full:
+    if prior + refund_amt >= net:
         payment.status = 'refunded'
+
+    # Uang refund keluar dari laci yang terbuka SEKARANG, bukan menghapus
+    # pemasukan sesi lama (yang mungkin sudah dihitung). Rumusnya di
+    # shift_service.drawer_totals.
+    actor = refund.requested_by or actor_user_id
+    if actor:
+        shift = await shift_service.ensure_open_shift(
+            db, payment.outlet_id, actor, strict=False, source="refund")
+    else:
+        shift = await shift_service.get_open_shift(db, payment.outlet_id)
+    if shift is not None:
+        refund.metadata_payload = {**(refund.metadata_payload or {}),
+                                   shift_service.REFUND_SHIFT_KEY: str(shift.id)}
 
     # Balikin stok — HANYA refund penuh.
     if is_full and payment.order_id:
@@ -1738,10 +1766,26 @@ async def request_refund(
     if payment.status != 'paid':
         raise HTTPException(status_code=400, detail=f"Payment status '{payment.status}', hanya payment 'paid' yang bisa di-refund")
 
-    # Validate amount
+    # Validate amount: batasnya uang bersih yang tinggal di toko (dibayar −
+    # kembalian) dikurangi refund yang sudah selesai sebelumnya.
+    from backend.services import shift_service
     refund_amount = D(str(body.amount))
-    if refund_amount > D(str(payment.amount_paid)):
-        raise HTTPException(status_code=400, detail="Jumlah refund melebihi jumlah pembayaran")
+    if refund_amount <= 0:
+        raise HTTPException(status_code=400, detail="Jumlah refund harus lebih dari 0")
+    already = D(str((await db.execute(
+        select(func.coalesce(func.sum(PaymentRefund.amount), 0)).where(
+            PaymentRefund.payment_id == payment.id,
+            PaymentRefund.status == 'completed',
+            PaymentRefund.deleted_at.is_(None),
+        )
+    )).scalar() or 0))
+    refundable = shift_service.payment_net(payment) - already
+    if refund_amount > refundable:
+        maks = f"{refundable:,.0f}".replace(",", ".")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Jumlah refund melebihi sisa yang bisa dikembalikan (maksimal Rp {maks})",
+        )
 
     # Check no existing pending refund for this payment
     existing = await db.execute(

@@ -119,7 +119,7 @@ async def mark_delivered(db, order: Order, outlet, *, proof_image_url: Optional[
     # COD: uangnya baru berpindah tangan sekarang. Satu pintu bareng
     # PUT /orders/{id}/status completed (delivery gelombang 1).
     from backend.services.order_lifecycle import settle_cod_payment, release_table_if_idle
-    await settle_cod_payment(db, order)
+    await settle_cod_payment(db, order, actor_user_id=actor_user_id)
 
     completed = False
     if _val(order.status) not in ("completed", "cancelled"):

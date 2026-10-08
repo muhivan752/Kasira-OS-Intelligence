@@ -136,7 +136,7 @@ async def latest_payment(db, order_id) -> Optional[Payment]:
     )).scalar_one_or_none()
 
 
-async def settle_cod_payment(db, order: Order) -> bool:
+async def settle_cod_payment(db, order: Order, *, actor_user_id=None) -> bool:
     """COD (tunai antar): tandai lunas waktu barangnya sampai.
 
     Dipanggil dua jalur yang sama-sama berarti "sudah diterima pelanggan":
@@ -150,16 +150,29 @@ async def settle_cod_payment(db, order: Order) -> bool:
     `expired` ikut dipulihkan: janitor payment_reconciliation sempat
     meng-expire COD yang masih di jalan (fix 5 Sep 2026). Barangnya sampai
     dan uangnya diterima kurir, jadi kenyataannya lunas, apa pun kata janitor.
+
+    Sekaligus titik serah terima uang tunai storefront (COD DAN ambil
+    sendiri yang lunas sejak dibuat): pembayarannya dipasang ke sesi kas yang
+    terbuka sekarang + siapa yang menerima (fix 8 Okt 2026). Tanpa ini uang
+    tunai storefront masuk laci tapi nggak pernah ada di perkiraan laci.
+    `actor_user_id` None = lewat link kurir: masuk sesi, penerimanya kosong.
     """
     pay = await latest_payment(db, order.id)
-    if pay is None or _val(pay.payment_method) != "cash" or _val(pay.status) not in ("pending", "expired"):
+    if pay is None or _val(pay.payment_method) != "cash":
         return False
-    now = datetime.now(timezone.utc)
-    pay.status = "paid"
-    pay.paid_at = now
-    pay.amount_paid = pay.amount_due
-    pay.row_version = (pay.row_version or 0) + 1
-    return True
+    settled = False
+    if _val(pay.status) in ("pending", "expired"):
+        now = datetime.now(timezone.utc)
+        pay.status = "paid"
+        pay.paid_at = now
+        pay.amount_paid = pay.amount_due
+        pay.row_version = (pay.row_version or 0) + 1
+        settled = True
+    if _val(pay.status) == "paid":
+        from backend.services.shift_service import attach_payment_to_drawer
+        await attach_payment_to_drawer(db, pay, actor_user_id=actor_user_id,
+                                       fallback_user_id=order.accepted_by, source="storefront_cash")
+    return settled
 
 
 async def accept_order(db, order: Order, outlet: Outlet, *, eta_minutes: int, actor_user_id=None) -> None:
@@ -181,6 +194,15 @@ async def accept_order(db, order: Order, outlet: Outlet, *, eta_minutes: int, ac
         pay.paid_at = now
         pay.amount_paid = pay.amount_due
         pay.row_version = (pay.row_version or 0) + 1
+    # Uang non-tunai yang sudah lunas masuk sesi kas sekarang. Manual = kasir
+    # ini yang memastikan uangnya (penerima); Xendit = tanpa penerima. Tunai
+    # menunggu serah terima (settle_cod_payment), bukan di sini.
+    if pay is not None and _val(pay.payment_method) != "cash" and _val(pay.status) == "paid":
+        from backend.services.shift_service import attach_payment_to_drawer
+        await attach_payment_to_drawer(
+            db, pay, actor_user_id=actor_user_id, source="storefront_accept",
+            set_receiver=(pay.channel or "xendit") == "manual",
+        )
     await _set_connect_status(db, order.id, "accepted")
     db.add(Event(
         outlet_id=order.outlet_id,

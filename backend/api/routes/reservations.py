@@ -415,7 +415,10 @@ async def confirm_reservation(
     # (dia sudah lihat bukti/notifikasi). QRIS Xendit dibiarkan, webhook yang nentuin.
     from backend.services.deposit_service import load_deposit_payment, mark_paid_if_manual
     dep_payment = await load_deposit_payment(db, reservation)
-    mark_paid_if_manual(dep_payment)
+    if mark_paid_if_manual(dep_payment):
+        # Kasir ini yang memastikan uang DP-nya: masuk sesi kas sekarang.
+        from backend.services.shift_service import attach_payment_to_drawer
+        await attach_payment_to_drawer(db, dep_payment, actor_user_id=current_user.id, source="deposit")
 
     reservation.status = "confirmed"
     reservation.confirmed_at = datetime.now(timezone.utc)

@@ -26,21 +26,19 @@ from backend.models.order import Order
 router = APIRouter(route_class=PosAccessRoute)
 
 
-async def _enrich_shift_with_payments(db: AsyncSession, shift) -> dict:
+async def _enrich_shift_with_payments(db: AsyncSession, shift):
     """Tambahkan data cash payments ke shift response."""
     shift_data = ShiftWithActivitiesResponse.model_validate(shift)
 
     # Query semua payments dari shift ini
     pay_query = select(Payment).where(
         Payment.shift_session_id == shift.id,
-        Payment.status == 'paid',
+        Payment.status.in_(shift_service.DRAWER_PAYMENT_STATUSES),
         Payment.deleted_at.is_(None),
     ).order_by(Payment.created_at.desc())
     pay_result = await db.execute(pay_query)
     payments = pay_result.scalars().all()
 
-    total_cash = 0.0
-    total_qris = 0.0
     cash_payments_list = []
 
     for p in payments:
@@ -65,15 +63,13 @@ async def _enrich_shift_with_payments(db: AsyncSession, shift) -> dict:
             created_at=p.created_at,
         ))
 
-        if p.payment_method == 'cash':
-            total_cash += net
-        elif p.payment_method == 'qris':
-            total_qris += net
-
+    # Angka dari satu sumber (shift_service.drawer_totals), sama dengan yang
+    # dipakai perkiraan laci dan rekap per akun.
+    totals = await shift_service.drawer_totals(db, shift)
     shift_data.cash_payments = cash_payments_list
-    shift_data.total_cash_sales = total_cash
-    shift_data.total_qris_sales = total_qris
-    return shift_data
+    shift_data.total_cash_sales = float(totals["cash_in"])
+    shift_data.total_qris_sales = float(totals["qris_in"])
+    return shift_data, totals
 
 
 @router.post("/open", response_model=StandardResponse[ShiftResponse])
@@ -229,8 +225,14 @@ async def get_current_shift(
             message="No open shift found"
         )
 
-    enriched = await _enrich_shift_with_payments(db, shift)
+    enriched, totals = await _enrich_shift_with_payments(db, shift)
     data = enriched.model_dump(mode="json")
+    # Sesi terbuka belum punya expected_ending_cash di DB. Kirim yang dihitung
+    # sekarang supaya app nggak menebak sendiri (tebakan app nggak tahu refund).
+    data["expected_ending_cash"] = float(totals["expected"])
+    data["cash_refunds"] = float(totals["cash_refunds"])
+    data["cash_income"] = float(totals["cash_income"])
+    data["cash_expense"] = float(totals["cash_expense"])
     mode = await shift_service.outlet_shift_mode(db, outlet_id)
     owner = await shift_service.is_owner(db, current_user)
     data["shift_mode"] = mode
@@ -396,7 +398,7 @@ async def get_shift_review(
     rows = await shift_service.shift_review(db, shift)
     if shift_service.blind_close_for(outlet.shift_mode, await shift_service.is_owner(db, current_user)):
         for r in rows:
-            for k in ("cash", "qris", "other", "total"):
+            for k in shift_service.REVIEW_MONEY_KEYS:
                 r[k] = None
     return StandardResponse(success=True, data=rows, request_id=request.state.request_id)
 
@@ -479,7 +481,7 @@ async def get_cash_activities(
     # Include cash payment transactions from this shift
     pay_query = select(Payment).where(
         Payment.shift_session_id == shift_id,
-        Payment.status == 'paid',
+        Payment.status.in_(shift_service.DRAWER_PAYMENT_STATUSES),
         Payment.deleted_at.is_(None),
     ).order_by(Payment.created_at.desc())
     pay_result = await db.execute(pay_query)

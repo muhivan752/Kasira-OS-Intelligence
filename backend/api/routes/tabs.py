@@ -516,7 +516,7 @@ async def pay_tab_full(
         order_id=first_order_id,
         tab_id=tab.id,
         outlet_id=tab.outlet_id,
-        shift_session_id=tab.shift_session_id,
+        shift_session_id=await _drawer_shift_id(db, tab, current_user),
         payment_method=body.payment_method,
         channel=channel,
         amount_due=effective_total,
@@ -707,7 +707,7 @@ async def pay_split(
         order_id=first_order_id,
         tab_id=tab.id,
         outlet_id=tab.outlet_id,
-        shift_session_id=tab.shift_session_id,
+        shift_session_id=await _drawer_shift_id(db, tab, current_user),
         payment_method=body.payment_method,
         channel=channel,
         amount_due=split_amount,
@@ -820,6 +820,20 @@ async def _complete_order_if_fully_paid(db: AsyncSession, order: Order) -> None:
     if all_paid:
         order.status = 'completed'
         order.row_version = (order.row_version or 0) + 1
+
+
+async def _drawer_shift_id(db, tab, user):
+    """Sesi kas yang terbuka SAAT uang tab diterima (fix 8 Okt 2026).
+
+    Dulu pembayaran nempel ke tab.shift_session_id = sesi waktu tab DIBUKA:
+    tab 03.50 dibayar 04.10 masuk ke sesi yang sudah ditutup sistem, dan tab
+    otomatis dari pesanan meja online (tanpa sesi) bikin uangnya hilang dari
+    hitungan laci. strict=False: perilaku lama juga nggak mengecek kunci laci.
+    """
+    from backend.services.shift_service import ensure_open_shift
+    shift = await ensure_open_shift(db, tab.outlet_id, user.id, user.tenant_id,
+                                    source="tab_payment", strict=False)
+    return shift.id
 
 
 def _tab_payment_channel(outlet, body) -> tuple[bool, str]:
@@ -1081,7 +1095,7 @@ async def pay_items(
         order_id=first_order_id,
         tab_id=tab.id,
         outlet_id=tab.outlet_id,
-        shift_session_id=tab.shift_session_id,
+        shift_session_id=await _drawer_shift_id(db, tab, current_user),
         payment_method=body.payment_method,
         channel=channel,
         amount_due=total_due,

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -133,6 +134,13 @@ async def ensure_open_shift(
                     "message": "Sesi kas belum dibuka. Buka kasir dan isi modal awal untuk memulai."},
         )
 
+    if tenant_id is None:
+        # Audit log ber-RLS menolak tenant_id NULL dan membatalkan seluruh
+        # transaksi (kegigit tes 8 Okt: jalur storefront/refund manggil tanpa
+        # tenant). Ambil dari outlet supaya pemanggil nggak bisa lupa.
+        from backend.models.outlet import Outlet
+        tenant_id = (await db.execute(select(Outlet.tenant_id).where(Outlet.id == outlet_id))).scalar()
+
     shift = Shift(
         outlet_id=outlet_id,
         user_id=user_id,
@@ -152,25 +160,155 @@ async def ensure_open_shift(
     return shift
 
 
-async def compute_expected_cash(db: AsyncSession, shift: Shift) -> float:
-    """modal awal + kas masuk (tunai) + pemasukan kas − pengeluaran kas."""
+# ───────────────────────── matematika laci ─────────────────────────
+#
+# Satu definisi, dipakai perkiraan laci, ringkasan sesi, DAN rekap per akun,
+# supaya jumlah per akun selalu sama persis dengan angka laci (fix 8 Okt 2026).
+#
+#   Masuk(S)  = Σ (dibayar − kembalian) pembayaran TUNAI dengan
+#               shift_session_id = S dan status paid ATAU refunded
+#               (uangnya memang pernah masuk laci; refund dicatat terpisah).
+#   Refund(S) = Σ refund TUNAI berstatus completed yang uangnya keluar di S:
+#               metadata_payload.shift_session_id = S. Refund lama tanpa
+#               penanda dihitung di sesi pembayarannya sendiri, jadi refund
+#               penuh lama tetap netral (masuk − keluar = 0) seperti dulu.
+#   Perkiraan = modal awal + pemasukan kas − pengeluaran kas + Masuk − Refund
+#
+# Rekap per akun = himpunan yang SAMA dikelompokkan: uang masuk per
+# payments.processed_by, refund per payment_refunds.requested_by (orang di
+# depan laci yang menyerahkan uang). NULL = "tanpa akun" (online, kurir,
+# data lama). Σ semua baris == Masuk − Refund, tanpa pengecualian.
+
+DRAWER_PAYMENT_STATUSES = ("paid", "refunded")
+REVIEW_MONEY_KEYS = ("cash", "cash_refunds", "cash_net", "qris", "other", "total")
+REFUND_SHIFT_KEY = "shift_session_id"
+
+
+def _d(v) -> Decimal:
+    return Decimal(str(v)) if v is not None else Decimal("0")
+
+
+def payment_net(payment) -> Decimal:
+    """Uang yang benar-benar tinggal di toko dari satu pembayaran."""
+    return _d(payment.amount_paid) - _d(payment.change_amount)
+
+
+def _refund_in_shift_clause(shift_id: UUID):
+    from sqlalchemy import or_, and_
+    from backend.models.payment_refund import PaymentRefund
+    tagged = PaymentRefund.metadata_payload.op("->>")(REFUND_SHIFT_KEY)
+    return or_(
+        tagged == str(shift_id),
+        and_(tagged.is_(None), Payment.shift_session_id == shift_id),
+    )
+
+
+async def _cash_in_by_user(db: AsyncSession, shift_id: UUID) -> dict:
+    """{processed_by: {cash, qris, other}} dalam Decimal."""
+    net = Payment.amount_paid - func.coalesce(Payment.change_amount, 0)
+    rows = (await db.execute(
+        select(
+            Payment.processed_by,
+            func.coalesce(func.sum(case((Payment.payment_method == "cash", net), else_=0)), 0).label("cash"),
+            func.coalesce(func.sum(case((Payment.payment_method == "qris", net), else_=0)), 0).label("qris"),
+            func.coalesce(func.sum(case((Payment.payment_method.notin_(["cash", "qris"]), net), else_=0)), 0).label("other"),
+        )
+        .where(
+            Payment.shift_session_id == shift_id,
+            Payment.status.in_(DRAWER_PAYMENT_STATUSES),
+            Payment.deleted_at.is_(None),
+        )
+        .group_by(Payment.processed_by)
+    )).all()
+    return {r.processed_by: {"cash": _d(r.cash), "qris": _d(r.qris), "other": _d(r.other)} for r in rows}
+
+
+async def _cash_refunds_by_user(db: AsyncSession, shift_id: UUID) -> dict:
+    """{requested_by: Decimal} refund tunai yang uangnya keluar di sesi ini."""
+    from backend.models.payment_refund import PaymentRefund
+    who = func.coalesce(PaymentRefund.requested_by, PaymentRefund.approved_by)
+    rows = (await db.execute(
+        select(who.label("uid"), func.coalesce(func.sum(PaymentRefund.amount), 0).label("amt"))
+        .select_from(PaymentRefund)
+        .join(Payment, Payment.id == PaymentRefund.payment_id)
+        .where(
+            PaymentRefund.status == "completed",
+            PaymentRefund.deleted_at.is_(None),
+            Payment.payment_method == "cash",
+            _refund_in_shift_clause(shift_id),
+        )
+        .group_by(who)
+    )).all()
+    return {r.uid: _d(r.amt) for r in rows}
+
+
+async def drawer_totals(db: AsyncSession, shift: Shift) -> dict:
+    """Semua komponen perkiraan laci, Decimal."""
     act_q = (
         select(CashActivity.activity_type, func.sum(CashActivity.amount).label("total"))
         .where(CashActivity.shift_id == shift.id, CashActivity.deleted_at.is_(None))
         .group_by(CashActivity.activity_type)
     )
-    totals = {row.activity_type: float(row.total or 0) for row in (await db.execute(act_q)).all()}
-    income = totals.get(CashActivityType.income, 0.0)
-    expense = totals.get(CashActivityType.expense, 0.0)
+    totals = {row.activity_type: _d(row.total) for row in (await db.execute(act_q)).all()}
+    income = totals.get(CashActivityType.income, Decimal("0"))
+    expense = totals.get(CashActivityType.expense, Decimal("0"))
+    by_user = await _cash_in_by_user(db, shift.id)
+    refunds = await _cash_refunds_by_user(db, shift.id)
+    cash_in = sum((v["cash"] for v in by_user.values()), Decimal("0"))
+    qris_in = sum((v["qris"] for v in by_user.values()), Decimal("0"))
+    other_in = sum((v["other"] for v in by_user.values()), Decimal("0"))
+    cash_refunds = sum(refunds.values(), Decimal("0"))
+    starting = _d(shift.starting_cash)
+    return {
+        "starting_cash": starting,
+        "cash_income": income,
+        "cash_expense": expense,
+        "cash_in": cash_in,
+        "qris_in": qris_in,
+        "other_in": other_in,
+        "cash_refunds": cash_refunds,
+        "expected": starting + income - expense + cash_in - cash_refunds,
+    }
 
-    cash_q = select(func.sum(Payment.amount_paid - func.coalesce(Payment.change_amount, 0))).where(
-        Payment.shift_session_id == shift.id,
-        Payment.payment_method == "cash",
-        Payment.status == "paid",
-        Payment.deleted_at.is_(None),
-    )
-    cash_in = float((await db.execute(cash_q)).scalar() or 0)
-    return float(shift.starting_cash or 0) + income - expense + cash_in
+
+async def compute_expected_cash(db: AsyncSession, shift: Shift) -> float:
+    """modal awal + pemasukan kas − pengeluaran kas + Masuk − Refund (lihat atas)."""
+    return float((await drawer_totals(db, shift))["expected"])
+
+
+async def attach_payment_to_drawer(
+    db: AsyncSession,
+    payment: Payment,
+    *,
+    actor_user_id: Optional[UUID] = None,
+    fallback_user_id: Optional[UUID] = None,
+    set_receiver: bool = True,
+    source: str = "storefront",
+) -> None:
+    """Pasang pembayaran yang lahir di luar kasir (storefront, DP) ke sesi
+    kas yang terbuka SAAT uangnya diterima, plus siapa penerimanya.
+
+    Nggak pernah memindah pembayaran yang sudah punya sesi: sesi yang sudah
+    dihitung nggak boleh berubah angkanya. `set_receiver=False` buat uang
+    yang nggak lewat tangan orang (QRIS Xendit). Tanpa aktor dan tanpa
+    cadangan, cuma nempel ke sesi yang sudah terbuka (link kurir).
+    """
+    if payment is None:
+        return
+    status = payment.status.value if hasattr(payment.status, "value") else str(payment.status)
+    if status != "paid":
+        return
+    if payment.shift_session_id is None:
+        opener = actor_user_id or fallback_user_id
+        if opener:
+            shift = await ensure_open_shift(db, payment.outlet_id, opener, strict=False, source=source)
+        else:
+            shift = await get_open_shift(db, payment.outlet_id)
+        if shift is not None:
+            payment.shift_session_id = shift.id
+            payment.row_version = (payment.row_version or 0) + 1
+    if set_receiver and actor_user_id and payment.processed_by is None:
+        payment.processed_by = actor_user_id
 
 
 async def close_shift(
@@ -384,13 +522,14 @@ def blind_close_for(mode: str, owner: bool) -> bool:
 
 def blind_view(data: dict) -> dict:
     """Buang angka yang bikin hitungan bisa dicontek."""
-    for k in ("expected_ending_cash", "total_cash_sales", "total_qris_sales", "starting_cash", "variance", "variance_status"):
+    for k in ("expected_ending_cash", "total_cash_sales", "total_qris_sales", "starting_cash", "variance", "variance_status",
+              "cash_refunds", "cash_income", "cash_expense"):
         if k in data:
             data[k] = None
     for p in data.get("cash_payments") or []:
         p.pop("amount", None); p.pop("net_amount", None); p.pop("change_amount", None)
     for r in data.get("review") or []:
-        for k in ("cash", "qris", "other", "total"):
+        for k in REVIEW_MONEY_KEYS:
             r[k] = None
     data["blind_close"] = True
     return data
@@ -439,41 +578,52 @@ async def assert_can_use_shift(db: AsyncSession, shift: Shift, user_id: UUID) ->
 
 
 async def shift_review(db: AsyncSession, shift: Shift) -> list[dict]:
-    """Rekap per kasir: pesanan, tunai, QRIS, total. Dihitung dari orders dan
-    payments di sesi ini; bahan layar tutup kasir dan dashboard pemilik."""
+    """Rekap per akun untuk satu sesi.
+
+    Dua ukuran yang sengaja dipisah (resto dengan waiter, 8 Okt 2026):
+    - `orders`: pesanan yang DIINPUT akun ini (orders.user_id) = kinerja.
+    - `cash`/`qris`/`other`/`cash_refunds`: uang yang DITERIMA akun ini
+      (payments.processed_by), termasuk pembayaran tab.
+    Baris `user_id: None` = uang tanpa akun (online, kurir, data lama).
+    Σ (cash − cash_refunds) semua baris == Masuk − Refund di drawer_totals.
+    """
     from backend.models.order import Order
     from backend.models.user import User
 
-    rows = (await db.execute(
-        select(
-            Order.user_id,
-            func.count(func.distinct(Order.id)).label("orders"),
-            func.coalesce(func.sum(
-                case((Payment.payment_method == "cash",
-                           Payment.amount_paid - func.coalesce(Payment.change_amount, 0)), else_=0)
-            ), 0).label("cash"),
-            func.coalesce(func.sum(
-                case((Payment.payment_method == "qris", Payment.amount_paid), else_=0)
-            ), 0).label("qris"),
-            func.coalesce(func.sum(
-                case((Payment.payment_method.notin_(["cash", "qris"]), Payment.amount_paid), else_=0)
-            ), 0).label("other"),
-        )
-        .select_from(Order)
-        .outerjoin(Payment, (Payment.order_id == Order.id) & (Payment.status == "paid") & (Payment.deleted_at.is_(None)))
+    money = await _cash_in_by_user(db, shift.id)
+    refunds = await _cash_refunds_by_user(db, shift.id)
+    order_rows = (await db.execute(
+        select(Order.user_id, func.count(func.distinct(Order.id)).label("orders"))
         .where(Order.shift_session_id == shift.id, Order.deleted_at.is_(None), Order.user_id.isnot(None))
         .group_by(Order.user_id)
     )).all()
-    if not rows:
+    orders = {r.user_id: int(r.orders) for r in order_rows}
+
+    keys = set(money) | set(refunds) | set(orders)
+    if not keys:
         return []
-    names = {u.id: u.full_name for u in (await db.execute(
-        select(User.id, User.full_name).where(User.id.in_([r.user_id for r in rows])))).all()}
+    ids = [k for k in keys if k is not None]
+    names = {}
+    if ids:
+        names = {u.id: u.full_name for u in (await db.execute(
+            select(User.id, User.full_name).where(User.id.in_(ids)))).all()}
+    zero = Decimal("0")
     out = []
-    for r in rows:
+    for k in keys:
+        m = money.get(k, {})
+        cash, qris, other = m.get("cash", zero), m.get("qris", zero), m.get("other", zero)
+        ref = refunds.get(k, zero)
+        cash_net = cash - ref
         out.append({
-            "user_id": str(r.user_id), "name": names.get(r.user_id) or "Kasir",
-            "orders": int(r.orders), "cash": float(r.cash), "qris": float(r.qris), "other": float(r.other),
-            "total": float(r.cash) + float(r.qris) + float(r.other),
+            "user_id": str(k) if k else None,
+            "name": (names.get(k) or "Akun terhapus") if k else "Tanpa akun (online/kurir)",
+            "orders": orders.get(k, 0),
+            "cash": float(cash),
+            "cash_refunds": float(ref),
+            "cash_net": float(cash_net),
+            "qris": float(qris),
+            "other": float(other),
+            "total": float(cash_net + qris + other),
         })
-    out.sort(key=lambda d: -d["total"])
+    out.sort(key=lambda d: (d["user_id"] is None, -d["total"], -d["orders"]))
     return out

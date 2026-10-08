@@ -91,23 +91,25 @@ export default function KasirPage() {
               {shift.locked_to_name && (
                 <p className="text-amber-700">Laci terkunci ke {shift.locked_to_name} (mode Ketat)</p>
               )}
-              {shift.review?.length > 0 && (
-                <div className="pt-1">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Rekap per kasir</p>
-                  <ul className="mt-1 divide-y divide-gray-100">
-                    {shift.review.map((r: any) => (
-                      <li key={r.user_id} className="flex items-center justify-between py-1.5">
-                        <span className="text-gray-900">{r.name} <span className="text-gray-400">· {r.orders} pesanan</span></span>
-                        <span className="text-gray-700">tunai {rp(r.cash)} · QRIS {rp(r.qris)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Modal awal</p><p className="font-semibold text-gray-900">{rp(shift.starting_cash)}</p></div>
-                <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Penjualan tunai</p><p className="font-semibold text-gray-900">{rp(shift.total_cash_sales)}</p></div>
-                <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Penjualan QRIS</p><p className="font-semibold text-gray-900">{rp(shift.total_qris_sales)}</p></div>
+              <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Isi laci menurut sistem</p>
+                <dl className="mt-2 space-y-1">
+                  <div className="flex justify-between"><dt className="text-gray-600">Modal awal</dt><dd className="text-gray-900">{rp(shift.starting_cash)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-gray-600">Tunai diterima</dt><dd className="text-gray-900">+ {rp(shift.total_cash_sales)}</dd></div>
+                  {Number(shift.cash_refunds) > 0 && (
+                    <div className="flex justify-between"><dt className="text-gray-600">Refund tunai</dt><dd className="text-gray-900">− {rp(shift.cash_refunds)}</dd></div>
+                  )}
+                  {Number(shift.cash_income) > 0 && (
+                    <div className="flex justify-between"><dt className="text-gray-600">Kas masuk lain</dt><dd className="text-gray-900">+ {rp(shift.cash_income)}</dd></div>
+                  )}
+                  {Number(shift.cash_expense) > 0 && (
+                    <div className="flex justify-between"><dt className="text-gray-600">Kas keluar</dt><dd className="text-gray-900">− {rp(shift.cash_expense)}</dd></div>
+                  )}
+                  <div className="flex justify-between border-t border-gray-200 pt-1 font-semibold"><dt className="text-gray-900">Perkiraan isi laci</dt><dd className="text-gray-900">{rp(shift.expected_ending_cash)}</dd></div>
+                </dl>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">QRIS diterima</p><p className="font-semibold text-gray-900">{rp(shift.total_qris_sales)}</p></div>
                 <div className="rounded-lg bg-gray-50 p-3"><p className="text-xs text-gray-500">Mode kas</p><p className="font-semibold text-gray-900 capitalize">{shift.shift_mode || 'ringan'}</p></div>
               </div>
             </div>
@@ -133,6 +135,40 @@ export default function KasirPage() {
           )}
         </div>
       </div>
+
+      {shift?.review?.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <h2 className="font-bold text-gray-900">Rekap per akun</h2>
+          <p className="mt-1 text-sm text-gray-500">Pesanan dihitung dari akun yang menginput. Uang dihitung dari akun yang menerima pembayaran. Jumlah tunai bersih semua baris sama dengan tunai diterima dikurangi refund di atas.</p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-xs text-gray-500">
+                  <th className="py-2 pr-3 font-medium">Akun</th>
+                  <th className="py-2 pr-3 font-medium text-right">Pesanan</th>
+                  <th className="py-2 pr-3 font-medium text-right">Tunai bersih</th>
+                  <th className="py-2 pr-3 font-medium text-right">QRIS</th>
+                  <th className="py-2 font-medium text-right">Lainnya</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {shift.review.map((r: any) => (
+                  <tr key={r.user_id || 'none'}>
+                    <td className="py-2 pr-3 text-gray-900">{r.name}</td>
+                    <td className="py-2 pr-3 text-right text-gray-700">{r.orders}</td>
+                    <td className="py-2 pr-3 text-right text-gray-700">
+                      {rp(r.cash_net)}
+                      {Number(r.cash_refunds) > 0 && <span className="block text-xs text-gray-400">terima {rp(r.cash)}, refund {rp(r.cash_refunds)}</span>}
+                    </td>
+                    <td className="py-2 pr-3 text-right text-gray-700">{rp(r.qris)}</td>
+                    <td className="py-2 text-right text-gray-700">{rp(r.other)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {counting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

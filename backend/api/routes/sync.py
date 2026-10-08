@@ -73,6 +73,7 @@ def _normalize_push(changes, syncing_user_id: str, tz_name: str) -> None:
                 return v
         return v
 
+    order_users: dict = {}
     for table, uuid_fields in _UUID_FIELDS.items():
         rows = getattr(changes, table, None) or []
         for r in rows:
@@ -87,6 +88,8 @@ def _normalize_push(changes, syncing_user_id: str, tz_name: str) -> None:
                     r[f] = as_uuid(r[f])
             if table == "orders" and not r.get("user_id"):
                 r["user_id"] = _uuid.UUID(syncing_user_id)
+            if table == "orders" and r.get("id"):
+                order_users[r["id"]] = r.get("user_id")
             if table == "payments":
                 # PaymentLocal di HP nggak nyimpen kembalian. Tanpa ini bayar
                 # Rp 50.000 buat tagihan Rp 5.400 kebaca sebagai kas masuk
@@ -103,6 +106,13 @@ def _normalize_push(changes, syncing_user_id: str, tz_name: str) -> None:
                 # 'xendit' oleh services/payment_methods.settles_inline.
                 if str(r.get("payment_method") or "") == "qris" and not r.get("channel"):
                     r["channel"] = "manual"
+                # Penerima uang (rekap per akun di Kas harian, 8 Okt 2026).
+                # Offline: yang input order di HP itu juga yang terima uangnya.
+                # Order yang nggak ikut paket ini → akun yang nge-sync.
+                if not r.get("processed_by"):
+                    r["processed_by"] = order_users.get(r.get("order_id")) or _uuid.UUID(syncing_user_id)
+                else:
+                    r["processed_by"] = as_uuid(r["processed_by"])
             for f in _TS_FIELDS:
                 if f in r:
                     r[f] = fix_ts(r[f])
