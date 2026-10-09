@@ -1,14 +1,14 @@
 {
   "pos": {
-    "version": "1.6.36",
+    "version": "1.6.37",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.36/selaris-pos-v1.6.36.apk",
-    "release_notes": "Masuk dan daftar lewat Google atau kode Sefrekuensi. Karyawan masuk dengan username."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.37/selaris-pos-v1.6.37.apk",
+    "release_notes": "Karyawan masuk cukup dengan nomor HP atau username dan password, tanpa username toko. Tersedia hapus akun di menu Tim dan akun saya. Tab Laporan mengikuti izin jabatan dan mendukung outlet mode Resep. Selaris AI di aplikasi bisa menyusun resep, mengubah harga bahan, mencatat bahan masuk, dan mengubah harga jual, dengan konfirmasi Simpan."
   },
   "dapur": {
-    "version": "1.6.36",
+    "version": "1.6.37",
     "is_mandatory": false,
-    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.36/selaris-dapur-v1.6.36.apk",
-    "release_notes": "Masuk dan daftar lewat Google atau kode Sefrekuensi. Karyawan masuk dengan username."
+    "download_url": "https://github.com/muhivan752/Kasira-OS-Intelligence/releases/download/v1.6.37/selaris-dapur-v1.6.37.apk",
+    "release_notes": "Karyawan masuk cukup dengan nomor HP atau username dan password, tanpa username toko. Tersedia hapus akun di menu Tim dan akun saya. Tab Laporan mengikuti izin jabatan dan mendukung outlet mode Resep. Selaris AI di aplikasi bisa menyusun resep, mengubah harga bahan, mencatat bahan masuk, dan mengubah harga jual, dengan konfirmasi Simpan."
   }
 }
