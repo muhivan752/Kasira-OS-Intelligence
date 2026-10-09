@@ -13,8 +13,9 @@ terapkan, abaikan, batalkan.
   `stats_by_kind` (superadmin), dan saklar KIND_ENABLED untuk mematikan
   detektor tanpa deploy kode (env SUGGESTIONS_DISABLED=kind,kind).
 
-Belum ditelan: tasks/kg_price_event_loop.py (WA harga bahan naik dari edit
-manual). Dilebur saat tahap B membawa notifikasi; sampai itu keduanya jalan.
+Saran TIDAK memakai WA (keputusan Ivan 9 Okt 2026). WA harga bahan naik yang
+lama (tasks/kg_price_event_loop.py) dicabut; perannya diambil kartu
+ingredient_price_up. Notifikasi tahap B: push app + DM Sefrekuensi saja.
 """
 import asyncio
 import hashlib
@@ -22,11 +23,9 @@ import json
 import logging
 import math as _math
 import os
-import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_CEILING
 from types import SimpleNamespace
-from urllib.parse import quote
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -156,7 +155,7 @@ def stock_candidate(*, kind_subject, subject_id, name, unit, stock, used_7d, act
              "avg_daily": round(avg, 2), "avg_unit": unit, "days_left": round(days_left, 1) if days_left is not None else None,
              "runs_out_on": runs_out, "min_stock": min_stock, "order_qty": oq, "order_unit": ou,
              "price_per_unit": money(price_per_unit or 0), "price_unit": unit, "order_total": money(total),
-             "supplier": {"id": str(supplier.id), "name": supplier.name, "has_phone": bool((supplier.phone or "").strip())} if supplier else None,
+             "supplier": {"id": str(supplier.id), "name": supplier.name, "phone": (supplier.phone or "").strip() or None} if supplier else None,
              "cover_days": STOCK_COVER_DAYS}
     proposal = {"action": "order_supplier", "subject": kind_subject, "subject_id": str(subject_id),
                 "qty": order_qty, "unit": unit, "supplier_id": str(supplier.id) if supplier else None}
@@ -533,15 +532,12 @@ async def apply(db, user, access, suggestion_id, params=None) -> dict:
 
 
 async def _order_message(db, row) -> dict:
+    """Catat 'sudah dipesan'. Pemesanan ke pemasok di luar Selaris; stok baru
+    bertambah saat pembelian dicatat (tidak ada WA, keputusan 9 Okt 2026)."""
     f = row.facts
     supplier = await db.get(Supplier, UUID(row.proposal["supplier_id"])) if row.proposal.get("supplier_id") else None
-    outlet = await db.get(Outlet, row.outlet_id)
-    text_ = (f"Halo {supplier.name if supplier else ''}, saya mau pesan {f['order_qty']:g} {f['order_unit']} {f['name']}. "
-             f"Bisa dikirim secepatnya? Terima kasih. {outlet.name}").replace("Halo ,", "Halo,")
-    phone = re.sub(r"\D", "", (supplier.phone or "") if supplier else "")
-    if phone.startswith("0"):
-        phone = "62" + phone[1:]
-    return {"message": text_, "wa_link": f"https://wa.me/{phone}?text={quote(text_)}" if phone else None}
+    return {"ordered_qty": f["order_qty"], "unit": f["order_unit"], "name": f["name"],
+            "supplier": supplier.name if supplier else None}
 
 
 async def _set_price(db, user, row, new_price, expected_old) -> tuple[dict, dict]:

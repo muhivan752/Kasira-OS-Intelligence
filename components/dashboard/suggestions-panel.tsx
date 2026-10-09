@@ -39,8 +39,8 @@ function describe(s: any): Card {
         ['Perkiraan total', rp(f.order_total)],
         ['Cukup untuk', `± ${f.cover_days} hari`],
       ] : [],
-      chips: [], note: owner ? 'Pesanan dikirim lewat WhatsApp. Stok bertambah saat pembelian dicatat di menu Pembelian.' : undefined,
-      primary: owner ? (sup?.has_phone ? 'Pesan lewat WA' : 'Tandai sudah dipesan') : undefined,
+      chips: [], note: owner ? `${sup?.phone ? `Kontak ${sup.name}: ${sup.phone}. ` : ''}Stok bertambah saat pembelian dicatat di menu Pembelian.` : undefined,
+      primary: owner ? 'Tandai sudah dipesan' : undefined,
       editable: owner ? { label: `Jumlah (${f.order_unit})`, value: f.order_qty, step: 0.5, key: 'qty' } : undefined };
   }
   if (s.kind === 'ingredient_price_up') {
@@ -107,7 +107,6 @@ export function SuggestionsPanel({ outletId }: { outletId?: string }) {
   async function apply(s: any, params?: any) {
     const done = await act(s.id, () => applySuggestion(s.id, params), s.kind === 'stock_low' ? 'Dicatat sudah dipesan.' : 'Diterapkan. Bisa dibatalkan kapan saja.');
     if (!done) return;
-    if (s.kind === 'stock_low' && done.result?.wa_link) window.open(done.result.wa_link, '_blank', 'noopener');
     if (s.kind === 'recipe_missing') {
       const ref = done.result?.hpp_session;
       if (ref?.ready && ref.fingerprint && !ref.replaces_recipe) {

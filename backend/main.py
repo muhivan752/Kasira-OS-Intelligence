@@ -111,7 +111,6 @@ async def lifespan(app: FastAPI):
     )
     from backend.tasks.stale_order_cleanup import stale_order_cleanup_loop
     from backend.tasks.sync_idempotency_cleanup import sync_idempotency_cleanup_loop
-    from backend.tasks.kg_price_event_loop import kg_price_event_loop
     from backend.tasks.shift_cutoff import shift_cutoff_loop
     from backend.tasks.online_order_timeout import online_order_timeout_loop
     from backend.services.account_deletion import account_deletion_loop
@@ -129,7 +128,8 @@ async def lifespan(app: FastAPI):
     task_supervisor.register("insights", lambda: insights_loop())
     task_supervisor.register("stale_order_cleanup", lambda: stale_order_cleanup_loop())
     task_supervisor.register("sync_idempotency_cleanup", lambda: sync_idempotency_cleanup_loop())
-    task_supervisor.register("kg_price_events", lambda: kg_price_event_loop())
+    # kg_price_events (WA harga bahan naik) dicabut 9 Okt 2026: Selaris tidak lagi
+    # memakai WA untuk saran; kartu "Harga bahan naik" di services/suggestions.py.
     task_supervisor.register("shift_cutoff", lambda: shift_cutoff_loop())
     task_supervisor.register("online_order_timeout", lambda: online_order_timeout_loop())
     task_supervisor.register("account_deletion", lambda: account_deletion_loop())

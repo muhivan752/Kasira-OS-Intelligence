@@ -7,9 +7,9 @@ https://claude.ai/artifact/32Gghjbq9E37UoBaBJXR32 (HP, tablet per peran, DM Sefr
 
 ## Tiga jawaban arsitek
 
-1. **Rumahnya di mana?** Satu modul `backend/services/suggestions/` dan satu tabel
-   `suggestions`. Saran harga bahan yang SUDAH ADA (`tasks/kg_price_event_loop.py`,
-   kirim WA lewat Fonnte) dilebur ke sini, bukan berjalan di sebelahnya.
+1. **Rumahnya di mana?** Satu modul `backend/services/suggestions.py` dan satu tabel
+   `suggestions`. WA harga bahan naik yang lama (`tasks/kg_price_event_loop.py`, Fonnte)
+   dicabut 9 Okt 2026: Selaris tidak lagi memakai WA untuk saran.
 2. **Siapa yang memutuskan?** Detektor (kode murni) memutuskan KAPAN ada saran dan
    SEMUA angkanya. Model AI hanya dipakai di dua tempat: mengusulkan takaran resep
    (berlabel perkiraan) dan memahami kalimat pemilik di percakapan Ubah. Eksekusi
@@ -91,7 +91,7 @@ Satu eksekutor per aksi, memanggil service yang sama dengan tombol manual:
 
 | Aksi | Service | Izin |
 |---|---|---|
-| draf pembelian | purchasing (status `draft`, stok tidak berubah sampai diterima) | purchasing.manage |
+| tandai sudah dipesan | tidak menyentuh stok; kontak pemasok ditampilkan sebagai teks; stok naik saat pembelian dicatat (TANPA WA) | purchasing.manage |
 | simpan resep | jalur simpan resep HPP yang sudah ada | hpp.manage |
 | ubah harga jual | jalur update produk yang sama (cache storefront ikut dibersihkan) | pemilik / products |
 
@@ -106,7 +106,9 @@ kalau sudah diubah orang sesudahnya, Selaris menolak dan menjelaskan.
 - `stock_low` untuk jabatan ber-izin stok: tampil TANPA harga beli dan total
   (API membuang field harga, bukan disembunyikan di layar).
 - Notifikasi hanya ke perangkat pemilik (`fcm.notify_outlet(device_types=("owner",))`),
-  atau ke DM Sefrekuensi kalau saluran itu dipilih. Tidak pernah keduanya.
+  atau ke DM Sefrekuensi kalau saluran itu dipilih. Tidak pernah keduanya, dan TIDAK
+  lewat WA. Catatan: `online_orders.wa_owner` adalah pintu notifikasi merchant yang
+  masih mengirim WA untuk pesanan online; saran tidak memakainya.
 
 ## API
 
