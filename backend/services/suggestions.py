@@ -679,7 +679,7 @@ async def run_due_once(force_outlet=None) -> int:
         await db.execute(text("SET LOCAL app.current_tenant_id = ''"))
         q = select(Outlet.id, Outlet.tenant_id, Outlet.timezone).join(Tenant, Tenant.id == Outlet.tenant_id).where(
             Outlet.deleted_at.is_(None), Outlet.is_active.is_(True), Tenant.deleted_at.is_(None),
-            Tenant.is_active.is_(True), Tenant.is_demo.is_(False))
+            Tenant.is_active.is_(True))  # toko demo ikut: di situ pemilik mencoba fitur ini
         if force_outlet:
             q = q.where(Outlet.id == force_outlet)
         outlets = (await db.execute(q)).all()
