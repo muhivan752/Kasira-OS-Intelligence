@@ -147,12 +147,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const proNav = scoped ? [
     ...(accessPermissions.includes('hpp.view') ? [{ name: 'HPP', href: '/dashboard/hpp', icon: Calculator }] : []),
-    ...(accessPermissions.includes('ai.chat') ? [{ name: 'AI Asisten', href: '/dashboard/ai', icon: MessageCircle }] : []),
+    ...(accessPermissions.includes('ai.chat') ? [{ name: 'Selaris AI', href: '/dashboard/ai', icon: MessageCircle }] : []),
   ] : [
     { name: 'Atur HPP', href: '/dashboard/hpp', icon: Calculator },
     { name: 'Bahan Baku', href: '/dashboard/bahan-baku', icon: Package },
     { name: 'Reservasi', href: '/dashboard/reservasi', icon: CalendarDays },
-    { name: 'AI Asisten', href: '/dashboard/ai', icon: MessageCircle },
+    { name: 'Selaris AI', href: '/dashboard/ai', icon: MessageCircle },
   ];
 
   const bottomNav = [

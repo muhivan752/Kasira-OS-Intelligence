@@ -94,7 +94,7 @@ function parseRecipeProposal(content: string): { proposal: RecipeProposal | null
 const rp = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
 
 export default function AIChatPage() {
-  const allowed = useProGuard('AI Asisten');
+  const allowed = useProGuard('Selaris AI');
   const [accessMode, setAccessMode] = useState<string>();
   useEffect(() => { let active = true; void getAccountAccess().then(result => { if (active && result.success) setAccessMode(result.data.enforcement_mode); }); return () => { active = false; }; }, []);
   if (!allowed || !accessMode) return <p role="status">Memuat akses AI…</p>;
@@ -102,7 +102,7 @@ export default function AIChatPage() {
 }
 
 function LegacyAIChatPage() {
-  const allowed = useProGuard('AI Asisten');
+  const allowed = useProGuard('Selaris AI');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -521,7 +521,7 @@ function LegacyAIChatPage() {
             <Bot className="w-5 h-5 text-purple-600" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-gray-900">AI Asisten</h1>
+            <h1 className="text-lg font-bold text-gray-900">Selaris AI</h1>
             <p className="text-xs text-gray-500">Tanya laporan dan analisis bisnis Anda</p>
           </div>
         </div>
@@ -972,15 +972,8 @@ function LegacyAIChatPage() {
                 );
               })()}
 
-              {msg.role === 'assistant' && msg.content && !loading && msg.tokens !== undefined && (
-                <p className="text-[10px] text-gray-400 mt-2">
-                  {msg.model?.includes('deepseek')
-                    ? 'DeepSeek'
-                    : msg.model?.includes('haiku')
-                      ? 'Haiku'
-                      : 'Sonnet'} &middot; {msg.tokens} tokens
-                </p>
-              )}
+              {/* Nama model dan jumlah token sengaja tidak ditampilkan: merek ke merchant
+                  adalah Selaris AI (keputusan Ivan 9 Okt 2026). Penyedia disebut di /privacy. */}
               {msg.role === 'assistant' && msg.content === '' && loading && (
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin text-gray-400" />

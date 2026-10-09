@@ -69,7 +69,7 @@ export function ScopedAIChat() {
   }
 
   return <div className="hpp-workspace space-y-5 max-w-3xl">
-    <header className="space-y-2"><h1 className="text-2xl font-semibold">AI Asisten</h1><p>Tanyakan data yang sesuai akses akun. Perubahan dicatat lewat halaman modulnya.</p></header>
+    <header className="space-y-2"><h1 className="text-2xl font-semibold">Selaris AI</h1><p>Tanyakan data yang sesuai akses akun. Perubahan dicatat lewat halaman modulnya.</p></header>
     {loading ? <p role="status">Memuat outlet dan akses AI…</p> : <>
       {outlets.length > 0 && <div className="flex flex-wrap items-end gap-3"><label className="flex-1 min-w-0">Outlet<select className="hpp-control w-full" aria-label="Outlet AI" value={outletId} disabled={busy} onChange={event => { clear(); setOutletId(event.target.value); }}>{outlets.map(outlet => <option key={outlet.id} value={outlet.id}>{outlet.name}</option>)}</select></label><button className="hpp-button" disabled={busy || !messages.length} onClick={clear}>Percakapan baru</button></div>}
       <div ref={history} role="log" aria-label="Percakapan AI" className="hpp-panel space-y-4 max-h-[55vh] overflow-y-auto">

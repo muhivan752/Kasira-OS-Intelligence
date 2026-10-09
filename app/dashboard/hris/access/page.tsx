@@ -22,7 +22,7 @@ const groups: { title: string; hint?: string; items: [string, string][] }[] = [
     ['purchasing.manage', 'Kelola supplier, catat nota dan pembayaran'], ['supplier.price.view', 'Lihat harga beli dan nominal nota supplier']] },
   { title: 'Resep dan HPP', hint: 'Bahan dan resep dipakai bersama satu brand. Menyimpan langsung butuh izin kelola dan setujui.', items: [['hpp.view', 'Lihat resep dan harga modal'],
     ['hpp.manage', 'Kelola bahan dan resep'], ['hpp.approve', 'Setujui penyimpanan bahan dan resep']] },
-  { title: 'AI', hint: 'AI hanya membaca data yang izinnya diberikan di atas.', items: [['ai.chat', 'Gunakan AI Asisten']] },
+  { title: 'AI', hint: 'AI hanya membaca data yang izinnya diberikan di atas.', items: [['ai.chat', 'Gunakan Selaris AI']] },
 ];
 const labels: Record<string, string> = Object.fromEntries(groups.flatMap(g => g.items));
 

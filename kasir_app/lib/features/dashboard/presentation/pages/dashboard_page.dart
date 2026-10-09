@@ -157,7 +157,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
 
   void _openAiAssistant() {
     if (!_isPro) {
-      _showUpgradeSheet(context, 'AI Asisten');
+      _showUpgradeSheet(context, 'Selaris AI');
       return;
     }
     Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatPage()));

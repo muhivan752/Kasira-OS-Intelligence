@@ -84,7 +84,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Asisten Selaris',
+                Text('Selaris AI',
                     style: KasiraDS.display(size: 16, color: KasiraDS.textStrong)),
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   Container(width: 6, height: 6,
@@ -202,7 +202,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           ),
           const SizedBox(height: 20),
           const Text(
-            'Halo! Saya AI Asisten Selaris',
+            'Halo! Saya Selaris AI',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
@@ -302,13 +302,7 @@ class _MessageBubble extends StatelessWidget {
                           color: isError ? KasiraDS.danger : KasiraDS.textStrong,
                         ),
                 ),
-                if (message.model != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    '${message.model} · ${message.tokens ?? 0} tokens',
-                    style: const TextStyle(fontSize: 10, color: KasiraDS.textMuted),
-                  ),
-                ],
+                // Nama model dan token tidak ditampilkan: mereknya Selaris AI.
               ],
             ),
           ),
