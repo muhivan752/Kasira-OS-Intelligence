@@ -32,6 +32,12 @@ def route_rules():
     # produk, akun managed selalu ditolak walau diberi izin (9 Okt 2026).
     # App menyembunyikan tabnya dengan izin yang sama (SessionCache.canViewMargin).
     add(reports, "GET", "get_margin_report", "hpp.view hpp.manage")
+    # Saran: pintu masuk untuk siapa pun yang boleh melihat salah satu jenis saran.
+    # Jenis mana yang tampil dan siapa yang boleh menerapkan diputuskan di
+    # services/suggestions.py (can_view / can_apply). Batalkan + periksa ulang: pemilik.
+    from backend.api.routes import suggestions
+    add(suggestions, "GET", "list_suggestions", "hpp.view stock.view")
+    add(suggestions, "POST", "apply_suggestion skip_suggestion", "hpp.view stock.view")
     add(recipes, "POST", "create_recipe", "hpp.manage")
     add(recipes, "PUT", "update_recipe", "hpp.manage")
     add(recipes, "DELETE", "delete_recipe", "hpp.manage")

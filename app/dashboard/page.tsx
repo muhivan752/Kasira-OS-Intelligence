@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { getOutlets, getDailyReport, getWeeklyRevenue, getBestSellers } from '@/app/actions/api';
 import { SefrekuensiCard } from '@/components/dashboard/sefrekuensi-card';
+import { SuggestionsPanel } from '@/components/dashboard/suggestions-panel';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const currency = (amount: number | string) => new Intl.NumberFormat('id-ID', {
@@ -64,6 +65,7 @@ export default function DashboardPage() {
     {!outletId && !error && <div className="overview-panel"><h2>Siapkan usaha Anda</h2>
       <p>Tambahkan informasi toko dan produk untuk mulai mencatat penjualan.</p>
       <Link href="/onboarding" className="overview-link">Lanjutkan pengaturan usaha</Link></div>}
+    {outletId && <SuggestionsPanel outletId={outletId} />}
     {outletId && (!error || report) && <>
       <section className="overview-today" aria-label="Angka penjualan hari ini">
         <div className="overview-revenue"><p>Total Pendapatan</p><strong>{currency(report?.revenue_today)}</strong></div>

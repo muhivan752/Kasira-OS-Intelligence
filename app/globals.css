@@ -784,3 +784,44 @@ body {
 .storefront-booking :is(.text-yellow-600, .text-yellow-700) { color: var(--brand-primary); }
 .storefront-booking :is(.bg-green-500, .bg-green-600, .hover\:bg-green-600:hover) { background-color: #137A53; color: #FFFFFF; }
 .dark .storefront-shell, [data-theme="dark"] .storefront-shell { --success: #65C99A; }
+
+/* Saran Selaris (components/dashboard/suggestions-panel.tsx) */
+.saran-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.saran-head p { margin-top: 4px; color: var(--text-muted); font-size: 14px; }
+.saran-link { min-height: 44px; padding: 0 4px; background: none; border: 0; color: var(--brand-primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.saran-notice { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--bg-subtle); color: var(--text-strong); font-size: 14px; }
+.saran-error { margin-top: 12px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--danger); color: var(--danger); font-size: 14px; }
+.saran-grid { display: grid; gap: 12px; margin-top: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); align-items: start; }
+.saran-card { border: 1px solid var(--border-default); border-radius: 14px; padding: 16px; background: var(--surface-card); min-width: 0; }
+.saran-tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--bg-subtle); }
+.saran-urgent { color: var(--danger); border: 1px solid var(--danger); background: transparent; }
+.saran-warn { color: var(--text-strong); border: 1px solid var(--warning); background: transparent; }
+.saran-brand { color: var(--brand-primary); background: var(--brand-tint); }
+.saran-seen { margin-top: 10px; font-size: 14px; color: var(--text-muted); }
+.saran-prop { margin-top: 6px; font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--text-strong); line-height: 1.35; text-wrap: balance; }
+.saran-rows { margin-top: 10px; border-top: 1px dashed var(--border-default); }
+.saran-rows li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--border-default); font-size: 14px; }
+.saran-num { font-variant-numeric: tabular-nums; color: var(--text-strong); white-space: nowrap; }
+.saran-est, .saran-fact { margin-left: 6px; font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+.saran-est { color: var(--text-strong); border: 1px solid var(--warning); }
+.saran-fact { color: var(--success); border: 1px solid var(--success); }
+.saran-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.saran-chip { font-size: 13px; font-weight: 600; padding: 5px 9px; border-radius: 8px; background: var(--bg-subtle); color: var(--text-strong); }
+.saran-chip-good { color: var(--success); }
+.saran-chip-bad { color: var(--danger); }
+.saran-note { margin-top: 8px; font-size: 12.5px; color: var(--text-muted); }
+.saran-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.saran-btn { min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--control-border); background: var(--surface-card); color: var(--text-strong); font-weight: 600; cursor: pointer; }
+.saran-btn:disabled { opacity: .6; cursor: default; }
+.saran-primary { background: var(--brand-fill); border-color: var(--brand-primary); color: var(--brand-on-fill); flex: 1 1 auto; }
+.saran-ghost { border-color: transparent; color: var(--text-muted); }
+.saran-small { min-height: 40px; font-size: 13px; border-radius: 999px; }
+.saran-why { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.saran-why p { width: 100%; font-size: 14px; font-weight: 600; color: var(--text-strong); }
+.saran-edit { margin-top: 12px; display: grid; gap: 6px; }
+.saran-edit label { font-size: 13px; color: var(--text-muted); }
+.saran-edit input { min-height: 44px; padding: 0 12px; border: 1px solid var(--control-border); border-radius: 10px; background: var(--surface-card); color: var(--text-strong); font: inherit; font-variant-numeric: tabular-nums; }
+.saran-decided { margin-top: 16px; font-size: 14px; }
+.saran-decided summary { cursor: pointer; color: var(--text-muted); min-height: 44px; display: flex; align-items: center; }
+.saran-decided li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--border-subtle); }
+.saran-decided b { color: var(--text-strong); }
