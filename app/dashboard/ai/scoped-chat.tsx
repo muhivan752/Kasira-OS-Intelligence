@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { RecipeDraftCard, type RecipeDraft } from '@/components/dashboard/recipe-draft-card';
 
 type Outlet = { id: string; name: string };
-type Message = { role: 'user' | 'assistant'; content: string };
+type Message = { role: 'user' | 'assistant'; content: string; drafts?: RecipeDraft[] };
 
 export function ScopedAIChat() {
   const [outlets, setOutlets] = useState<Outlet[]>([]), [outletId, setOutletId] = useState('');
@@ -43,12 +44,13 @@ export function ScopedAIChat() {
       }
       const reader = response.body?.getReader();
       if (!reader) throw new Error('Jawaban belum dapat dibaca. Coba lagi.');
-      const decoder = new TextDecoder(); let pending = '', answer = '', failure = '', nextConversation;
+      const decoder = new TextDecoder(); let pending = '', answer = '', failure = '', nextConversation; const drafts: RecipeDraft[] = [];
       function consume(event: string) {
         const line = event.split('\n').find(value => value.startsWith('data: '));
         if (!line) return;
         const payload = JSON.parse(line.slice(6));
         if (payload.type === 'chunk') answer += payload.content || '';
+        if (payload.type === 'recipe_draft') drafts.push(payload as RecipeDraft);
         if (payload.type === 'error') failure = payload.message;
         if (payload.type === 'done') nextConversation = payload.conversation_id;
       }
@@ -61,8 +63,8 @@ export function ScopedAIChat() {
       }
       if (pending.trim()) consume(pending);
       if (failure) throw new Error(failure);
-      if (!answer) throw new Error('Jawaban belum tersedia. Coba lagi.');
-      if (current === revision.current) { setMessages(value => [...value, { role: 'assistant', content: answer }]); setConversation(nextConversation); }
+      if (!answer && !drafts.length) throw new Error('Jawaban belum tersedia. Coba lagi.');
+      if (current === revision.current) { setMessages(value => [...value, { role: 'assistant', content: answer, drafts }]); setConversation(nextConversation); }
     } catch (error) {
       if (current === revision.current && !controller.signal.aborted) setError(error instanceof Error ? error.message : 'Koneksi terputus. Coba lagi.');
     } finally { if (current === revision.current) { setBusy(false); input.current?.focus(); } }
@@ -74,8 +76,8 @@ export function ScopedAIChat() {
       {outlets.length > 0 && <div className="flex flex-wrap items-end gap-3"><label className="flex-1 min-w-0">Outlet<select className="hpp-control w-full" aria-label="Outlet AI" value={outletId} disabled={busy} onChange={event => { clear(); setOutletId(event.target.value); }}>{outlets.map(outlet => <option key={outlet.id} value={outlet.id}>{outlet.name}</option>)}</select></label><button className="hpp-button" disabled={busy || !messages.length} onClick={clear}>Percakapan baru</button></div>}
       <div ref={history} role="log" aria-label="Percakapan AI" className="hpp-panel space-y-4 max-h-[55vh] overflow-y-auto">
         {!messages.length && <p>Belum ada percakapan. Tulis pertanyaan untuk outlet yang dipilih.</p>}
-        {messages.map((message, index) => <article key={index} className="space-y-1"><h2 className="font-semibold">{message.role === 'user' ? 'Anda' : 'Asisten'}</h2><p className="whitespace-pre-wrap break-words">{message.content}</p></article>)}
-        {busy && <p role="status">Menyiapkan jawaban…</p>}
+        {messages.map((message, index) => <article key={index} className="space-y-1"><h2 className="font-semibold">{message.role === 'user' ? 'Anda' : 'Selaris AI'}</h2><p className="whitespace-pre-wrap break-words">{message.content}</p>{message.drafts?.map(d => <RecipeDraftCard key={d.session_id} draft={d} outletId={outletId} />)}</article>)}
+        {busy && <p role="status">Menyiapkan jawaban. Kalau Selaris AI sedang menyusun resep, ini bisa sampai satu menit.</p>}
       </div>
       {error && <div className="space-y-2"><p role="alert">{error}</p>{!outlets.length && <button className="hpp-button" onClick={() => setReload(value => value + 1)}>Muat ulang akses AI</button>}</div>}
       {!!outlets.length && <form className="space-y-3" onSubmit={event => { event.preventDefault(); void send(); }}><label htmlFor="scoped-ai-message">Pertanyaan Anda</label><textarea ref={input} id="scoped-ai-message" className="hpp-control w-full" rows={3} value={text} disabled={busy} maxLength={100000} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} /><div className="flex flex-wrap gap-3"><button className="hpp-button hpp-primary" disabled={busy || !text.trim()} type="submit">Kirim pertanyaan</button>{canDraft && <Link className="hpp-button" href={`/dashboard/hpp/chat?outlet=${outletId}`}>Susun draft HPP</Link>}</div></form>}

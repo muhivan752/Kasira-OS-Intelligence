@@ -301,18 +301,9 @@ async def detect_prices(db, outlet, sold30, cost) -> tuple[list, set]:
 
 
 async def recipe_draft(db, outlet, product):
-    """Takaran perkiraan dari model, modal dihitung kode (hpp_setup_service.prepare)."""
+    """Takaran perkiraan dari model, modal dihitung kode (hpp_setup_service)."""
     from backend.services import hpp_setup_service as hpp
-    ctx = await hpp.context(db, outlet.brand_id)
-    msg = (f"Lengkapi estimasi resep {product.name} untuk 1 porsi. Pakai bahan yang sudah ada di toko kalau cocok, "
-           "beri takaran dan harga beli perkiraan yang umum untuk usaha di Indonesia.")
-    turn = SimpleNamespace(message=msg, reply=None)
-    answer, _ = await hpp.generate(None, [turn], ctx, "estimate")
-    if answer.draft is None:
-        return None, None, msg
-    draft = answer.draft.model_dump(mode="json")
-    preview = hpp.prepare(answer.draft, ctx, [msg], "estimate")
-    return draft, preview, msg
+    return await hpp.draft_for(db, outlet.brand_id, product.name)
 
 
 def preview_summary(preview):
@@ -578,8 +569,7 @@ async def _clear_cache(db, outlet):
 
 async def _start_recipe(db, user, access, row) -> dict:
     """Bikin sesi HPP dari draf saran. Persetujuannya tetap lewat POST /hpp-setup/sessions/{id}/approve."""
-    from backend.models.audit_log import AuditLog
-    from backend.models.hpp_setup import HppSetupSession, HppSetupTurn
+    from backend.models.hpp_setup import HppSetupSession
     from backend.services import hpp_setup_service as hpp
     tenant = await db.get(Tenant, user.tenant_id)
     if not _is_pro(tenant):
@@ -590,22 +580,13 @@ async def _start_recipe(db, user, access, row) -> dict:
             return _session_ref(session)
     outlet = await db.get(Outlet, row.outlet_id)
     p = row.proposal
-    draft = p.get("draft")
-    preview, revision = None, 0
+    draft, preview = p.get("draft"), None
     if draft:
         ctx = await hpp.context(db, outlet.brand_id)
         preview = hpp.prepare(hpp.Draft.model_validate(draft), ctx, [p.get("message") or ""], "estimate")
-        revision = 1
-    session = HppSetupSession(id=uuid4(), tenant_id=user.tenant_id, outlet_id=outlet.id, user_id=user.id,
-        access_version=access.version, mode="estimate", draft=draft, preview=preview, status="draft", revision=revision)
-    db.add(session)
-    await db.flush()
-    if draft:
-        db.add(HppSetupTurn(tenant_id=user.tenant_id, session_id=session.id, request_id=uuid4(), mode="estimate",
-            message=p.get("message") or "", reply="Ini perkiraan resep dari Selaris. Cek takarannya, koreksi kalau beda, lalu simpan.",
-            usage={"source": f"suggestion:{row.id}"}))
-    db.add(AuditLog(tenant_id=user.tenant_id, user_id=user.id, action="HPP_SETUP_STARTED",
-        entity="hpp_setup_session", entity_id=session.id, after_state={"mode": "estimate", "source": f"suggestion:{row.id}"}))
+    session = await hpp.open_session(db, user=user, access_version=access.version, outlet=outlet, draft=draft,
+        preview=preview, message=p.get("message"), source=f"suggestion:{row.id}",
+        reply="Ini perkiraan resep dari Selaris. Cek takarannya, koreksi kalau beda, lalu simpan.")
     row.hpp_session_id = session.id
     return _session_ref(session)
 

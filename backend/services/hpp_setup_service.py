@@ -568,3 +568,38 @@ async def generate(draft, turns, ctx, mode, references="", status="draft"):
             history.append({"role": "assistant", "content": output})
             history.append({"role": "user", "content": "Perbaiki JSON sesuai schema. Field string harus string, bukan null. Masalah validasi: " + json.dumps(errors, default=str) + ". Kirim JSON lengkap; jangan sertakan hitungan HPP."})
     raise ValueError("Jawaban AI belum lengkap. Draft sebelumnya tetap tersimpan; coba proses pesan ini lagi.")
+
+
+async def open_session(db, *, user, access_version, outlet, draft, preview, message, reply, source):
+    """Buka sesi HPP dari draf yang sudah disiapkan (kartu saran, chat Selaris AI).
+
+    Satu rumah: persetujuannya tetap lewat POST /ai/hpp-setup/sessions/{id}/approve
+    dengan semua pengecekan izin, sidik draf, dan kunci barisnya. Pemanggil yang commit.
+    """
+    from uuid import uuid4
+    from backend.models.audit_log import AuditLog
+    from backend.models.hpp_setup import HppSetupSession, HppSetupTurn
+    session = HppSetupSession(id=uuid4(), tenant_id=user.tenant_id, outlet_id=outlet.id, user_id=user.id,
+        access_version=access_version, mode="estimate", draft=draft, preview=preview, status="draft",
+        revision=1 if draft else 0)
+    db.add(session)
+    await db.flush()
+    if draft:
+        db.add(HppSetupTurn(tenant_id=user.tenant_id, session_id=session.id, request_id=uuid4(), mode="estimate",
+            message=message or "", reply=reply, usage={"source": source}))
+    db.add(AuditLog(tenant_id=user.tenant_id, user_id=user.id, action="HPP_SETUP_STARTED",
+        entity="hpp_setup_session", entity_id=session.id, after_state={"mode": "estimate", "source": source}))
+    return session
+
+
+async def draft_for(db, brand_id, product_name: str, user_message: str = ""):
+    """Draf resep perkiraan + pratinjau yang modalnya dihitung kode (prepare)."""
+    from types import SimpleNamespace
+    ctx = await context(db, brand_id)
+    msg = ((user_message.strip() + "\n\n") if user_message.strip() else "") + (
+        f"Lengkapi estimasi resep {product_name} untuk 1 porsi. Pakai bahan yang sudah ada di toko kalau cocok. "
+        "Takaran dan harga yang saya sebut di atas dipakai apa adanya; yang belum saya sebut diisi perkiraan umum di Indonesia.")
+    answer, _ = await generate(None, [SimpleNamespace(message=msg, reply=None)], ctx, "estimate")
+    if answer.draft is None:
+        return None, None, msg
+    return answer.draft.model_dump(mode="json"), prepare(answer.draft, ctx, [msg], "estimate"), msg

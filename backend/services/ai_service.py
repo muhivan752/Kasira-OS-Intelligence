@@ -328,8 +328,11 @@ async def get_model_for_tier(tier: str, task: str = "routine", tenant_id: str = 
     Sonnet ~4x biaya Haiku. Dipakai sparingly untuk task yang genuinely butuh
     reasoning mendalam.
     """
-    if intent == INTENT_PRICING_COACH:
+    from backend.services.llm_client import deepseek_enabled
+    if intent == INTENT_PRICING_COACH and not deepseek_enabled():
         return SONNET_MODEL_ID
+    # Selaris AI memakai DeepSeek untuk semua teks (keputusan Ivan 9 Okt 2026);
+    # id "haiku" dibelokkan ke DeepSeek oleh llm_client.route_model.
     return HAIKU_MODEL_ID
 
 
@@ -1720,6 +1723,11 @@ async def stream_ai_response(
 
     # 1. Classify intent — SETUP_RECIPE / RESTOCK = actionable, selain itu langsung ke Claude
     intent = classify_intent(message)
+    from backend.services.llm_client import deepseek_enabled
+    if intent == INTENT_SETUP_RECIPE and deepseek_enabled():
+        # Resep sekarang lewat alat susun_resep (selaris_agent, mesin HPP) supaya
+        # modal dihitung kode dan bisa disimpan; proposal lama tidak dipakai.
+        intent = INTENT_CHAT
 
     if intent in (INTENT_SETUP_RECIPE, INTENT_MENU_BULK):
         # AI propose resep/menu via Haiku — user confirm di dashboard lalu apply
@@ -1916,6 +1924,24 @@ async def stream_ai_response(
     from backend.services.finance_context import build_finance_context
     system_prompt += await build_finance_context(message, outlet_id, tenant_id, db)
 
+    # Konteks per izin: tim & absensi, jabatan & akses, saran terbuka (selaris_agent).
+    from backend.services import selaris_agent
+    from backend.models.outlet import Outlet as _Outlet
+    from backend.models.tenant import Tenant as _Tenant
+    from backend.models.user import User as _User
+    agent_user = await db.get(_User, UUID(str(user_id))) if user_id else None
+    agent_outlet = await db.get(_Outlet, UUID(str(outlet_id)))
+    agent_tenant = await db.get(_Tenant, UUID(str(tenant_id)))
+    if access is not None and agent_user is not None and agent_outlet is not None:
+        try:
+            system_prompt += await selaris_agent.team_context(db, access, agent_outlet, agent_user)
+            system_prompt += await selaris_agent.access_context(db, access, agent_user)
+            system_prompt += await selaris_agent.suggestions_context(db, agent_user, access, agent_outlet.id)
+        except Exception:
+            logger.exception("selaris_agent: konteks tambahan gagal, chat tetap jalan")
+            await db.rollback()
+    system_prompt += selaris_agent.STYLE
+
     # 4. Pilih model. PRICING_COACH override (Redis-down degraded) takes
     # precedence atas get_model_for_tier().
     task_complexity = classify_task_complexity(message)
@@ -1979,7 +2005,7 @@ async def stream_ai_response(
 
                     # Stream sukses — emit buffered output
                     for chunk in buffer:
-                        yield sse({"type": "chunk", "content": chunk})
+                        yield sse({"type": "chunk", "content": selaris_agent.clean(chunk)})
                     done_payload = {
                         "type": "done",
                         "intent": intent,
@@ -2028,7 +2054,36 @@ async def stream_ai_response(
             })
             return
 
-        # Non-pricing intent: direct stream, no fallback
+        # Non-pricing: Selaris AI dengan alat (DeepSeek function calling).
+        if deepseek_enabled() and access is not None and agent_user is not None and agent_outlet is not None:
+            can_recipe = selaris_agent.can_draft_recipe(access, agent_tenant)
+            history_for_agent = prior_history
+            async def execute(name, args):
+                if name != "susun_resep" or not can_recipe:
+                    return {"status": "ditolak", "pesan": "Alat ini tidak tersedia untuk akun ini."}, None
+                # Validasi tanpa kunci dulu: draf AI bisa 30-60 detik, dan kunci baris
+                # outlet/brand selama itu akan menahan transaksi kasir (FK ke outlets).
+                if access_guard:
+                    await access_guard()
+                return await selaris_agent.run_recipe_tool(db, user=agent_user, access=access, outlet=agent_outlet,
+                    produk=args.get("produk", ""), keterangan=args.get("keterangan", ""), user_message=message,
+                    guard=(lambda: access_guard(lock=True)) if access_guard else None)
+            await db.commit()  # lepas transaksi baca selama model berjalan
+            final_text, tokens_used = "", 0
+            async for ev in selaris_agent.run(system=system_prompt, history=history_for_agent, message=message,
+                                              tools=[selaris_agent.RECIPE_TOOL] if can_recipe else [], execute=execute):
+                if ev.get("type") == "_final":
+                    final_text, tokens_used = ev["text"], ev["tokens"]
+                    continue
+                yield sse(ev)
+            yield sse({"type": "done", "intent": intent, "tokens_used": tokens_used})
+            if access_guard:
+                await access_guard()
+            await _save_conversation_turn(redis_client, history_namespace, conversation_id,
+                user_message=message, assistant_message=final_text)
+            return
+
+        # Tanpa DeepSeek: stream biasa tanpa alat (jalur lama).
         assistant_buffer = []
         async with client.messages.stream(
             model=model,

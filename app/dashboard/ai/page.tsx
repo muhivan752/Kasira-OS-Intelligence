@@ -5,6 +5,7 @@ import { Bot, Send, Trash2, Loader2, AlertCircle, CheckCircle2, FlaskConical, Ch
 import { useProGuard } from '@/app/hooks/use-pro-guard';
 import { getAccountAccess } from '@/app/actions/accounts';
 import { ScopedAIChat } from './scoped-chat';
+import { RecipeDraftCard, type RecipeDraft } from '@/components/dashboard/recipe-draft-card';
 
 interface ProposalIngredient {
   name: string;
@@ -43,6 +44,8 @@ interface Message {
   model?: string;
   tokens?: number;
   recipeProposal?: RecipeProposal;
+  recipeDraft?: RecipeDraft;   // alat susun_resep Selaris AI
+  status?: string;
   editableProposal?: RecipeProposal;
   applying?: boolean;
   proposalApplied?: boolean;
@@ -235,7 +238,11 @@ function LegacyAIChatPage() {
           try {
             const event = JSON.parse(jsonStr);
 
-            if (event.type === 'chunk') {
+            if (event.type === 'status') {
+              setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, status: event.content } : m));
+            } else if (event.type === 'recipe_draft') {
+              setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, recipeDraft: event as RecipeDraft, status: undefined } : m));
+            } else if (event.type === 'chunk') {
               setMessages(prev =>
                 prev.map(m =>
                   m.id === assistantId
@@ -589,7 +596,9 @@ function LegacyAIChatPage() {
                   <span className="text-xs font-medium">Berhasil</span>
                 </div>
               )}
+              {msg.status && !msg.recipeDraft && <p className="text-xs italic text-[var(--text-muted)]" role="status">{msg.status}</p>}
               <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+              {msg.recipeDraft && <RecipeDraftCard draft={msg.recipeDraft} outletId={outletId} />}
 
               {msg.editableProposal && (() => {
                 const ep = msg.editableProposal;

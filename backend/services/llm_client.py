@@ -269,3 +269,53 @@ class LLMClient:
 def get_llm_client(timeout: float = 25.0) -> LLMClient:
     """Client chat yang otomatis milih provider per model id."""
     return LLMClient(timeout=timeout)
+
+
+# ─── DeepSeek: streaming dengan alat (function calling) ─────────────────────
+
+async def deepseek_tool_stream(*, messages: list, tools: list | None, max_tokens: int = 1200,
+                               timeout: float = 60.0) -> AsyncGenerator[tuple, None]:
+    """Satu putaran DeepSeek dengan alat, format OpenAI.
+
+    `messages` sudah format OpenAI (termasuk role system/tool). Yield:
+      ("text", potongan)            teks jawaban, langsung bisa diteruskan ke layar
+      ("tool_calls", [panggilan])   daftar {id, name, arguments(str JSON)} di akhir putaran
+      ("usage", (input, output))
+    """
+    payload = {"model": settings.DEEPSEEK_CHAT_MODEL or DEEPSEEK_CHAT_MODEL, "max_tokens": max_tokens,
+               "messages": messages, "stream": True, "stream_options": {"include_usage": True},
+               "thinking": {"type": "disabled"}}
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
+    calls: dict[int, dict] = {}
+    async with httpx.AsyncClient(timeout=timeout) as http:
+        async with http.stream("POST", f"{DEEPSEEK_BASE_URL}/chat/completions", json=payload, headers=_headers()) as resp:
+            if resp.status_code >= 400:
+                body = (await resp.aread()).decode("utf-8", "replace")[:400]
+                raise RuntimeError(f"DeepSeek HTTP {resp.status_code}: {body}")
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                raw = line[5:].strip()
+                if not raw or raw == "[DONE]":
+                    continue
+                try:
+                    event = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                usage = event.get("usage")
+                if usage:
+                    yield ("usage", (int(usage.get("prompt_tokens") or 0), int(usage.get("completion_tokens") or 0)))
+                for choice in event.get("choices") or []:
+                    delta = choice.get("delta") or {}
+                    if delta.get("content"):
+                        yield ("text", delta["content"])
+                    for tc in delta.get("tool_calls") or []:
+                        slot = calls.setdefault(int(tc.get("index", 0)), {"id": "", "name": "", "arguments": ""})
+                        slot["id"] = tc.get("id") or slot["id"]
+                        fn = tc.get("function") or {}
+                        slot["name"] = fn.get("name") or slot["name"]
+                        slot["arguments"] += fn.get("arguments") or ""
+    if calls:
+        yield ("tool_calls", [calls[i] for i in sorted(calls)])
