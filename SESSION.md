@@ -4,6 +4,20 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
+## 2026-10-09 - IDENTITAS PT DI HALAMAN LEGAL LIVE, AUDIT LAUNCH
+
+Selaris dikelola PT Sefrekuensi Teknologi Indonesia (keputusan Ivan 9/10),
+kontak halo@sefrekuensi.id (Cloudflare Email Routing). `COMPANY_*` di
+lib/brand.ts dipakai Footer, /privacy, /terms; tanggal "Terakhir diperbarui"
+kini tetap (dulu selalu tanggal hari ini). Source 25ad4e7 dipush; frontend-only
+`--no-deps` live image4edcda…b9e, backend tidak disentuh. Rollback: tag
+selaris-frontend-before-pt:20261009 (imagec9ce9f…1fb8).
+Audit launch 9/10 (baca saja), wajib sebelum Play: hapus akun di app + web
+/hapus-akun; /privacy belum menyebut Anthropic, Google, Sefrekuensi, Sentry, R2;
+build Play wajib mematikan update via GitHub version.json; validasi startup
+SECRET_KEY/POSTGRES_PASSWORD default; CORS localhost:3000 di .env; uji restore
+backup; JWT 8 hari perlu keputusan (kasir offline).
+
 ## UPDATE TERAKHIR - FORM KARYAWAN DAN AKUN SATU SIMPAN LIVE, 2026-10-06
 
 Owner/manager berizin sekarang membuat profil dan akun nomor HP/username dari
