@@ -110,6 +110,10 @@ function LegacyAIChatPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [outletId, setOutletId] = useState<string | null>(null);
+  // Ingatan percakapan: backend menyimpan riwayat per conversation_id (Redis, 30 menit).
+  // Dulu halaman ini tidak pernah mengirimnya, jadi tiap pertanyaan dijawab tanpa ingatan
+  // dan jawaban saling bertabrakan (log chat Ivan 9 Okt 2026).
+  const conversationRef = useRef<string | null>(null);
   const [error, setError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -196,7 +200,7 @@ function LegacyAIChatPage() {
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text.trim(), outlet_id: effectiveOutletId }),
+        body: JSON.stringify({ message: text.trim(), outlet_id: effectiveOutletId, conversation_id: conversationRef.current }),
       });
 
       if (res.status === 403) {
@@ -251,6 +255,7 @@ function LegacyAIChatPage() {
                 )
               );
             } else if (event.type === 'done') {
+              if (event.conversation_id) conversationRef.current = event.conversation_id;
               setMessages(prev =>
                 prev.map(m => {
                   if (m.id !== assistantId) return m;
@@ -313,6 +318,7 @@ function LegacyAIChatPage() {
   };
 
   const clearChat = () => {
+    conversationRef.current = null;
     setMessages([]);
     setError('');
   };
