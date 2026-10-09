@@ -1,7 +1,7 @@
 """
 Kasira Invoice OCR Service — Extract purchase data from invoice photos.
 
-Uses Claude Vision API to parse supplier invoices/receipts into structured data:
+Uses OpenAI vision (fallback Claude) to parse supplier invoices/receipts into structured data:
 - Supplier name
 - Invoice date
 - Line items: ingredient name, quantity, unit, unit price, total
@@ -26,39 +26,7 @@ logger = logging.getLogger(__name__)
 SUPPORTED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
-async def extract_invoice_data(image_bytes: bytes, media_type: str) -> Dict:
-    """
-    Send invoice image to Claude Vision API, get structured extraction.
-    Returns: {supplier, date, items: [{name, qty, unit, unit_price, total}]}
-    """
-    if not settings.ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY not configured")
-
-    import anthropic
-
-    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
-    b64 = base64.b64encode(image_bytes).decode("utf-8")
-
-    try:
-        response = await client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1500,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": b64,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": """Kamu adalah asisten OCR untuk nota pembelian bahan baku restoran/cafe Indonesia.
+OCR_PROMPT = """Kamu adalah asisten OCR untuk nota pembelian bahan baku restoran/cafe Indonesia.
 
 Ekstrak data dari foto nota/invoice ini ke format JSON berikut:
 
@@ -88,24 +56,81 @@ Rules:
 - Jika ada item yang tidak jelas, tetap masukkan dengan best guess
 - quantity dan unit_price harus angka (float/int)
 - Jika total_price tidak terlihat, hitung dari quantity × unit_price
-- HANYA output JSON, tanpa penjelasan""",
-                    },
-                ],
-            }
-        ],
-    )
+- HANYA output JSON, tanpa penjelasan"""
 
+
+async def _openai_vision(key: str, image_bytes: bytes, media_type: str) -> str:
+    """OpenAI Responses API, pola sama dengan Sefrekuensi (handlers/openai.go openAIVisionModel)."""
+    import httpx
+    data_url = f"data:{media_type};base64," + base64.b64encode(image_bytes).decode("utf-8")
+    body = {
+        "model": settings.OPENAI_VISION_MODEL or "gpt-5.6-luna",
+        "input": [{"role": "user", "content": [
+            {"type": "input_image", "image_url": data_url, "detail": "high"},
+            {"type": "input_text", "text": OCR_PROMPT},
+        ]}],
+        "max_output_tokens": 3000,
+        "reasoning": {"effort": "low"},
+        "text": {"format": {"type": "json_object"}},
+        "store": False,
+    }
+    async with httpx.AsyncClient(timeout=90.0) as http:
+        resp = await http.post("https://api.openai.com/v1/responses", json=body,
+                               headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+    if resp.status_code >= 400:
+        detail = resp.text[:300]
+        logger.error("OpenAI vision nota HTTP %s: %s", resp.status_code, detail)
+        if resp.status_code in (401, 403) or "insufficient_quota" in detail or "billing" in detail:
+            raise RuntimeError("Layanan baca nota sedang tidak tersedia. Catat nota secara manual dulu.")
+        raise RuntimeError("Nota belum bisa dibaca. Coba lagi sebentar.")
+    data = resp.json()
+    usage = data.get("usage") or {}
+    logger.info("OpenAI vision nota %s: in=%s out=%s", data.get("model"), usage.get("input_tokens"), usage.get("output_tokens"))
+    parts = [c.get("text", "") for item in data.get("output") or [] if item.get("type") == "message"
+             for c in item.get("content") or [] if c.get("type") == "output_text"]
+    return "".join(parts).strip()
+
+
+async def _anthropic_vision(image_bytes: bytes, media_type: str) -> str:
+    import anthropic
+    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+    try:
+        response = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
+                {"type": "text", "text": OCR_PROMPT},
+            ]}],
+        )
     except Exception as e:
         error_msg = str(e)
         if "credit balance" in error_msg.lower():
             raise RuntimeError("Anthropic API credit habis. Top up di console.anthropic.com")
         logger.error(f"Claude Vision API error: {error_msg}")
         raise RuntimeError(f"OCR gagal: {error_msg[:100]}")
+    return response.content[0].text.strip()
 
-    # Parse JSON from response
+
+async def extract_invoice_data(image_bytes: bytes, media_type: str) -> Dict:
+    """
+    Baca foto nota jadi data terstruktur. OpenAI dulu (9 Okt 2026, kredit Anthropic
+    habis), Anthropic hanya kalau kunci OpenAI belum dipasang.
+    Model cuma MENYALIN isi nota; pencocokan bahan dan efek ke stok/HPP tetap
+    dihitung kode (match_ingredients, purchasing_service) sesudah pengguna menyetujui.
+    Returns: {supplier, date, items: [{name, qty, unit, unit_price, total}]}
+    """
+    from backend.services.llm_client import openai_key
+    key = openai_key()
+    if key:
+        text = await _openai_vision(key, image_bytes, media_type)
+    elif settings.ANTHROPIC_API_KEY:
+        text = await _anthropic_vision(image_bytes, media_type)
+    else:
+        raise RuntimeError("Layanan baca nota belum dikonfigurasi")
+
     import json
-    text = response.content[0].text.strip()
-
     # Strip markdown code block if present
     if text.startswith("```"):
         lines = text.split("\n")

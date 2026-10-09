@@ -93,6 +93,11 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_CHAT_MODEL: str = "deepseek-v4-flash"
 
+    # OpenAI — baca foto nota (vision), 9 Okt 2026. Kunci sama dengan Sefrekuensi.
+    # Kosong = jatuh ke Anthropic seperti dulu. Lihat services/llm_client.openai_key.
+    OPENAI_API_KEY: str = ""
+    OPENAI_VISION_MODEL: str = "gpt-5.6-luna"
+
     # Chat publik di landing page. 0 = tanpa batas per IP (keputusan Ivan:
     # pantau dulu). Isi angka > 0 buat nyalain rem tanpa ubah kode.
     LANDING_CHAT_MAX_PER_IP: int = 0

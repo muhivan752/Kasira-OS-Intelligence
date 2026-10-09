@@ -62,8 +62,9 @@ export default function PrivacyPolicyPage() {
           <ul className="list-disc pl-6 space-y-2 mb-6">
             <li><strong>Vultr (Singapura):</strong> Server tempat aplikasi dan database Selaris berjalan.</li>
             <li><strong>Cloudflare:</strong> Jaringan pengantar situs dan API, serta penyimpanan cadangan database (R2).</li>
-            <li><strong>DeepSeek:</strong> Model AI untuk asisten chat, ringkasan Beranda, saran menu, dan bot WhatsApp. Pertanyaan Anda dan data toko yang relevan, seperti penjualan dan menu, dikirim untuk menyusun jawaban.</li>
-            <li><strong>Anthropic:</strong> Model AI untuk membaca foto nota dan saran harga. Foto nota dan data harga yang relevan dikirim untuk diproses.</li>
+            <li><strong>DeepSeek:</strong> Model AI untuk asisten chat, ringkasan Beranda, saran menu, saran harga, dan bot WhatsApp. Pertanyaan Anda dan data toko yang relevan, seperti penjualan, menu, dan harga bahan, dikirim untuk menyusun jawaban.</li>
+            <li><strong>OpenAI:</strong> Model AI untuk membaca foto nota belanja. Foto nota yang Anda unggah dikirim untuk dibaca. Selaris meminta OpenAI tidak menyimpan permintaan tersebut.</li>
+            <li><strong>Anthropic:</strong> Model AI cadangan apabila layanan di atas sedang tidak tersedia.</li>
             <li><strong>Xendit:</strong> Pemrosesan pembayaran QRIS dan pembayaran nontunai.</li>
             <li><strong>Fonnte:</strong> Pengiriman pesan WhatsApp: kode masuk, struk digital, dan notifikasi.</li>
             <li><strong>Sefrekuensi:</strong> Aplikasi milik perusahaan yang sama. Bila Anda memilih menerima kode masuk lewat Sefrekuensi, nomor HP Anda dicocokkan dengan akun Sefrekuensi untuk mengirim kode tersebut.</li>

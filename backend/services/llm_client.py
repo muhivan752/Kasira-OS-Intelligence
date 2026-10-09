@@ -62,6 +62,22 @@ def deepseek_enabled() -> bool:
     return bool(settings.DEEPSEEK_API_KEY)
 
 
+# Container backend Selaris TIDAK di-recreate (hotfix dipasang docker cp), jadi
+# env baru dari .env tidak terbaca sampai recreate. Kunci OpenAI boleh juga
+# datang dari berkas yang dipasang scripts/pasang-kunci-openai.sh.
+OPENAI_KEY_FILE = "/app/secrets/openai.key"
+
+
+def openai_key() -> str:
+    if settings.OPENAI_API_KEY.strip():
+        return settings.OPENAI_API_KEY.strip()
+    try:
+        with open(OPENAI_KEY_FILE, encoding="utf-8") as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
+
+
 def chat_configured() -> bool:
     """Ada minimal satu provider chat yang bisa dipakai."""
     return bool(settings.DEEPSEEK_API_KEY or settings.ANTHROPIC_API_KEY)
