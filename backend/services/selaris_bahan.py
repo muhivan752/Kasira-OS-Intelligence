@@ -18,6 +18,7 @@ setelah disimpan, riwayat ada di audit_log + events (ingredient.price_updated,
 stock.ingredient_restock) dan nota di Pembelian.
 """
 from decimal import Decimal, ROUND_HALF_UP
+from types import SimpleNamespace
 
 from sqlalchemy import select, text
 
@@ -49,6 +50,22 @@ STOCK_TOOL = {"type": "function", "function": {
     }, "required": ["barang"]}}}
 
 
+SELL_TOOL = {"type": "function", "function": {
+    "name": "ubah_harga_jual",
+    "description": ("Siapkan perubahan harga jual menu yang SUDAH ADA, misalnya 'naikkan kopi susu jadi 22 ribu'. "
+                    "Bisa beberapa menu sekaligus. Isi SATU dari harga (harga akhir), naik_rupiah, atau naik_persen, "
+                    "persis seperti yang diucapkan; turun ditulis negatif. Jangan menghitung sendiri, kode yang menghitung. "
+                    "Belum tersimpan sampai pengguna menekan Simpan."),
+    "parameters": {"type": "object", "properties": {
+        "menu": {"type": "array", "items": {"type": "object", "properties": {
+            "nama": {"type": "string", "description": "Nama menu seperti diucapkan pengguna."},
+            "harga": {"type": "number", "description": "Harga jual akhir dalam rupiah kalau disebut. 22 ribu = 22000."},
+            "naik_rupiah": {"type": "number", "description": "Kalau pengguna bilang naik/turun sekian rupiah. Turun 1 ribu = -1000."},
+            "naik_persen": {"type": "number", "description": "Kalau pengguna bilang naik/turun sekian persen. Turun 5 persen = -5."},
+        }, "required": ["nama"]}},
+    }, "required": ["menu"]}}}
+
+
 def _ok(access, *perms):
     return access.mode == "owner" or all(access.allows(p) for p in perms)
 
@@ -64,6 +81,10 @@ def tools_for(access, tenant) -> list:
         tools.append(PRICE_TOOL)
     if _ok(access, "stock.receive"):
         tools.append(STOCK_TOOL)
+    if access.mode == "owner":
+        # PUT /products/{id} belum terdaftar untuk jabatan managed (access registry),
+        # jadi harga jual = pemilik saja. Tawarkan sama dengan yang bisa disimpan.
+        tools.append(SELL_TOOL)
     return tools
 
 
@@ -120,41 +141,56 @@ async def _stock(db, outlet_id, ingredient_id) -> float:
     return float(value or 0)
 
 
+def recipe_modal(recipe, costs: dict | None = None):
+    """(modal_sekarang, modal_dengan_costs) satu resep, atau None kalau ada satuan yang
+    tidak bisa dikonversi. Satu-satunya hitungan modal di modul ini; filter 5 kondisi
+    resep sama dengan compute HPP (CLAUDE.md), pakai helper unit_utils."""
+    from backend.services.unit_utils import decimal_ingredient_cost_contribution, normalize_recipe_qty
+    costs = costs or {}
+    before = after = Decimal("0")
+    for ri in recipe.ingredients:
+        if not (ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
+                and ri.ingredient is not None and ri.ingredient.deleted_at is None):
+            continue
+        part = decimal_ingredient_cost_contribution(ri)
+        if part is None:
+            return None
+        before += part
+        if ri.ingredient_id in costs:
+            after += Decimal(str(normalize_recipe_qty(ri))) * Decimal(str(costs[ri.ingredient_id]))
+        else:
+            after += part
+    return before, after
+
+
+def _active_recipes(product_ids=None, ingredient_ids=None):
+    from sqlalchemy.orm import selectinload
+    from backend.models.recipe import Recipe, RecipeIngredient
+    q = select(Recipe).where(Recipe.is_active.is_(True), Recipe.deleted_at.is_(None)).options(
+        selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient))
+    if product_ids is not None:
+        q = q.where(Recipe.product_id.in_(list(product_ids)))
+    if ingredient_ids is not None:
+        q = q.where(Recipe.id.in_(select(RecipeIngredient.recipe_id).where(
+            RecipeIngredient.ingredient_id.in_(list(ingredient_ids)), RecipeIngredient.deleted_at.is_(None))))
+    return q
+
+
 async def product_impact(db, brand_id, costs: dict) -> list:
     """Modal per porsi produk yang memakai bahan di `costs` ({ingredient_id: biaya baru per satuan dasar}),
-    sebelum dan sesudah. Filter 5 kondisi resep sama dengan compute HPP (CLAUDE.md)."""
-    from sqlalchemy.orm import selectinload
+    sebelum dan sesudah."""
     from backend.models.product import Product
-    from backend.models.recipe import Recipe, RecipeIngredient
-    from backend.services.unit_utils import decimal_ingredient_cost_contribution, normalize_recipe_qty
     if not costs:
         return []
-    recipe_ids = select(RecipeIngredient.recipe_id).where(RecipeIngredient.ingredient_id.in_(list(costs)),
-        RecipeIngredient.deleted_at.is_(None))
-    recipes = (await db.execute(select(Recipe, Product).join(Product, Product.id == Recipe.product_id).where(
-        Recipe.id.in_(recipe_ids), Recipe.is_active.is_(True), Recipe.deleted_at.is_(None),
-        Product.brand_id == brand_id, Product.deleted_at.is_(None))
-        .options(selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient)))).all()
+    recipes = (await db.execute(_active_recipes(ingredient_ids=costs))).scalars().all()
+    products = {p.id: p for p in (await db.execute(select(Product).where(Product.id.in_([r.product_id for r in recipes]),
+        Product.brand_id == brand_id, Product.deleted_at.is_(None)))).scalars().all()} if recipes else {}
     out = []
-    for recipe, product in recipes:
-        before = after = Decimal("0")
-        complete = True
-        for ri in recipe.ingredients:
-            if not (ri.deleted_at is None and not ri.is_optional and ri.quantity > 0
-                    and ri.ingredient is not None and ri.ingredient.deleted_at is None):
-                continue
-            part = decimal_ingredient_cost_contribution(ri)
-            if part is None:
-                complete = False
-                continue
-            before += part
-            if ri.ingredient_id in costs:
-                qty = normalize_recipe_qty(ri)
-                after += Decimal(str(qty)) * Decimal(str(costs[ri.ingredient_id]))
-            else:
-                after += part
-        if not complete:
+    for recipe in recipes:
+        product, modal = products.get(recipe.product_id), recipe_modal(recipe, costs)
+        if not product or modal is None:
             continue
+        before, after = modal
         price = float(product.base_price) if product.base_price else None
         out.append({"produk": product.name, "modal_lama": _rp(before), "modal_baru": _rp(after),
             "margin_baru": round((price - float(after)) / price * 100, 1) if price else None, "harga_jual": price})
@@ -247,4 +283,79 @@ async def run_stock_tool(db, *, user, access, outlet, barang, pemasok=None):
               "belum_bisa": problems, "dampak_modal_produk": impact,
               "catatan": ("Harga tidak dicatat karena akun ini tidak punya izin pembelian. " if not may_buy else "")
                          + "Belum tersimpan. Pengguna menekan Simpan di kartu."}
+    return result, card
+
+
+def new_sell_price(old: Decimal, item: dict):
+    """Harga jual baru dari ucapan pengguna. Model hanya menyalin angka; hitungan di sini.
+    Persen dibulatkan ke Rp500 terdekat (kebiasaan harga menu); rupiah dan harga akhir apa adanya.
+    Kartu menampilkan cara hitungnya dan angkanya bisa diubah sebelum Simpan."""
+    price, plus, pct = _num(item.get("harga")), _num(item.get("naik_rupiah")), _num(item.get("naik_persen"))
+    if price is not None and price > 0:
+        new, how = Decimal(str(price)), "harga akhir"
+    elif plus is not None and plus != 0:
+        new, how = old + Decimal(str(plus)), f"{'naik' if plus > 0 else 'turun'} {rupiah_text(abs(plus))}"
+    elif pct is not None and pct != 0 and old > 0:
+        raw = old * (Decimal(1) + Decimal(str(pct)) / 100)
+        new = (raw / 500).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * 500
+        how = f"{'naik' if pct > 0 else 'turun'} {abs(pct):g}% dari {rupiah_text(old)}, dibulatkan ke Rp500"
+    else:
+        return None, None
+    new = new.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return (new, how) if Decimal(0) < new < Decimal("10000000000") else (None, None)
+
+
+def rupiah_text(value) -> str:
+    return "Rp " + f"{_rp(value):,}".replace(",", ".")
+
+
+async def run_sell_price_tool(db, *, user, outlet, menu):
+    """Kartu ubah harga jual. Harga lama, modal resep, margin, dan harga varian dihitung kode;
+    Simpan memanggil PUT /products/{id} (izin dan audit di sana)."""
+    from backend.models.product import Product, ProductVariant
+    from backend.services.variant_utils import variant_price
+    await _bind(db, user.tenant_id)
+    products = (await db.execute(select(Product).where(Product.brand_id == outlet.brand_id,
+        Product.deleted_at.is_(None)))).scalars().all()
+    rows, problems = [], []
+    for item in (menu or [])[:20]:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("nama") or "")
+        product, candidates = match(products, name)
+        if not product:
+            problems.append({"menu": name, "kandidat": [c.name for c in candidates],
+                             "masalah": "pilih salah satu" if candidates else "belum ada di daftar menu"})
+            continue
+        new, how = new_sell_price(Decimal(str(product.base_price or 0)), item)
+        if new is None:
+            problems.append({"menu": product.name, "masalah": "harga baru tidak jelas"})
+            continue
+        rows.append((product, new, how))
+    if not rows:
+        return {"status": "gagal", "masalah": problems, "pesan": "Tanyakan menu dan harga akhirnya."}, None
+    ids = [p.id for p, _, _ in rows]
+    recipes = {r.product_id: r for r in (await db.execute(_active_recipes(product_ids=ids))).scalars().all()}
+    variants = (await db.execute(select(ProductVariant).where(ProductVariant.product_id.in_(ids),
+        ProductVariant.deleted_at.is_(None), ProductVariant.is_active.is_(True))
+        .order_by(ProductVariant.sort_order))).scalars().all()
+    lines = []
+    for product, new, how in rows:
+        old = Decimal(str(product.base_price or 0))
+        computed = recipe_modal(recipes[product.id]) if product.id in recipes else None
+        modal = computed[0] if computed else None
+        margin = lambda price: round(float((price - modal) / price * 100), 1) if modal is not None and price > 0 else None
+        mine = [v for v in variants if v.product_id == product.id]
+        lines.append({"product_id": str(product.id), "row_version": product.row_version, "menu": product.name, "cara": how,
+            "harga_lama": _rp(old), "harga_baru": _rp(new), "modal": _rp(modal) if modal is not None else None,
+            "margin_lama": margin(old), "margin_baru": margin(new),
+            "di_bawah_modal": bool(modal is not None and new <= modal),
+            "lonjakan": bool(old > 0 and (new > old * 3 or new * 3 < old)),
+            # Harga varian lewat variant_price (satu rumah, termasuk clamp ke 0).
+            "varian": [{"nama": v.name, "lama": _rp(variant_price(product, v)),
+                        "baru": _rp(variant_price(SimpleNamespace(id=product.id, base_price=new), v))} for v in mine][:8]})
+    card = {"type": "sell_price", "lines": lines, "masalah": problems}
+    result = {"status": "kartu_siap", "menu": [{k: l[k] for k in ("menu", "harga_lama", "harga_baru", "modal", "margin_lama",
+              "margin_baru", "di_bawah_modal")} for l in lines], "belum_bisa": problems,
+              "catatan": "Belum tersimpan. Pengguna menekan Simpan di kartu. Harga varian ikut bergeser karena varian menyimpan selisih."}
     return result, card

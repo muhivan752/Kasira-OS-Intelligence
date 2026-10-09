@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRef, useState } from 'react';
-import { createPurchase, restockIngredient, updateIngredient } from '@/app/actions/api';
+import { createPurchase, restockIngredient, updateIngredient, updateProduct } from '@/app/actions/api';
 
 // Kartu konfirmasi alat bahan Selaris AI (backend/services/selaris_bahan.py).
 // Angka di kartu dihitung backend. Simpan memanggil endpoint yang sama dengan
@@ -20,8 +20,12 @@ export type StockInCard = {
   type: 'stock_in'; outlet_id: string; pemasok: string | null; lines: StockLine[]; nota: boolean; total: number | null;
   produk: Impact[]; masalah: { bahan: string; masalah: string; kandidat?: string[] }[];
 };
-export type BahanCard = IngredientPriceCard | StockInCard;
-export const isBahanCard = (event: { type?: string }) => event.type === 'ingredient_price' || event.type === 'stock_in';
+type SellLine = { product_id: string; row_version: number; menu: string; cara: string; harga_lama: number; harga_baru: number;
+  modal: number | null; margin_lama: number | null; margin_baru: number | null; di_bawah_modal: boolean; lonjakan: boolean;
+  varian: { nama: string; lama: number; baru: number }[] };
+export type SellPriceCard = { type: 'sell_price'; lines: SellLine[]; masalah: { menu: string; masalah: string; kandidat?: string[] }[] };
+export type BahanCard = IngredientPriceCard | StockInCard | SellPriceCard;
+export const isBahanCard = (event: { type?: string }) => ['ingredient_price', 'stock_in', 'sell_price'].includes(event.type || '');
 
 const rp = (n: number | null | undefined) => 'Rp ' + Math.round(Number(n) || 0).toLocaleString('id-ID');
 const qty = (n: number, unit: string) => `${Number(n.toFixed(2)).toLocaleString('id-ID')} ${unit}`;
@@ -42,7 +46,7 @@ function ImpactList({ rows }: { rows: Impact[] }) {
 }
 
 export function BahanCardView({ card }: { card: BahanCard }) {
-  return card.type === 'ingredient_price' ? <PriceCard card={card} /> : <StockCard card={card} />;
+  return card.type === 'ingredient_price' ? <PriceCard card={card} /> : card.type === 'sell_price' ? <SellCard card={card} /> : <StockCard card={card} />;
 }
 
 function PriceCard({ card }: { card: IngredientPriceCard }) {
@@ -137,6 +141,60 @@ function StockCard({ card }: { card: StockInCard }) {
       : <div className="saran-acts">
           <button type="button" className="saran-btn saran-primary" disabled={state === 'saving'} onClick={save}>{state === 'saving' ? 'Menyimpan…' : card.nota ? 'Simpan nota' : 'Simpan stok masuk'}</button>
           <Link className="saran-btn inline-flex items-center" href={card.nota ? '/dashboard/pembelian' : '/dashboard/bahan-baku'}>{card.nota ? 'Buka Pembelian' : 'Buka Bahan Baku'}</Link>
+        </div>}
+  </section>;
+}
+
+// Harga jual: hitungan awal dari backend (selaris_bahan.new_sell_price), tapi angkanya
+// bisa diubah di sini sebelum Simpan. Margin ulang dihitung dari modal resep yang sama.
+function SellCard({ card }: { card: SellPriceCard }) {
+  const [prices, setPrices] = useState(() => Object.fromEntries(card.lines.map(l => [l.product_id, String(l.harga_baru)])));
+  const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle'), [error, setError] = useState('');
+  const done = useRef(new Set<string>()), [savedIds, setSavedIds] = useState<string[]>([]);
+  const value = (l: SellLine) => Math.round(Number(prices[l.product_id]) || 0);
+  const margin = (l: SellLine, price: number) => l.modal != null && price > 0 ? Math.round((price - l.modal) / price * 1000) / 10 : null;
+  const invalid = card.lines.some(l => value(l) <= 0);
+
+  async function save() {
+    if (state !== 'idle' || invalid) return;
+    setState('saving'); setError('');
+    for (const l of card.lines) {
+      if (done.current.has(l.product_id)) continue;
+      const result = await updateProduct(l.product_id, { base_price: value(l), row_version: l.row_version });
+      if (!result.success) {
+        setState('idle');
+        setError(/modified|concurrent/i.test(String(result.message)) ? `${l.menu} baru saja diubah dari tempat lain. Minta Selaris AI menyiapkan ulang.` : `${l.menu}: ${result.message || 'belum tersimpan'}`);
+        return;
+      }
+      done.current.add(l.product_id);
+      setSavedIds([...done.current]);
+    }
+    setState('saved');
+  }
+
+  return <section className="saran-card mt-3" aria-label="Ubah harga jual">
+    <span className="saran-tag saran-brand">Ubah harga jual</span>
+    <ul className="saran-rows">{card.lines.map(l => {
+      const price = value(l), m = margin(l, price);
+      return <li key={l.product_id} className="flex-col items-stretch">
+        <div className="flex justify-between gap-3"><span>{l.menu}<em className="saran-fact">{l.cara}</em></span><span className="saran-num">{rp(l.harga_lama)} ke</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label className="flex items-center gap-2 text-sm">Rp<input aria-label={`Harga baru ${l.menu}`} className="hpp-control w-32" inputMode="numeric" value={prices[l.product_id]} disabled={state !== 'idle' || savedIds.includes(l.product_id)} onChange={e => setPrices(v => ({ ...v, [l.product_id]: e.target.value.replace(/\D/g, '') }))} /></label>
+          <span className="saran-num">{l.modal != null ? `modal ${rp(l.modal)} · margin ${l.margin_lama ?? '?'}% ke ${m ?? '?'}%` : 'belum ada resep, margin tidak dihitung'}</span>
+        </div>
+        {l.modal != null && price > 0 && price <= l.modal && <span className="saran-chip saran-chip-bad">Di bawah modal</span>}
+        {l.harga_lama > 0 && (price > l.harga_lama * 3 || price * 3 < l.harga_lama) && <span className="saran-chip saran-chip-bad">Periksa angkanya, beda jauh dari harga lama</span>}
+        {l.varian.length > 0 && <span className="saran-note">Varian ikut bergeser: {l.varian.map(v => `${v.nama} ${rp(v.lama)} ke ${rp(v.lama + price - l.harga_lama)}`).join(', ')}</span>}
+      </li>;
+    })}</ul>
+    {card.masalah.length > 0 && <p className="saran-note">Belum masuk kartu: {card.masalah.map(m => `${m.menu} (${m.masalah}${m.kandidat?.length ? `: ${m.kandidat.join(', ')}` : ''})`).join('; ')}.</p>}
+    <p className="saran-note">Harga baru dipakai kasir dan toko online setelah aplikasi kasir sinkron.</p>
+    {error && <p className="saran-error" role="alert">{error}</p>}
+    {state === 'saved'
+      ? <p className="saran-notice" role="status">Harga jual tersimpan.</p>
+      : <div className="saran-acts">
+          <button type="button" className="saran-btn saran-primary" disabled={state === 'saving' || invalid} onClick={save}>{state === 'saving' ? 'Menyimpan…' : 'Simpan harga jual'}</button>
+          <Link className="saran-btn inline-flex items-center" href="/dashboard/menu">Buka Menu</Link>
         </div>}
   </section>;
 }

@@ -31,6 +31,7 @@ STYLE = """
 - Kalau pengguna minta dibuatkan, diisi, dilengkapi, atau dihitung resep, bahan, takaran, atau HPP suatu produk: panggil alat susun_resep. Jangan menyuruh pengguna mencari menu lain dan jangan bilang tidak bisa.
 - Kalau alat susun_resep tidak tersedia, jelaskan bahwa akun ini belum punya izin kelola HPP dan pemilik usaha bisa memberikannya di menu Tim & absensi.
 - Kalau pengguna menyebut harga beli bahan berubah (naik, turun, sekarang sekian): panggil ubah_harga_bahan. Kalau menyebut barang datang, baru beli, atau stok masuk: panggil tambah_stok, satu panggilan untuk semua barang yang disebut. Salin jumlah, satuan, dan rupiah persis dari pengguna; 38 ribu = 38000, 1,5 juta = 1500000.
+- Kalau pengguna minta harga jual menu diubah: panggil ubah_harga_jual. Salin harga akhir, naik/turun rupiah, atau naik/turun persen persis seperti ucapan pengguna; jangan menghitung harga barunya sendiri. Harga jual hanya bisa diubah pemilik usaha.
 - Kalau alat bahan tidak tersedia, jelaskan bahwa akun ini belum punya izin untuk itu dan pemilik usaha bisa memberikannya di Jabatan dan izin.
 - Alat hanya menyiapkan kartu. Jangan pernah bilang sudah tersimpan, stok sudah bertambah, atau harga sudah berubah. Katakan "cek kartunya lalu tekan Simpan".
 """
@@ -265,7 +266,8 @@ async def run(*, system: str, history: list, message: str, tools: list, execute)
                 args = {}
             label = {"susun_resep": f"Menyiapkan draf resep {args.get('produk', '')}",
                      "ubah_harga_bahan": f"Menyiapkan perubahan harga {args.get('bahan', '')}",
-                     "tambah_stok": "Menyiapkan catatan bahan masuk"}.get(c["name"], "Menyiapkan")
+                     "tambah_stok": "Menyiapkan catatan bahan masuk",
+                     "ubah_harga_jual": "Menyiapkan perubahan harga jual"}.get(c["name"], "Menyiapkan")
             yield {"type": "status", "content": label.strip() + "…"}
             try:
                 result, card = await execute(c["name"], args)

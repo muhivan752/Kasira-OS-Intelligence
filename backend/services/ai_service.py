@@ -2066,13 +2066,16 @@ async def stream_ai_response(
             async def execute(name, args):
                 if name not in tool_names:
                     return {"status": "ditolak", "pesan": "Alat ini tidak tersedia untuk akun ini."}, None
-                if name in ("ubah_harga_bahan", "tambah_stok"):
+                if name in ("ubah_harga_bahan", "tambah_stok", "ubah_harga_jual"):
                     # Hanya membaca dan menyiapkan kartu; penyimpanan lewat endpoint modulnya.
                     if access_guard:
                         await access_guard()
                     if name == "ubah_harga_bahan":
                         return await selaris_bahan.run_price_tool(db, user=agent_user, outlet=agent_outlet,
                             bahan=args.get("bahan", ""), harga=args.get("harga"), jumlah=args.get("jumlah"), satuan=args.get("satuan", ""))
+                    if name == "ubah_harga_jual":
+                        return await selaris_bahan.run_sell_price_tool(db, user=agent_user, outlet=agent_outlet,
+                            menu=args.get("menu") or [])
                     return await selaris_bahan.run_stock_tool(db, user=agent_user, access=access, outlet=agent_outlet,
                         barang=args.get("barang") or [], pemasok=args.get("pemasok"))
                 # Validasi tanpa kunci dulu: draf AI bisa 30-60 detik, dan kunci baris
