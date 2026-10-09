@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { getAccountSetup, issueStaffActivation, saveAccessRole, saveStaffAccount, type AccountResult } from '@/app/actions/accounts';
+import { getAccountSetup, saveAccessRole, saveStaffAccount, type AccountResult } from '@/app/actions/accounts';
 import '../../keuangan/finance.css';
 import '../hris.css';
 
@@ -73,20 +73,9 @@ export default function TeamAccess() {
           <div className="access-groups">{groups.map(g => <fieldset key={g.title}><legend>{g.title}</legend>{g.hint && <p className="f-footnote">{g.hint}</p>}{g.items.map(([p, text]) => <label className="account-option" key={p}><input type="checkbox" name="permissions" value={p} defaultChecked={role ? role.policy.permissions[p] === true : p === 'hris.self'} />{text}</label>)}</fieldset>)}</div>
           <button className="f-button f-primary" disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan jabatan'}</button>
         </form></section>
-      <section className="f-panel"><h2>Kode aktivasi dan reset password</h2><p className="f-footnote">Akun baru dibuat dari tombol Tambah karyawan di halaman Tim. Di sini untuk mengaktifkan atau mereset login akun yang sudah ada.</p><label className="finance-form">Pilih karyawan<select value={employeeId} onChange={e => { setEmployeeId(e.target.value); setCode(null); }}><option value="">Pilih profil</option>{setup.employees.map((e: any) => <option key={e.id} value={e.id}>{e.name}{e.is_active ? '' : ' (nonaktif)'}</option>)}</select></label>
-        {!setup.employees.length && <p>Tambahkan profil karyawan di halaman Tim terlebih dahulu.</p>}
-        {employee && (account?.is_owner ? <p>Akun pemilik tidak diubah melalui profil karyawan.</p> : <form key={`${employeeId}:${account?.row_version}`} className="finance-form" onSubmit={accountSubmit} aria-busy={busy}>
-          <p>Perubahan akun membatalkan sesi perangkat karyawan. Pengaktifan akun tetap memerlukan profil karyawan aktif.</p>
-          <label>Username karyawan<input name="username" defaultValue={account?.username || ''} autoCapitalize="none" minLength={3} maxLength={64} required /></label>
-          <label>Jabatan akses<select name="role_id" defaultValue={setup.roles.some((r: any) => r.editable && r.id === account?.role_id) ? account.role_id : ''} required={!account}><option value="">{account ? 'Pertahankan akses lama' : 'Pilih jabatan'}</option>{setup.roles.filter((r: any) => r.editable).map((r: any) => <option value={r.id} key={r.id}>{r.name}</option>)}</select></label>
-          <label className="account-option"><input type="checkbox" name="is_active" defaultChecked={account ? account.is_active : employee.is_active} />Akun boleh masuk</label>
-          <button className="f-button f-primary" disabled={busy || !setup.shop_username}>{busy ? 'Menyimpan…' : account ? 'Simpan akun karyawan' : 'Buat akun karyawan'}</button>
-        </form>)}
-        {account && !account.is_owner && <button className="f-button" disabled={busy || !account.is_active || !employee?.is_active || !account.username} onClick={async () => {
-          const result = await write({ employeeId, action: 'activation' }, client_request_id => issueStaffActivation(employeeId, { client_request_id })); if (result) setCode(result);
-        }}>Buat kode aktivasi atau reset password</button>}
-        {code && <div className="finance-form"><p>Bagikan kode secara pribadi kepada karyawan. Password lama dan sesi terdahulu telah dibatalkan. Kode berlaku sampai {new Date(code.expires_at).toLocaleString('id-ID')}.</p><p>Username toko: {code.shop_username} · Username akun: {code.username}</p><label htmlFor="staff-activation">Kode aktivasi</label><textarea id="staff-activation" readOnly value={code.code} rows={3} /><Link className="f-button" href="/activate">Buka halaman aktivasi</Link><button className="f-button" onClick={() => setCode(null)}>Tutup kode</button></div>}
-      </section>
+      {/* Kode aktivasi dihapus 9 Okt 2026: pemilik membuat password baru langsung dari
+          halaman Tim (satu tempat untuk akun karyawan), lalu mengirimnya lewat WhatsApp. */}
+      <section className="f-panel"><h2>Akun karyawan</h2><p className="f-footnote">Tambah karyawan, ganti tugas, dan buat password baru dari halaman Tim.</p><Link className="f-button" href="/dashboard/hris">Buka halaman Tim</Link></section>
     </>}
   </div>;
 }

@@ -21,8 +21,24 @@ class UsernameBody(AccountBody):
         return value
 
 
-class PasswordLogin(UsernameBody):
+class PasswordLogin(AccountBody):
+    # Username toko opsional (9 Okt 2026): karyawan cukup nomor HP atau username +
+    # password; server mencari akunnya di semua toko (services.accounts.login_candidates).
+    # APK lama masih mengirim shop_username, jalur itu tetap sama.
+    shop_username: str | None = Field(default=None, min_length=3, max_length=64)
+    tenant_id: UUID | None = None
+    username: str = Field(default="owner", min_length=3, max_length=64)
     password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("shop_username", mode="before")
+    @classmethod
+    def empty_shop(cls, value):
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("shop_username", "username")
+    @classmethod
+    def username_format(cls, value):
+        return UsernameBody.username_format(value) if value is not None else None
 
     @field_validator("username", mode="before")
     @classmethod

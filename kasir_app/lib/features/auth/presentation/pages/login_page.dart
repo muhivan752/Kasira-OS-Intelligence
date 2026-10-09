@@ -191,17 +191,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
         firstPin: '');
   }
 
-  Future<void> loginPassword(
-      String shop, String username, String password) async {
+  /// Masuk dengan nomor HP/username + password, TANPA username toko (9 Okt 2026).
+  /// Server mencari tokonya. Kalau nomor itu terdaftar di beberapa toko,
+  /// kembalikan daftar tokonya; layar memanggil lagi dengan [tenantId].
+  Future<List<Map<String, dynamic>>?> loginPassword(
+      String username, String password, {String? tenantId}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final response = await _dio.post('/api/v1/auth/password/login', data: {
-        'shop_username': shop.trim(),
         'username': username.trim(),
         'password': password,
+        if (tenantId != null) 'tenant_id': tenantId,
       });
-      await acceptGoogleSession(
-          Map<String, dynamic>.from(response.data['data'] as Map));
+      final data = Map<String, dynamic>.from(response.data['data'] as Map);
+      if (data['choose_shop'] == true) {
+        state = state.copyWith(isLoading: false);
+        return (data['shops'] as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      }
+      await acceptGoogleSession(data);
     } on DioException catch (error) {
       state = state.copyWith(
           isLoading: false,
@@ -211,6 +220,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
           isLoading: false, error: 'Akun belum dapat dibuka. Coba lagi.');
     }
+    return null;
   }
 
   void usePasswordInstead() {
@@ -466,10 +476,9 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
-  final _shopController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _staffPassword = false;
+  bool _otpOpen = false;
 
   String _pinInput = '';
   bool _isConfirmingPin = false;
@@ -504,7 +513,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   void dispose() {
     _phoneController.dispose();
     _otpController.dispose();
-    _shopController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -721,36 +729,34 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Widget _buildPassword(AuthState state) {
-    return AutofillGroup(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Masuk ke usaha Anda',
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Masuk ke toko Anda',
           style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
       const SizedBox(height: 16),
+      _passwordForm(state),
+      TextButton(
+          onPressed: state.isLoading
+              ? null
+              : () => ref.read(authProvider.notifier).useOtpInstead(),
+          child: const Text('Masuk dengan Google atau kode Sefrekuensi')),
+    ]);
+  }
+
+  // Nomor HP/username + password, satu-satunya isian karyawan. Username toko
+  // dan centang "saya karyawan" dihapus 9 Okt 2026: server yang mencari tokonya.
+  Widget _passwordForm(AuthState state) {
+    return AutofillGroup(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       TextField(
-          controller: _shopController,
+          controller: _usernameController,
           enabled: !state.isLoading,
           autocorrect: false,
           textCapitalization: TextCapitalization.none,
-          decoration: const InputDecoration(labelText: 'Username toko'),
+          autofillHints: const [AutofillHints.username],
+          decoration:
+              const InputDecoration(labelText: 'Nomor HP atau username'),
           textInputAction: TextInputAction.next),
-      Material(
-          color: Colors.transparent,
-          child: CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Saya masuk sebagai karyawan'),
-              value: _staffPassword,
-              onChanged: state.isLoading
-                  ? null
-                  : (value) =>
-                      setState(() => _staffPassword = value ?? false))),
-      if (_staffPassword)
-        TextField(
-            controller: _usernameController,
-            enabled: !state.isLoading,
-            autocorrect: false,
-            autofillHints: const [AutofillHints.username],
-            decoration: const InputDecoration(labelText: 'Username akun'),
-            textInputAction: TextInputAction.next),
+      const SizedBox(height: 8),
       TextField(
           controller: _passwordController,
           enabled: !state.isLoading,
@@ -758,48 +764,62 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           autofillHints: const [AutofillHints.password],
           decoration: const InputDecoration(labelText: 'Password'),
           onSubmitted: (_) => _passwordLogin()),
-      const SizedBox(height: 20),
+      const SizedBox(height: 16),
       SizedBox(
           width: double.infinity,
           child: FilledButton(
               onPressed: state.isLoading ? null : _passwordLogin,
-              child: Text(state.isLoading ? 'Memproses…' : 'Masuk ke usaha'))),
-      TextButton(
-          onPressed:
-              state.isLoading ? null : () => context.push('/account-code'),
-          child: const Text('Aktivasi akun atau pulihkan password')),
-      TextButton(
-          onPressed: state.isLoading
-              ? null
-              : () => ref.read(authProvider.notifier).useOtpInstead(),
-          child: const Text('Masuk dengan Google atau kode Sefrekuensi')),
+              child: Text(state.isLoading ? 'Memproses…' : 'Masuk'))),
+      const SizedBox(height: 8),
+      Text('Lupa password? Minta pemilik toko membuat yang baru.',
+          style: KasiraDS.sans(size: 12.5, color: KasiraDS.textMuted)),
     ]));
   }
 
-  void _passwordLogin() {
-    if (_shopController.text.trim().isEmpty ||
-        _passwordController.text.isEmpty ||
-        (_staffPassword && _usernameController.text.trim().isEmpty)) {
+  Future<void> _passwordLogin({String? tenantId}) async {
+    if (_usernameController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              'Isi username toko, akun karyawan bila dipilih, dan password.')));
+          content: Text('Isi nomor HP atau username, dan password.')));
       return;
     }
-    ref.read(authProvider.notifier).loginPassword(
-        _shopController.text,
-        _staffPassword ? _usernameController.text : 'owner',
-        _passwordController.text);
+    final shops = await ref.read(authProvider.notifier).loginPassword(
+        _usernameController.text, _passwordController.text,
+        tenantId: tenantId);
+    if (shops == null || !mounted) return;
+    final picked = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheet) => SafeArea(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Text('Pilih toko',
+                      style: KasiraDS.display(
+                          size: 20, color: KasiraDS.textStrong))),
+              for (final shop in shops)
+                ListTile(
+                    leading: const Icon(Icons.storefront_outlined),
+                    title: Text('${shop['name']}'),
+                    subtitle: shop['owner'] == true
+                        ? const Text('Pemilik')
+                        : null,
+                    onTap: () =>
+                        Navigator.pop(sheet, '${shop['tenant_id']}')),
+              const SizedBox(height: 8),
+            ])));
+    if (picked != null && mounted) await _passwordLogin(tenantId: picked);
   }
 
+  // Layar pertama (9 Okt 2026): tiga cara masuk terlihat sekaligus. Google dan
+  // kode Sefrekuensi untuk pemilik, nomor HP/username + password untuk karyawan.
   Widget _buildInputPhone(AuthState state) {
+    if (_otpOpen) return _buildOtpPhone(state);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Masuk ke usaha Anda',
+        Text('Masuk ke toko Anda',
             style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
-        const SizedBox(height: 8),
-        Text('Gunakan akun Google, atau kode masuk dari Sefrekuensi.',
-            style: KasiraDS.sans(size: 15, color: KasiraDS.textBody)),
         const SizedBox(height: 20),
         SizedBox(
             width: double.infinity,
@@ -817,7 +837,42 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           Text('Google belum tersedia. Gunakan kode Sefrekuensi.',
               style: KasiraDS.sans(size: 13, color: KasiraDS.textMuted)),
         ],
-        const SizedBox(height: 24),
+        const SizedBox(height: 10),
+        SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: state.isLoading
+                  ? null
+                  : () => setState(() => _otpOpen = true),
+              icon: const Icon(Icons.sms_outlined),
+              label: Text('Kode dari $kSefrekuensiName'),
+            )),
+        const SizedBox(height: 20),
+        Row(children: [
+          const Expanded(child: Divider()),
+          Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text('atau nomor HP dan password',
+                  style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted))),
+          const Expanded(child: Divider()),
+        ]),
+        const SizedBox(height: 12),
+        _passwordForm(state),
+      ],
+    );
+  }
+
+  Widget _buildOtpPhone(AuthState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton.icon(
+            onPressed: state.isLoading || state.sefreLoading
+                ? null
+                : () => setState(() => _otpOpen = false),
+            icon: const Icon(Icons.arrow_back, size: 18),
+            label: const Text('Kembali')),
+        const SizedBox(height: 8),
         Text('Nomor HP Anda',
             style: KasiraDS.display(size: 22, color: KasiraDS.textStrong)),
         const SizedBox(height: 6),
@@ -923,13 +978,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     .sendOtp(channel: 'whatsapp'),
             child: const Text('Gunakan WhatsApp'),
           ),
-        const SizedBox(height: 4),
-        TextButton(
-          onPressed: (state.isLoading || state.sefreLoading)
-              ? null
-              : () => ref.read(authProvider.notifier).usePasswordInstead(),
-          child: const Text('Karyawan, atau punya password? Masuk dengan username'),
-        ),
       ],
     );
   }

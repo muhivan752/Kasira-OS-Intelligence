@@ -4,13 +4,17 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import { loginPassword } from '@/app/actions/accounts';
+import { POS_WORKSPACE_PERMISSIONS } from '@/lib/pos-access';
+import { PasswordInput } from './password-input';
 import { getAuthProviders, registerTenant, sendOtp, signInGoogle, verifyGooglePhone, verifyOtp, verifyRegistrationOtp } from '@/app/actions/auth';
 import { SEFREKUENSI_PLAY_URL, type OtpChannel } from '@/lib/brand';
 import { googleIdToken, prepareGoogleAuth, type FirebaseWebConfig } from '@/lib/google-auth';
 import { AuthShell } from './auth-shell';
 import { GoogleButton } from './google-button';
 
-type Step = 'choice' | 'phone' | 'otp' | 'business';
+type Step = 'choice' | 'phone' | 'otp' | 'business' | 'shop';
+type Shop = { tenant_id: string; name: string; owner: boolean };
 const businesses = [{ value: 'cafe', label: 'Kafe' }, { value: 'warung', label: 'Warung' }, { value: 'resto', label: 'Restoran' }, { value: 'other', label: 'Usaha lain' }];
 
 export function AuthFlow({ mode }: { mode: 'login' | 'register' }) {
@@ -36,6 +40,9 @@ export function AuthFlow({ mode }: { mode: 'login' | 'register' }) {
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [referral, setReferral] = useState(search.get('ref') || '');
+  const [loginId, setLoginId] = useState('');
+  const [password, setPassword] = useState('');
+  const [shops, setShops] = useState<Shop[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -56,6 +63,24 @@ export function AuthFlow({ mode }: { mode: 'login' | 'register' }) {
     const target = search.get('redirect');
     router.push(target?.startsWith('/dashboard') ? target : '/dashboard');
     router.refresh();
+  }
+  // Karyawan (dan pemilik yang punya password) masuk di layar yang sama: nomor HP atau
+  // username + password, tanpa username toko (9 Okt 2026). Server yang mencari tokonya;
+  // kalau nomor itu terdaftar di beberapa toko, layar berikutnya meminta memilih.
+  async function passwordLogin(event?: React.FormEvent, tenantId?: string) {
+    event?.preventDefault();
+    if (busy || !loginId.trim() || !password) return;
+    setBusy(true); setError('');
+    try {
+      const result = await loginPassword({ username: loginId.trim(), password, ...(tenantId ? { tenant_id: tenantId } : {}) });
+      if (!result.success) { setError(result.message); return; }
+      if (result.data.choose_shop) { setShops(result.data.shops); setStep('shop'); return; }
+      const access = result.data.access;
+      const requested = search.get('redirect');
+      const destination = access?.enforcement_mode === 'managed' ? access?.permissions?.some((p: string) => POS_WORKSPACE_PERMISSIONS.includes(p)) ? '/dashboard/operasional' : '/dashboard/hris' : requested?.startsWith('/dashboard') ? requested : '/dashboard';
+      setPassword('');
+      router.push(destination); router.refresh();
+    } finally { setBusy(false); }
   }
   async function google() {
     if (!config) return;
@@ -113,20 +138,21 @@ export function AuthFlow({ mode }: { mode: 'login' | 'register' }) {
     setError(''); setNotFound(false);
     if (step === 'otp') { setStep('phone'); setOtp(''); }
     else if (step === 'business') { setStep('phone'); setGoogleProof(''); setOtpProof(''); }
-    else { setStep('choice'); setIdToken(''); setEmail(''); }
+    else { setStep('choice'); setIdToken(''); setEmail(''); setShops([]); }
   }
   const titles: Record<Step, string> = {
     choice: mode === 'register' ? 'Mulai usaha Anda di Selaris.' : 'Selamat datang kembali.',
     phone: idToken ? 'Hubungkan nomor Anda.' : 'Masuk dengan kode.',
     otp: channel === 'sefrekuensi' ? 'Periksa Sefrekuensi.' : 'Periksa WhatsApp.',
     business: 'Kenalkan usaha Anda.',
+    shop: 'Pilih toko.',
   };
   return <AuthShell>
     {step !== 'choice' && <button className="auth-back" type="button" onClick={back} disabled={busy}><ArrowLeft size={18} /> Kembali</button>}
     <div className="auth-heading">
       <p className="auth-kicker">{step === 'choice' ? 'Selaris bersama Sefrekuensi' : step === 'business' ? 'Langkah terakhir' : 'Akun Anda'}</p>
       <h1>{titles[step]}</h1>
-      <p>{step === 'choice' ? 'Satu tempat untuk mengelola penjualan dan usaha Anda.' : step === 'phone' ? idToken ? `${email}. Verifikasi nomor sekali untuk menghubungkan akun dan usaha Anda.` : 'Gunakan nomor yang terdaftar di Sefrekuensi.' : step === 'otp' ? `Masukkan kode 6 digit untuk +${phone}${channel === 'sefrekuensi' ? ', dari pesan Yasmin.' : '.'}` : 'Isi informasi dasar. Menu, printer, dan pembayaran bisa diatur setelahnya.'}</p>
+      <p>{step === 'choice' ? 'Satu tempat untuk mengelola penjualan dan usaha Anda.' : step === 'shop' ? `${loginId.trim()} terdaftar di lebih dari satu toko.` : step === 'phone' ? idToken ? `${email}. Verifikasi nomor sekali untuk menghubungkan akun dan usaha Anda.` : 'Gunakan nomor yang terdaftar di Sefrekuensi.' : step === 'otp' ? `Masukkan kode 6 digit untuk +${phone}${channel === 'sefrekuensi' ? ', dari pesan Yasmin.' : '.'}` : 'Isi informasi dasar. Menu, printer, dan pembayaran bisa diatur setelahnya.'}</p>
     </div>
     {error && <div className="auth-error" role="alert">{error}</div>}
     {step === 'choice' && <div className="auth-actions">
@@ -134,9 +160,18 @@ export function AuthFlow({ mode }: { mode: 'login' | 'register' }) {
       {checking ? <p className="auth-note" role="status">Menyiapkan pilihan login…</p> : !config && <p className="auth-note">Login Google sedang disiapkan. Kode Sefrekuensi tersedia di bawah.</p>}
       <div className="auth-divider"><span>atau</span></div>
       <button className="ks-btn ks-btn-outline" type="button" onClick={() => { setError(''); setStep('phone'); }} disabled={busy}>Gunakan kode Sefrekuensi</button>
-      <p className="auth-note">Kode datang sebagai pesan di aplikasi Sefrekuensi.</p>
-      {mode === 'login' && <Link className="auth-text-button" href="/login/password">Karyawan, atau punya password? Masuk dengan username</Link>}
+      {mode === 'login' && <form className="auth-form" onSubmit={passwordLogin} aria-busy={busy}>
+        <div className="auth-divider"><span>atau nomor HP dan password</span></div>
+        <label htmlFor="login-id">Nomor HP atau username<input id="login-id" autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={64} value={loginId} onChange={event => setLoginId(event.target.value)} required /></label>
+        <PasswordInput label="Password" name="password" autoComplete="current-password" maxLength={128} value={password} onChange={event => setPassword(event.target.value)} required />
+        <button className="ks-btn" disabled={busy || !loginId.trim() || !password}>{busy ? 'Memproses…' : 'Masuk'}</button>
+        <p className="auth-note">Lupa password? Minta pemilik toko membuat yang baru.</p>
+      </form>}
+      {mode === 'register' && <p className="auth-note">Kode datang sebagai pesan di aplikasi Sefrekuensi.</p>}
       <p className="auth-switch">{mode === 'login' ? 'Belum punya usaha di Selaris?' : 'Sudah punya akun?'} <Link href={mode === 'login' ? '/register' : '/login'}>{mode === 'login' ? 'Daftarkan usaha' : 'Masuk'}</Link></p>
+    </div>}
+    {step === 'shop' && <div className="auth-actions">
+      {shops.map(shop => <button key={shop.tenant_id} className="ks-btn ks-btn-outline" type="button" disabled={busy} onClick={() => passwordLogin(undefined, shop.tenant_id)}>{shop.name}{shop.owner ? ' (pemilik)' : ''}</button>)}
     </div>}
     {step === 'phone' && <form className="auth-form" onSubmit={event => { event.preventDefault(); void send('sefrekuensi'); }}>
       <label htmlFor="auth-phone">Nomor HP<input id="auth-phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="081234567890" value={phone} onChange={event => setPhone(event.target.value)} required autoFocus /></label>

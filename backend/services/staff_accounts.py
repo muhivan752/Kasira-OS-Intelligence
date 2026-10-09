@@ -91,8 +91,8 @@ async def target(db, user, context, user_id, outlet_id=None):
 
 
 async def configure(db, request, user, context, tenant, employee, body):
-    if not tenant.login_username:
-        raise HTTPException(409, "Tetapkan username toko di Akun saya terlebih dahulu")
+    # Username toko tidak lagi syarat (9 Okt 2026): karyawan masuk dengan nomor
+    # HP/username + password, server mencari tokonya (accounts.login_candidates).
     context.require_outlet(employee.outlet_id)
     if not employee.is_active:
         raise HTTPException(409, "Aktifkan profil sebelum membuat atau mengatur akun")
@@ -168,6 +168,7 @@ async def options(db, user, context):
             a.id not in linked or linked[a.id].outlet_id in context.outlet_ids)]
     tenant = await db.get(Tenant, user.tenant_id)
     return {"account_admin": admin, "shop_username": tenant.login_username if admin else None,
+        "business_name": tenant.name if admin else None,
         "roles": [{"id": str(r.id), "name": r.name, "outlet_ids": (r.permissions["access_policy"].get("outlet_ids") or []),
             "scope": r.scope} for r in permitted.values()],
         "accounts": [{"id": str(a.id), "name": a.full_name, "username": a.login_username,

@@ -69,10 +69,23 @@ async def recovery_result(db, user, body, data):
 
 @auth_router.post("/password/login")
 async def password_login(body: PasswordLogin, request: Request, db: AsyncSession = Depends(get_db)):
-    await svc.limited(request, body.shop_username, body.username)
-    user = await svc.identity(db, body.shop_username, body.username)
-    if not await svc.password_matches(user, body.password):
-        raise HTTPException(401, "Username toko, username akun atau password tidak sesuai")
+    await svc.limited(request, body.shop_username or "*", body.username)
+    if body.shop_username:
+        user = await svc.identity(db, body.shop_username, body.username)
+        if not await svc.password_matches(user, body.password):
+            raise HTTPException(401, "Username toko, username akun atau password tidak sesuai")
+    else:
+        matched = await svc.password_matches_any(
+            await svc.login_candidates(db, body.username, body.tenant_id), body.password)
+        if not matched:
+            raise HTTPException(401, "Nomor HP, username atau password tidak sesuai")
+        if len(matched) > 1:
+            tenants = {t.id: t for t in (await db.scalars(select(Tenant).where(
+                Tenant.id.in_([u.tenant_id for u in matched])))).all()}
+            return response({"choose_shop": True, "shops": sorted(({"tenant_id": str(u.tenant_id),
+                "name": tenants[u.tenant_id].name, "owner": u.is_superuser} for u in matched),
+                key=lambda s: s["name"].lower())})
+        user = matched[0]
     await bind(db, user.tenant_id)
     return response(await payload(db, user))
 
@@ -284,9 +297,6 @@ async def save_employee_account(employee_id: UUID, body: EmployeeAccountSave, us
             raise HTTPException(409, "Permintaan sudah dipakai untuk karyawan lain")
         return response(previous)
     version(employee, body)
-    tenant = await db.get(Tenant, user.tenant_id)
-    if not tenant.login_username:
-        raise HTTPException(409, "Tetapkan username toko dan password pemilik terlebih dahulu")
     if body.is_active and not employee.is_active:
         raise HTTPException(409, "Aktifkan profil karyawan terlebih dahulu")
     role = await db.scalar(select(Role).where(Role.id == body.role_id, Role.tenant_id == user.tenant_id, Role.deleted_at.is_(None))) if body.role_id else None

@@ -1,7 +1,7 @@
-import { Suspense } from 'react';
-import { PasswordFlow } from '@/components/auth/password-flow';
+import { redirect } from 'next/navigation';
 
-// Masuk pakai username toko + password: karyawan, dan pemilik yang sudah membuat password.
+// Sejak 9 Okt 2026 nomor HP/username + password ada di /login, tanpa username toko.
+// Tautan lama (pesan WA karyawan, bookmark) tetap sampai ke layar yang benar.
 export default function PasswordLoginPage() {
-  return <Suspense fallback={<p className="auth-loading" role="status">Memuat halaman masuk…</p>}><PasswordFlow mode="login" /></Suspense>;
+  redirect('/login');
 }

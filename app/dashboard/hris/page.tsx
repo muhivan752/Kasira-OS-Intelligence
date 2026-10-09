@@ -12,7 +12,7 @@ import './hris.css';
 
 const labels: Record<HrKind, string> = { employees: 'Karyawan', schedules: 'Jadwal', attendance: 'Absensi & izin' };
 const actions: Record<HrKind, string> = { employees: 'Tambah karyawan', schedules: 'Atur jadwal', attendance: 'Catat kehadiran' };
-type Dialog = { kind: HrKind; row?: HrEmployee | HrRecord } | { kind: 'void'; collection: 'schedules' | 'attendance'; row: HrRecord } | { kind: 'punch'; action: 'in' | 'out' };
+type Dialog = { kind: HrKind; row?: HrEmployee | HrRecord; reset?: boolean } | { kind: 'void'; collection: 'schedules' | 'attendance'; row: HrRecord } | { kind: 'punch'; action: 'in' | 'out' };
 const initial: HrFilters = { outlet_id: '', start: '', end: '', kind: 'employees', search: '', active: '', skip: 0 };
 
 export default function HrisPage() {
@@ -81,7 +81,7 @@ export default function HrisPage() {
     setBusy(true); setSaveError(''); persist(request);
     try {
       const result = await writeHr(request);
-      if (result.success) { persist(null); setNotice(result.message || 'Data tim disimpan'); setRevision(v => v + 1); setHandoff(handoffFrom(request, setup.shop_username)); return true; }
+      if (result.success) { persist(null); setNotice(result.message || 'Data tim disimpan'); setRevision(v => v + 1); setHandoff(handoffFrom(request, setup)); return true; }
       setSaveError(result.message); if (!result.uncertain) persist(null); return false;
     } catch { setSaveError('Koneksi terputus. Hasil penyimpanan belum pasti; periksa permintaan yang sama.'); return false; }
     finally { writing.current = false; setBusy(false); }
@@ -117,10 +117,10 @@ export default function HrisPage() {
         <div className="hr-summary"><div><span>Karyawan aktif di outlet</span><strong>{data.summary.active_employees ?? 'Tidak diizinkan'}</strong></div><div><span>Jadwal tercatat</span><strong>{data.summary.scheduled ?? 'Tidak diizinkan'}</strong></div><div><span>Kehadiran tercatat</span><strong>{data.summary.present ?? 'Tidak diizinkan'}</strong></div><div><span>Izin, sakit, cuti dan libur</span><strong>{data.summary.leave ?? 'Tidak diizinkan'}</strong></div></div>
         {data.summary.open != null && <p>{data.summary.open} catatan belum pulang{data.summary.unrecorded_started != null ? ` · ${data.summary.unrecorded_started} jadwal sudah mulai, belum ada catatan.` : ''}</p>}<p className="f-footnote">Belum ada catatan bukan berarti tidak hadir. Kehadiran mengikuti tanggal kerja, termasuk jadwal melewati tengah malam. Diperbarui {hrTime(data.generated_at, zone)}.</p></section>
       <section className="f-panel"><h2>{labels[filters.kind]}</h2><p>{data.total} catatan sesuai filter.</p>
-        {!data.items.length ? <div className="f-empty"><h3>Belum ada {filters.kind === 'employees' ? 'karyawan' : filters.kind === 'schedules' ? 'jadwal' : 'kehadiran'} sesuai pilihan</h3><p>{filters.kind === 'employees' ? 'Tambahkan profil karyawan. Akun kasir boleh dihubungkan nanti.' : 'Periksa outlet dan periode, atau tambahkan catatan yang sudah dikonfirmasi.'}</p>{(filters.search || filters.active) && <button className="f-button" onClick={() => setFilters(v => ({ ...v, search: '', active: '', skip: 0 }))}>Reset filter</button>}</div>
+        {!data.items.length ? <div className="f-empty"><h3>Belum ada {filters.kind === 'employees' ? 'karyawan' : filters.kind === 'schedules' ? 'jadwal' : 'kehadiran'} sesuai pilihan</h3><p>{filters.kind === 'employees' ? 'Tambahkan karyawan dengan nama, nomor HP, dan tugasnya. Info masuknya bisa langsung dikirim ke WhatsApp.' : 'Periksa outlet dan periode, atau tambahkan catatan yang sudah dikonfirmasi.'}</p>{(filters.search || filters.active) && <button className="f-button" onClick={() => setFilters(v => ({ ...v, search: '', active: '', skip: 0 }))}>Reset filter</button>}</div>
           : <ul className="hr-list">{data.items.map(item => filters.kind === 'employees' ? <li key={item.id}><div><h3>{(item as HrEmployee).name}</h3><p>{(item as HrEmployee).code} · {(item as HrEmployee).position}</p><p>{(item as HrEmployee).is_active ? 'Aktif' : 'Nonaktif'} · Mulai {hrDay((item as HrEmployee).started_on)}{(item as HrEmployee).ended_on ? ` · Selesai ${hrDay((item as HrEmployee).ended_on!)}` : ''}</p>
               {manager && <p className="f-footnote">{(item as HrEmployee).phone || 'Nomor HP belum diisi'} · {(item as HrEmployee).user_id ? accessLabel(setup, (item as HrEmployee).user_id!) : 'Belum punya akun'}</p>}</div>
-              {manager && <button className="f-button" disabled={mutationDisabled} aria-label={`Edit karyawan ${(item as HrEmployee).name}`} onClick={() => open({ kind: 'employees', row: item })}>Edit profil</button>}</li>
+              {manager && <div className="hr-actions">{setup?.account_admin && (item as HrEmployee).user_id && (item as HrEmployee).is_active && setup.accounts.some(a => a.id === (item as HrEmployee).user_id) && <button className="f-button" disabled={mutationDisabled} aria-label={`Buat password baru untuk ${(item as HrEmployee).name}`} onClick={() => open({ kind: 'employees', row: item, reset: true })}>Buat password baru</button>}<button className="f-button" disabled={mutationDisabled} aria-label={`Edit karyawan ${(item as HrEmployee).name}`} onClick={() => open({ kind: 'employees', row: item })}>Edit</button></div>}</li>
             : <li key={item.id}><div><h3>{(item as HrRecord).employee_name}</h3><p>{hrDay((item as HrRecord).work_date)}{filters.kind === 'attendance' ? ` · ${(item as HrRecord).status}` : ''}</p>
               <p>{filters.kind === 'schedules' ? `${hrTime((item as HrRecord).starts_at, zone)} → ${hrTime((item as HrRecord).ends_at, zone)}` : `${hrTime((item as HrRecord).clock_in, zone)}${(item as HrRecord).status === 'hadir' ? ` → ${(item as HrRecord).clock_out ? hrTime((item as HrRecord).clock_out, zone) : 'Belum pulang'}` : ''}`}</p>
               {filters.kind === 'attendance' && <p className="f-footnote">{(item as HrRecord).source === 'self' ? 'Awal dicatat dari akun karyawan' : 'Awal dicatat pengelola'}{(item as HrRecord).minutes != null ? ` · ${Math.floor((item as HrRecord).minutes! / 60)} jam ${(item as HrRecord).minutes! % 60} menit tercatat` : ''}</p>}
@@ -129,7 +129,7 @@ export default function HrisPage() {
         {data.total > 0 && <div className="hr-pager"><p>{data.skip + (data.items.length ? 1 : 0)} sampai {data.skip + data.items.length} dari {data.total}</p><div className="hr-actions"><button className="f-button" disabled={filters.skip === 0} onClick={() => setFilters(v => ({ ...v, skip: Math.max(0, v.skip - 50) }))}>Sebelumnya</button><button className="f-button" disabled={data.skip + data.items.length >= data.total} onClick={() => setFilters(v => ({ ...v, skip: v.skip + 50 }))}>Berikutnya</button></div></div>}</section>
     </>}
     {handoff && <HandoffDialog value={handoff} close={() => setHandoff(null)} />}
-    {dialog && setup && selected && <HrForm key={`${dialog.kind}:${'row' in dialog ? dialog.row?.id || 'new' : 'action' in dialog ? dialog.action : 'new'}`} dialog={dialog} setup={setup} outletId={selected.id} day={filters.start} zone={zone} pending={pending} busy={busy} error={saveError} submit={submit} retry={retry} close={() => setDialog(null)} />}
+    {dialog && setup && selected && <HrForm key={`${dialog.kind}:${'row' in dialog ? dialog.row?.id || 'new' : 'action' in dialog ? dialog.action : 'new'}:${'reset' in dialog && dialog.reset ? 'reset' : ''}`} dialog={dialog} setup={setup} outletId={selected.id} day={filters.start} zone={zone} pending={pending} busy={busy} error={saveError} submit={submit} retry={retry} close={() => setDialog(null)} />}
   </div>;
 }
 
@@ -149,14 +149,22 @@ function HrForm({ dialog, setup, outletId, day, zone, pending, busy, error, subm
   const employee = dialog.kind === 'employees' ? dialog.row as HrEmployee | undefined : undefined;
   const record = dialog.kind === 'schedules' || dialog.kind === 'attendance' ? dialog.row as HrRecord | undefined : undefined;
   const [status, setStatus] = useState(record?.status || 'hadir'), [localError, setLocalError] = useState('');
-  const [accountMode, setAccountMode] = useState(employee?.user_id ? 'existing' : setup.account_admin && setup.shop_username ? 'new' : 'profile');
+  // Form karyawan (9 Okt 2026, permintaan Ivan "terlalu ribet"): yang wajib cuma nama,
+  // nomor HP, dan tugas; password dibuatkan. Pilihan akun lama, username, tanggal, dan
+  // catatan pindah ke "Detail lain". Akun yang sudah ada HANYA dikirim ulang ke server
+  // kalau tugas/login/password benar-benar diubah, karena configure() mencabut semua
+  // sesi karyawan itu.
+  const [accountMode, setAccountMode] = useState(employee?.user_id ? 'existing' : setup.account_admin ? 'new' : 'profile');
   const [accountId, setAccountId] = useState(employee?.user_id || ''), [placement, setPlacement] = useState(employee?.outlet_id || outletId);
-  const [configureAccount, setConfigureAccount] = useState(false), [loginKind, setLoginKind] = useState('phone'), [resetPassword, setResetPassword] = useState(false);
-  const [position, setPosition] = useState(employee?.position || ''), [positionAuto, setPositionAuto] = useState(!employee?.position), [roleChoice, setRoleChoice] = useState('');
-  const placementRoles = (setup.roles || []).filter(r => r.scope === 'tenant' || r.outlet_ids.includes(placement));
-  const pickRole = (value: string) => { setRoleChoice(value); const role = placementRoles.find(r => r.id === value); if (positionAuto && role) setPosition(role.name); };
   const linkedAccount = setup.accounts.find(a => a.id === accountId), newAccount = accountMode === 'new';
-  const loginFields = setup.account_admin && (newAccount || accountMode === 'existing' && configureAccount && linkedAccount);
+  const [loginKind, setLoginKind] = useState(linkedAccount?.username && !/^\d+$/.test(linkedAccount.username) ? 'username' : 'phone'), [loginEdited, setLoginEdited] = useState(false);
+  const [resetPassword, setResetPassword] = useState(dialog.kind === 'employees' && Boolean(dialog.reset)), [password, setPassword] = useState(newPassword);
+  const placementRoles = (setup.roles || []).filter(r => r.scope === 'tenant' || r.outlet_ids.includes(placement));
+  const [roleChoice, setRoleChoice] = useState(employee?.user_id ? linkedAccount?.role_id || '' : placementRoles.find(r => r.name.toLowerCase() === 'kasir')?.id || '');
+  const [position, setPosition] = useState(employee?.position || placementRoles.find(r => r.id === roleChoice)?.name || ''), [positionAuto, setPositionAuto] = useState(!employee?.position);
+  const pickRole = (value: string) => { setRoleChoice(value); const role = placementRoles.find(r => r.id === value); if (positionAuto) setPosition(role ? role.name : value === 'self' ? 'Karyawan' : ''); };
+  const accountChanged = Boolean(linkedAccount) && (roleChoice !== (linkedAccount?.role_id || '') || resetPassword || loginEdited);
+  const loginFields = Boolean(setup.account_admin && (newAccount || accountMode === 'existing' && accountChanged));
   const passwordNeeded = newAccount || !linkedAccount?.password_enabled || resetPassword;
   const frozen = Boolean(pending), title = dialog.kind === 'void' ? 'Batalkan catatan' : dialog.kind === 'punch' ? dialog.action === 'in' ? 'Catat masuk sekarang' : 'Catat pulang sekarang' : dialog.row ? dialog.kind === 'attendance' ? 'Koreksi kehadiran' : dialog.kind === 'employees' ? 'Edit profil karyawan' : 'Edit jadwal' : actions[dialog.kind];
   const save = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -167,11 +175,11 @@ function HrForm({ dialog, setup, outletId, day, zone, pending, busy, error, subm
       const payload: HrPending['payload'] = { client_request_id: crypto.randomUUID() };
       let path = '', method: 'POST' | 'PUT' = 'POST';
       if (dialog.kind === 'employees') {
-        Object.assign(payload, { name: value('name'), position: value('position'), phone: value('phone') || null, outlet_id: value('outlet_id'), user_id: value('user_id') || null, started_on: value('started_on'), ended_on: value('ended_on') || null, is_active: value('is_active') === 'true', notes: value('notes') || null, row_version: employee?.row_version });
+        Object.assign(payload, { name: value('name'), position: value('position') || 'Karyawan', phone: value('phone') || null, outlet_id: value('outlet_id'), user_id: value('user_id') || null, started_on: value('started_on'), ended_on: value('ended_on') || null, is_active: value('is_active') === 'true', notes: value('notes') || null, row_version: employee?.row_version });
         if (loginFields) {
-          const password = String(f.get('password') || '');
-          if (passwordNeeded && password !== String(f.get('password_confirm') || '')) throw new Error('Ulangi password harus sama dengan password awal');
-          payload.account = { use_phone: loginKind === 'phone', username: loginKind === 'username' ? value('username') : null, role_id: value('role_id') || null, user_row_version: linkedAccount?.row_version || null, password: passwordNeeded ? password : null };
+          if (passwordNeeded && password.length < 8) throw new Error('Password minimal 8 karakter');
+          if (newAccount && !roleChoice) throw new Error('Pilih tugas karyawan');
+          payload.account = { use_phone: loginKind === 'phone', username: loginKind === 'username' ? value('username') : null, role_id: roleChoice && roleChoice !== 'self' ? roleChoice : null, user_row_version: linkedAccount?.row_version || null, password: passwordNeeded ? password : null };
         }
         path = employee ? `/employees/${employee.id}` : '/employees'; method = employee ? 'PUT' : 'POST';
       } else if (dialog.kind === 'void') { path = `/${dialog.collection}/${dialog.row.id}/void`; Object.assign(payload, { row_version: dialog.row.row_version, reason: value('reason') }); }
@@ -190,25 +198,33 @@ function HrForm({ dialog, setup, outletId, day, zone, pending, busy, error, subm
     {frozen && <p className="f-notice">Periksa penyimpanan data yang sama sebelum mengubah isinya.</p>}
     <fieldset disabled={busy || frozen}>
       {dialog.kind === 'employees' ? <>
-        <label>Nama karyawan<input name="name" autoFocus required maxLength={120} defaultValue={employee?.name || ''} /></label><label>Jabatan atau tugas<input name="position" required maxLength={100} value={position} onChange={e => { setPosition(e.target.value); setPositionAuto(false); }} placeholder="Terisi dari hak akses, boleh diubah" /></label>
-        <label>Outlet penempatan<select name="outlet_id" required value={placement} onChange={e => { setPlacement(e.target.value); setRoleChoice(''); }}>{setup.outlets.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
-        <label>Nomor HP<input name="phone" type="tel" required={Boolean(loginFields && loginKind === 'phone')} maxLength={40} defaultValue={employee?.phone || ''} placeholder="08 atau +62" /></label>
-        {setup.account_admin && setup.shop_username ? <>
-          <label>Akun karyawan<select aria-label="Akun karyawan" value={accountMode} onChange={e => { setAccountMode(e.target.value); setConfigureAccount(false); }}><option value="profile">Profil saja, tanpa login</option><option value="existing">Pakai akun yang sudah ada</option>{!employee?.user_id && <option value="new">Buatkan akun login baru</option>}</select></label>
-          {accountMode === 'existing' && <><label>Hubungkan akun kasir<select name="user_id" required value={accountId} onChange={e => { setAccountId(e.target.value); setConfigureAccount(false); setResetPassword(false); }}><option value="">Pilih akun</option>{employee?.user_id && !linkedAccount && <option value={employee.user_id}>Akun terhubung (izin akun tidak dapat diatur)</option>}{setup.accounts.filter(a => !a.employee_id || a.employee_id === employee?.id).map(a => <option key={a.id} value={a.id}>{a.name}{a.username ? ` · ${a.username}` : ''}</option>)}</select></label>{linkedAccount && <label>Pengaturan login<select value={configureAccount ? 'configure' : 'keep'} onChange={e => setConfigureAccount(e.target.value === 'configure')}><option value="keep">Biarkan seperti sekarang ({accessLabel(setup, accountId).replace('Akun: ', '')})</option><option value="configure">Ubah hak akses, login atau password</option></select></label>}<p className="f-footnote">Akun dan riwayat yang sudah ada tetap dipakai.</p></>}
-          {accountMode !== 'existing' && <input type="hidden" name="user_id" value={accountMode === 'profile' ? employee?.user_id || '' : ''} />}
-          {loginFields && <div className="hr-account-fields"><h3>Login karyawan</h3><p className="f-footnote">Username toko: {setup.shop_username}. Profil dan akun disimpan bersama.</p>
-            <label>Masuk menggunakan<select aria-label="Masuk menggunakan" value={loginKind} onChange={e => setLoginKind(e.target.value)}><option value="phone">Nomor HP karyawan</option><option value="username">Username akun</option></select></label>
-            {loginKind === 'username' && <><label>Username akun<input name="username" required minLength={3} maxLength={64} pattern="[A-Za-z0-9](?:[A-Za-z0-9_]|-){2,63}" defaultValue={linkedAccount?.username || ''} autoCapitalize="none" autoCorrect="off" spellCheck={false} /></label><p className="f-footnote">Minimal 3 karakter, tanpa spasi. Contoh: irfan.</p></>}
-            <label>Hak akses<select aria-label="Hak akses" required={newAccount} value={roleChoice} onChange={e => pickRole(e.target.value)}>{newAccount ? <option value="" disabled>Pilih hak akses</option> : <option value="">Tetap: {roleName(setup, linkedAccount?.role_id)}</option>}{placementRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}{newAccount && <option value="self">Absensi saja (tidak bisa transaksi)</option>}</select></label>
-            <input type="hidden" name="role_id" value={roleChoice === 'self' ? '' : roleChoice} />
-            <p className="f-footnote">Kasir bisa berjualan dan membuka kas. Barista melihat pesanan dapur. Kepala toko juga mengelola tim dan stok. Isi tiap jabatan bisa diubah di Jabatan dan izin.</p>
-            {!newAccount && linkedAccount?.password_enabled && <label>Password<select aria-label="Password" value={resetPassword ? 'reset' : 'keep'} onChange={e => setResetPassword(e.target.value === 'reset')}><option value="keep">Pertahankan password</option><option value="reset">Tetapkan password baru</option></select></label>}
-            {passwordNeeded && <><PasswordInput label="Password awal" name="password" required minLength={8} maxLength={128} autoComplete="new-password" /><PasswordInput label="Ulangi password awal" name="password_confirm" required minLength={8} maxLength={128} autoComplete="new-password" /><p className="f-footnote">Minimal 8 karakter. Berikan username toko, nomor HP atau username akun, dan password awal kepada karyawan.</p></>}
-          </div>}
-        </> : <><label>Hubungkan akun kasir<select name="user_id" defaultValue={employee?.user_id || ''} disabled={!setup.accounts.length}><option value="">Belum dihubungkan</option>{employee?.user_id && !setup.accounts.some(a => a.id === employee.user_id) && <option value={employee.user_id}>Akun terhubung</option>}{setup.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>{!setup.accounts.length && <input type="hidden" name="user_id" value={employee?.user_id || ''} />}<p className="f-footnote">{setup.account_admin ? <>Tetapkan username toko di <Link href="/dashboard/account">Akun saya</Link> untuk membuat akun dari form ini.</> : 'Profil dapat disimpan. Pembuatan akun memerlukan izin dari pemilik.'}</p></>}
-        <div className="f-field-grid"><label>Tanggal mulai kerja<input name="started_on" type="date" required defaultValue={employee?.started_on || day} /></label><label>Tanggal selesai kerja<input name="ended_on" type="date" defaultValue={employee?.ended_on || ''} /></label></div>
-        <label>Status karyawan<select name="is_active" defaultValue={employee?.is_active === false ? 'false' : 'true'}><option value="true">Aktif</option><option value="false">Nonaktif</option></select></label><p className="f-footnote">Karyawan nonaktif tidak bisa masuk ke akunnya. Riwayatnya tetap tersimpan.</p><label>Catatan pengelola<textarea name="notes" maxLength={2000} defaultValue={employee?.notes || ''} /></label>
+        <label>Nama<input name="name" autoFocus={!resetPassword} required maxLength={120} defaultValue={employee?.name || ''} /></label>
+        {setup.outlets.length > 1 ? <label>Outlet<select name="outlet_id" required value={placement} onChange={e => { setPlacement(e.target.value); setRoleChoice(''); }}>{setup.outlets.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label> : <input type="hidden" name="outlet_id" value={placement} />}
+        {loginKind === 'phone' || !setup.account_admin || accountMode === 'profile' ? <label>Nomor HP<input name="phone" type="tel" inputMode="tel" required={loginFields && loginKind === 'phone'} maxLength={40} defaultValue={employee?.phone || ''} placeholder="0812..." onChange={() => { if (linkedAccount && loginKind === 'phone' && /^\d+$/.test(linkedAccount.username || '')) setLoginEdited(true); }} /></label>
+          : <><input type="hidden" name="phone" value={employee?.phone || ''} /><label>Username<input name="username" required minLength={3} maxLength={64} pattern="[A-Za-z0-9](?:[A-Za-z0-9_]|-){2,63}" defaultValue={linkedAccount?.username && !/^\d+$/.test(linkedAccount.username) ? linkedAccount.username : ''} autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="contoh: rina" onChange={() => setLoginEdited(true)} /></label></>}
+        {setup.account_admin && accountMode !== 'profile' && <button type="button" className="hr-link" onClick={() => { setLoginKind(v => v === 'phone' ? 'username' : 'phone'); if (linkedAccount) setLoginEdited(true); }}>{loginKind === 'phone' ? 'Tidak punya HP? Pakai username' : 'Pakai nomor HP'}</button>}
+        {setup.account_admin && accountMode !== 'profile' && (newAccount || linkedAccount) && <fieldset className="hr-roles"><legend>Tugas</legend>
+          {placementRoles.map(r => <label key={r.id} className="hr-role"><input type="radio" name="role_choice" value={r.id} checked={roleChoice === r.id} onChange={() => pickRole(r.id)} /><span><b>{r.name}</b>{roleHint(r.name) && <small>{roleHint(r.name)}</small>}</span></label>)}
+          {newAccount && <label className="hr-role"><input type="radio" name="role_choice" value="self" checked={roleChoice === 'self'} onChange={() => pickRole('self')} /><span><b>Absen saja</b><small>Cuma absen masuk dan pulang</small></span></label>}
+          {linkedAccount && !linkedAccount.role_id && <p className="f-footnote">Akun ini masih memakai akses lama. Pilih tugas untuk memakai pengaturan baru.</p>}
+          {!placementRoles.length && <p className="f-footnote">Belum ada tugas untuk outlet ini. Buat di <Link href="/dashboard/hris/access">Jabatan dan izin</Link>.</p>}
+        </fieldset>}
+        {setup.account_admin && accountMode === 'existing' && linkedAccount && <div className="hr-account-fields"><p>Masuk dengan <b>{linkedAccount.username || 'akun lama'}</b>{linkedAccount.password_enabled ? '' : ' · belum punya password'}</p>
+          {linkedAccount.password_enabled && !resetPassword && <button type="button" className="f-button" onClick={() => { setResetPassword(true); setPassword(newPassword()); }}>Buat password baru</button>}</div>}
+        {loginFields && passwordNeeded && <label>Password{newAccount ? '' : ' baru'}<span className="hr-password"><input name="password" required minLength={8} maxLength={128} autoComplete="off" autoCapitalize="none" spellCheck={false} value={password} autoFocus={resetPassword} onChange={e => setPassword(e.target.value)} /><button type="button" className="f-button" onClick={() => setPassword(newPassword())}>Acak</button></span></label>}
+        {loginFields && passwordNeeded && <p className="f-footnote">Sesudah disimpan, info masuknya bisa langsung dikirim ke WhatsApp karyawan.{!newAccount && ' Password lama langsung tidak berlaku.'}</p>}
+        <details className="hr-more" open={!setup.account_admin && !employee}><summary>Detail lain</summary>
+          <label>Jabatan atau tugas<input name="position" maxLength={100} value={position} onChange={e => { setPosition(e.target.value); setPositionAuto(false); }} placeholder="Terisi dari tugas, boleh diubah" /></label>
+          <div className="f-field-grid"><label>Mulai kerja<input name="started_on" type="date" required defaultValue={employee?.started_on || day} /></label><label>Selesai kerja<input name="ended_on" type="date" defaultValue={employee?.ended_on || ''} /></label></div>
+          {employee && <><label>Status karyawan<select name="is_active" defaultValue={employee.is_active === false ? 'false' : 'true'}><option value="true">Aktif</option><option value="false">Nonaktif</option></select></label><p className="f-footnote">Karyawan nonaktif tidak bisa masuk. Riwayatnya tetap tersimpan.</p></>}
+          {!employee && <input type="hidden" name="is_active" value="true" />}
+          <label>Catatan<textarea name="notes" maxLength={2000} defaultValue={employee?.notes || ''} /></label>
+          {setup.account_admin ? <>
+            <label>Akun login<select aria-label="Akun login" value={accountMode} onChange={e => { setAccountMode(e.target.value); setAccountId(e.target.value === 'existing' ? employee?.user_id || '' : accountId); setLoginEdited(false); setResetPassword(false); }}>{!employee?.user_id && <option value="new">Buat akun baru</option>}<option value="existing">Pakai akun yang sudah ada</option><option value="profile">Tanpa akun login</option></select></label>
+            {accountMode === 'existing' && <label>Akun<select name="user_id" required value={accountId} onChange={e => { setAccountId(e.target.value); setLoginEdited(false); setResetPassword(false); const next = setup.accounts.find(a => a.id === e.target.value); setRoleChoice(next?.role_id || ''); setLoginKind(next?.username && !/^\d+$/.test(next.username) ? 'username' : 'phone'); }}><option value="">Pilih akun</option>{employee?.user_id && !linkedAccount && <option value={employee.user_id}>Akun terhubung (tidak dapat diatur)</option>}{setup.accounts.filter(a => !a.employee_id || a.employee_id === employee?.id).map(a => <option key={a.id} value={a.id}>{a.name}{a.username ? ` · ${a.username}` : ''}</option>)}</select></label>}
+            {accountMode !== 'existing' && <input type="hidden" name="user_id" value={accountMode === 'profile' ? employee?.user_id || '' : ''} />}
+          </> : <><label>Hubungkan akun kasir<select name="user_id" defaultValue={employee?.user_id || ''} disabled={!setup.accounts.length}><option value="">Belum dihubungkan</option>{employee?.user_id && !setup.accounts.some(a => a.id === employee.user_id) && <option value={employee.user_id}>Akun terhubung</option>}{setup.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>{!setup.accounts.length && <input type="hidden" name="user_id" value={employee?.user_id || ''} />}<p className="f-footnote">Pembuatan akun memerlukan izin dari pemilik.</p></>}
+        </details>
       </> : dialog.kind === 'void' ? <><p>{dialog.row.employee_name} · {hrDay(dialog.row.work_date)}. Catatan akan dibatalkan dan riwayat koreksinya tetap disimpan.</p><label>Alasan pembatalan<textarea name="reason" autoFocus required maxLength={500} /></label></>
         : dialog.kind === 'punch' ? <><p>{setup.self_employee?.name} · {setup.outlets.find(o => o.id === (dialog.action === 'out' ? setup.open_attendance?.outlet_id : outletId))?.name}</p><p>Waktu {dialog.action === 'in' ? 'masuk' : 'pulang'} dicatat ketika tombol simpan ditekan. Periksa outlet sebelum menyimpan.</p></>
         : <><p>Outlet: {setup.outlets.find(o => o.id === outletId)?.name} · Semua jam dalam {zoneLabel(zone)}.</p><EmployeeChoice row={record} frozen={busy || frozen} />
@@ -221,13 +237,27 @@ function HrForm({ dialog, setup, outletId, day, zone, pending, busy, error, subm
   </form></InventoryDialog>;
 }
 
-type Handoff = { name: string; shop: string; login: string; usesPhone: boolean; password: string; phone: string | null };
+type Handoff = { name: string; business: string; login: string; usesPhone: boolean; password: string; phone: string | null };
 
-function handoffFrom(request: HrPending, shop: string | null | undefined): Handoff | null {
+const PASSWORD_WORDS = ['kopi', 'gula', 'aren', 'susu', 'teh', 'roti', 'senja', 'pagi', 'kasir', 'meja'];
+function newPassword() {
+  const n = new Uint32Array(2);
+  crypto.getRandomValues(n);
+  return `${PASSWORD_WORDS[n[0] % PASSWORD_WORDS.length]}-${1000 + (n[1] % 9000)}`;
+}
+
+// Penjelasan singkat untuk jabatan bawaan (services/default_roles.py). Jabatan buatan
+// pemilik tampil tanpa penjelasan karena isinya bisa apa saja.
+function roleHint(name: string) {
+  return ({ kasir: 'Jualan, terima bayar, buka kas', barista: 'Lihat dan selesaikan pesanan dapur', 'kepala toko': 'Kasir, stok, dan atur tim' } as Record<string, string>)[name.trim().toLowerCase()] || '';
+}
+
+function handoffFrom(request: HrPending, setup: HrSetup): Handoff | null {
   const account = request.payload.account as Record<string, unknown> | undefined, payload = request.payload as Record<string, unknown>;
-  if (!account || !shop || !account.password) return null;
+  if (!account || !account.password) return null;
   const phone = payload.phone ? String(payload.phone) : null, usesPhone = account.use_phone === true;
-  return { name: String(payload.name || ''), shop, login: usesPhone ? phone || '' : String(account.username || ''), usesPhone, password: String(account.password), phone };
+  const business = setup.business_name || setup.outlets.find(o => o.id === payload.outlet_id)?.name || 'Selaris';
+  return { name: String(payload.name || ''), business, login: usesPhone ? phone || '' : String(account.username || ''), usesPhone, password: String(account.password), phone };
 }
 
 function roleName(setup: HrSetup, roleId?: string | null) {
@@ -242,18 +272,18 @@ function accessLabel(setup: HrSetup | null, userId: string) {
 }
 
 function HandoffDialog({ value, close }: { value: Handoff; close: () => void }) {
-  const [show, setShow] = useState(false), [copied, setCopied] = useState('');
+  const [show, setShow] = useState(true), [copied, setCopied] = useState('');
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
-  const text = `Halo ${value.name}, ini akun Selaris kamu.\nUsername toko: ${value.shop}\n${value.usesPhone ? 'Nomor HP' : 'Username'}: ${value.login}\nPassword awal: ${value.password}\nMasuk lewat aplikasi Selaris POS atau ${origin}/login`;
+  const text = `Halo ${value.name}, ini akun Selaris kamu di ${value.business}.\nBuka aplikasi Selaris POS atau ${origin}/login, lalu masuk pakai:\n${value.usesPhone ? 'Nomor HP' : 'Username'}: ${value.login}\nPassword: ${value.password}`;
   const wa = value.phone ? value.phone.replace(/\D/g, '').replace(/^0/, '62') : '';
   const copy = async () => { try { await navigator.clipboard.writeText(text); setCopied('Info login disalin'); } catch { setCopied('Salin otomatis tidak tersedia. Catat info di atas.'); } };
   return <InventoryDialog title={`Info login ${value.name}`} busy={false} onClose={close}><div className="finance-form hr-handoff">
-    <p>Login karyawan sudah disimpan. Berikan info ini ke karyawan secara pribadi. Password tidak ditampilkan lagi sesudah jendela ini ditutup.</p>
-    <dl><dt>Username toko</dt><dd>{value.shop}</dd><dt>{value.usesPhone ? 'Nomor HP' : 'Username'}</dt><dd>{value.login}</dd>
-      <dt>Password awal</dt><dd>{show ? value.password : '••••••••'} <button type="button" className="f-button" onClick={() => setShow(v => !v)}>{show ? 'Sembunyikan' : 'Tampilkan'}</button></dd></dl>
+    <p>Akun {value.name} siap. Kirim info ini ke karyawan. Password hanya tampil di jendela ini.</p>
+    <dl><dt>{value.usesPhone ? 'Nomor HP' : 'Username'}</dt><dd>{value.login}</dd>
+      <dt>Password</dt><dd>{show ? value.password : '••••••••'} <button type="button" className="f-button" onClick={() => setShow(v => !v)}>{show ? 'Sembunyikan' : 'Tampilkan'}</button></dd></dl>
     {copied && <p role="status">{copied}</p>}
     <div className="f-form-actions"><button type="button" className="f-button" onClick={copy}>Salin info login</button>
-      {wa && <a className="f-button" href={`https://wa.me/${wa}?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">Kirim lewat WA</a>}
+      {wa && <a className="f-button" href={`https://wa.me/${wa}?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">Kirim ke WhatsApp</a>}
       <button type="button" className="f-button f-primary" onClick={close}>Selesai</button></div>
   </div></InventoryDialog>;
 }

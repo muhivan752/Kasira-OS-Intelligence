@@ -129,6 +129,40 @@ async def identity(db, shop, username):
     return rows[0] if len(rows) == 1 else None
 
 
+LOGIN_CANDIDATE_LIMIT = 8
+
+
+async def login_candidates(db, username, tenant_id=None):
+    """Akun yang mungkin dimaksud oleh nomor HP/username tanpa username toko.
+
+    Satu-satunya rumah aturan "masuk tanpa username toko" (9 Okt 2026):
+    - akun karyawan aktif dengan nomor HP/username itu di toko mana pun;
+    - pemilik ("owner") lewat username tokonya, jadi pemilik yang punya password
+      cukup mengetik username toko di kolom yang sama.
+    Satu nomor bisa kerja di dua toko; pemilihan toko terjadi SESUDAH password
+    cocok, jadi daftar toko tidak bocor ke orang yang tidak tahu passwordnya.
+    """
+    staff = select(User).join(Tenant, User.tenant_id == Tenant.id).where(
+        Tenant.deleted_at.is_(None), User.deleted_at.is_(None), User.is_active.is_(True),
+        User.password_hash.is_not(None), User.login_username != "owner",
+        User.login_username.in_(username_aliases(username)))
+    owner = select(User).join(Tenant, User.tenant_id == Tenant.id).where(
+        Tenant.deleted_at.is_(None), Tenant.login_username == username, User.deleted_at.is_(None),
+        User.login_username == "owner", User.password_hash.is_not(None))
+    if tenant_id:
+        staff, owner = staff.where(User.tenant_id == tenant_id), owner.where(User.tenant_id == tenant_id)
+    rows = list((await db.scalars(staff.order_by(User.id).limit(LOGIN_CANDIDATE_LIMIT))).all())
+    rows += [r for r in (await db.scalars(owner)).all() if r not in rows]
+    return rows[:LOGIN_CANDIDATE_LIMIT]
+
+
+async def password_matches_any(users, password):
+    matched = [u for u in users if await password_matches(u, password)]
+    if not users:
+        await password_matches(None, password)
+    return matched
+
+
 def username_aliases(username):
     aliases = {username}
     if re.fullmatch(r"\d+", username):

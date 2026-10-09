@@ -38,7 +38,11 @@ async function save(result: AccountResult): Promise<AccountResult> {
   return { success: true, data };
 }
 
-export async function loginPassword(body: unknown) { return save(await call('/auth/password/login', 'POST', body, false)); }
+export async function loginPassword(body: unknown) {
+  const result = await call('/auth/password/login', 'POST', body, false);
+  // Nomor yang terdaftar di beberapa toko: belum ada sesi, layar memilih toko dulu.
+  return result.success && result.data?.choose_shop ? result : save(result);
+}
 export async function registerPassword(body: unknown) { return save(await call('/auth/password/register', 'POST', body, false)); }
 export async function consumeAccountCode(body: unknown) { return save(await call('/auth/password/challenge', 'POST', body, false)); }
 export async function claimPassword(body: unknown) { return save(await call('/auth/password/claim', 'POST', body)); }
