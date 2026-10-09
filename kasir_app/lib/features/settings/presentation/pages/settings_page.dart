@@ -10,6 +10,7 @@ import 'payment_methods_settings_page.dart';
 import 'printer_settings_page.dart';
 import 'sync_settings_page.dart';
 import 'profile_page.dart';
+import 'account_deletion_page.dart';
 import 'staff_page.dart';
 import '../../../../core/widgets/lebar_konten.dart';
 
@@ -180,6 +181,18 @@ class SettingsPage extends ConsumerWidget {
                   title: 'Keluar (Logout)',
                   subtitle: 'Keluar dari akun dan hapus sesi',
                   onTap: () => _confirmLogout(context, ref),
+                ),
+                _buildSettingTile(
+                  icon: LucideIcons.trash2,
+                  title: 'Hapus Akun',
+                  subtitle: isOwner
+                      ? 'Hapus akun dan seluruh data usaha'
+                      : 'Hapus akun login Anda',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const AccountDeletionPage()),
+                  ),
                 ),
               ],
             )),

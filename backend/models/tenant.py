@@ -1,5 +1,6 @@
 import enum
-from sqlalchemy import Column, String, Boolean, Integer, Date, Enum
+from sqlalchemy import Column, String, Boolean, Integer, Date, DateTime, Enum
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.models.base import BaseModel
 
@@ -47,5 +48,9 @@ class Tenant(BaseModel):
 
     # Referral
     referral_code = Column(String(20), unique=True, nullable=True, index=True)
+
+    # Hapus akun pemilik: dijadwalkan, bukan langsung (services/account_deletion.py)
+    deletion_scheduled_at = Column(DateTime(timezone=True), nullable=True)
+    deletion_requested_by = Column(UUID(as_uuid=True), nullable=True)
 
     brands = relationship("Brand", back_populates="tenant")

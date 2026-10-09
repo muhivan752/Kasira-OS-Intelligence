@@ -91,7 +91,7 @@ export default function PrivacyPolicyPage() {
           <ul className="list-disc pl-6 space-y-2 mb-6">
             <li>Meminta akses atau salinan data pribadi yang kami simpan.</li>
             <li>Memperbarui atau mengoreksi data pribadi Anda.</li>
-            <li>Meminta penghapusan akun dan data pribadi Anda.</li>
+            <li>Menghapus akun dan data pribadi Anda. Caranya ada di halaman <Link href="/hapus-akun">Hapus Akun</Link>.</li>
             <li>Menarik kembali persetujuan, termasuk izin lokasi lewat pengaturan perangkat.</li>
           </ul>
           <p>Permintaan dapat dikirim lewat kontak di bawah dan kami proses paling lambat 3 x 24 jam sesuai UU PDP.</p>

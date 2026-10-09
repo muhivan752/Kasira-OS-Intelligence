@@ -12,6 +12,7 @@ export default function Footer() {
       <a href={WA_LINK} target="_blank" rel="noopener noreferrer">Hubungi tim Selaris</a>
       <Link href="/terms">Syarat & ketentuan</Link>
       <Link href="/privacy">Kebijakan privasi</Link>
+      <Link href="/hapus-akun">Hapus akun</Link>
     </nav>
   </footer>;
 }

@@ -202,7 +202,7 @@ def enforce_route(request, context):
         return enforce_legacy_staff(request, context)
     if context.mode != "managed":
         return
-    from backend.api.routes import auth, hris, users, accounts
+    from backend.api.routes import auth, hris, users, accounts, account_deletion
     allowed = {
         ("GET", auth.get_me), ("GET", auth.get_access), ("GET", users.read_user_me),
         ("DELETE", auth.logout), ("POST", auth.set_pin), ("POST", auth.login_with_pin),
@@ -212,6 +212,9 @@ def enforce_route(request, context):
         ("POST", hris.create_attendance), ("PUT", hris.edit_attendance), ("POST", hris.void_attendance),
         ("POST", hris.punch),
         ("GET", accounts.account_info), ("GET", accounts.sessions), ("POST", accounts.revoke_sessions),
+        # Hak hapus akun milik semua akun (Play + UU PDP); aturan pemilik di service.
+        ("GET", account_deletion.deletion_status), ("POST", account_deletion.request_deletion),
+        ("DELETE", account_deletion.cancel_deletion),
     }
     # FastAPI has resolved endpoint identity before dependencies, even without scope['route'].
     from backend.services.pos_access import supported_route

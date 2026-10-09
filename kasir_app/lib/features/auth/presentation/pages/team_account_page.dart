@@ -10,6 +10,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/services/session_cache.dart';
 import '../../../../core/widgets/sefrekuensi_otp_card.dart';
 import 'login_page.dart';
+import '../../../settings/presentation/pages/account_deletion_page.dart';
 
 class TeamAccountPage extends ConsumerStatefulWidget {
   const TeamAccountPage({super.key, this.client});
@@ -201,5 +202,11 @@ class _TeamAccountPageState extends ConsumerState<TeamAccountPage> {
                                     if (context.mounted) context.go('/login');
                                   },
                             child: const Text('Keluar dari akun')),
+                        TextButton(
+                            onPressed: _busy
+                                ? null
+                                : () => Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => const AccountDeletionPage())),
+                            child: const Text('Hapus akun')),
                       ])))));
 }

@@ -5,6 +5,7 @@ import '../../../../core/auth/logout_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/dapur_provider.dart';
+import '../../../settings/presentation/pages/account_deletion_page.dart';
 
 class DapurSettingsPage extends ConsumerStatefulWidget {
   const DapurSettingsPage({super.key});
@@ -177,6 +178,13 @@ class _DapurSettingsPageState extends ConsumerState<DapurSettingsPage> {
                 label: 'Keluar',
                 color: AppColors.error,
                 onTap: _logout,
+              ),
+              _ActionTile(
+                icon: LucideIcons.trash2,
+                label: 'Hapus Akun',
+                color: AppColors.error,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const AccountDeletionPage())),
               ),
             ],
           ),

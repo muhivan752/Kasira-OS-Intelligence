@@ -54,6 +54,14 @@ export async function revokeAccountSessions(body: unknown) {
   if (result.success) { const jar = await cookies(); for (const name of ['token', 'tenant_id', 'outlet_id']) jar.delete(name); }
   return result;
 }
+export async function getAccountDeletion() { return call('/account-deletion'); }
+export async function cancelAccountDeletion() { return call('/account-deletion', 'DELETE'); }
+export async function requestAccountDeletion(confirm: string) {
+  const result = await call('/account-deletion', 'POST', { confirm });
+  // Akun selain pemilik langsung terhapus: sesi di browser ini ikut diakhiri.
+  if (result.success && result.data.deleted) { const jar = await cookies(); for (const name of ['token', 'tenant_id', 'outlet_id']) jar.delete(name); }
+  return result;
+}
 export async function getAccountSetup() { return call('/hris/access/setup'); }
 export async function saveAccessRole(body: unknown) { return call('/hris/access/roles', 'POST', body); }
 export async function saveStaffAccount(employeeId: string, body: unknown) { return call(`/hris/employees/${encodeURIComponent(employeeId)}/account`, 'POST', body); }

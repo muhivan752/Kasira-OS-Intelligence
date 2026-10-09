@@ -2,11 +2,13 @@ from fastapi import APIRouter
 from backend.api.routes import hpp_setup
 from backend.api.routes import hris
 from backend.api.routes import accounts
+from backend.api.routes import account_deletion
 from backend.api.routes import auth, users, tenants, outlets, categories, products, orders, payments, sync, shifts, reports, connect, ai, reservations, loyalty, media, customers, tables, tabs, webhook, ingredients, recipes, knowledge_graph, superadmin, billing, referrals, platform, embeddings, analytics, invoice_ocr, waitlist, landing, purchasing, finance, crm, couriers, devices
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(accounts.auth_router, prefix="/auth", tags=["accounts"])
+api_router.include_router(account_deletion.router, prefix="/account-deletion", tags=["accounts"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(outlets.router, prefix="/outlets", tags=["outlets"])
