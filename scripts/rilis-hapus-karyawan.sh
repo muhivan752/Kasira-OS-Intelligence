@@ -34,10 +34,14 @@ for i in $(seq 1 30); do
   sudo -n docker exec kasira-backend-1 python -c "from backend.services.hris import remove_employee" >/dev/null 2>&1 && break
   sleep 2
 done
-sudo -n docker exec kasira-backend-1 python -c "
-from backend.main import app
-assert any(getattr(r, 'path', '').endswith('/hris/employees/{employee_id}/remove') for r in app.routes)
-print('✅ backend punya rute hapus karyawan')" || { echo "❌ rute hapus belum ada. Frontend TIDAK dipasang."; exit 1; }
+# Router API dipasang sebagai sub-aplikasi, jadi cek lewat HTTP: rute ada = 401 (perlu login), bukan 404.
+code=$(sudo -n docker exec kasira-backend-1 python -c "
+import urllib.request
+r = urllib.request.Request('http://127.0.0.1:8000/api/v1/hris/employees/00000000-0000-0000-0000-000000000000/remove', data=b'{}', headers={'Content-Type': 'application/json'}, method='POST')
+try: urllib.request.urlopen(r, timeout=10); print(200)
+except Exception as e: print(getattr(e, 'code', 'ERR'))")
+[ "$code" = 401 ] || { echo "❌ rute hapus balas $code (harus 401). Frontend TIDAK dipasang."; exit 1; }
+echo "✅ backend punya rute hapus karyawan"
 
 sudo -n docker tag kasira-frontend:latest selaris-frontend-before-hapus-karyawan:20261009 2>/dev/null || true
 sudo -n docker compose build frontend
