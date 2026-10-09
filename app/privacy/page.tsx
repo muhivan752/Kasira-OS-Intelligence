@@ -64,6 +64,7 @@ export default function PrivacyPolicyPage() {
             <li><strong>Cloudflare:</strong> Jaringan pengantar situs dan API, serta penyimpanan cadangan database (R2).</li>
             <li><strong>DeepSeek:</strong> Model AI untuk asisten chat, ringkasan Beranda, saran menu, saran harga, dan bot WhatsApp. Pertanyaan Anda dan data toko yang relevan, seperti penjualan, menu, dan harga bahan, dikirim untuk menyusun jawaban.</li>
             <li><strong>OpenAI:</strong> Model AI untuk membaca foto nota belanja. Foto nota yang Anda unggah dikirim untuk dibaca. Selaris meminta OpenAI tidak menyimpan permintaan tersebut.</li>
+            <li><strong>Voyage AI:</strong> Mengubah nama dan deskripsi menu menjadi data pencarian, supaya asisten AI bisa menemukan menu yang relevan dengan pertanyaan Anda. Yang dikirim adalah data menu dan isi pertanyaan Anda.</li>
             <li><strong>Anthropic:</strong> Model AI cadangan apabila layanan di atas sedang tidak tersedia.</li>
             <li><strong>Xendit:</strong> Pemrosesan pembayaran QRIS dan pembayaran nontunai.</li>
             <li><strong>Fonnte:</strong> Pengiriman pesan WhatsApp: kode masuk, struk digital, dan notifikasi.</li>

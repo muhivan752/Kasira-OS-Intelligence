@@ -32,9 +32,33 @@ VOYAGE_DIMS = 512  # voyage-3-lite default
 BATCH_SIZE = 32  # Voyage supports up to 128 texts per request
 
 
+# Kunci: berkas yang dipasang scripts/rilis-voyage.sh, cadangan env VOYAGE_API_KEY
+# (container backend tidak di-recreate, jadi env baru tidak terbaca). 9 Okt 2026:
+# kunci khusus Selaris di akun Voyage yang sama dengan Sefrekuensi.
+VOYAGE_KEY_FILE = "/app/secrets/voyage.key"
+# Pemutus: kunci ditolak (401/403) = berhenti mencoba 1 jam. Dulu kunci mati sejak
+# 8 Okt dan SETIAP chat Selaris AI menunggu panggilan yang pasti gagal.
+_BREAKER_SECONDS = 3600
+_breaker_until = 0.0
+
+
+def voyage_key() -> str:
+    # Berkas dulu: env container masih memuat kunci lama yang sudah mati dan tidak
+    # bisa diganti tanpa recreate.
+    try:
+        with open(VOYAGE_KEY_FILE, encoding="utf-8") as fh:
+            key = fh.read().strip()
+            if key:
+                return key
+    except OSError:
+        pass
+    return (getattr(settings, "VOYAGE_API_KEY", "") or "").strip()
+
+
 def is_available() -> bool:
-    """Check if embedding service is configured."""
-    return bool(getattr(settings, "VOYAGE_API_KEY", None))
+    """Embedding bisa dipakai: ada kunci dan pemutus tidak sedang terbuka."""
+    import time
+    return bool(voyage_key()) and time.monotonic() >= _breaker_until
 
 
 # ─── Core Embed ──────────────────────────────────────────────────────────────
@@ -56,9 +80,13 @@ async def embed_texts(
     Raises:
         RuntimeError if API key not configured or API call fails
     """
-    api_key = getattr(settings, "VOYAGE_API_KEY", None)
+    global _breaker_until
+    import time
+    api_key = voyage_key()
     if not api_key:
         raise RuntimeError("VOYAGE_API_KEY not configured")
+    if time.monotonic() < _breaker_until:
+        raise RuntimeError("Voyage dijeda sementara (kunci ditolak)")
 
     all_embeddings = []
 
@@ -79,6 +107,10 @@ async def embed_texts(
                 },
             )
 
+            if response.status_code in (401, 403):
+                _breaker_until = time.monotonic() + _BREAKER_SECONDS
+                logger.error("Voyage menolak kunci (%s); embedding dijeda 1 jam", response.status_code)
+                raise RuntimeError(f"Voyage API error: {response.status_code}")
             if response.status_code != 200:
                 logger.error(f"Voyage API error {response.status_code}: {response.text}")
                 raise RuntimeError(f"Voyage API error: {response.status_code}")
