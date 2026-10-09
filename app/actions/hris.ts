@@ -32,7 +32,7 @@ export async function checkHrRequest(request: HrPending) {
 export async function getHrWorkspace(filters: HrFilters) { return call<HrWorkspace>(`/workspace?${new URLSearchParams({ ...filters, skip: String(filters.skip), limit: '50' })}`); }
 export async function getHrEmployeeChoices(search = '', skip = 0) { return call<{ items: { id: string; name: string; code: string }[]; total: number }>(`/employee-choices?${new URLSearchParams({ search, skip: String(skip), limit: '50' })}`); }
 export async function writeHr(request: HrPending) {
-  if (!/^\/(employees|schedules|attendance)(\/[0-9a-f-]{36}(\/void)?)?$/.test(request.path) && request.path !== '/punch') return { success: false as const, message: 'Permintaan belum valid' };
+  if (!/^\/(employees|schedules|attendance)(\/[0-9a-f-]{36}(\/void|\/remove)?)?$/.test(request.path) && request.path !== '/punch') return { success: false as const, message: 'Permintaan belum valid' };
   const setup = await getHrSetup();
   if (!setup.success) return { ...setup, uncertain: true };
   if (request.workspace_key !== setup.data.workspace_key) return { success: false as const, uncertain: true, message: 'Akun atau bisnis sudah berubah. Muat ulang sebelum menyimpan.' };

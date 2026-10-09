@@ -50,3 +50,4 @@
 .hr-more summary { cursor: pointer; font-weight: 600; min-height: 32px; }
 .hr-more[open] { display: flex; flex-direction: column; gap: 1rem; }
 @media (max-width: 374px) { .finance-form fieldset.hr-roles { grid-template-columns: 1fr; } }
+.finance-form .f-button.f-danger { background: var(--danger); border-color: var(--danger); color: #fff; }

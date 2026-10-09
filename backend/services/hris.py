@@ -208,6 +208,52 @@ async def save_employee(db, request, user, body, employee_id=None):
     return await finish(db, request, user, body, fp, action, row, before, result)
 
 
+async def remove_employee(db, request, user, body, employee_id):
+    """Hapus karyawan oleh pemilik/pengelola (9 Okt 2026, permintaan Ivan).
+
+    - Akun login karyawan dihapus lewat account_deletion.anonymize_user, rumah yang
+      sama dengan "hapus akun saya": identitas dikosongkan, sesi dicabut, baris tetap
+      (shifts/transaksi menunjuk user_id).
+    - Profil karyawan disembunyikan (deleted_at) dan nomor HP dikosongkan. Nama dan
+      kode tetap, karena riwayat jadwal/absensi menampilkan nama itu; query riwayat
+      join ke profil tanpa filter deleted_at, jadi catatan lama tidak hilang.
+    - Tidak bisa dibatalkan; antarmuka meminta konfirmasi dulu.
+    """
+    from backend.services import accounts, staff_accounts
+    from backend.services.account_deletion import anonymize_user
+    await accounts.lock(db, f"tenant:{user.tenant_id}")
+    context = await require_manager(db, user)
+    action = "hr_employee_remove"
+    fp, prior = await replay(db, user, body, action, employee_id)
+    if prior:
+        return prior
+    row = await employee_lock(db, user, employee_id)
+    context.require_outlet(row.outlet_id)
+    version(row, body)
+    before = employee_data(row)
+    opened = await db.scalar(select(HrAttendance.id).where(HrAttendance.tenant_id == user.tenant_id,
+        HrAttendance.employee_id == row.id, HrAttendance.deleted_at.is_(None),
+        HrAttendance.status == "hadir", HrAttendance.clock_out.is_(None)))
+    if opened:
+        raise HTTPException(409, "Catat pulang karyawan ini terlebih dahulu")
+    account_removed = False
+    if row.user_id:
+        context, _ = await staff_accounts.fresh_actor(db, request, user)
+        account = await staff_accounts.target(db, user, context, row.user_id)
+        if account.id == user.id:
+            raise HTTPException(403, "Akun sendiri dihapus lewat Akun saya")
+        await anonymize_user(db, account)
+        account_removed = True
+    # Tanggal outlet, dan tidak sebelum tanggal mulai (karyawan yang belum sempat mulai).
+    today = max(now().astimezone(tz(await db.get(Outlet, row.outlet_id))).date(), row.started_on)
+    row.is_active = False
+    row.ended_on = row.ended_on or today
+    row.phone = None
+    row.deleted_at = now()
+    row.row_version += 1
+    return await finish(db, request, user, body, fp, action, row, before, {"removed": True, "account_removed": account_removed})
+
+
 async def request_status(db, user, client_request_id):
     context = await require_manager(db, user)
     prior = await db.scalar(select(AuditLog).where(AuditLog.tenant_id == user.tenant_id,

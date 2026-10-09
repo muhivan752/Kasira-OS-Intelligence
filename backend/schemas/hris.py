@@ -70,6 +70,10 @@ class AttendanceSave(Write):
         return value
 
 
+class RemoveEmployee(Write):
+    row_version: int = Field(ge=1)
+
+
 class VoidRecord(Write):
     reason: str = Field(min_length=1, max_length=500)
 

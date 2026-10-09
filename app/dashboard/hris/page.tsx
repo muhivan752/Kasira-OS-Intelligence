@@ -23,6 +23,7 @@ export default function HrisPage() {
   const key = useRef<string | null>(null), writing = useRef(false);
   const [retryPassword, setRetryPassword] = useState(''), [needsPassword, setNeedsPassword] = useState(false);
   const [handoff, setHandoff] = useState<Handoff | null>(null);
+  const [removing, setRemoving] = useState<HrEmployee | null>(null);
   useEffect(() => {
     let current = true; setLoading(true); setError(''); setSetup(null); setData(null);
     getHrSetup().then(result => { if (!current) return;
@@ -120,7 +121,7 @@ export default function HrisPage() {
         {!data.items.length ? <div className="f-empty"><h3>Belum ada {filters.kind === 'employees' ? 'karyawan' : filters.kind === 'schedules' ? 'jadwal' : 'kehadiran'} sesuai pilihan</h3><p>{filters.kind === 'employees' ? 'Tambahkan karyawan dengan nama, nomor HP, dan tugasnya. Info masuknya bisa langsung dikirim ke WhatsApp.' : 'Periksa outlet dan periode, atau tambahkan catatan yang sudah dikonfirmasi.'}</p>{(filters.search || filters.active) && <button className="f-button" onClick={() => setFilters(v => ({ ...v, search: '', active: '', skip: 0 }))}>Reset filter</button>}</div>
           : <ul className="hr-list">{data.items.map(item => filters.kind === 'employees' ? <li key={item.id}><div><h3>{(item as HrEmployee).name}</h3><p>{(item as HrEmployee).code} · {(item as HrEmployee).position}</p><p>{(item as HrEmployee).is_active ? 'Aktif' : 'Nonaktif'} · Mulai {hrDay((item as HrEmployee).started_on)}{(item as HrEmployee).ended_on ? ` · Selesai ${hrDay((item as HrEmployee).ended_on!)}` : ''}</p>
               {manager && <p className="f-footnote">{(item as HrEmployee).phone || 'Nomor HP belum diisi'} · {(item as HrEmployee).user_id ? accessLabel(setup, (item as HrEmployee).user_id!) : 'Belum punya akun'}</p>}</div>
-              {manager && <div className="hr-actions">{setup?.account_admin && (item as HrEmployee).user_id && (item as HrEmployee).is_active && setup.accounts.some(a => a.id === (item as HrEmployee).user_id) && <button className="f-button" disabled={mutationDisabled} aria-label={`Buat password baru untuk ${(item as HrEmployee).name}`} onClick={() => open({ kind: 'employees', row: item, reset: true })}>Buat password baru</button>}<button className="f-button" disabled={mutationDisabled} aria-label={`Edit karyawan ${(item as HrEmployee).name}`} onClick={() => open({ kind: 'employees', row: item })}>Edit</button></div>}</li>
+              {manager && <div className="hr-actions">{setup?.account_admin && (item as HrEmployee).user_id && (item as HrEmployee).is_active && setup.accounts.some(a => a.id === (item as HrEmployee).user_id) && <button className="f-button" disabled={mutationDisabled} aria-label={`Buat password baru untuk ${(item as HrEmployee).name}`} onClick={() => open({ kind: 'employees', row: item, reset: true })}>Buat password baru</button>}<button className="f-button" disabled={mutationDisabled} aria-label={`Edit karyawan ${(item as HrEmployee).name}`} onClick={() => open({ kind: 'employees', row: item })}>Edit</button><button className="f-button" disabled={mutationDisabled} aria-label={`Hapus karyawan ${(item as HrEmployee).name}`} onClick={() => { setSaveError(''); setRemoving(item as HrEmployee); }}>Hapus</button></div>}</li>
             : <li key={item.id}><div><h3>{(item as HrRecord).employee_name}</h3><p>{hrDay((item as HrRecord).work_date)}{filters.kind === 'attendance' ? ` · ${(item as HrRecord).status}` : ''}</p>
               <p>{filters.kind === 'schedules' ? `${hrTime((item as HrRecord).starts_at, zone)} → ${hrTime((item as HrRecord).ends_at, zone)}` : `${hrTime((item as HrRecord).clock_in, zone)}${(item as HrRecord).status === 'hadir' ? ` → ${(item as HrRecord).clock_out ? hrTime((item as HrRecord).clock_out, zone) : 'Belum pulang'}` : ''}`}</p>
               {filters.kind === 'attendance' && <p className="f-footnote">{(item as HrRecord).source === 'self' ? 'Awal dicatat dari akun karyawan' : 'Awal dicatat pengelola'}{(item as HrRecord).minutes != null ? ` · ${Math.floor((item as HrRecord).minutes! / 60)} jam ${(item as HrRecord).minutes! % 60} menit tercatat` : ''}</p>}
@@ -129,6 +130,8 @@ export default function HrisPage() {
         {data.total > 0 && <div className="hr-pager"><p>{data.skip + (data.items.length ? 1 : 0)} sampai {data.skip + data.items.length} dari {data.total}</p><div className="hr-actions"><button className="f-button" disabled={filters.skip === 0} onClick={() => setFilters(v => ({ ...v, skip: Math.max(0, v.skip - 50) }))}>Sebelumnya</button><button className="f-button" disabled={data.skip + data.items.length >= data.total} onClick={() => setFilters(v => ({ ...v, skip: v.skip + 50 }))}>Berikutnya</button></div></div>}</section>
     </>}
     {handoff && <HandoffDialog value={handoff} close={() => setHandoff(null)} />}
+    {removing && <RemoveDialog employee={removing} busy={busy} error={saveError} close={() => setRemoving(null)}
+      confirm={async () => { if (await submit({ title: `Hapus ${removing.name}`, path: `/employees/${removing.id}/remove`, method: 'POST', payload: { client_request_id: crypto.randomUUID(), row_version: removing.row_version } })) setRemoving(null); }} />}
     {dialog && setup && selected && <HrForm key={`${dialog.kind}:${'row' in dialog ? dialog.row?.id || 'new' : 'action' in dialog ? dialog.action : 'new'}:${'reset' in dialog && dialog.reset ? 'reset' : ''}`} dialog={dialog} setup={setup} outletId={selected.id} day={filters.start} zone={zone} pending={pending} busy={busy} error={saveError} submit={submit} retry={retry} close={() => setDialog(null)} />}
   </div>;
 }
@@ -285,5 +288,17 @@ function HandoffDialog({ value, close }: { value: Handoff; close: () => void }) 
     <div className="f-form-actions"><button type="button" className="f-button" onClick={copy}>Salin info login</button>
       {wa && <a className="f-button" href={`https://wa.me/${wa}?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">Kirim ke WhatsApp</a>}
       <button type="button" className="f-button f-primary" onClick={close}>Selesai</button></div>
+  </div></InventoryDialog>;
+}
+
+// Hapus karyawan (9 Okt 2026). Backend: services/hris.remove_employee — akun login
+// dikosongkan lewat rumah yang sama dengan "hapus akun saya", riwayat absensi tetap.
+function RemoveDialog({ employee, busy, error, close, confirm }: { employee: HrEmployee; busy: boolean; error: string; close: () => void; confirm: () => void }) {
+  return <InventoryDialog title={`Hapus ${employee.name}?`} busy={busy} onClose={close}><div className="finance-form">
+    {error && <p className="f-notice f-error" role="alert">{error}</p>}
+    <p>{employee.user_id ? `${employee.name} langsung tidak bisa masuk lagi, dan akun login-nya dihapus.` : `${employee.name} dihapus dari daftar karyawan.`}</p>
+    <p className="f-footnote">Riwayat jadwal, absensi, dan transaksi yang pernah dicatat tetap tersimpan atas nama {employee.name}. Penghapusan tidak bisa dibatalkan. Kalau hanya cuti atau berhenti sementara, ubah statusnya jadi Nonaktif lewat Edit.</p>
+    <div className="f-form-actions"><button type="button" className="f-button" disabled={busy} onClick={close}>Batal</button>
+      <button type="button" className="f-button f-danger" disabled={busy} onClick={confirm}>{busy ? 'Menghapus...' : `Hapus ${employee.name}`}</button></div>
   </div></InventoryDialog>;
 }

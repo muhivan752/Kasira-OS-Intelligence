@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.deps import get_current_user
 from backend.core.database import get_db
 from backend.models import User
-from backend.schemas.hris import AttendanceSave, EmployeeSave, Punch, ScheduleSave, VoidRecord
+from backend.schemas.hris import AttendanceSave, EmployeeSave, Punch, RemoveEmployee, ScheduleSave, VoidRecord
 from backend.schemas.response import StandardResponse
 from backend.services import hris as svc
 
@@ -63,6 +63,11 @@ async def create_employee(body: EmployeeSave, request: Request, db: AsyncSession
 @router.put("/employees/{employee_id}")
 async def edit_employee(employee_id: UUID, body: EmployeeSave, request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await write(request, db, svc.save_employee(db, request, user, body, employee_id), "Profil karyawan diperbarui")
+
+
+@router.post("/employees/{employee_id}/remove")
+async def remove_employee(employee_id: UUID, body: RemoveEmployee, request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await write(request, db, svc.remove_employee(db, request, user, body, employee_id), "Karyawan dihapus")
 
 
 @router.post("/schedules")

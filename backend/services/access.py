@@ -207,7 +207,7 @@ def enforce_route(request, context):
         ("GET", auth.get_me), ("GET", auth.get_access), ("GET", users.read_user_me),
         ("DELETE", auth.logout), ("POST", auth.set_pin), ("POST", auth.login_with_pin),
         ("GET", hris.setup), ("GET", hris.workspace), ("GET", hris.choices), ("GET", hris.request_status),
-        ("POST", hris.create_employee), ("PUT", hris.edit_employee),
+        ("POST", hris.create_employee), ("PUT", hris.edit_employee), ("POST", hris.remove_employee),
         ("POST", hris.create_schedule), ("PUT", hris.edit_schedule), ("POST", hris.cancel_schedule),
         ("POST", hris.create_attendance), ("PUT", hris.edit_attendance), ("POST", hris.void_attendance),
         ("POST", hris.punch),
