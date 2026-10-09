@@ -43,6 +43,15 @@ class SessionCache {
       accessToken != null &&
       (accessMode != 'managed' || permissions.contains(permission));
   bool get offlinePosAllowed => accessToken != null && accessMode != 'managed';
+  /// Tab Laporan (modal + margin per produk). Gerbang sama dengan backend
+  /// business_access: hpp.view / hpp.manage. Beda dengan `allows`, akun
+  /// legacy TIDAK otomatis lolos: izinnya dari flag jabatan (can_view_hpp)
+  /// yang sudah dihitung server di manifest.
+  bool get canViewMargin =>
+      accessToken != null &&
+      (accessMode == 'owner' ||
+          permissions.contains('hpp.view') ||
+          permissions.contains('hpp.manage'));
 
   Future<void> applyAccess(Map<String, dynamic> manifest) async {
     if (manifest['user_id'] != null && manifest['user_id'] != userId ||

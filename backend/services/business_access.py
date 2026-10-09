@@ -6,7 +6,7 @@ from backend.services.pos_access import as_id, require_any
 
 
 def route_rules():
-    from backend.api.routes import finance, purchasing, recipes, ingredients, customer_workspace
+    from backend.api.routes import finance, purchasing, recipes, ingredients, customer_workspace, reports
     rules = {}
 
     def add(module, method, names, grants):
@@ -27,6 +27,11 @@ def route_rules():
     add(customer_workspace, "POST", "create note", "customers.manage")
     add(customer_workspace, "PUT", "update", "customers.manage")
     add(recipes, "GET", "list_recipes get_hpp_report", "hpp.view")
+    # Tab Laporan app (modal + margin per produk) = isi yang sama dengan
+    # laporan HPP. Dulu tanpa gerbang: kasir legacy bisa membaca modal semua
+    # produk, akun managed selalu ditolak walau diberi izin (9 Okt 2026).
+    # App menyembunyikan tabnya dengan izin yang sama (SessionCache.canViewMargin).
+    add(reports, "GET", "get_margin_report", "hpp.view hpp.manage")
     add(recipes, "POST", "create_recipe", "hpp.manage")
     add(recipes, "PUT", "update_recipe", "hpp.manage")
     add(recipes, "DELETE", "delete_recipe", "hpp.manage")

@@ -95,7 +95,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
   List<Widget> get _pages => [
     const _DashboardContent(),         // 0 Beranda
     const PosPage(),                   // 1 Kasir
-    const MarginReportPage(),          // 2 Laporan
+    // IndexedStack membangun semua anak: tanpa izin, jangan sampai layar ini
+    // tetap memanggil /reports/margin di belakang.
+    SessionCache.instance.canViewMargin ? const MarginReportPage() : const SizedBox.shrink(), // 2 Laporan
     const OrderListPage(),             // 3 Riwayat
     const TableGridPage(),             // 4 Meja (Pro)
     const ProductManagementPage(),     // 5 Stok
@@ -107,6 +109,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
   /// AI = FAB (bukan tab). Setting via header/side-nav action. Reservasi di dalam Meja.
   /// (page index STABIL: 0 Beranda,1 Kasir,2 Laporan,3 Riwayat,4 Meja,5 Stok.)
   List<({IconData icon, String label, int page})> get _visibleTabs {
+    // Laporan berisi modal + margin: hanya untuk yang diizinkan (hpp.view),
+    // gerbang yang sama dengan backend (business_access).
+    final canMargin = SessionCache.instance.canViewMargin;
+    return [
+      for (final tab in _allTabs)
+        if (tab.page != 2 || canMargin) tab,
+    ];
+  }
+
+  List<({IconData icon, String label, int page})> get _allTabs {
     if (_isPro) {
       return const [
         (icon: LucideIcons.home, label: 'Beranda', page: 0),
