@@ -197,12 +197,23 @@ void main() async {
       return true; // mark as handled — jangan propagate ke OS
     };
 
-    await initializeDateFormatting('id_ID', null);
+    // Apa pun yang gagal di sini TIDAK boleh mencegah runApp: kegagalan sebelum
+    // runApp ditelan zone dan app diam di layar hitam (APK 1.6.37, 10/10/2026).
+    Future<void> step(String name, Future<void> Function() run) async {
+      try {
+        await run().timeout(const Duration(seconds: 8));
+      } catch (e, st) {
+        debugPrint('Startup $name gagal, lanjut: $e');
+        debugPrint('$st');
+      }
+    }
+
+    await step('date', () => initializeDateFormatting('id_ID', null));
     final prefs = await SharedPreferences.getInstance();
-    await AppConfig.init(prefs);
+    await step('config', () => AppConfig.init(prefs));
 
     // Pre-warm session cache from SharedPreferences (fast) + SecureStorage (token only)
-    await SessionCache.instance.initFromPrefsCache();
+    await step('session', () => SessionCache.instance.initFromPrefsCache());
 
     // Notifikasi push. SENGAJA nggak di-await: Firebase butuh ratusan mili
     // dan nggak ada satu layar pun yang nunggu hasilnya. Ketukan notifikasi

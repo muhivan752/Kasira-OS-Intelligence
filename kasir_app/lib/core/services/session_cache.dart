@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -191,16 +192,35 @@ class SessionCache {
     subscriptionTier = prefs.getString('c_subscription_tier');
     businessDomain = prefs.getString('c_business_domain');
     _loadPaymentConfig(prefs);
-    // Token still needs SecureStorage — read in parallel
+    // Token still needs SecureStorage — read in parallel.
+    // 10/10/2026 (APK 1.6.37 layar hitam): sesudah instal ulang, Android bisa
+    // memulihkan data lama dari cadangan otomatis tanpa kunci enkripsinya, dan
+    // read() melempar. Dulu itu terjadi sebelum runApp, jadi app diam di layar
+    // hitam selamanya. Sekarang penyimpanan yang tak terbaca dikosongkan dan app
+    // membuka layar masuk seperti instal baru.
     const secure = FlutterSecureStorage();
-    final results = await Future.wait([
-      secure.read(key: 'access_token'),
-      secure.read(key: 'shift_session_id'),
-    ]);
-    accessToken = results[0];
-    shiftSessionId = results[1];
-    userId = await secure.read(key: 'user_id');
-    await _loadAccess();
+    try {
+      final results = await Future.wait([
+        secure.read(key: 'access_token'),
+        secure.read(key: 'shift_session_id'),
+      ]).timeout(const Duration(seconds: 5));
+      accessToken = results[0];
+      shiftSessionId = results[1];
+      userId = await secure.read(key: 'user_id').timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('SessionCache: penyimpanan aman tidak terbaca, mulai dari awal: $e');
+      accessToken = null;
+      shiftSessionId = null;
+      userId = null;
+      try {
+        await secure.deleteAll().timeout(const Duration(seconds: 5));
+      } catch (_) {}
+    }
+    try {
+      await _loadAccess();
+    } catch (e) {
+      debugPrint('SessionCache: data akses lama tidak terbaca: $e');
+    }
     _initialized = true;
   }
 

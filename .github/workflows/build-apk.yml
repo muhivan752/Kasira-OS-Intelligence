@@ -39,6 +39,10 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          # Dikunci (10/10/2026): tanpa ini setiap build memakai stable terbaru,
+          # jadi 1.6.36 (3.47.6) dan 1.6.37 (3.47.7) beda mesin tanpa ada yang
+          # mengubah kode. Naikkan dengan sengaja dan uji sideload dulu.
+          flutter-version: '3.47.6'
           cache: true
 
       - name: Get Flutter Packages
