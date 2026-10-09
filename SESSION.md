@@ -4,6 +4,35 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
+## 2026-10-09 sore - SELARIS AI + MESIN SARAN TAHAP A LIVE (BACA INI DULU)
+
+Arah Ivan: AI Selaris = fitur utama yang dijual, harus PROAKTIF. Konsep kartu
+saran (Terapkan / Ubah / Abaikan), mockup HP+tablet+DM disetujui:
+https://claude.ai/artifact/32Gghjbq9E37UoBaBJXR32 . Rancangan: docs/SARAN_DESIGN.md.
+
+LIVE (commit 2d067f4, 20d43f5, 2c490d8, dee7426; migrasi 117):
+- Merek "Selaris AI": web/app tidak menampilkan nama model atau token; prompt
+  dilarang menyebut penyedia (DeepSeek teks, Anthropic OCR nota/pricing).
+- services/suggestions.py + tabel suggestions: 4 detektor kode murni
+  (stock_low, ingredient_price_up, thin_margin, recipe_missing), jalan tiap
+  hari >= 06.00 waktu outlet + tombol Periksa ulang. Kartu di Beranda web.
+  Resep: draf perkiraan via hpp_setup_service, Terapkan = sesi + approve HPP.
+- TANPA WA (Ivan): kg_price_event_loop tidak didaftarkan lagi; kartu stok =
+  Tandai sudah dipesan. online_orders.wa_owner masih WA untuk pesanan online.
+- Toko demo ikut diperiksa (semua tenant non-demo is_active=false = akun contoh).
+- Putaran pertama 9/10 12.17 WIB: 2 stock_low di outlet 312d798d.
+- Deploy backend: scripts/pasang-backend.sh <commit-dasar> <file...> (Ivan yang
+  menjalankan; pengaman Claude Code menolak docker cp ke produksi).
+
+NEXT yang disetujui Ivan ("oke ini next"): konteks Selaris AI ditambah
+(1) tim & absensi (masuk hari ini, telat, izin/sakit/cuti, jadwal; pemilik +
+izin kelola absensi lihat semua, karyawan hanya diri sendiri),
+(2) jabatan & hak akses (pemilik / access.manage),
+(3) saran Selaris yang terbuka beserta angkanya. Backend saja, tanpa APK.
+Lalu tahap B: notifikasi push pemilik + DM Sefrekuensi, percakapan Ubah.
+APK DITAHAN Ivan: tombol Hapus Akun, tab Laporan per izin, teks Laporan mode
+Resep, label Selaris AI app; build sekaligus sesudah intelligence.
+
 ## 2026-10-09 siang - HAPUS AKUN + LAPORAN MODE RESEP LIVE
 
 Ivan pilih opsi (a): pemilik = seluruh usaha dihapus 30 hari sesudah minta
