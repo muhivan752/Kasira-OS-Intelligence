@@ -390,12 +390,17 @@ async def get_margin_report(
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
-    Margin report untuk outlet stock_mode='simple' (Starter + Pro mix-mode).
-    Pro recipe mode → 400, arahkan ke /recipes/hpp-report (HPP via unit_utils.py).
+    Margin report, tab Laporan di app POS. Dua mode stok, satu bentuk balasan:
 
-    Output: list produk dengan buy_price snapshot + margin per unit.
-    Produk tanpa buy_price tetap muncul (missing_buy_price=true) — action focus
-    user buat fill the gap.
+    - simple: modal = products.buy_price.
+    - recipe (9 Okt 2026, dulu 400 STOCK_MODE_NOT_SUPPORTED dan app cuma bisa
+      bilang "Coba lagi" selamanya): modal = HPP resep dari
+      finance_service.cost_map_for_brand, rumah yang sama dengan laba rugi.
+      Resep tidak lengkap = modal tidak diketahui (missing_buy_price), BUKAN
+      ditutup harga beli lama. Field `buy_price` tetap dipakai supaya APK yang
+      sudah terpasang langsung bisa menampilkan.
+
+    Produk tanpa modal tetap muncul (missing_buy_price=true) — action focus.
     """
     # 1. Validate outlet ownership + load stock_mode
     outlet_res = await db.execute(
@@ -412,15 +417,10 @@ async def get_margin_report(
     stock_mode_raw = getattr(outlet, "stock_mode", "simple")
     stock_mode = stock_mode_raw.value if hasattr(stock_mode_raw, "value") else str(stock_mode_raw or "simple")
 
+    recipe_cost = None
     if stock_mode == "recipe":
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "STOCK_MODE_NOT_SUPPORTED",
-                "mode": "recipe",
-                "message": "Outlet pakai recipe mode — pakai /recipes/hpp-report untuk HPP berbasis bahan baku.",
-            },
-        )
+        from backend.services.finance_service import cost_map_for_brand
+        recipe_cost = await cost_map_for_brand(db, outlet.brand_id)
 
     # 2. Fetch products dalam brand outlet (tenant scope sudah via outlet validation)
     products_res = await db.execute(
@@ -440,7 +440,7 @@ async def get_margin_report(
 
     for p in products:
         base_price = p.base_price or Decimal("0")
-        buy_price = p.buy_price
+        buy_price = recipe_cost.get(p.id) if recipe_cost is not None else p.buy_price
         has_buy = buy_price is not None
         if has_buy:
             with_buy_price += 1

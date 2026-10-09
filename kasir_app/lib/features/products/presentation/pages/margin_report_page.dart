@@ -199,13 +199,18 @@ class _MarginReportPageState extends ConsumerState<MarginReportPage> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _ActionFocusBanner(missingCount: report.summary.missingBuyPrice),
+                    _ActionFocusBanner(
+                        missingCount: report.summary.missingBuyPrice,
+                        recipe: report.summary.stockMode == 'recipe'),
                     const SizedBox(height: 12),
                   ],
                 );
               }
               final productIdx = idx - headerCount;
-              return _MarginTile(product: report.products[productIdx], currency: _currency);
+              return _MarginTile(
+                  product: report.products[productIdx],
+                  currency: _currency,
+                  recipe: report.summary.stockMode == 'recipe');
             },
           ),
         );
@@ -328,7 +333,9 @@ class _SummaryStat extends StatelessWidget {
 
 class _ActionFocusBanner extends StatelessWidget {
   final int missingCount;
-  const _ActionFocusBanner({required this.missingCount});
+  // Mode Resep: modal = HPP resep (backend cost_map_for_brand), bukan harga beli.
+  final bool recipe;
+  const _ActionFocusBanner({required this.missingCount, this.recipe = false});
 
   @override
   Widget build(BuildContext context) {
@@ -349,7 +356,9 @@ class _ActionFocusBanner extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '$missingCount produk belum diisi harga beli (modal)',
+                  recipe
+                      ? '$missingCount produk belum punya HPP resep (modal)'
+                      : '$missingCount produk belum diisi harga beli (modal)',
                   style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF92400E),
@@ -361,13 +370,16 @@ class _ActionFocusBanner extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          const Padding(
-            padding: EdgeInsets.only(left: 26),
+          Padding(
+            padding: const EdgeInsets.only(left: 26),
             child: Text(
-              'Modal = harga beli ke supplier (bukan stok). '
+              recipe
+                  ? 'Modal dihitung dari resep dan harga bahan baku. '
+                      'Produk yang resep atau harga bahannya belum lengkap belum bisa dihitung marginnya.'
+                  : 'Modal = harga beli ke supplier (bukan stok). '
               'Tanpa harga modal, margin tidak bisa dihitung. '
               'Contoh: jual nasi 18rb, beli bahan 8rb → modal = 8rb.',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 11,
                 color: Color(0xFF92400E),
                 height: 1.45,
@@ -375,11 +387,13 @@ class _ActionFocusBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          const Padding(
-            padding: EdgeInsets.only(left: 26),
+          Padding(
+            padding: const EdgeInsets.only(left: 26),
             child: Text(
-              'Cara mengisi: tab Stok, pilih produk, lalu isi "Harga Beli per Unit".',
-              style: TextStyle(
+              recipe
+                  ? 'Cara melengkapi: buka dashboard web, menu HPP.'
+                  : 'Cara mengisi: tab Stok, pilih produk, lalu isi "Harga Beli per Unit".',
+              style: const TextStyle(
                 fontSize: 11,
                 color: Color(0xFF92400E),
                 fontStyle: FontStyle.italic,
@@ -418,7 +432,8 @@ class _EmptyState extends StatelessWidget {
 class _MarginTile extends StatelessWidget {
   final _MarginProduct product;
   final NumberFormat currency;
-  const _MarginTile({required this.product, required this.currency});
+  final bool recipe;
+  const _MarginTile({required this.product, required this.currency, this.recipe = false});
 
   @override
   Widget build(BuildContext context) {
@@ -462,9 +477,9 @@ class _MarginTile extends StatelessWidget {
                 ),
                 if (missing) ...[
                   const SizedBox(height: 4),
-                  const Text(
-                    'Belum diisi harga beli (modal)',
-                    style: TextStyle(
+                  Text(
+                    recipe ? 'Resep atau harga bahan belum lengkap' : 'Belum diisi harga beli (modal)',
+                    style: const TextStyle(
                       fontSize: 11,
                       color: Color(0xFFB45309),
                       fontStyle: FontStyle.italic,
