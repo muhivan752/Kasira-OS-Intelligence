@@ -1694,6 +1694,7 @@ async def stream_ai_response(
     conversation_id: Optional[str] = None,
     access=None,
     access_guard=None,
+    cards: bool = False,
 ) -> AsyncGenerator[str, None]:
     """
     Generator untuk SSE stream.
@@ -2061,6 +2062,10 @@ async def stream_ai_response(
             from backend.services import selaris_bahan
             can_recipe = selaris_agent.can_draft_recipe(access, agent_tenant)
             agent_tools = ([selaris_agent.RECIPE_TOOL] if can_recipe else []) + selaris_bahan.tools_for(access, agent_tenant)
+            if not cards:
+                # App kasir belum bisa menampilkan kartu Simpan: tanpa alat berkartu,
+                # dan model diberi tahu ke mana pengguna diarahkan (selaris_agent.NO_CARDS).
+                agent_tools = []
             tool_names = {t["function"]["name"] for t in agent_tools}
             history_for_agent = prior_history
             async def execute(name, args):
@@ -2088,7 +2093,8 @@ async def stream_ai_response(
             await db.commit()  # lepas transaksi baca selama model berjalan
             final_text, tokens_used = "", 0
             async for ev in selaris_agent.run(system=system_prompt, history=history_for_agent, message=message,
-                                              tools=agent_tools, execute=execute):
+                                              tools=agent_tools, execute=execute,
+                                              tail="" if cards else selaris_agent.NO_CARDS):
                 if ev.get("type") == "_final":
                     final_text, tokens_used = ev["text"], ev["tokens"]
                     continue

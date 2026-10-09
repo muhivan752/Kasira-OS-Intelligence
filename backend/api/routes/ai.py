@@ -183,6 +183,10 @@ _HINT_DISPLAY_OVERRIDE = {
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=100000)
     outlet_id: UUID
+    # Klien bisa menampilkan kartu Simpan (resep, harga bahan, stok, harga jual).
+    # Dashboard web mengirim true; app kasir (termasuk APK lama) tidak, jadi alat
+    # berkartu tidak ditawarkan dan AI mengarahkan ke dashboard web. 9 Okt 2026.
+    cards: bool = False
     # Multi-turn: kirim null di turn pertama, server balikin UUID di `done` event.
     # Pake UUID itu untuk turn-turn berikutnya supaya server load prior history.
     # History TTL 30min rolling (Redis ephemeral), max 5 turn pair.
@@ -309,6 +313,7 @@ async def ai_chat(
                 redis_client=redis,
                 user_id=str(current_user.id),
                 conversation_id=str(body.conversation_id) if body.conversation_id else None,
+                cards=body.cards,
                 access=access, access_guard=guard,
             ):
                 buffered.append(chunk)

@@ -12,6 +12,10 @@ class ChatMessage {
   final String? intent;
   final String? model;
   final int? tokens;
+  // Kartu Simpan dari alat Selaris AI (resep, harga bahan, bahan masuk, harga
+  // jual). Ditampilkan di bawah balasan; lihat widgets/ai_cards.dart.
+  final List<Map<String, dynamic>> cards;
+  String? status;
 
   ChatMessage({
     required this.id,
@@ -20,8 +24,14 @@ class ChatMessage {
     this.intent,
     this.model,
     this.tokens,
-  });
+    List<Map<String, dynamic>>? cards,
+    this.status,
+  }) : cards = cards ?? [];
 }
+
+/// Jenis kartu yang bisa ditampilkan app. Sama dengan yang dikirim backend
+/// (services/selaris_agent.py, services/selaris_bahan.py).
+const kAiCardTypes = {'recipe_draft', 'ingredient_price', 'stock_in', 'sell_price'};
 
 class AiChatState {
   final List<ChatMessage> messages;
@@ -110,6 +120,9 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
         // backend bakal generate UUID baru dan echo balik di done event.
         if (_currentConversationId != null)
           'conversation_id': _currentConversationId,
+        // App ini bisa menampilkan kartu Simpan (sejak 1.6.37). APK lama tidak
+        // mengirim ini, jadi backend tidak menawarinya alat berkartu.
+        'cards': true,
       });
 
       final client = http.Client();
@@ -131,10 +144,13 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
       }
 
       // Parse SSE stream
+      // LineSplitter menyambung baris yang terpotong antar paket jaringan;
+      // dulu chunk.split('\n') membuang event yang terbelah (kartu paling rawan).
       final buffer = StringBuffer();
-      await for (final chunk in response.stream.transform(utf8.decoder)) {
-        final lines = chunk.split('\n');
-        for (final line in lines) {
+      await for (final line in response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())) {
+        {
           if (!line.startsWith('data: ')) continue;
           final jsonStr = line.substring(6).trim();
           if (jsonStr.isEmpty) continue;
@@ -146,6 +162,13 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
             if (type == 'chunk') {
               buffer.write(event['content'] ?? '');
               _updateAssistant(assistantMsg.id, buffer.toString());
+            } else if (type == 'status') {
+              assistantMsg.status = event['content'] as String?;
+              state = state.copyWith(messages: [...state.messages]);
+            } else if (kAiCardTypes.contains(type)) {
+              assistantMsg.cards.add(event);
+              assistantMsg.status = null;
+              state = state.copyWith(messages: [...state.messages]);
             } else if (type == 'done') {
               // Capture conv_id yang di-echo backend — persist untuk turn
               // berikutnya biar Redis history ter-load. Backend auto-gen UUID
@@ -198,6 +221,7 @@ class AiChatNotifier extends StateNotifier<AiChatState> {
           intent: intent,
           model: model,
           tokens: tokens,
+          cards: m.cards,
         );
       }
       return m;

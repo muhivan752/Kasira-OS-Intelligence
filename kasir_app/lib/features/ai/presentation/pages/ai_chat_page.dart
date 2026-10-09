@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme/kasira_ds.dart';
 import '../../providers/ai_chat_provider.dart';
+import '../widgets/ai_cards.dart';
 
 const _suggestions = [
   'Berapa omzet hari ini?',
@@ -303,6 +304,13 @@ class _MessageBubble extends StatelessWidget {
                         ),
                 ),
                 // Nama model dan token tidak ditampilkan: mereknya Selaris AI.
+                if (message.status != null && message.cards.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(message.status!,
+                        style: KasiraDS.sans(size: 12.5, color: KasiraDS.textMuted).copyWith(fontStyle: FontStyle.italic)),
+                  ),
+                for (final card in message.cards) AiCard(card: card),
               ],
             ),
           ),

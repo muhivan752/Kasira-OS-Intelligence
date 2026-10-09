@@ -75,6 +75,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       if (step == AuthStep.inputPhone) {
+        // Layar pertama (9 Okt 2026): Google, kode Sefrekuensi, dan nomor HP/username + password.
+        expect(find.text('Nomor HP atau username'), findsOneWidget);
+        await tester.ensureVisible(find.text('Kode dari Sefrekuensi'));
+        await tester.tap(find.text('Kode dari Sefrekuensi'));
+        await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextField).first, '08111111111');
         await tester.ensureVisible(find.text('Kirim kode ke Sefrekuensi'));
         await tester.tap(find.text('Kirim kode ke Sefrekuensi'));

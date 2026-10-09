@@ -36,6 +36,12 @@ STYLE = """
 - Alat hanya menyiapkan kartu. Jangan pernah bilang sudah tersimpan, stok sudah bertambah, atau harga sudah berubah. Katakan "cek kartunya lalu tekan Simpan".
 """
 
+NO_CARDS = """
+
+# PENGGUNA MEMAKAI APLIKASI KASIR (PRIORITAS DI ATAS ATURAN ALAT)
+Aplikasi kasir belum bisa menampilkan kartu Simpan. Kalau pengguna minta menyusun resep atau HPP, mengubah harga beli bahan, mencatat bahan masuk, atau mengubah harga jual, jelaskan singkat bahwa itu bisa dilakukan lewat Selaris AI di dashboard web (selaris.id, menu Selaris AI) dengan kalimat yang sama. Jangan menyebut kartu, jangan bilang tidak punya izin, dan jangan mengaku sudah mengubah apa pun. Pertanyaan biasa tetap dijawab seperti biasa.
+"""
+
 RECIPE_TOOL = {"type": "function", "function": {
     "name": "susun_resep",
     "description": ("Siapkan draf resep dan hitung HPP satu produk memakai bahan dan harga toko. Dipakai setiap kali "
@@ -232,14 +238,14 @@ async def run_recipe_tool(db, *, user, access, outlet, produk: str, keterangan: 
 
 # ───────────────────────── putaran agen ─────────────────────────
 
-async def run(*, system: str, history: list, message: str, tools: list, execute):
+async def run(*, system: str, history: list, message: str, tools: list, execute, tail: str = ""):
     """Putaran chat dengan alat. Yield event SSE (dict). `execute(name, args)` → (hasil, kartu|None).
 
     Teks dialirkan langsung; kalau model memanggil alat, alat dijalankan lalu
     model menulis jawaban akhir dari hasilnya (maksimal 2 putaran alat).
     """
     from backend.services.llm_client import deepseek_tool_stream
-    msgs = [{"role": "system", "content": system + STYLE}] + [
+    msgs = [{"role": "system", "content": system + STYLE + tail}] + [
         {"role": m["role"], "content": m["content"]} for m in history if m.get("content")] + [
         {"role": "user", "content": message}]
     tokens, text_all = 0, []

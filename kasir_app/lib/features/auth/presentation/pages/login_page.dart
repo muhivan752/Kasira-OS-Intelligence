@@ -848,12 +848,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               label: Text('Kode dari $kSefrekuensiName'),
             )),
         const SizedBox(height: 20),
+        // Teks boleh turun baris: 320px dengan teks 160% meluber kalau kaku.
         Row(children: [
           const Expanded(child: Divider()),
-          Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Text('atau nomor HP dan password',
-                  style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted))),
+          Flexible(
+              flex: 3,
+              child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('atau nomor HP dan password',
+                      textAlign: TextAlign.center,
+                      style: KasiraDS.sans(size: 12, color: KasiraDS.textMuted)))),
           const Expanded(child: Divider()),
         ]),
         const SizedBox(height: 12),

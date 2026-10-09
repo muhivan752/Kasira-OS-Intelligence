@@ -202,7 +202,7 @@ function LegacyAIChatPage() {
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text.trim(), outlet_id: effectiveOutletId, conversation_id: conversationRef.current }),
+        body: JSON.stringify({ message: text.trim(), outlet_id: effectiveOutletId, conversation_id: conversationRef.current, cards: true }),
       });
 
       if (res.status === 403) {

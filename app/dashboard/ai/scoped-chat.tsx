@@ -38,7 +38,7 @@ export function ScopedAIChat() {
     setMessages(value => [...value, { role: 'user', content }]); setText(''); setError(''); setBusy(true);
     try {
       const response = await fetch('/api/ai', { method: 'POST', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: content, outlet_id: outletId, conversation_id: conversation }) });
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: content, outlet_id: outletId, conversation_id: conversation, cards: true }) });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(typeof data.detail === 'string' ? data.detail : data.detail?.message || 'Pesan belum dapat diproses. Coba lagi.');

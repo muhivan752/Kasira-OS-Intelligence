@@ -59,7 +59,8 @@ void main() {
         });
     final client = Dio()..httpClientAdapter = adapter;
     final notifier = AuthNotifier(restoreSession: false, client: client);
-    await notifier.loginPassword('qa-shop', 'staff', 'qa private password');
+    await notifier.loginPassword('staff', 'qa private password');
+    expect(adapter.calls.single.data.containsKey('shop_username'), isFalse);
     expect(adapter.calls.single.data['username'], 'staff');
     expect(cache.userId, 'new-user');
     expect(cache.tenantId, 'new-tenant');
