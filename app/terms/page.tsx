@@ -1,6 +1,7 @@
 import Navbar from '@/components/landing/Navbar';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { COMPANY_CITY, COMPANY_EMAIL, COMPANY_NAME } from '@/lib/brand';
 
 export const metadata = {
   title: 'Syarat & Ketentuan',
@@ -16,11 +17,11 @@ export default function TermsOfServicePage() {
           <ArrowLeft className="w-4 h-4" /> Kembali ke Beranda
         </Link>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4">Syarat & Ketentuan</h1>
-        <p className="text-gray-500 mb-8">Terakhir diperbarui: {new Date().toLocaleDateString('id-ID')}</p>
+        <p className="text-gray-500 mb-8">Terakhir diperbarui: 9 Oktober 2026</p>
         
         <div className="prose prose-emerald max-w-none text-gray-700">
           <p>
-            Dengan mendaftar dan menggunakan Selaris ("Layanan"), Anda menyetujui syarat dan ketentuan berikut ("Ketentuan Layanan"). Harap baca dengan saksama sebelum menggunakan Layanan kami.
+            Selaris ("Layanan") dikelola oleh {COMPANY_NAME} ("kami"), berkedudukan di {COMPANY_CITY}, Indonesia. Dengan mendaftar dan menggunakan Layanan, Anda menyetujui syarat dan ketentuan berikut ("Ketentuan Layanan"). Harap baca dengan saksama sebelum menggunakan Layanan kami.
           </p>
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">1. Akun dan Registrasi</h2>
@@ -64,6 +65,11 @@ export default function TermsOfServicePage() {
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">7. Hukum yang Berlaku</h2>
           <p>
             Syarat & Ketentuan ini tunduk pada dan ditafsirkan sesuai dengan hukum yang berlaku di Republik Indonesia. Segala perselisihan yang timbul sehubungan dengan Syarat & Ketentuan ini akan diselesaikan secara musyawarah atau melalui pengadilan negeri yang berwenang di Indonesia.
+          </p>
+
+          <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">8. Hubungi Kami</h2>
+          <p>
+            Pertanyaan tentang Syarat & Ketentuan ini dapat dikirim ke {COMPANY_NAME} melalui email <a href={`mailto:${COMPANY_EMAIL}`}>{COMPANY_EMAIL}</a>.
           </p>
         </div>
       </div>

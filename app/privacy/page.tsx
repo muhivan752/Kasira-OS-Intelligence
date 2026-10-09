@@ -1,6 +1,7 @@
 import Navbar from '@/components/landing/Navbar';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { COMPANY_CITY, COMPANY_EMAIL, COMPANY_NAME } from '@/lib/brand';
 
 export const metadata = {
   title: 'Kebijakan Privasi',
@@ -16,11 +17,11 @@ export default function PrivacyPolicyPage() {
           <ArrowLeft className="w-4 h-4" /> Kembali ke Beranda
         </Link>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4">Kebijakan Privasi</h1>
-        <p className="text-gray-500 mb-8">Terakhir diperbarui: {new Date().toLocaleDateString('id-ID')}</p>
+        <p className="text-gray-500 mb-8">Terakhir diperbarui: 9 Oktober 2026</p>
         
         <div className="prose prose-emerald max-w-none text-gray-700">
           <p>
-            Selamat datang di Selaris. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, mengungkapkan, dan melindungi informasi pribadi Anda saat Anda menggunakan aplikasi Selaris, situs web, dan layanan terkait (secara kolektif disebut "Layanan").
+            Selamat datang di Selaris. Selaris dikelola oleh {COMPANY_NAME} ("kami"), berkedudukan di {COMPANY_CITY}, Indonesia. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, mengungkapkan, dan melindungi informasi pribadi Anda saat Anda menggunakan aplikasi Selaris, situs web, dan layanan terkait (secara kolektif disebut "Layanan").
           </p>
           <p>
             Dengan menggunakan Layanan kami, Anda menyetujui pengumpulan dan penggunaan informasi sesuai dengan kebijakan ini. Kebijakan ini tunduk pada hukum Republik Indonesia, termasuk Undang-Undang Pelindungan Data Pribadi (UU PDP).
@@ -69,7 +70,7 @@ export default function PrivacyPolicyPage() {
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">6. Hubungi Kami</h2>
           <p>
-            Jika Anda memiliki pertanyaan tentang Kebijakan Privasi ini atau ingin menggunakan hak Anda terkait data pribadi, Anda dapat menghubungi kami melalui WhatsApp di nomor layanan pelanggan kami: <strong>+62-852-7078-2220</strong>.
+            Jika Anda memiliki pertanyaan tentang Kebijakan Privasi ini atau ingin menggunakan hak Anda terkait data pribadi, Anda dapat menghubungi kami melalui WhatsApp di nomor layanan pelanggan kami: <strong>+62-852-7078-2220</strong>, atau email ke <a href={`mailto:${COMPANY_EMAIL}`}>{COMPANY_EMAIL}</a>.
           </p>
         </div>
       </div>

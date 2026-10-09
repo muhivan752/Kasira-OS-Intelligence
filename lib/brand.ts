@@ -18,6 +18,11 @@ export const WA_NUMBER = '6285270782220';
 export const WA_LINK = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Halo ${BRAND}, saya tertarik coba`)}`;
 export const DEMO_SLUG = 'kasira-coffee';
 
+/** Badan usaha pengelola Selaris (founder 9 Okt 2026). Footer, /privacy, /terms baca dari sini. */
+export const COMPANY_NAME = 'PT Sefrekuensi Teknologi Indonesia';
+export const COMPANY_EMAIL = 'halo@sefrekuensi.id';
+export const COMPANY_CITY = 'Medan';
+
 /**
  * Sefrekuensi = app sosial milik founder yang sama. Layar masuk & daftar
  * nawarin kirim kode lewat sana sebagai iklan halus (keputusan Ivan 4 Sep):
