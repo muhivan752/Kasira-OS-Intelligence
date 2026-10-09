@@ -6,6 +6,7 @@ import { useProGuard } from '@/app/hooks/use-pro-guard';
 import { getAccountAccess } from '@/app/actions/accounts';
 import { ScopedAIChat } from './scoped-chat';
 import { RecipeDraftCard, type RecipeDraft } from '@/components/dashboard/recipe-draft-card';
+import { BahanCardView, isBahanCard, type BahanCard } from '@/components/dashboard/bahan-cards';
 
 interface ProposalIngredient {
   name: string;
@@ -45,6 +46,7 @@ interface Message {
   tokens?: number;
   recipeProposal?: RecipeProposal;
   recipeDraft?: RecipeDraft;   // alat susun_resep Selaris AI
+  bahanCards?: BahanCard[];    // alat ubah_harga_bahan / tambah_stok
   status?: string;
   editableProposal?: RecipeProposal;
   applying?: boolean;
@@ -244,6 +246,8 @@ function LegacyAIChatPage() {
 
             if (event.type === 'status') {
               setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, status: event.content } : m));
+            } else if (isBahanCard(event)) {
+              setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, bahanCards: [...(m.bahanCards || []), event as BahanCard], status: undefined } : m));
             } else if (event.type === 'recipe_draft') {
               setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, recipeDraft: event as RecipeDraft, status: undefined } : m));
             } else if (event.type === 'chunk') {
@@ -602,9 +606,10 @@ function LegacyAIChatPage() {
                   <span className="text-xs font-medium">Berhasil</span>
                 </div>
               )}
-              {msg.status && !msg.recipeDraft && <p className="text-xs italic text-[var(--text-muted)]" role="status">{msg.status}</p>}
+              {msg.status && !msg.recipeDraft && !msg.bahanCards?.length && <p className="text-xs italic text-[var(--text-muted)]" role="status">{msg.status}</p>}
               <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
               {msg.recipeDraft && <RecipeDraftCard draft={msg.recipeDraft} outletId={outletId} />}
+              {msg.bahanCards?.map((card, i) => <BahanCardView key={i} card={card} />)}
 
               {msg.editableProposal && (() => {
                 const ep = msg.editableProposal;

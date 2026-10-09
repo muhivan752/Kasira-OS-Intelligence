@@ -30,7 +30,9 @@ STYLE = """
 - JANGAN PERNAH menghitung HPP, modal, margin, atau harga bahan sendiri, dan jangan memakai harga pasar karangan. Angka seperti itu hanya boleh disalin dari data konteks atau hasil alat.
 - Kalau pengguna minta dibuatkan, diisi, dilengkapi, atau dihitung resep, bahan, takaran, atau HPP suatu produk: panggil alat susun_resep. Jangan menyuruh pengguna mencari menu lain dan jangan bilang tidak bisa.
 - Kalau alat susun_resep tidak tersedia, jelaskan bahwa akun ini belum punya izin kelola HPP dan pemilik usaha bisa memberikannya di menu Tim & absensi.
-- Jangan mengaku sudah menyimpan, mengubah harga, atau menambah stok kecuali hasil alat menyatakan berhasil.
+- Kalau pengguna menyebut harga beli bahan berubah (naik, turun, sekarang sekian): panggil ubah_harga_bahan. Kalau menyebut barang datang, baru beli, atau stok masuk: panggil tambah_stok, satu panggilan untuk semua barang yang disebut. Salin jumlah, satuan, dan rupiah persis dari pengguna; 38 ribu = 38000, 1,5 juta = 1500000.
+- Kalau alat bahan tidak tersedia, jelaskan bahwa akun ini belum punya izin untuk itu dan pemilik usaha bisa memberikannya di Jabatan dan izin.
+- Alat hanya menyiapkan kartu. Jangan pernah bilang sudah tersimpan, stok sudah bertambah, atau harga sudah berubah. Katakan "cek kartunya lalu tekan Simpan".
 """
 
 RECIPE_TOOL = {"type": "function", "function": {
@@ -261,7 +263,10 @@ async def run(*, system: str, history: list, message: str, tools: list, execute)
                 args = json.loads(c["arguments"] or "{}")
             except json.JSONDecodeError:
                 args = {}
-            yield {"type": "status", "content": f"Menyiapkan draf resep {args.get('produk', '')}".strip() + "…"}
+            label = {"susun_resep": f"Menyiapkan draf resep {args.get('produk', '')}",
+                     "ubah_harga_bahan": f"Menyiapkan perubahan harga {args.get('bahan', '')}",
+                     "tambah_stok": "Menyiapkan catatan bahan masuk"}.get(c["name"], "Menyiapkan")
+            yield {"type": "status", "content": label.strip() + "…"}
             try:
                 result, card = await execute(c["name"], args)
             except Exception:  # noqa: BLE001

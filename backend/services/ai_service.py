@@ -1724,9 +1724,11 @@ async def stream_ai_response(
     # 1. Classify intent — SETUP_RECIPE / RESTOCK = actionable, selain itu langsung ke Claude
     intent = classify_intent(message)
     from backend.services.llm_client import deepseek_enabled
-    if intent == INTENT_SETUP_RECIPE and deepseek_enabled():
-        # Resep sekarang lewat alat susun_resep (selaris_agent, mesin HPP) supaya
-        # modal dihitung kode dan bisa disimpan; proposal lama tidak dipakai.
+    if intent in (INTENT_SETUP_RECIPE, INTENT_RESTOCK) and deepseek_enabled():
+        # Resep lewat alat susun_resep, stok masuk lewat alat tambah_stok
+        # (selaris_agent/selaris_bahan): angka dihitung kode dan baru tersimpan
+        # sesudah pengguna menekan Simpan. Jalur RESTOCK lama menambah stok
+        # langsung tanpa konfirmasi; sekarang hanya dipakai kalau DeepSeek mati.
         intent = INTENT_CHAT
 
     if intent in (INTENT_SETUP_RECIPE, INTENT_MENU_BULK):
@@ -2056,11 +2058,23 @@ async def stream_ai_response(
 
         # Non-pricing: Selaris AI dengan alat (DeepSeek function calling).
         if deepseek_enabled() and access is not None and agent_user is not None and agent_outlet is not None:
+            from backend.services import selaris_bahan
             can_recipe = selaris_agent.can_draft_recipe(access, agent_tenant)
+            agent_tools = ([selaris_agent.RECIPE_TOOL] if can_recipe else []) + selaris_bahan.tools_for(access, agent_tenant)
+            tool_names = {t["function"]["name"] for t in agent_tools}
             history_for_agent = prior_history
             async def execute(name, args):
-                if name != "susun_resep" or not can_recipe:
+                if name not in tool_names:
                     return {"status": "ditolak", "pesan": "Alat ini tidak tersedia untuk akun ini."}, None
+                if name in ("ubah_harga_bahan", "tambah_stok"):
+                    # Hanya membaca dan menyiapkan kartu; penyimpanan lewat endpoint modulnya.
+                    if access_guard:
+                        await access_guard()
+                    if name == "ubah_harga_bahan":
+                        return await selaris_bahan.run_price_tool(db, user=agent_user, outlet=agent_outlet,
+                            bahan=args.get("bahan", ""), harga=args.get("harga"), jumlah=args.get("jumlah"), satuan=args.get("satuan", ""))
+                    return await selaris_bahan.run_stock_tool(db, user=agent_user, access=access, outlet=agent_outlet,
+                        barang=args.get("barang") or [], pemasok=args.get("pemasok"))
                 # Validasi tanpa kunci dulu: draf AI bisa 30-60 detik, dan kunci baris
                 # outlet/brand selama itu akan menahan transaksi kasir (FK ke outlets).
                 if access_guard:
@@ -2071,7 +2085,7 @@ async def stream_ai_response(
             await db.commit()  # lepas transaksi baca selama model berjalan
             final_text, tokens_used = "", 0
             async for ev in selaris_agent.run(system=system_prompt, history=history_for_agent, message=message,
-                                              tools=[selaris_agent.RECIPE_TOOL] if can_recipe else [], execute=execute):
+                                              tools=agent_tools, execute=execute):
                 if ev.get("type") == "_final":
                     final_text, tokens_used = ev["text"], ev["tokens"]
                     continue
