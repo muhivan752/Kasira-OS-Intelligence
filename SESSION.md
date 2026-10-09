@@ -4,6 +4,17 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
+## 2026-10-09 sore 2 - AGEN SELARIS AI LIVE (BACA INI DULU)
+
+services/selaris_agent.py (5b07e79): DeepSeek function calling, alat susun_resep
+memakai mesin HPP (hpp_setup_service.draft_for + open_session), kartu draf di chat
+web (Simpan = approve HPP). Konteks per izin: tim & absensi, jabatan & akses, saran.
+Gaya tanpa emoji/dash, model dilarang menghitung HPP. Kredit Anthropic habis: semua
+teks DeepSeek (pricing coach ikut). Chat web pemilik kini mengirim conversation_id
+(69cd07f; dulu tidak pernah, terbukti dari audit_log).
+NEXT: baca log tes Ivan, vision nota ke OpenAI (kunci dari Sefrekuensi via skrip
+Ivan), tahap B notifikasi, restock chat jadi kartu konfirmasi. APK tetap ditahan.
+
 ## 2026-10-09 sore - SELARIS AI + MESIN SARAN TAHAP A LIVE (BACA INI DULU)
 
 Arah Ivan: AI Selaris = fitur utama yang dijual, harus PROAKTIF. Konsep kartu
