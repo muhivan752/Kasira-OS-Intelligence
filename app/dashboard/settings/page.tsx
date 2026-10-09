@@ -1,1247 +1,499 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { getOutlets, updateOutlet, updateStockMode, getCurrentUser, getTaxConfig, updateTaxConfig, getReferralCode, getReferralStats, setupOutletWhatsApp
-} from '@/app/actions/api';
-import { Loader2, Store, Clock, Link as LinkIcon, CreditCard, Upload, ImageOff, Image, Package, Receipt, Gift, Copy, Share2, Check, MessageCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { getOutlets, updateOutlet, updateStockMode, getCurrentUser, getTaxConfig, updateTaxConfig, getReferralCode, getReferralStats, setupOutletWhatsApp } from '@/app/actions/api';
 import { DeliveryHoursSettings } from '@/components/dashboard/delivery-hours-settings';
 import { CourierSettings } from '@/components/dashboard/courier-settings';
+import { Loader2 } from 'lucide-react';
+import './settings.css';
 
-export default function SettingsPage() {
-  const [loading, setLoading] = useState(true);
-  const [outlet, setOutlet] = useState<any>(null);
-  const [saving, setSaving] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const [stockMode, setStockMode] = useState('simple');
-  const [shiftMode, setShiftMode] = useState<'ringan' | 'standar' | 'ketat'>('ringan');
-  const [shiftModeSaving, setShiftModeSaving] = useState(false);
-  const [shiftModeMsg, setShiftModeMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [savingStockMode, setSavingStockMode] = useState(false);
-  const [stockModeError, setStockModeError] = useState('');
-  const [needsRecipeSetup, setNeedsRecipeSetup] = useState(false);
-  const [isPro, setIsPro] = useState(false);
-  const coverInputRef = useRef<HTMLInputElement>(null);
+/*
+ * Pengaturan (disusun ulang 9 Okt 2026, mockup disetujui Ivan).
+ *
+ * Kelompok mengikuti cara pemilik berpikir: Toko, Kasir dan struk, Pesanan online
+ * dan antar, Stok, Langganan. Semua pengaturan lama tetap ada, hanya dipindah.
+ *
+ * Satu aturan simpan:
+ * - saklar dan pilihan langsung tersimpan (patch kecil ke outlet), tanda kecil di barisnya;
+ * - isian teks/angka (profil, rekening, pajak dan struk) menandai "ada perubahan" dan
+ *   disimpan bersama lewat bilah Simpan perubahan di bawah. Tidak ada alert() browser.
+ *
+ * Nomor toko digabung (keputusan Ivan): satu isian "Nomor WhatsApp toko" menulis ke
+ * outlets.phone DAN outlets.whatsapp_number, karena backend membaca keduanya
+ * (whatsapp_number dulu, phone cadangan). Teks bebas jam operasional hanya muncul
+ * di mode Manual; di mode jadwal halaman toko memakai hours_today dari jadwal.
+ *
+ * Pengaturan berlaku per outlet: dulu hanya outlets[0], sekarang bisa dipilih.
+ */
 
-  // Tax config state
-  const [taxConfig, setTaxConfig] = useState({
-    pb1_enabled: false,
-    tax_pct: 10,
-    service_charge_enabled: false,
-    service_charge_pct: 5,
-    tax_inclusive: false,
-    tax_number: '',
-    receipt_footer: '',
-    row_version: 0,
-  });
-  const [savingTax, setSavingTax] = useState(false);
-  const [taxSaved, setTaxSaved] = useState(false);
-  const [taxError, setTaxError] = useState('');
+type Section = 'toko' | 'kasir' | 'online' | 'stok' | 'langganan';
+const SECTIONS: { id: Section; label: string; icon: string }[] = [
+  { id: 'toko', label: 'Toko', icon: 'M3 9l1.5-5h15L21 9M4 9v11h16V9M3 9h18M9 20v-6h6v6' },
+  { id: 'kasir', label: 'Kasir dan struk', icon: 'M3 4h18v12H3zM7 20h10M12 16v4' },
+  { id: 'online', label: 'Pesanan online dan antar', icon: 'M3 7h13v10H3zM16 10h3l2 3v4h-5M7 20a2 2 0 100-4 2 2 0 000 4zM18 20a2 2 0 100-4 2 2 0 000 4z' },
+  { id: 'stok', label: 'Stok', icon: 'M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8' },
+  { id: 'langganan', label: 'Langganan', icon: 'M3 6h18v13H3zM3 10h18' },
+];
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const rp = (n: number) => 'Rp' + Math.round(n || 0).toLocaleString('id-ID');
+const digits = (v: string) => v.replace(/\D/g, '');
 
-  // Referral
-  const [referralCode, setReferralCode] = useState('');
-  const [referralShareUrl, setReferralShareUrl] = useState('');
-  const [referralShareText, setReferralShareText] = useState('');
-  const [referralStats, setReferralStats] = useState<any>(null);
-  const [copied, setCopied] = useState(false);
+type Msg = { ok: boolean; text: string } | null;
+type Profile = { name: string; whatsapp: string; address: string; opening_hours: string; cover_image_url: string };
+type Tax = { pb1_enabled: boolean; tax_pct: number; service_charge_enabled: boolean; service_charge_pct: number; tax_inclusive: boolean; tax_number: string; receipt_footer: string; row_version: number };
+type Bank = { bank_name: string; bank_account_number: string; bank_account_name: string };
+const NO_TAX: Tax = { pb1_enabled: false, tax_pct: 10, service_charge_enabled: false, service_charge_pct: 5, tax_inclusive: false, tax_number: '', receipt_footer: '', row_version: 0 };
 
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    whatsapp_number: '',
-    address: '',
-    opening_hours: '',
-    is_open: true,
-    cover_image_url: '',
-  });
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
-    setLoading(true);
-    try {
-      const outlets = await getOutlets();
-      if (outlets && outlets.length > 0) {
-        const data = outlets[0];
-        setOutlet(data);
-        setFormData({
-          name: data.name || '',
-          phone: data.phone || '',
-          whatsapp_number: data.whatsapp_number || '',
-          address: data.address || '',
-          opening_hours: typeof data.opening_hours === 'string' ? data.opening_hours : '',
-          is_open: data.is_open !== false,
-          cover_image_url: data.cover_image_url || '',
-        });
-        setStockMode(data.stock_mode || 'simple');
-        setShiftMode(data.shift_mode || 'ringan');
-        setKitchenMode(data.kitchen_mode || 'off');
-        setOnline({
-          online_orders_enabled: data.online_orders_enabled ?? true,
-          online_notify_owner_wa: data.online_notify_owner_wa ?? true,
-          online_auto_cancel_minutes: data.online_auto_cancel_minutes ?? 10,
-        });
-        setPay({
-          payment_methods: Array.isArray(data.payment_methods) && data.payment_methods.length ? data.payment_methods : ['cash', 'qris'],
-          qris_channel: data.qris_channel || 'manual',
-          qris_static_image_url: data.qris_static_image_url || '',
-        });
-        setBank({
-          bank_name: data.bank_name || '',
-          bank_account_number: data.bank_account_number || '',
-          bank_account_name: data.bank_account_name || '',
-        });
-
-        // Load tax config
-        try {
-          const tc = await getTaxConfig(data.id);
-          if (tc) {
-            setTaxConfig({
-              pb1_enabled: tc.pb1_enabled ?? false,
-              tax_pct: tc.tax_pct ?? 10,
-              service_charge_enabled: tc.service_charge_enabled ?? false,
-              service_charge_pct: tc.service_charge_pct ?? 5,
-              tax_inclusive: tc.tax_inclusive ?? false,
-              tax_number: tc.tax_number ?? '',
-              receipt_footer: tc.receipt_footer ?? '',
-              row_version: tc.row_version ?? 0,
-            });
-          }
-        } catch {}
-      }
-      const user = await getCurrentUser();
-      if (user) {
-        const tier = user.subscription_tier || 'starter';
-        setIsPro(['pro', 'business', 'enterprise'].includes(tier));
-      }
-
-      // Load referral
-      try {
-        const refData = await getReferralCode();
-        if (refData) {
-          setReferralCode(refData.referral_code);
-          setReferralShareUrl(refData.share_url);
-          setReferralShareText(refData.share_text);
-        }
-        const stats = await getReferralStats();
-        if (stats) setReferralStats(stats);
-      } catch {}
-    } catch (error) {
-      console.error('Failed to load outlet data', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const [showStockModeConfirm, setShowStockModeConfirm] = useState<string | null>(null);
-  const [stockModeSuccess, setStockModeSuccess] = useState('');
-
-  // Pesanan online (mig 101). Toggle disimpan langsung, tanpa tombol simpan.
-  const [online, setOnline] = useState({ online_orders_enabled: true, online_notify_owner_wa: true, online_auto_cancel_minutes: 10 });
-  const [onlineMsg, setOnlineMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [onlineSaving, setOnlineSaving] = useState(false);
-  const handleOnlineChange = async (patch: Partial<typeof online>) => {
-    if (!outlet) return;
-    const next = { ...online, ...patch };
-    setOnline(next);
-    setOnlineSaving(true);
-    setOnlineMsg(null);
-    const res = await updateOutlet(outlet.id, patch);
-    setOnlineSaving(false);
-    if (res.success) {
-      setOnlineMsg({ ok: true, text: patch.online_orders_enabled === false ? 'Pesanan online dihentikan sementara. Halaman toko menampilkan pemberitahuan.' : 'Tersimpan.' });
-    } else {
-      setOnline(online);
-      setOnlineMsg({ ok: false, text: res.message || 'Gagal menyimpan' });
-    }
-  };
-
-  // Metode pembayaran (mig 103). Toko memilih sendiri yang aktif; aplikasi
-  // kasir dan halaman toko hanya menampilkan yang aktif. Tunai selalu ada.
-  const [pay, setPay] = useState<{ payment_methods: string[]; qris_channel: string; qris_static_image_url: string }>({
-    payment_methods: ['cash', 'qris'], qris_channel: 'manual', qris_static_image_url: '',
-  });
-  const [bank, setBank] = useState({ bank_name: '', bank_account_number: '', bank_account_name: '' });
-  const [payMsg, setPayMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [paySaving, setPaySaving] = useState(false);
-  const [qrisUploading, setQrisUploading] = useState(false);
-  const savePayPatch = async (patch: Record<string, any>, okText = 'Tersimpan. Aplikasi kasir mengikuti saat dibuka lagi.') => {
-    if (!outlet) return false;
-    setPaySaving(true);
-    setPayMsg(null);
-    const res = await updateOutlet(outlet.id, patch);
-    setPaySaving(false);
-    if (res.success) {
-      setPayMsg({ ok: true, text: okText });
-      return true;
-    }
-    setPayMsg({ ok: false, text: res.message || 'Gagal menyimpan' });
-    return false;
-  };
-  const toggleMethod = async (m: string, on: boolean) => {
-    const prev = pay.payment_methods;
-    const set = new Set(prev);
-    if (on) set.add(m); else set.delete(m);
-    set.add('cash');
-    const next = ['cash', 'qris', 'transfer', 'card'].filter(x => set.has(x));
-    setPay(p => ({ ...p, payment_methods: next }));
-    const ok = await savePayPatch({ payment_methods: next });
-    if (!ok) setPay(p => ({ ...p, payment_methods: prev }));
-  };
-  const handleQrisUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setQrisUploading(true);
-    setPayMsg(null);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (res.ok && data.url) {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || '';
-        const url = `${baseUrl}${data.url}`;
-        const ok = await savePayPatch({ qris_static_image_url: url }, 'Gambar QRIS tersimpan. Kasir menampilkannya saat pelanggan memilih QRIS.');
-        if (ok) setPay(p => ({ ...p, qris_static_image_url: url }));
-      } else {
-        setPayMsg({ ok: false, text: data.detail || 'Unggah gagal' });
-      }
-    } catch {
-      setPayMsg({ ok: false, text: 'Unggah gagal' });
-    } finally {
-      setQrisUploading(false);
-      e.target.value = '';
-    }
-  };
-
-  // Layar dapur (kolom kitchen_mode ada sejak mig 003, baru dipakai 3 Sep 2026).
-  const [kitchenMode, setKitchenMode] = useState<'off' | 'display' | 'print'>('off');
-  const [kitchenMsg, setKitchenMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [kitchenSaving, setKitchenSaving] = useState(false);
-  const handleKitchenModeChange = async (mode: 'off' | 'display') => {
-    if (!outlet) return;
-    const prev = kitchenMode;
-    setKitchenMode(mode);
-    setKitchenSaving(true);
-    setKitchenMsg(null);
-    const res = await updateOutlet(outlet.id, { kitchen_mode: mode });
-    setKitchenSaving(false);
-    if (res.success) {
-      setKitchenMsg({ ok: true, text: mode === 'display' ? 'Layar dapur aktif. Login di aplikasi Dapur dengan nomor HP dan PIN.' : 'Layar dapur dinonaktifkan.' });
-    } else {
-      setKitchenMode(prev);
-      setKitchenMsg({ ok: false, text: res.message || 'Gagal menyimpan' });
-    }
-  };
-
-  const handleShiftModeChange = async (mode: 'ringan' | 'standar' | 'ketat') => {
-    if (!outlet || mode === shiftMode) return;
-    setShiftModeSaving(true);
-    setShiftModeMsg(null);
-    const prev = shiftMode;
-    setShiftMode(mode);
-    const res = await updateOutlet(outlet.id, { shift_mode: mode });
-    setShiftModeSaving(false);
-    if (!res?.success) {
-      setShiftMode(prev);
-      setShiftModeMsg({ ok: false, text: res?.message || 'Gagal mengubah mode kas' });
-    } else {
-      setShiftModeMsg({ ok: true, text: mode === 'standar' ? 'Mode Standar aktif. Kasir kini menghitung laci tanpa melihat angka harapan.' : mode === 'ketat' ? 'Mode Ketat aktif. Kasir wajib membuka sesi dengan modal awal; laci terkunci ke pembukanya.' : 'Mode Ringan aktif.' });
-    }
-  };
-
-  function handleStockModeClick(mode: string) {
-    if (!outlet || mode === stockMode) return;
-    if (mode === 'recipe') {
-      setShowStockModeConfirm(mode);
-    } else {
-      setShowStockModeConfirm(mode);
-    }
-  }
-
-  async function confirmStockModeChange() {
-    const mode = showStockModeConfirm;
-    if (!mode || !outlet) return;
-    setShowStockModeConfirm(null);
-    setSavingStockMode(true);
-    setStockModeError('');
-    setNeedsRecipeSetup(false);
-    setStockModeSuccess('');
-    try {
-      const result = await updateStockMode(outlet.id, mode);
-      if (!result.success) {
-        setStockModeError(result.message);
-        setNeedsRecipeSetup(result.needsRecipeSetup);
-        return;
-      }
-      setStockMode(mode);
-      if (mode === 'recipe') {
-        setStockModeSuccess('Mode Resep & HPP aktif! Stok kini dihitung dari bahan baku sesuai resep produk.');
-      } else {
-        setStockModeSuccess('Mode Stok Sederhana aktif. Stok kembali dihitung per produk.');
-      }
-      setTimeout(() => setStockModeSuccess(''), 8000);
-    } catch {
-      setStockModeError('Mode stok belum tersimpan. Muat ulang halaman lalu coba lagi.');
-    } finally {
-      setSavingStockMode(false);
-    }
-  }
-
-  async function handleTaxSave() {
-    if (!outlet) return;
-    setSavingTax(true);
-    setTaxError('');
-    try {
-      const payload = {
-        pb1_enabled: taxConfig.pb1_enabled,
-        tax_pct: taxConfig.tax_pct,
-        service_charge_enabled: taxConfig.service_charge_enabled,
-        service_charge_pct: taxConfig.service_charge_pct,
-        tax_inclusive: taxConfig.tax_inclusive,
-        tax_number: taxConfig.tax_number.trim() || null,
-        receipt_footer: taxConfig.receipt_footer.trim() || null,
-        expected_row_version: taxConfig.row_version,
-      };
-      const updated = await updateTaxConfig(outlet.id, payload);
-      if (updated) {
-        setTaxConfig(c => ({
-          ...c,
-          row_version: updated.row_version ?? c.row_version + 1,
-        }));
-      }
-      setTaxSaved(true);
-      setTimeout(() => setTaxSaved(false), 2000);
-    } catch (e: any) {
-      setTaxError(e.message || 'Gagal menyimpan');
-    }
-    setSavingTax(false);
-  }
-
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingCover(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (res.ok && data.url) {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || '';
-        setFormData(f => ({ ...f, cover_image_url: `${baseUrl}${data.url}` }));
-      } else {
-        alert(data.detail || 'Gagal upload gambar');
-      }
-    } catch {
-      alert('Gagal upload gambar');
-    } finally {
-      setUploadingCover(false);
-      if (coverInputRef.current) coverInputRef.current.value = '';
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    const res = await updateOutlet(outlet.id, formData);
-    if (res.success) {
-      alert('Pengaturan berhasil disimpan');
-      loadData();
-    } else {
-      alert(res.message || 'Gagal menyimpan pengaturan');
-    }
-    setSaving(false);
-  };
-
-  if (loading) {
-    return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
-  }
-
-  const storefrontUrl = outlet?.slug
-    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/${outlet.slug}`
-    : '';
-
-  return (
-    <div className="space-y-6 max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Pengaturan Outlet</h1>
-        <p className="text-gray-500">Kelola informasi dasar dan tampilan storefront Anda.</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        {/* Kolom kiri: profil toko, metode bayar, pajak, billing */}
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <Store className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">Informasi Dasar</h2>
-            </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* Cover Image */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                  <Image className="w-4 h-4 text-gray-500" />
-                  Foto Cover Storefront
-                </label>
-                <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
-                  onChange={handleCoverUpload} />
-                {formData.cover_image_url ? (
-                  <div className="space-y-2">
-                    <div className="relative w-full h-36 rounded-xl overflow-hidden border border-gray-200 bg-gray-100">
-                      <img
-                        src={formData.cover_image_url}
-                        alt="Cover"
-                        className="w-full h-full object-cover"
-                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => coverInputRef.current?.click()}
-                        disabled={uploadingCover}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 disabled:opacity-50">
-                        {uploadingCover ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                        Ganti foto
-                      </button>
-                      <button type="button" onClick={() => setFormData(f => ({ ...f, cover_image_url: '' }))}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50">
-                        <ImageOff className="w-3.5 h-3.5" /> Hapus foto
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => coverInputRef.current?.click()}
-                    disabled={uploadingCover}
-                    className="w-full flex flex-col items-center justify-center gap-2 h-28 border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50">
-                    {uploadingCover
-                      ? <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                      : <Upload className="w-6 h-6 text-gray-400" />}
-                    <span className="text-xs text-gray-500">
-                      {uploadingCover ? 'Mengupload...' : 'Klik untuk pilih foto cover storefront'}
-                    </span>
-                  </button>
-                )}
-                <p className="text-xs text-gray-400 mt-1">Tampil sebagai banner di bagian atas storefront. Ukuran ideal: 800×300px</p>
-              </div>
-
-              <div className="border-t border-gray-100 pt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Outlet</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nomor Telepon / WhatsApp</label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={e => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') })}
-                  placeholder="628123456789"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nomor WhatsApp toko <span className="text-gray-400 font-normal">(tampil di storefront)</span></label>
-                <input
-                  type="tel"
-                  value={formData.whatsapp_number}
-                  onChange={e => setFormData({ ...formData, whatsapp_number: e.target.value.replace(/\D/g, '') })}
-                  placeholder="628123456789"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                />
-                <p className="text-xs text-gray-500 mt-1">Pelanggan yang membuka website toko bisa langsung mengirim pesan ke nomor ini untuk bertanya atau memesan. Kosongkan jika tombol WhatsApp tidak ingin ditampilkan.</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Alamat Lengkap</label>
-                <textarea
-                  rows={3}
-                  value={formData.address}
-                  onChange={e => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
-                />
-              </div>
-
-              <div className="pt-2 border-t border-gray-100">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-900">Status Operasional</h3>
-                    <p className="text-xs text-gray-500">Buka atau tutup toko untuk pesanan online.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, is_open: !formData.is_open })}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                      formData.is_open ? 'bg-blue-600' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      formData.is_open ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-gray-500" />
-                    Jam Operasional
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Contoh: 08:00 - 22:00"
-                    value={formData.opening_hours}
-                    onChange={e => setFormData({ ...formData, opening_hours: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex items-center justify-center px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Simpan Perubahan
-                </button>
-              </div>
-            </form>
-          </div>
-          {/* Metode pembayaran (mig 103). Toko memilih sendiri, tidak ada yang dipaksa.
-              Duduk di kolom utama: butuh lebar buat 2 kolom pilihan + 3 input rekening. */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">Metode Pembayaran</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-600">
-                Aplikasi kasir dan halaman toko hanya menampilkan metode yang Anda nyalakan. Tunai selalu aktif.
-              </p>
-              {payMsg && <p className={`text-sm ${payMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{payMsg.text}</p>}
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div className="flex items-start gap-3 p-4 border border-gray-200 rounded-xl bg-gray-50">
-                  <input type="checkbox" className="mt-1" checked disabled />
-                  <div>
-                    <p className="font-semibold text-gray-900">Tunai</p>
-                    <p className="text-sm text-gray-600 mt-0.5">Selalu aktif. Kembalian dihitung otomatis.</p>
-                  </div>
-                </div>
-                {([
-                  { id: 'qris', label: 'QRIS', hint: 'GoPay, OVO, DANA, ShopeePay, dan semua m-banking.' },
-                  { id: 'transfer', label: 'Transfer bank', hint: 'Untuk pesanan besar, katering, atau bayar di muka.' },
-                  { id: 'card', label: 'Kartu EDC', hint: 'Debit atau kredit lewat mesin EDC bank Anda.' },
-                ] as const).map(m => (
-                  <label key={m.id} className="flex items-start gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer">
-                    <input type="checkbox" className="mt-1" checked={pay.payment_methods.includes(m.id)} disabled={paySaving}
-                      onChange={e => toggleMethod(m.id, e.target.checked)} />
-                    <div>
-                      <p className="font-semibold text-gray-900">{m.label}</p>
-                      <p className="text-sm text-gray-600 mt-0.5">{m.hint}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-
-              {pay.payment_methods.includes('qris') && (
-                <div className="p-4 border border-gray-200 rounded-xl">
-                  {pay.qris_channel === 'xendit' ? (
-                    <>
-                      <p className="font-semibold text-gray-900">QRIS dinamis lewat Xendit</p>
-                      <p className="text-sm text-gray-600 mt-0.5">
-                        Setiap transaksi membuat kode QR dengan nominalnya sendiri dan lunas terkonfirmasi otomatis.{' '}
-                        <Link href="/dashboard/settings/payment" className="text-blue-600 hover:underline">Kelola kunci Xendit</Link>
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="font-semibold text-gray-900">Gambar QRIS toko</p>
-                      <p className="text-sm text-gray-600 mt-0.5 mb-3">
-                        Unduh QRIS dari aplikasi bank, GoPay, atau DANA merchant Anda, lalu unggah di sini. Kasir menampilkannya ke pelanggan dan menekan Konfirmasi setelah melihat notifikasi uang masuk.
-                      </p>
-                      <div className="flex flex-wrap items-center gap-4">
-                        {pay.qris_static_image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={pay.qris_static_image_url} alt="QRIS toko" className="w-36 h-36 object-contain rounded-lg border border-gray-200 bg-white" />
-                        ) : (
-                          <div className="w-36 h-36 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400 text-center px-2">Belum ada gambar</div>
-                        )}
-                        <label className={`px-4 py-2 text-sm font-medium rounded-lg border cursor-pointer ${qrisUploading ? 'opacity-60 pointer-events-none' : 'hover:bg-gray-50'} border-gray-300 text-gray-700`}>
-                          {qrisUploading ? 'Mengunggah...' : pay.qris_static_image_url ? 'Ganti gambar' : 'Unggah gambar QRIS'}
-                          <input type="file" accept="image/*" className="hidden" onChange={handleQrisUpload} />
-                        </label>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-3">
-                        Ingin lunas terkonfirmasi otomatis tanpa cek notifikasi?{' '}
-                        <Link href="/dashboard/settings/payment" className="text-blue-600 hover:underline">Hubungkan Xendit</Link>
-                      </p>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {pay.payment_methods.includes('transfer') && (
-                <div className="p-4 border border-gray-200 rounded-xl">
-                  <p className="font-semibold text-gray-900">Rekening tujuan transfer</p>
-                  <p className="text-sm text-gray-600 mt-0.5 mb-3">Ditampilkan kasir ke pelanggan saat memilih transfer.</p>
-                  <div className="grid sm:grid-cols-3 gap-3">
-                    <input type="text" placeholder="Nama bank (BCA, BRI, Mandiri)" value={bank.bank_name} onChange={e => setBank({ ...bank, bank_name: e.target.value })}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                    <input type="text" inputMode="numeric" placeholder="Nomor rekening" value={bank.bank_account_number} onChange={e => setBank({ ...bank, bank_account_number: e.target.value.replace(/[^0-9-]/g, '') })}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                    <input type="text" placeholder="Atas nama" value={bank.bank_account_name} onChange={e => setBank({ ...bank, bank_account_name: e.target.value })}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                  </div>
-                  <button type="button" disabled={paySaving} onClick={() => savePayPatch(bank, 'Rekening tersimpan.')}
-                    className="mt-3 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                    Simpan rekening
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-          {/* Tax & Service Charge */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">Pajak, Struk & Identitas</h2>
-            </div>
-            <div className="p-6 space-y-5">
-              {/* NPWP & Footer Struk */}
-              <div className="pb-4 border-b border-gray-100 space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1">
-                    NPWP (Nomor Pokok Wajib Pajak)
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={30}
-                    value={taxConfig.tax_number}
-                    onChange={e => setTaxConfig(c => ({ ...c, tax_number: e.target.value }))}
-                    placeholder="Contoh: 01.234.567.8-901.000"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Tampil di header struk (kalau diisi). Kosongkan kalau bukan PKP atau belum punya NPWP.
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1">
-                    Pesan Footer Struk
-                  </label>
-                  <textarea
-                    rows={2}
-                    maxLength={200}
-                    value={taxConfig.receipt_footer}
-                    onChange={e => setTaxConfig(c => ({ ...c, receipt_footer: e.target.value }))}
-                    placeholder="Contoh: Ikuti IG @kasiracoffee, promo kopi 10% tiap Jumat!"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Ganti tulisan "Powered by Selaris" di bawah struk dengan pesan Anda sendiri. Maksimal 200 karakter.
-                    {taxConfig.receipt_footer.length > 0 && (
-                      <span className="ml-2 text-gray-400">({taxConfig.receipt_footer.length}/200)</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              {/* PB1 / Pajak Restoran */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Pajak (PB1)</p>
-                    <p className="text-xs text-gray-500">Pajak restoran yang dikenakan ke pelanggan</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setTaxConfig(c => ({ ...c, pb1_enabled: !c.pb1_enabled }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      taxConfig.pb1_enabled ? 'bg-blue-600' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      taxConfig.pb1_enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
-                </div>
-                {taxConfig.pb1_enabled && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.5}
-                      value={taxConfig.tax_pct}
-                      onChange={e => setTaxConfig(c => ({ ...c, tax_pct: parseFloat(e.target.value) || 0 }))}
-                      className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    />
-                    <span className="text-sm text-gray-500">%</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Service Charge */}
-              <div className="border-t border-gray-100 pt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Service Charge</p>
-                    <p className="text-xs text-gray-500">Biaya layanan tambahan</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setTaxConfig(c => ({ ...c, service_charge_enabled: !c.service_charge_enabled }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      taxConfig.service_charge_enabled ? 'bg-blue-600' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      taxConfig.service_charge_enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
-                </div>
-                {taxConfig.service_charge_enabled && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.5}
-                      value={taxConfig.service_charge_pct}
-                      onChange={e => setTaxConfig(c => ({ ...c, service_charge_pct: parseFloat(e.target.value) || 0 }))}
-                      className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    />
-                    <span className="text-sm text-gray-500">%</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Tax Inclusive */}
-              {taxConfig.pb1_enabled && (
-                <div className="border-t border-gray-100 pt-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Harga Termasuk Pajak</p>
-                      <p className="text-xs text-gray-500">Harga menu sudah include pajak</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setTaxConfig(c => ({ ...c, tax_inclusive: !c.tax_inclusive }))}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        taxConfig.tax_inclusive ? 'bg-blue-600' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        taxConfig.tax_inclusive ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Preview */}
-              {(taxConfig.pb1_enabled || taxConfig.service_charge_enabled) && (
-                <div className="border-t border-gray-100 pt-4">
-                  <p className="text-xs text-gray-500 mb-2">Contoh pesanan Rp100.000:</p>
-                  <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1">
-                    <div className="flex justify-between text-gray-600">
-                      <span>Subtotal</span><span>Rp100.000</span>
-                    </div>
-                    {taxConfig.pb1_enabled && !taxConfig.tax_inclusive && (
-                      <div className="flex justify-between text-gray-600">
-                        <span>Pajak ({taxConfig.tax_pct}%)</span>
-                        <span>Rp{(100000 * taxConfig.tax_pct / 100).toLocaleString('id-ID')}</span>
-                      </div>
-                    )}
-                    {taxConfig.pb1_enabled && taxConfig.tax_inclusive && (
-                      <div className="flex justify-between text-gray-400 italic">
-                        <span>Pajak ({taxConfig.tax_pct}%, termasuk)</span>
-                        <span>Rp{Math.round(100000 - 100000 / (1 + taxConfig.tax_pct / 100)).toLocaleString('id-ID')}</span>
-                      </div>
-                    )}
-                    {taxConfig.service_charge_enabled && (
-                      <div className="flex justify-between text-gray-600">
-                        <span>Service ({taxConfig.service_charge_pct}%)</span>
-                        <span>Rp{(100000 * taxConfig.service_charge_pct / 100).toLocaleString('id-ID')}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-1">
-                      <span>Total</span>
-                      <span>Rp{(() => {
-                        let total = 100000;
-                        if (taxConfig.service_charge_enabled) total += 100000 * taxConfig.service_charge_pct / 100;
-                        if (taxConfig.pb1_enabled && !taxConfig.tax_inclusive) total += 100000 * taxConfig.tax_pct / 100;
-                        return Math.round(total).toLocaleString('id-ID');
-                      })()}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {taxError && (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  {taxError}
-                </p>
-              )}
-              <button
-                onClick={handleTaxSave}
-                disabled={savingTax}
-                className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {savingTax ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                {taxSaved ? 'Tersimpan!' : 'Simpan Pengaturan'}
-              </button>
-            </div>
-          </div>
-
-          {/* Billing */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">Langganan & Billing</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-600">
-                Kelola paket langganan, lihat invoice, dan bayar tagihan.
-              </p>
-              <Link
-                href="/dashboard/settings/billing"
-                className="block w-full text-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors"
-              >
-                Kelola Langganan
-              </Link>
-            </div>
-          </div>
-
-          {/* Kurir toko. Ditaruh di kolom KIRI, bukan nempel ke kartu Antar di
-              kanan, supaya dua kolomnya seimbang: kanan sudah menumpuk stok,
-              pesanan online, dapur, sesi kas, dan referral. */}
-          <CourierSettings outletId={outlet?.id} />
-
-        </div>
-
-        {/* Kolom kanan: tautan toko, WA, stok, pesanan online, dapur, sesi kas, referral */}
-        <div className="space-y-6">
-          {/* Storefront Link */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <LinkIcon className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">Link Storefront</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-600">
-                Bagikan link ini ke pelanggan untuk menerima pesanan online.
-              </p>
-              {storefrontUrl ? (
-                <>
-                  <div>
-                    <input
-                      type="text"
-                      readOnly
-                      value={storefrontUrl}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-600 outline-none"
-                    />
-                  </div>
-                  <a
-                    href={storefrontUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block w-full text-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                  >
-                    Buka Storefront
-                  </a>
-                  <Link href="/dashboard/toko" className="block text-center text-sm font-semibold text-[var(--brand-secondary)] hover:underline">
-                    QR, stiker, dan cara supaya toko ditemukan di Google
-                  </Link>
-                </>
-              ) : (
-                <p className="text-sm text-gray-400 italic">Slug outlet belum tersedia</p>
-              )}
-            </div>
-          </div>
-
-          {/* Antar + ongkir + jam buka (delivery gelombang 1) */}
-          <DeliveryHoursSettings outlet={outlet} onSaved={(patch) => setOutlet((o: any) => ({ ...o, ...patch }))} />
-
-          {/* WhatsApp toko — token Fonnte buat promo dari nomor sendiri */}
-          <WhatsAppTokenCard outletId={outlet?.id} connected={!!outlet?.wa_connected} onChanged={(v) => setOutlet((o: any) => ({ ...o, wa_connected: v }))} />
-
-          {/* Stock Mode (Pro only) */}
-          {isPro && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-                <Package className="w-5 h-5 text-gray-500" />
-                <h2 className="text-lg font-bold text-gray-900">Mode Stok</h2>
-              </div>
-              <div className="p-6 space-y-4">
-                <p className="text-sm text-gray-600">
-                  Pilih cara mengelola stok produk Anda.
-                </p>
-                <div className="space-y-2 rounded-lg bg-[var(--surface-sunken)] p-4">
-                  <p className="text-sm text-[var(--text-body)]">Untuk mode Resep &amp; HPP, siapkan bahan dan takaran per porsi terlebih dahulu. Mulai dari produk di halaman Atur HPP.</p>
-                  <Link className="hpp-button" href="/dashboard/hpp">Siapkan resep dan HPP</Link>
-                </div>
-                {stockModeError && (
-                  <div role="alert" className="space-y-2 text-sm text-[var(--danger)]">
-                    <p>{stockModeError}</p>
-                    {needsRecipeSetup && (
-                      <p className="text-[var(--text-body)]">
-                        Siapkan bahan di <Link href="/dashboard/bahan-baku" className="underline font-semibold">Bahan Baku</Link>,
-                        {' '}atau pilih produk dari <Link href="/dashboard/hpp" className="underline font-semibold">Atur HPP</Link>.
-                        Resep juga bisa dibuka dari <Link href="/dashboard/menu" className="underline font-semibold">Menu</Link>.
-                        Setelah semua resep lengkap, coba beralih lagi.
-                      </p>
-                    )}
-                  </div>
-                )}
-                {stockModeSuccess && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <p className="text-sm text-green-800 font-medium">{stockModeSuccess}</p>
-                  </div>
-                )}
-                <div className="space-y-3">
-                  <label className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${stockMode === 'simple' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                    <input type="radio" name="stock_mode" value="simple" checked={stockMode === 'simple'} disabled={savingStockMode}
-                      onChange={() => handleStockModeClick('simple')} className="mt-0.5" />
-                    <div>
-                      <p className="font-medium text-gray-900">Stok Sederhana</p>
-                      <p className="text-sm text-gray-500">Stok per produk, berkurang otomatis setiap transaksi. Bahan dan resep bisa disiapkan sebelum beralih mode.</p>
-                    </div>
-                  </label>
-                  <label className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${stockMode === 'recipe' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                    <input type="radio" name="stock_mode" value="recipe" checked={stockMode === 'recipe'} disabled={savingStockMode}
-                      onChange={() => handleStockModeClick('recipe')} className="mt-0.5" />
-                    <div>
-                      <p className="font-medium text-gray-900">Resep & HPP</p>
-                      <p className="text-sm text-gray-500">Stok per bahan baku, berkurang otomatis berdasarkan resep. HPP dihitung otomatis. Stok produk tidak ditampilkan.</p>
-                    </div>
-                  </label>
-                </div>
-                {savingStockMode && <p className="text-sm text-blue-600">Menyimpan...</p>}
-
-                {/* Confirmation Dialog */}
-                {showStockModeConfirm && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6">
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">
-                        {showStockModeConfirm === 'recipe' ? 'Beralih ke Mode Resep & HPP?' : 'Kembali ke Stok Sederhana?'}
-                      </h3>
-                      {showStockModeConfirm === 'recipe' ? (
-                        <div className="text-sm text-gray-600 space-y-2 mb-5">
-                          <p>Dengan mode Resep & HPP:</p>
-                          <ul className="list-disc ml-5 space-y-1">
-                            <li>Stok dihitung dari <strong>bahan baku</strong>, bukan per produk</li>
-                            <li>Setiap produk perlu <strong>resep</strong> yang terhubung ke bahan</li>
-                            <li>HPP otomatis dihitung dari harga bahan</li>
-                            <li>Stok sederhana (per produk) <strong>tidak akan ditampilkan</strong></li>
-                          </ul>
-                          <p className="mt-3 text-amber-700 bg-amber-50 rounded-lg p-3">
-                            Siapkan resep setiap produk terlebih dahulu melalui Atur HPP. Peralihan akan ditolak bila resep belum lengkap. Pastikan stok fisik bahan sudah dicatat sebelum mulai berjualan dalam mode ini.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-gray-600 space-y-2 mb-5">
-                          <p>Kembali ke stok sederhana:</p>
-                          <ul className="list-disc ml-5 space-y-1">
-                            <li>Stok kembali dihitung <strong>per produk</strong></li>
-                            <li>Resep <strong>tidak dipakai untuk pengurangan stok</strong></li>
-                            <li>Data resep & bahan baku tetap tersimpan</li>
-                          </ul>
-                        </div>
-                      )}
-                      <div className="flex gap-3">
-                        <button onClick={() => setShowStockModeConfirm(null)}
-                          className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition">
-                          Batal
-                        </button>
-                        <button onClick={confirmStockModeChange}
-                          className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition">
-                          Ya, Beralih
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Pesanan online dari halaman toko (semua tier). */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <Store className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">Pesanan Online</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-600">
-                Pesanan dari halaman toko masuk ke aplikasi kasir sebagai "Menunggu konfirmasi". Kasir menerima dengan perkiraan waktu atau menolak dengan alasan, dan pelanggan dikabari lewat WhatsApp di setiap tahap.
-              </p>
-              {onlineMsg && <p className={`text-sm ${onlineMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{onlineMsg.text}</p>}
-              <label className="flex items-start gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer">
-                <input type="checkbox" className="mt-1" checked={online.online_orders_enabled} disabled={onlineSaving}
-                  onChange={e => handleOnlineChange({ online_orders_enabled: e.target.checked })} />
-                <div>
-                  <p className="font-semibold text-gray-900">Terima pesanan online</p>
-                  <p className="text-sm text-gray-600 mt-0.5">Matikan saat tidak ada yang menjaga aplikasi kasir. Menu tetap bisa dilihat, tombol pesan dinonaktifkan.</p>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer">
-                <input type="checkbox" className="mt-1" checked={online.online_notify_owner_wa} disabled={onlineSaving}
-                  onChange={e => handleOnlineChange({ online_notify_owner_wa: e.target.checked })} />
-                <div>
-                  <p className="font-semibold text-gray-900">Kabar WhatsApp ke pemilik</p>
-                  <p className="text-sm text-gray-600 mt-0.5">Cadangan bila aplikasi kasir tertutup: ringkasan pesanan dikirim ke nomor WhatsApp toko, atau nomor outlet bila kosong.</p>
-                </div>
-              </label>
-              <div className="p-4 border border-gray-200 rounded-xl">
-                <p className="font-semibold text-gray-900">Batas konfirmasi</p>
-                <p className="text-sm text-gray-600 mt-0.5 mb-3">Pesanan yang belum dikonfirmasi lewat batas ini dibatalkan otomatis. Pembayaran QRIS dikembalikan ke pelanggan.</p>
-                <div className="flex flex-wrap gap-2">
-                  {[5, 10, 15, 20, 30].map(m => (
-                    <button key={m} type="button" disabled={onlineSaving} onClick={() => handleOnlineChange({ online_auto_cancel_minutes: m })}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${online.online_auto_cancel_minutes === m ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
-                      {m} menit
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Layar dapur (Pro). Dapur nggak memblokir kasir: pesanan yang dibayar tetap selesai. */}
-          {isPro && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-                <Package className="w-5 h-5 text-gray-500" />
-                <h2 className="text-lg font-bold text-gray-900">Layar Dapur</h2>
-              </div>
-              <div className="p-6 space-y-4">
-                <p className="text-sm text-gray-600">
-                  Papan antrean untuk barista atau juru masak di aplikasi Dapur. Pesanan yang sudah dibayar atau dikonfirmasi muncul di sana, ditandai dimasak, siap, lalu selesai. Kasir tetap berjalan seperti biasa bila dapur tidak menandai apa pun.
-                </p>
-                {kitchenMsg && <p className={`text-sm ${kitchenMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{kitchenMsg.text}</p>}
-                <div className="grid gap-3">
-                  {([
-                    ['off', 'Nonaktif', 'Tidak ada layar dapur. Login aplikasi Dapur ditolak.'],
-                    ['display', 'Layar dapur', 'Aplikasi Dapur di tablet atau HP kedua menampilkan antrean pesanan dengan bunyi saat pesanan baru masuk.'],
-                  ] as const).map(([val, title, desc]) => (
-                    <label key={val} className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${kitchenMode === val ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                      <input type="radio" name="kitchen_mode" value={val} checked={kitchenMode === val}
-                        onChange={() => handleKitchenModeChange(val)} disabled={kitchenSaving} className="mt-1" />
-                      <div>
-                        <p className="font-semibold text-gray-900">{title}</p>
-                        <p className="text-sm text-gray-600 mt-0.5">{desc}</p>
-                      </div>
-                    </label>
-                  ))}
-                  <div className="flex items-start gap-3 p-4 border border-dashed border-gray-200 rounded-xl opacity-60">
-                    <input type="radio" disabled className="mt-1" />
-                    <div>
-                      <p className="font-semibold text-gray-900">Cetak tiket dapur <span className="ml-2 text-xs font-medium text-gray-500">Segera</span></p>
-                      <p className="text-sm text-gray-600 mt-0.5">Tiket pesanan tercetak otomatis di printer dapur.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Mode kas (semua tier). Profil nempel di outlet, bukan tier:
-              satu akun Business bisa punya kios Ringan dan flagship Ketat. */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">Sesi Kas</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-600">
-                Sesi kas terbuka sendiri di transaksi pertama dan ditutup sendiri pukul 04.00. Yang berbeda antar mode hanya seberapa ketat hitungan lacinya.
-              </p>
-              {shiftModeMsg && <p className={`text-sm ${shiftModeMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{shiftModeMsg.text}</p>}
-              {/* Satu kolom: bagian ini duduk di kolom kanan yang sempit,
-                  dua kolom bikin kartunya kepencet jadi satu kata per baris. */}
-              <div className="grid gap-3">
-                {([
-                  ['ringan', 'Ringan', 'Hitung kas opsional. Kasir melihat angka sistem. Cocok untuk usaha yang dijaga pemiliknya sendiri.'],
-                  ['standar', 'Standar', 'Pengingat kalau kas belum dihitung. Kasir mengetik hitungannya tanpa melihat angka harapan; selisih hanya terlihat oleh pemilik.'],
-                  ['ketat', 'Ketat', 'Sesi tidak terbuka sendiri: kasir wajib membuka dengan modal awal, dan laci terkunci ke kasir itu sampai dia menjeda atau menutupnya (serah terima). Untuk kafe dengan pergantian shift resmi.'],
-                ] as const).map(([val, title, desc]) => (
-                  <label key={val} className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${shiftMode === val ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                    <input type="radio" name="shift_mode" value={val} checked={shiftMode === val}
-                      onChange={() => handleShiftModeChange(val)} disabled={shiftModeSaving} className="mt-1" />
-                    <div>
-                      <p className="font-semibold text-gray-900">{title}</p>
-                      <p className="text-sm text-gray-600 mt-0.5">{desc}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-              <p className="text-xs text-gray-400">Apa pun modenya, sesi yang tertinggal tetap ditutup sistem pukul 04.00 dan ditandai belum dihitung.</p>
-            </div>
-          </div>
-
-          {/* Referral */}
-          {referralCode && (
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-emerald-200 flex items-center gap-2">
-                <Gift className="w-5 h-5 text-emerald-600" />
-                <h2 className="text-lg font-bold text-gray-900">Referral Program</h2>
-                <span className="ml-auto text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">20% komisi</span>
-              </div>
-              <div className="p-6 space-y-4">
-                <p className="text-sm text-gray-600">
-                  Ajak pebisnis lain pakai Selaris. Kamu dapat <span className="font-bold text-emerald-700">20% komisi</span> dari langganan mereka setiap bulan!
-                </p>
-
-                {/* Code + Copy */}
-                <div className="bg-white rounded-lg border border-emerald-200 p-4">
-                  <p className="text-xs text-gray-500 mb-1">Kode referral Anda</p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold text-gray-900 tracking-wider font-mono">{referralCode}</span>
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(referralShareUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                      className="ml-auto p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                      title="Salin link"
-                    >
-                      {copied ? <Check className="w-5 h-5 text-emerald-600" /> : <Copy className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Share buttons */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(referralShareText); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-emerald-700 bg-emerald-100 rounded-lg hover:bg-emerald-200 transition-colors"
-                  >
-                    <Copy className="w-4 h-4" />
-                    {copied ? 'Tersalin!' : 'Salin Teks'}
-                  </button>
-                  <a
-                    href={`https://wa.me/?text=${encodeURIComponent(referralShareText)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    Share via WA
-                  </a>
-                </div>
-
-                {/* Stats */}
-                {referralStats && (
-                  <div className="grid grid-cols-3 gap-3 pt-2">
-                    <div className="bg-white rounded-lg border border-gray-200 p-3 text-center">
-                      <p className="text-2xl font-bold text-gray-900">{referralStats.total_referrals}</p>
-                      <p className="text-xs text-gray-500">Referral</p>
-                    </div>
-                    <div className="bg-white rounded-lg border border-gray-200 p-3 text-center">
-                      <p className="text-2xl font-bold text-emerald-600">Rp{((referralStats.pending_balance || 0) / 1000).toFixed(0)}rb</p>
-                      <p className="text-xs text-gray-500">Pending</p>
-                    </div>
-                    <div className="bg-white rounded-lg border border-gray-200 p-3 text-center">
-                      <p className="text-2xl font-bold text-gray-900">Rp{((referralStats.total_earned || 0) / 1000).toFixed(0)}rb</p>
-                      <p className="text-xs text-gray-500">Dicairkan</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Referral list */}
-                {referralStats?.referrals?.length > 0 && (
-                  <div className="pt-2">
-                    <p className="text-xs font-medium text-gray-500 mb-2">Merchant hasil referral Anda:</p>
-                    <div className="space-y-2">
-                      {referralStats.referrals.map((r: any) => (
-                        <div key={r.id} className="flex items-center justify-between bg-white rounded-lg border border-gray-200 px-3 py-2">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{r.referred_name}</p>
-                            <p className="text-xs text-gray-500">{r.referred_tier}</p>
-                          </div>
-                          <p className="text-sm font-semibold text-emerald-600">Rp{((r.total_commission || 0) / 1000).toFixed(0)}rb</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-        </div>
-      </div>
-    </div>
-  );
+function Switch({ on, label, disabled, onChange }: { on: boolean; label: string; disabled?: boolean; onChange: (v: boolean) => void }) {
+  return <button type="button" className="st-switch" role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={() => onChange(!on)} />;
+}
+function Seg<T extends string | number>({ value, options, label, disabled, onChange }: { value: T; options: [T, string][]; label: string; disabled?: boolean; onChange: (v: T) => void }) {
+  return <div className="st-seg" role="group" aria-label={label}>{options.map(([v, text]) =>
+    <button key={String(v)} type="button" aria-pressed={value === v} disabled={disabled} onClick={() => value !== v && onChange(v)}>{text}</button>)}</div>;
+}
+function Note({ msg }: { msg: Msg }) {
+  return msg ? <span className={`st-msg ${msg.ok ? 'ok' : 'err'}`} role="status">{msg.text}</span> : null;
+}
+function Row({ title, hint, children, block }: { title?: string; hint?: React.ReactNode; children?: React.ReactNode; block?: boolean }) {
+  return <div className={`st-row${block ? ' st-block' : ''}`}>
+    {title !== undefined && <div className="st-t"><b>{title}</b>{hint && <small>{hint}</small>}</div>}
+    {children !== undefined && (block ? children : <div className="st-v">{children}</div>)}
+  </div>;
 }
 
+export default function SettingsPage() {
+  const [loading, setLoading] = useState(true), [loadError, setLoadError] = useState('');
+  const [outlets, setOutlets] = useState<any[]>([]), [outletId, setOutletId] = useState('');
+  const [outlet, setOutlet] = useState<any>(null);
+  const [section, setSection] = useState<Section>('toko');
+  const [tier, setTier] = useState('starter');
+  const isPro = ['pro', 'business', 'enterprise'].includes(tier);
 
-/** Kartu token Fonnte. Kabar pesanan online ke pelanggan dikirim dari nomor
- *  WhatsApp toko sendiri kalau token ada (fallback nomor Selaris). Token
- *  dicek ke Fonnte waktu disimpan, jadi token salah ketahuan di sini. */
-function WhatsAppTokenCard({ outletId, connected, onChanged }: { outletId?: string; connected: boolean; onChanged: (v: boolean) => void }) {
-  const [token, setToken] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [open, setOpen] = useState(false);
+  // Isian yang disimpan lewat bilah Simpan perubahan.
+  const [profile, setProfile] = useState<Profile>({ name: '', whatsapp: '', address: '', opening_hours: '', cover_image_url: '' });
+  const [tax, setTax] = useState<Tax>(NO_TAX);
+  const [bank, setBank] = useState<Bank>({ bank_name: '', bank_account_number: '', bank_account_name: '' });
+  const [base, setBase] = useState<{ profile: Profile; tax: Tax; bank: Bank } | null>(null);
+  const [saving, setSaving] = useState(false), [saveMsg, setSaveMsg] = useState<Msg>(null);
 
+  // Saklar dan pilihan yang langsung tersimpan.
+  const [quick, setQuick] = useState<Record<string, any>>({});
+  const [rowMsg, setRowMsg] = useState<Record<string, Msg>>({});
+  const [busyKey, setBusyKey] = useState('');
+  const [uploading, setUploading] = useState(''), coverInput = useRef<HTMLInputElement>(null), qrisInput = useRef<HTMLInputElement>(null);
+
+  const [referral, setReferral] = useState<{ code: string; url: string; text: string; stats: any } | null>(null);
+  const [copied, setCopied] = useState('');
+
+  useEffect(() => {
+    const fromHash = window.location.hash.slice(1) as Section;
+    if (SECTIONS.some(s => s.id === fromHash)) setSection(fromHash);
+  }, []);
+  const go = (id: Section) => { setSection(id); history.replaceState(null, '', `#${id}`); };
+
+  const apply = useCallback(async (data: any) => {
+    setOutlet(data);
+    const p: Profile = { name: data.name || '', whatsapp: data.whatsapp_number || data.phone || '', address: data.address || '',
+      opening_hours: typeof data.opening_hours === 'string' ? data.opening_hours : '', cover_image_url: data.cover_image_url || '' };
+    const b: Bank = { bank_name: data.bank_name || '', bank_account_number: data.bank_account_number || '', bank_account_name: data.bank_account_name || '' };
+    let t: Tax = NO_TAX;
+    try {
+      const tc = await getTaxConfig(data.id);
+      if (tc) t = { pb1_enabled: tc.pb1_enabled ?? false, tax_pct: tc.tax_pct ?? 10, service_charge_enabled: tc.service_charge_enabled ?? false,
+        service_charge_pct: tc.service_charge_pct ?? 5, tax_inclusive: tc.tax_inclusive ?? false, tax_number: tc.tax_number ?? '',
+        receipt_footer: tc.receipt_footer ?? '', row_version: tc.row_version ?? 0 };
+    } catch { /* Pajak tetap bisa diisi; simpan akan memberi tahu kalau gagal. */ }
+    setProfile(p); setBank(b); setTax(t); setBase({ profile: p, tax: t, bank: b });
+    setQuick({
+      is_open: data.is_open !== false, hours_mode: data.hours_mode === 'schedule' ? 'schedule' : 'manual',
+      payment_methods: Array.isArray(data.payment_methods) && data.payment_methods.length ? data.payment_methods : ['cash', 'qris'],
+      qris_channel: data.qris_channel || 'manual', qris_static_image_url: data.qris_static_image_url || '',
+      online_orders_enabled: data.online_orders_enabled ?? true, online_notify_owner_wa: data.online_notify_owner_wa ?? true,
+      online_auto_cancel_minutes: data.online_auto_cancel_minutes ?? 10, kitchen_mode: data.kitchen_mode === 'display' ? 'display' : 'off',
+      shift_mode: data.shift_mode || 'ringan', stock_mode: data.stock_mode || 'simple', wa_connected: !!data.wa_connected,
+    });
+    setRowMsg({}); setSaveMsg(null);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await getOutlets();
+        if (!list?.length) { setLoadError('Belum ada outlet. Buat outlet dulu di aplikasi kasir.'); return; }
+        setOutlets(list); setOutletId(list[0].id); await apply(list[0]);
+        const user = await getCurrentUser();
+        if (user) setTier(user.subscription_tier || 'starter');
+        try {
+          const ref = await getReferralCode();
+          if (ref?.referral_code) setReferral({ code: ref.referral_code, url: ref.share_url, text: ref.share_text, stats: await getReferralStats().catch(() => null) });
+        } catch { /* Kartu ajak usaha lain cukup disembunyikan. */ }
+      } catch { setLoadError('Pengaturan belum bisa dimuat. Periksa koneksi lalu muat ulang.'); }
+      finally { setLoading(false); }
+    })();
+  }, [apply]);
+
+  const dirty = useMemo(() => {
+    const s = base;
+    if (!s) return [] as string[];
+    const out: string[] = [];
+    if (JSON.stringify(profile) !== JSON.stringify(s.profile)) out.push('profil toko');
+    if (JSON.stringify(bank) !== JSON.stringify(s.bank)) out.push('rekening');
+    if (JSON.stringify(tax) !== JSON.stringify(s.tax)) out.push('pajak dan struk');
+    return out;
+  }, [base, profile, bank, tax]);
+
+  const switchOutlet = async (id: string) => {
+    if (dirty.length) { setSaveMsg({ ok: false, text: 'Simpan atau batalkan perubahan dulu sebelum pindah outlet.' }); return; }
+    const next = outlets.find(o => o.id === id);
+    if (!next) return;
+    setOutletId(id); setLoading(true);
+    const fresh = (await getOutlets().catch(() => null))?.find((o: any) => o.id === id) || next;
+    await apply(fresh); setLoading(false);
+  };
+
+  // Patch kecil yang langsung tersimpan. Kalau gagal, nilai lama dikembalikan.
+  async function quickSave(key: string, patch: Record<string, any>, ok = 'Tersimpan') {
+    if (!outlet) return false;
+    const prev = { ...quick };
+    setQuick(q => ({ ...q, ...patch })); setBusyKey(key); setRowMsg(m => ({ ...m, [key]: null }));
+    const res = await updateOutlet(outlet.id, patch);
+    setBusyKey('');
+    if (res?.success) { setOutlet((o: any) => ({ ...o, ...patch })); setRowMsg(m => ({ ...m, [key]: { ok: true, text: ok } })); return true; }
+    setQuick(prev); setRowMsg(m => ({ ...m, [key]: { ok: false, text: res?.message || 'Belum tersimpan. Coba lagi.' } }));
+    return false;
+  }
+
+  async function saveAll() {
+    if (!outlet || !base || saving) return;
+    setSaving(true); setSaveMsg(null);
+    const s = base;
+    try {
+      if (JSON.stringify(profile) !== JSON.stringify(s.profile) || JSON.stringify(bank) !== JSON.stringify(s.bank)) {
+        const wa = digits(profile.whatsapp);
+        const patch: Record<string, any> = { name: profile.name.trim(), address: profile.address, cover_image_url: profile.cover_image_url,
+          phone: wa, whatsapp_number: wa, ...bank };
+        if (quick.hours_mode !== 'schedule') patch.opening_hours = profile.opening_hours;
+        if (!patch.name) throw new Error('Nama toko wajib diisi.');
+        const res = await updateOutlet(outlet.id, patch);
+        if (!res?.success) throw new Error(res?.message || 'Profil toko belum tersimpan.');
+        setOutlet((o: any) => ({ ...o, ...patch }));
+        setBase(v => v && { ...v, profile, bank });
+      }
+      if (JSON.stringify(tax) !== JSON.stringify(s.tax)) {
+        const updated = await updateTaxConfig(outlet.id, { pb1_enabled: tax.pb1_enabled, tax_pct: tax.tax_pct, service_charge_enabled: tax.service_charge_enabled,
+          service_charge_pct: tax.service_charge_pct, tax_inclusive: tax.tax_inclusive, tax_number: tax.tax_number.trim() || null,
+          receipt_footer: tax.receipt_footer.trim() || null, expected_row_version: tax.row_version });
+        const next = { ...tax, row_version: updated?.row_version ?? tax.row_version + 1 };
+        setTax(next); setBase(v => v && { ...v, tax: next });
+      }
+      setSaveMsg({ ok: true, text: 'Perubahan tersimpan.' });
+    } catch (e) {
+      setSaveMsg({ ok: false, text: e instanceof Error ? e.message : 'Belum tersimpan. Coba lagi.' });
+    } finally { setSaving(false); }
+  }
+  const undo = () => { if (base) { setProfile(base.profile); setTax(base.tax); setBank(base.bank); setSaveMsg(null); } };
+
+  async function upload(kind: 'cover' | 'qris', file?: File) {
+    if (!file) return;
+    setUploading(kind);
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.detail || 'Unggah gagal. Coba foto lain.');
+      const url = `${process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || ''}${data.url}`;
+      if (kind === 'cover') setProfile(p => ({ ...p, cover_image_url: url }));
+      else await quickSave('qris', { qris_static_image_url: url }, 'Gambar QRIS tersimpan');
+    } catch (e) {
+      setRowMsg(m => ({ ...m, [kind]: { ok: false, text: e instanceof Error ? e.message : 'Unggah gagal' } }));
+    } finally { setUploading(''); if (coverInput.current) coverInput.current.value = ''; if (qrisInput.current) qrisInput.current.value = ''; }
+  }
+
+  // Pindah mode stok butuh konfirmasi dan bisa ditolak server (resep belum lengkap).
+  const [stockConfirm, setStockConfirm] = useState<'simple' | 'recipe' | null>(null);
+  const [stockMsg, setStockMsg] = useState<{ ok: boolean; text: string; recipes?: boolean } | null>(null);
+  async function changeStockMode() {
+    const mode = stockConfirm;
+    if (!mode || !outlet) return;
+    setStockConfirm(null); setBusyKey('stock'); setStockMsg(null);
+    try {
+      const r = await updateStockMode(outlet.id, mode);
+      if (!r.success) { setStockMsg({ ok: false, text: r.message, recipes: r.needsRecipeSetup }); return; }
+      setQuick(q => ({ ...q, stock_mode: mode }));
+      setStockMsg({ ok: true, text: mode === 'recipe' ? 'Stok sekarang dihitung dari resep dan bahan baku.' : 'Stok kembali dihitung per produk.' });
+    } catch { setStockMsg({ ok: false, text: 'Belum tersimpan. Muat ulang halaman lalu coba lagi.' }); }
+    finally { setBusyKey(''); }
+  }
+
+  const copy = async (key: string, text: string) => {
+    try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(''), 2000); } catch { setCopied(''); }
+  };
+
+  if (loading && !outlet) return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-[var(--brand-primary)]" /></div>;
+  if (loadError) return <p className="text-[var(--danger)]" role="alert">{loadError}</p>;
+
+  const storefront = outlet?.slug ? `${window.location.origin}/${outlet.slug}` : '';
+  const methods: string[] = quick.payment_methods || ['cash'];
+  const toggleMethod = (m: string, on: boolean) => {
+    const set = new Set(methods); if (on) set.add(m); else set.delete(m); set.add('cash');
+    void quickSave(`pay-${m}`, { payment_methods: ['cash', 'qris', 'transfer', 'card'].filter(x => set.has(x)) }, on ? 'Aktif' : 'Nonaktif');
+  };
+  const today = (() => {
+    const slots = outlet?.business_hours?.[DAY_KEYS[new Date().getDay()]];
+    if (!Array.isArray(slots)) return null;
+    return slots.length ? slots.map((s: string[]) => `${s[0].replace(':', '.')} sampai ${s[1].replace(':', '.')}`).join(', ') : 'tutup';
+  })();
+  const open = quick.is_open !== false;
+  const statusSub = !open ? 'Pelanggan masih bisa melihat menu, tapi belum bisa memesan.'
+    : quick.hours_mode === 'schedule' ? (today === 'tutup' ? 'Ikut jadwal. Hari ini jadwalnya tutup.' : today ? `Ikut jadwal. Hari ini ${today}.` : 'Ikut jadwal.')
+    : 'Manual. Toko buka sampai Anda menutupnya.';
+
+  return <div className="space-y-4">
+    <div className="st">
+      <nav className="st-rail" aria-label="Kelompok pengaturan">
+        <div className="st-outlet">
+          <b>{outlet?.name || 'Outlet'}</b>
+          {outlets.length > 1 && <select aria-label="Pilih outlet" value={outletId} onChange={e => switchOutlet(e.target.value)}>{outlets.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select>}
+        </div>
+        {SECTIONS.map(s => <button key={s.id} type="button" className="st-nav" aria-current={section === s.id} onClick={() => go(s.id)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={s.icon} /></svg>{s.label}</button>)}
+        <p className="st-rail-note">{outlets.length > 1 ? 'Pengaturan berlaku per outlet. Pilih outlet di atas.' : 'Pengaturan berlaku untuk outlet ini.'}</p>
+      </nav>
+
+      <main className="st-main" aria-busy={loading}>
+        {section === 'toko' && <section className="st-section">
+          <div className="st-head"><h1>Toko</h1><p>Yang dilihat pelanggan: nama, foto, alamat, dan kapan toko buka.</p></div>
+          <div className="st-status" data-open={open}>
+            <div className="st-dot" />
+            <div><strong>{open ? 'Buka, menerima pesanan' : 'Tutup sementara'}</strong><span>{statusSub}{open && quick.online_orders_enabled === false ? ' Pesanan online sedang dimatikan.' : ''}</span> <Note msg={rowMsg.open} /></div>
+            <Switch on={open} label="Toko buka" disabled={busyKey === 'open'} onChange={v => quickSave('open', { is_open: v }, v ? 'Toko dibuka' : 'Toko ditutup sementara')} />
+          </div>
+
+          <div className="st-group"><h2>Profil</h2>
+            <div className="st-list">
+              <Row block>
+                <div className="st-cover">
+                  {profile.cover_image_url ? <img src={profile.cover_image_url} alt="Foto sampul toko" /> : <span>Belum ada foto sampul. Ukuran ideal 800 x 300.</span>}
+                  <div className="st-cover-acts">
+                    <button type="button" className="st-btn" disabled={uploading === 'cover'} onClick={() => coverInput.current?.click()}>{uploading === 'cover' ? 'Mengunggah…' : profile.cover_image_url ? 'Ganti foto' : 'Pilih foto'}</button>
+                    {profile.cover_image_url && <button type="button" className="st-btn danger" onClick={() => setProfile(p => ({ ...p, cover_image_url: '' }))}>Hapus</button>}
+                  </div>
+                </div>
+                <input ref={coverInput} type="file" accept="image/*" hidden onChange={e => upload('cover', e.target.files?.[0])} />
+                <Note msg={rowMsg.cover} />
+              </Row>
+              <Row block><div className="st-field"><label htmlFor="st-name">Nama toko</label><input id="st-name" required maxLength={120} value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))} /></div></Row>
+              <Row block><div className="st-field"><label htmlFor="st-address">Alamat</label><textarea id="st-address" rows={2} value={profile.address} onChange={e => setProfile(p => ({ ...p, address: e.target.value }))} /></div></Row>
+              <Row block><div className="st-field"><label htmlFor="st-wa">Nomor WhatsApp toko</label><input id="st-wa" type="tel" inputMode="tel" placeholder="0812..." value={profile.whatsapp} onChange={e => setProfile(p => ({ ...p, whatsapp: digits(e.target.value) }))} />
+                <small>Dipakai untuk tombol WhatsApp di halaman toko dan kabar pesanan ke Anda.</small></div></Row>
+            </div>
+          </div>
+
+          <div className="st-group"><h2>Jam buka</h2>
+            <div className="st-embed"><DeliveryHoursSettings key={`hours-${outlet?.id}`} part="hours" outlet={outlet} onSaved={patch => { setOutlet((o: any) => ({ ...o, ...patch })); if (patch.hours_mode) setQuick(q => ({ ...q, hours_mode: patch.hours_mode })); }} /></div>
+            {quick.hours_mode !== 'schedule' && <div className="st-list"><Row block><div className="st-field"><label htmlFor="st-hours">Jam buka yang ditampilkan di halaman toko</label>
+              <input id="st-hours" placeholder="Contoh: Setiap hari 08.00 sampai 22.00" value={profile.opening_hours} onChange={e => setProfile(p => ({ ...p, opening_hours: e.target.value }))} />
+              <small>Hanya untuk mode Manual. Kalau memakai jadwal, halaman toko menulis jam dari jadwal.</small></div></Row></div>}
+          </div>
+
+          <div className="st-group"><h2>Halaman toko online</h2>
+            <div className="st-list">
+              {storefront ? <Row title={storefront.replace(/^https?:\/\//, '')} hint="Bagikan tautan ini ke pelanggan, atau cetak QR untuk meja.">
+                <button type="button" className="st-btn" onClick={() => copy('link', storefront)}>{copied === 'link' ? 'Tersalin' : 'Salin'}</button>
+                <a className="st-btn" href={storefront} target="_blank" rel="noopener noreferrer">Buka</a>
+                <Link className="st-btn" href="/dashboard/toko">QR dan stiker</Link>
+              </Row> : <Row title="Tautan toko belum tersedia" hint="Simpan nama toko terlebih dahulu." />}
+            </div>
+          </div>
+        </section>}
+
+        {section === 'kasir' && <section className="st-section">
+          <div className="st-head"><h1>Kasir dan struk</h1><p>Cara pelanggan membayar, apa yang tercetak di struk, dan seberapa ketat hitungan laci.</p></div>
+          <div className="st-group"><h2>Pembayaran</h2>
+            <div className="st-list">
+              <Row title="Tunai" hint="Selalu aktif. Kembalian dihitung otomatis."><span className="st-pill on">Aktif</span></Row>
+              <Row title="QRIS" hint={quick.qris_channel === 'xendit' ? 'QRIS dinamis lewat Xendit, lunas terkonfirmasi otomatis.' : quick.qris_static_image_url ? 'Kasir menampilkan gambar QRIS toko dan menekan Konfirmasi setelah uang masuk.' : 'Unggah gambar QRIS dari aplikasi bank atau dompet digital Anda.'}>
+                <Note msg={rowMsg['pay-qris'] || rowMsg.qris} /><Switch on={methods.includes('qris')} label="QRIS" disabled={busyKey.startsWith('pay')} onChange={v => toggleMethod('qris', v)} />
+              </Row>
+              {methods.includes('qris') && quick.qris_channel !== 'xendit' && <Row block>
+                <div className="flex flex-wrap items-center gap-4">
+                  {quick.qris_static_image_url ? <img className="st-qris" src={quick.qris_static_image_url} alt="QRIS toko" /> : null}
+                  <div className="grid gap-2">
+                    <button type="button" className="st-btn" disabled={uploading === 'qris'} onClick={() => qrisInput.current?.click()}>{uploading === 'qris' ? 'Mengunggah…' : quick.qris_static_image_url ? 'Ganti gambar QRIS' : 'Unggah gambar QRIS'}</button>
+                    <Link className="text-sm font-semibold text-[var(--brand-primary)]" href="/dashboard/settings/payment">Ingin lunas otomatis? Hubungkan Xendit</Link>
+                  </div>
+                  <input ref={qrisInput} type="file" accept="image/*" hidden onChange={e => upload('qris', e.target.files?.[0])} />
+                </div>
+              </Row>}
+              <Row title="Transfer bank" hint={bank.bank_name ? `${bank.bank_name} ${bank.bank_account_number} a.n. ${bank.bank_account_name}` : 'Isi rekening tujuan setelah dinyalakan.'}>
+                <Note msg={rowMsg['pay-transfer']} /><Switch on={methods.includes('transfer')} label="Transfer bank" disabled={busyKey.startsWith('pay')} onChange={v => toggleMethod('transfer', v)} />
+              </Row>
+              {methods.includes('transfer') && <Row block><div className="st-grid3">
+                <div className="st-field"><label htmlFor="st-bank">Bank</label><input id="st-bank" placeholder="BCA, BRI, Mandiri" value={bank.bank_name} onChange={e => setBank(b => ({ ...b, bank_name: e.target.value }))} /></div>
+                <div className="st-field"><label htmlFor="st-acc">Nomor rekening</label><input id="st-acc" inputMode="numeric" value={bank.bank_account_number} onChange={e => setBank(b => ({ ...b, bank_account_number: e.target.value.replace(/[^0-9-]/g, '') }))} /></div>
+                <div className="st-field"><label htmlFor="st-accname">Atas nama</label><input id="st-accname" value={bank.bank_account_name} onChange={e => setBank(b => ({ ...b, bank_account_name: e.target.value }))} /></div>
+              </div></Row>}
+              <Row title="Kartu EDC" hint="Debit atau kredit lewat mesin EDC bank Anda.">
+                <Note msg={rowMsg['pay-card']} /><Switch on={methods.includes('card')} label="Kartu EDC" disabled={busyKey.startsWith('pay')} onChange={v => toggleMethod('card', v)} />
+              </Row>
+            </div>
+          </div>
+
+          <div className="st-group"><h2>Pajak dan struk</h2>
+            <div className="st-split">
+              <div className="st-list">
+                <Row title="Pajak restoran (PB1)">
+                  {tax.pb1_enabled && <><input className="st-num" type="number" min={0} max={100} step={0.5} aria-label="Persen pajak" value={tax.tax_pct} onChange={e => setTax(t => ({ ...t, tax_pct: parseFloat(e.target.value) || 0 }))} /> %</>}
+                  <Switch on={tax.pb1_enabled} label="Pajak restoran" onChange={v => setTax(t => ({ ...t, pb1_enabled: v }))} />
+                </Row>
+                {tax.pb1_enabled && <Row title="Harga menu sudah termasuk pajak"><Switch on={tax.tax_inclusive} label="Harga termasuk pajak" onChange={v => setTax(t => ({ ...t, tax_inclusive: v }))} /></Row>}
+                <Row title="Service charge">
+                  {tax.service_charge_enabled && <><input className="st-num" type="number" min={0} max={100} step={0.5} aria-label="Persen service" value={tax.service_charge_pct} onChange={e => setTax(t => ({ ...t, service_charge_pct: parseFloat(e.target.value) || 0 }))} /> %</>}
+                  <Switch on={tax.service_charge_enabled} label="Service charge" onChange={v => setTax(t => ({ ...t, service_charge_enabled: v }))} />
+                </Row>
+                <Row block><div className="st-field"><label htmlFor="st-npwp">NPWP di kepala struk</label><input id="st-npwp" maxLength={30} placeholder="01.234.567.8-901.000" value={tax.tax_number} onChange={e => setTax(t => ({ ...t, tax_number: e.target.value }))} /><small>Kosongkan kalau belum PKP.</small></div></Row>
+                <Row block><div className="st-field"><label htmlFor="st-foot">Pesan di bawah struk</label><textarea id="st-foot" rows={2} maxLength={200} placeholder="Ikuti IG toko, promo kopi tiap Jumat" value={tax.receipt_footer} onChange={e => setTax(t => ({ ...t, receipt_footer: e.target.value }))} /><small>{tax.receipt_footer.length}/200. Kosong berarti tulisan Powered by Selaris.</small></div></Row>
+              </div>
+              <div><Receipt name={profile.name} address={profile.address} tax={tax} /><p className="st-cap">Pratinjau struk, ikut berubah saat Anda mengetik</p></div>
+            </div>
+          </div>
+
+          <div className="st-group"><h2>Laci kas dan dapur</h2>
+            <div className="st-list">
+              <Row title="Ketatnya hitungan laci" hint={{ ringan: 'Hitung kas opsional, kasir melihat angka sistem. Cocok kalau toko dijaga sendiri.', standar: 'Kasir mengetik hitungan tanpa melihat angka sistem. Selisih hanya terlihat oleh Anda.', ketat: 'Kasir wajib membuka dengan modal awal. Laci terkunci ke kasir itu sampai serah terima.' }[quick.shift_mode as string]}>
+                <Note msg={rowMsg.shift} />
+                <Seg label="Mode kas" value={quick.shift_mode} disabled={busyKey === 'shift'} options={[['ringan', 'Ringan'], ['standar', 'Standar'], ['ketat', 'Ketat']]} onChange={v => quickSave('shift', { shift_mode: v }, 'Mode kas tersimpan')} />
+              </Row>
+              <Row title="Layar dapur" hint={isPro ? 'Antrean pesanan di aplikasi Dapur, dengan bunyi saat pesanan baru masuk. Kasir tetap berjalan walau dapur belum menandai selesai.' : 'Tersedia di paket Pro.'}>
+                <Note msg={rowMsg.kitchen} />{!isPro && <span className="st-pill pro">Pro</span>}
+                <Switch on={quick.kitchen_mode === 'display'} label="Layar dapur" disabled={!isPro || busyKey === 'kitchen'} onChange={v => quickSave('kitchen', { kitchen_mode: v ? 'display' : 'off' }, v ? 'Aktif. Masuk di aplikasi Dapur.' : 'Nonaktif')} />
+              </Row>
+            </div>
+            <p className="st-cap" style={{ textAlign: 'left' }}>Sesi kas yang tertinggal ditutup sistem pukul 04.00, apa pun modenya.</p>
+          </div>
+        </section>}
+
+        {section === 'online' && <section className="st-section">
+          <div className="st-head"><h1>Pesanan online dan antar</h1><p>Pesanan dari halaman toko, ongkir, kurir, dan kabar WhatsApp ke pelanggan.</p></div>
+          <div className="st-group"><h2>Menerima pesanan</h2>
+            <div className="st-list">
+              <Row title="Terima pesanan online" hint="Matikan saat tidak ada yang menjaga kasir. Menu tetap bisa dilihat, tombol pesan dinonaktifkan.">
+                <Note msg={rowMsg.online} /><Switch on={quick.online_orders_enabled} label="Terima pesanan online" disabled={busyKey === 'online'} onChange={v => quickSave('online', { online_orders_enabled: v }, v ? 'Pesanan online dibuka' : 'Pesanan online dihentikan sementara')} />
+              </Row>
+              <Row title="Batal otomatis kalau tidak dikonfirmasi" hint="Pembayaran QRIS dikembalikan ke pelanggan.">
+                <Note msg={rowMsg.cancel} /><Seg label="Batas konfirmasi" value={quick.online_auto_cancel_minutes} disabled={busyKey === 'cancel'} options={[[5, '5'], [10, '10'], [15, '15'], [20, '20'], [30, '30 menit']]} onChange={v => quickSave('cancel', { online_auto_cancel_minutes: v })} />
+              </Row>
+              <Row title="Kabari saya lewat WhatsApp" hint="Cadangan kalau aplikasi kasir tertutup. Dikirim ke nomor WhatsApp toko.">
+                <Note msg={rowMsg.notify} /><Switch on={quick.online_notify_owner_wa} label="Kabar WhatsApp ke pemilik" disabled={busyKey === 'notify'} onChange={v => quickSave('notify', { online_notify_owner_wa: v })} />
+              </Row>
+            </div>
+          </div>
+          <div className="st-group"><h2>Antar</h2>
+            <div className="st-embed"><DeliveryHoursSettings key={`delivery-${outlet?.id}`} part="delivery" outlet={outlet} onSaved={patch => setOutlet((o: any) => ({ ...o, ...patch }))} /></div>
+            <div className="st-embed"><CourierSettings key={`courier-${outlet?.id}`} outletId={outlet?.id} /></div>
+          </div>
+          <div className="st-group"><h2>Kabar ke pelanggan</h2>
+            <WhatsAppToko key={`wa-${outlet?.id}`} outletId={outlet?.id} connected={!!quick.wa_connected} onChanged={v => setQuick(q => ({ ...q, wa_connected: v }))} />
+          </div>
+        </section>}
+
+        {section === 'stok' && <section className="st-section">
+          <div className="st-head"><h1>Stok</h1><p>Jarang diubah. Mengganti cara hitung stok memengaruhi kasir dan laporan.</p></div>
+          {!isPro ? <div className="st-list"><Row title="Stok per produk" hint="Stok berkurang per menu yang terjual. Hitung dari resep dan bahan baku tersedia di paket Pro."><span className="st-pill on">Dipakai</span></Row></div>
+          : <div className="st-group"><h2>Cara menghitung stok</h2>
+            <div className="st-list">
+              {([['simple', 'Per produk', 'Stok berkurang per menu yang terjual. Paling sederhana.'], ['recipe', 'Dari resep dan bahan baku', 'Stok bahan berkurang mengikuti resep, modal (HPP) terhitung otomatis. Semua menu harus punya resep dulu.']] as const).map(([m, title, hint]) =>
+                <Row key={m} title={title} hint={hint}>{quick.stock_mode === m ? <span className="st-pill on">Dipakai</span> : <button type="button" className="st-btn" disabled={busyKey === 'stock'} onClick={() => setStockConfirm(m)}>Pakai cara ini</button>}</Row>)}
+            </div>
+            {stockMsg && <p className={`st-msg ${stockMsg.ok ? 'ok' : 'err'}`} role="status">{stockMsg.text}{stockMsg.recipes && <> Lengkapi resep di <Link className="underline" href="/dashboard/hpp">Atur HPP</Link> atau <Link className="underline" href="/dashboard/bahan-baku">Bahan Baku</Link>, lalu coba lagi.</>}</p>}
+            <div className="st-list"><Row title="Siapkan resep dulu" hint="Mode resep ditolak kalau ada menu yang belum punya resep."><Link className="st-btn" href="/dashboard/hpp">Buka Atur HPP</Link></Row></div>
+          </div>}
+        </section>}
+
+        {section === 'langganan' && <section className="st-section">
+          <div className="st-head"><h1>Langganan</h1><p>Paket, pembayaran otomatis, dan program ajak usaha lain.</p></div>
+          <div className="st-group"><h2>Paket</h2>
+            <div className="st-list">
+              <Row title={`Paket ${tier.charAt(0).toUpperCase()}${tier.slice(1)}`} hint="Lihat tagihan, ganti paket, atau bayar langganan."><Link className="st-btn primary" href="/dashboard/settings/billing">Kelola langganan</Link></Row>
+              <Row title="QRIS otomatis lewat Xendit" hint="Pembayaran QRIS lunas terkonfirmasi tanpa cek notifikasi.">{quick.qris_channel === 'xendit' ? <span className="st-pill on">Tersambung</span> : <span className="st-pill">Belum</span>}<Link className="st-btn" href="/dashboard/settings/payment">Atur</Link></Row>
+            </div>
+          </div>
+          {referral && <div className="st-group"><h2>Ajak usaha lain</h2>
+            <div className="st-list">
+              <Row title={`Kode ${referral.code}`} hint="Anda mendapat 20% dari langganan usaha yang bergabung lewat kode ini, setiap bulan.">
+                <button type="button" className="st-btn" onClick={() => copy('ref', referral.url)}>{copied === 'ref' ? 'Tersalin' : 'Salin tautan'}</button>
+                <a className="st-btn" href={`https://wa.me/?text=${encodeURIComponent(referral.text)}`} target="_blank" rel="noopener noreferrer">Kirim lewat WhatsApp</a>
+              </Row>
+              {referral.stats && <Row title={`${referral.stats.total_referrals || 0} usaha bergabung`} hint={`Komisi menunggu ${rp(referral.stats.pending_balance || 0)}, sudah dicairkan ${rp(referral.stats.total_earned || 0)}.`} />}
+              {(referral.stats?.referrals || []).map((r: any) => <Row key={r.id} title={r.referred_name} hint={`Paket ${r.referred_tier}`}>{rp(r.total_commission || 0)}</Row>)}
+            </div>
+          </div>}
+        </section>}
+
+        {(dirty.length > 0 || saveMsg) && <div className="st-savebar" role="region" aria-label="Simpan perubahan">
+          <span>{dirty.length ? `Ada perubahan ${dirty.join(', ')} yang belum disimpan.` : saveMsg?.text}{dirty.length > 0 && saveMsg && !saveMsg.ok ? ` ${saveMsg.text}` : ''}</span>
+          {dirty.length > 0 ? <span className="flex gap-2"><button type="button" className="st-btn" disabled={saving} onClick={undo}>Batalkan</button><button type="button" className="st-btn primary" disabled={saving} onClick={saveAll}>{saving ? 'Menyimpan…' : 'Simpan perubahan'}</button></span>
+            : <button type="button" className="st-btn" onClick={() => setSaveMsg(null)}>Tutup</button>}
+        </div>}
+      </main>
+    </div>
+
+    {stockConfirm && <div className="st-modal" role="dialog" aria-modal="true" aria-labelledby="st-stock-title"><div>
+      <h3 id="st-stock-title">{stockConfirm === 'recipe' ? 'Hitung stok dari resep?' : 'Kembali ke stok per produk?'}</h3>
+      {stockConfirm === 'recipe' ? <ul><li>Stok dihitung dari bahan baku, bukan per produk.</li><li>Setiap menu perlu resep. Kalau ada yang belum, peralihan ditolak.</li><li>Catat stok fisik bahan sebelum mulai berjualan.</li></ul>
+        : <ul><li>Stok kembali dihitung per produk.</li><li>Resep dan bahan tetap tersimpan, tapi tidak mengurangi stok.</li></ul>}
+      <div className="flex gap-2 justify-end"><button type="button" className="st-btn" onClick={() => setStockConfirm(null)}>Batal</button><button type="button" className="st-btn primary" onClick={changeStockMode}>Ganti cara hitung</button></div>
+    </div></div>}
+  </div>;
+}
+
+function Receipt({ name, address, tax }: { name: string; address: string; tax: Tax }) {
+  const items: [string, number, number][] = [['Es Kopi Susu', 2, 22000], ['Croissant', 1, 26000]];
+  const sub = items.reduce((a, [, q, p]) => a + q * p, 0);
+  const svc = tax.service_charge_enabled ? sub * tax.service_charge_pct / 100 : 0;
+  const pb1 = tax.pb1_enabled ? (tax.tax_inclusive ? sub - sub / (1 + tax.tax_pct / 100) : sub * tax.tax_pct / 100) : 0;
+  const total = sub + svc + (tax.pb1_enabled && !tax.tax_inclusive ? pb1 : 0);
+  return <div className="st-receipt" aria-label="Pratinjau struk">
+    <div className="c big">{(name || 'Nama toko').toUpperCase()}</div>
+    {address && <div className="c">{address}</div>}
+    {tax.tax_number.trim() && <div className="c">NPWP {tax.tax_number.trim()}</div>}
+    <hr />
+    {items.map(([n, q, p]) => <div key={n}><div>{n}</div><div className="r"><span>{q} x {rp(p)}</span><span>{rp(q * p)}</span></div></div>)}
+    <hr />
+    <div className="r"><span>Subtotal</span><span>{rp(sub)}</span></div>
+    {svc > 0 && <div className="r"><span>Service {tax.service_charge_pct}%</span><span>{rp(svc)}</span></div>}
+    {tax.pb1_enabled && <div className="r"><span>PB1 {tax.tax_pct}%{tax.tax_inclusive ? ' (termasuk)' : ''}</span><span>{rp(pb1)}</span></div>}
+    <div className="r big"><span>TOTAL</span><span>{rp(total)}</span></div>
+    <hr />
+    <div className="c">{tax.receipt_footer.trim() || 'Powered by Selaris'}</div>
+  </div>;
+}
+
+/** Nomor WhatsApp toko sendiri lewat Fonnte. Token dicek ke Fonnte saat disimpan. */
+function WhatsAppToko({ outletId, connected, onChanged }: { outletId?: string; connected: boolean; onChanged: (v: boolean) => void }) {
+  const [token, setToken] = useState(''), [busy, setBusy] = useState(false), [msg, setMsg] = useState<Msg>(null);
+  const [open, setOpen] = useState(false), [confirmOff, setConfirmOff] = useState(false);
   const save = async (value: string) => {
     if (!outletId) return;
     setBusy(true); setMsg(null);
-    try {
-      const r = await setupOutletWhatsApp(outletId, value);
-      onChanged(r.connected); setToken(''); setOpen(false);
-      setMsg({ ok: true, text: r.message });
-    } catch (e: any) { setMsg({ ok: false, text: e.message }); }
+    try { const r = await setupOutletWhatsApp(outletId, value); onChanged(r.connected); setToken(''); setOpen(false); setConfirmOff(false); setMsg({ ok: true, text: r.message }); }
+    catch (e: any) { setMsg({ ok: false, text: e.message }); }
     finally { setBusy(false); }
   };
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <MessageCircle className="w-5 h-5 text-gray-500" />
-          <h2 className="text-lg font-bold text-gray-900">WhatsApp Toko</h2>
-        </div>
-        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-          {connected ? 'Tersambung' : 'Belum tersambung'}
-        </span>
-      </div>
-      <div className="p-6 space-y-3">
-        <p className="text-sm text-gray-600">
-          Opsional. Kabar pesanan online ke pelanggan bisa dikirim dari <b>nomor WhatsApp toko Anda sendiri</b>. Tanpa ini, kabar tetap terkirim dari nomor Selaris.
-          Caranya: daftar di <a href="https://fonnte.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">fonnte.com</a>,
-          hubungkan nomor WA toko (scan QR), lalu salin <b>Token</b> dari dashboard Fonnte ke sini. Struk & OTP tetap lewat Selaris.
-        </p>
-        {msg && <p className={`text-sm ${msg.ok ? 'text-green-700' : 'text-red-600'}`}>{msg.text}</p>}
-        {open || !connected ? (
-          <div className="flex gap-2">
-            <input
-              type="password"
-              value={token}
-              onChange={e => setToken(e.target.value)}
-              placeholder="Tempel token Fonnte"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-            <button onClick={() => save(token.trim())} disabled={busy || !token.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-              {busy ? 'Mengecek…' : 'Sambungkan'}
-            </button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <button onClick={() => setOpen(true)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">Ganti token</button>
-            <button onClick={() => { if (confirm('Putuskan WhatsApp toko? Kabar pesanan akan dikirim dari nomor Selaris.')) save(''); }} disabled={busy} className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg">Putus</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return <div className="st-list">
+    <Row title="Kirim dari nomor WhatsApp toko sendiri" hint={<>Opsional. Tanpa ini, kabar pesanan dikirim dari nomor Selaris. Daftar di <a className="underline" href="https://fonnte.com" target="_blank" rel="noopener noreferrer">fonnte.com</a>, sambungkan nomor toko, lalu tempel tokennya di sini.</>}>
+      <span className={`st-pill ${connected ? 'on' : ''}`}>{connected ? 'Tersambung' : 'Belum tersambung'}</span>
+    </Row>
+    {(open || !connected) && <Row block><div className="flex gap-2">
+      <input className="st-input" type="password" aria-label="Token Fonnte" placeholder="Tempel token Fonnte" value={token} onChange={e => setToken(e.target.value)} />
+      <button type="button" className="st-btn primary" disabled={busy || !token.trim()} onClick={() => save(token.trim())}>{busy ? 'Mengecek…' : 'Sambungkan'}</button>
+    </div></Row>}
+    {connected && !open && <Row block><div className="flex flex-wrap gap-2 items-center">
+      <button type="button" className="st-btn" onClick={() => setOpen(true)}>Ganti token</button>
+      {confirmOff ? <><span className="text-sm">Kabar pesanan akan dikirim dari nomor Selaris.</span><button type="button" className="st-btn danger" disabled={busy} onClick={() => save('')}>Ya, putuskan</button><button type="button" className="st-btn" onClick={() => setConfirmOff(false)}>Batal</button></>
+        : <button type="button" className="st-btn danger" onClick={() => setConfirmOff(true)}>Putuskan</button>}
+    </div></Row>}
+    {msg && <Row block><Note msg={msg} /></Row>}
+  </div>;
 }

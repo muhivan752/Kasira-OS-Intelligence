@@ -21,7 +21,7 @@ const VEHICLES: { key: string; label: string }[] = [
   { key: 'jalan_kaki', label: 'Jalan kaki' },
 ];
 
-const inputCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm';
+const inputCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-[var(--brand-primary)] outline-none text-sm';
 
 export function CourierSettings({ outletId }: { outletId?: string }) {
   const [rows, setRows] = useState<any[]>([]);
@@ -133,7 +133,7 @@ export function CourierSettings({ outletId }: { outletId?: string }) {
                   <button
                     key={v.key}
                     onClick={() => setVehicle(v.key)}
-                    className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${vehicle === v.key ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${vehicle === v.key ? 'border-[var(--brand-primary)] bg-[var(--brand-tint)] text-[var(--brand-primary)]' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                   >
                     {v.label}
                   </button>
@@ -144,7 +144,7 @@ export function CourierSettings({ outletId }: { outletId?: string }) {
               <button
                 onClick={onAdd}
                 disabled={busy || !name.trim()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-fill)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Simpan
               </button>

@@ -21,7 +21,7 @@ const DAYS: { key: string; label: string }[] = [
 ];
 type Hours = Record<string, [string, string][]>;
 
-const inputCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm';
+const inputCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-[var(--brand-primary)] outline-none text-sm';
 
 function rp(n: number) { return 'Rp ' + Math.round(n || 0).toLocaleString('id-ID'); }
 function contohOngkir(base: number, perKm: number, freeKm: number, km: number) {
@@ -30,7 +30,9 @@ function contohOngkir(base: number, perKm: number, freeKm: number, km: number) {
   return fee <= 0 ? 0 : Math.ceil(fee / 500) * 500;
 }
 
-export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSaved?: (patch: any) => void }) {
+// `part` (9 Okt 2026): Pengaturan menaruh Antar di kelompok Pesanan online dan Jam buka
+// di kelompok Toko. Satu komponen, dua bagian, state dan simpannya tetap di sini.
+export function DeliveryHoursSettings({ outlet, onSaved, part }: { outlet: any; onSaved?: (patch: any) => void; part?: 'delivery' | 'hours' }) {
   // ── Antar ──
   const [enabled, setEnabled] = useState(true);
   const [cod, setCod] = useState(true);
@@ -126,7 +128,7 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
     const patch = { hours_mode: mode, business_hours: mode === 'schedule' ? bh : outlet.business_hours ?? null };
     const res = await updateOutlet(outlet.id, patch);
     setHSaving(false);
-    if (res?.success) { setHMsg({ ok: true, text: mode === 'schedule' ? 'Tersimpan. Toko buka dan tutup sendiri mengikuti jadwal.' : 'Tersimpan. Buka tutup diatur manual dari saklar Status Operasional.' }); onSaved?.(patch); }
+    if (res?.success) { setHMsg({ ok: true, text: mode === 'schedule' ? 'Tersimpan. Toko buka dan tutup sendiri mengikuti jadwal.' : 'Tersimpan. Buka dan tutup lewat saklar status toko di atas.' }); onSaved?.(patch); }
     else setHMsg({ ok: false, text: res?.message || 'Gagal menyimpan' });
   };
 
@@ -182,14 +184,14 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
   return (
     <>
       {/* ── Antar ── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {part !== 'hours' && <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Bike className="w-5 h-5 text-gray-500" />
             <h2 className="text-lg font-bold text-gray-900">Antar dan Ongkir</h2>
           </div>
           <button type="button" onClick={() => setEnabled(v => !v)} role="switch" aria-checked={enabled}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? 'bg-blue-600' : 'bg-gray-200'}`}>
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? 'bg-[var(--brand-fill)]' : 'bg-gray-200'}`}>
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         </div>
@@ -202,7 +204,7 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
                 <p className="text-sm font-medium text-gray-900 flex items-center gap-1.5"><MapPin className="w-4 h-4 text-gray-500" /> Titik lokasi toko</p>
                 <p className="text-xs text-gray-500 mt-0.5">Semua jarak antar dihitung dari titik ini. Pastikan pin ada di tokonya, bukan di rumah atau posisi HP saat login.</p>
               </div>
-              <button type="button" onClick={pakaiAlamatToko} disabled={pinBusy} className="shrink-0 text-xs font-semibold text-blue-600 hover:underline disabled:opacity-50">Pakai alamat toko</button>
+              <button type="button" onClick={pakaiAlamatToko} disabled={pinBusy} className="shrink-0 text-xs font-semibold text-[var(--brand-primary)] hover:underline disabled:opacity-50">Pakai alamat toko</button>
             </div>
             {(pinPick || pin) && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -225,9 +227,9 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
               )}
             </div>
             {pinPick && (
-              <div className="flex items-center justify-between gap-3 rounded-lg bg-blue-50 px-3 py-2">
-                <p className="text-xs text-blue-800 truncate">{pinPick.address}</p>
-                <button type="button" onClick={savePin} disabled={pinBusy} className="shrink-0 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-1">
+              <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--brand-tint)] px-3 py-2">
+                <p className="text-xs text-[var(--brand-primary)] truncate">{pinPick.address}</p>
+                <button type="button" onClick={savePin} disabled={pinBusy} className="shrink-0 px-3 py-1.5 bg-[var(--brand-fill)] text-[var(--brand-on-fill)] rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-1">
                   {pinBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Simpan titik
                 </button>
               </div>
@@ -266,7 +268,7 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
               <p className="text-xs text-gray-500 mt-0.5">Pelanggan boleh bayar tunai ke kurir saat pesanan sampai. Matikan kalau mau semua pesanan antar dibayar dulu lewat QRIS atau transfer.</p>
             </div>
             <button type="button" onClick={() => setCod(v => !v)} role="switch" aria-checked={cod}
-              className={`relative mt-0.5 inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${cod ? 'bg-blue-600' : 'bg-gray-200'}`}>
+              className={`relative mt-0.5 inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${cod ? 'bg-[var(--brand-fill)]' : 'bg-gray-200'}`}>
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${cod ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
@@ -276,15 +278,15 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
           </div>
           <div className="flex items-center justify-between">
             <span className={`text-sm ${dMsg ? (dMsg.ok ? 'text-green-600' : 'text-red-600') : 'text-transparent'}`}>{dMsg?.text || '.'}</span>
-            <button type="button" onClick={saveDelivery} disabled={dSaving} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-2">
+            <button type="button" onClick={saveDelivery} disabled={dSaving} className="px-5 py-2 bg-[var(--brand-fill)] text-[var(--brand-on-fill)] rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-2">
               {dSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Simpan tarif
             </button>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* ── Jam buka ── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {part !== 'delivery' && <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
           <Clock className="w-5 h-5 text-gray-500" />
           <h2 className="text-lg font-bold text-gray-900">Jam Buka</h2>
@@ -293,16 +295,16 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
           <div className="grid grid-cols-2 gap-2">
             {(['manual', 'schedule'] as const).map(m => (
               <button key={m} type="button" onClick={() => setMode(m)}
-                className={`rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${mode === m ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+                className={`rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${mode === m ? 'border-[var(--brand-primary)] bg-[var(--brand-tint)] text-[var(--brand-primary)]' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
                 <p className="font-semibold">{m === 'manual' ? 'Manual' : 'Ikut jadwal'}</p>
-                <p className="text-xs opacity-80">{m === 'manual' ? 'Buka tutup dari saklar Status Operasional.' : 'Toko buka dan tutup sendiri tiap hari. Saklar tetap bisa menutup mendadak.'}</p>
+                <p className="text-xs opacity-80">{m === 'manual' ? 'Buka dan tutup lewat saklar status toko di atas.' : 'Toko buka dan tutup sendiri tiap hari. Saklar tetap bisa menutup mendadak.'}</p>
               </button>
             ))}
           </div>
           {mode === 'schedule' && (
             <div className="space-y-2">
               <div className="flex justify-end">
-                <button type="button" onClick={applyAll} className="text-xs font-semibold text-blue-600 hover:underline">Samakan semua hari dengan Senin</button>
+                <button type="button" onClick={applyAll} className="text-xs font-semibold text-[var(--brand-primary)] hover:underline">Samakan semua hari dengan Senin</button>
               </div>
               {DAYS.map(d => {
                 const v = hours[d.key] || { open: '08:00', close: '22:00', closed: false, has2: false, open2: '17:00', close2: '22:00' };
@@ -327,7 +329,7 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
                         <button type="button" onClick={() => set({ has2: false })} className="ml-auto text-xs text-gray-500 hover:text-red-600">Hapus</button>
                       </div>
                     ) : (
-                      <button type="button" onClick={() => set({ has2: true })} className="ml-[4.75rem] text-xs font-medium text-blue-600 hover:underline">
+                      <button type="button" onClick={() => set({ has2: true })} className="ml-[4.75rem] text-xs font-medium text-[var(--brand-primary)] hover:underline">
                         Tambah jam kedua (istirahat siang)
                       </button>
                     ))}
@@ -339,12 +341,12 @@ export function DeliveryHoursSettings({ outlet, onSaved }: { outlet: any; onSave
           )}
           <div className="flex items-center justify-between">
             <span className={`text-sm ${hMsg ? (hMsg.ok ? 'text-green-600' : 'text-red-600') : 'text-transparent'}`}>{hMsg?.text || '.'}</span>
-            <button type="button" onClick={saveHours} disabled={hSaving} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-2">
+            <button type="button" onClick={saveHours} disabled={hSaving} className="px-5 py-2 bg-[var(--brand-fill)] text-[var(--brand-on-fill)] rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-2">
               {hSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Simpan jam buka
             </button>
           </div>
         </div>
-      </div>
+      </div>}
     </>
   );
 }
