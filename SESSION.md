@@ -4,6 +4,26 @@ Baca `CLAUDE.md` → `MEMORY.md` → handoff ini sebelum melanjutkan. Bagian Okt
 di atas adalah acuan sesi terakhir; catatan dan NEXT ACTION April di bawah
 merupakan arsip, bukan pekerjaan yang sedang aktif.
 
+## 2026-10-09 siang - HAPUS AKUN + LAPORAN MODE RESEP LIVE
+
+Ivan pilih opsi (a): pemilik = seluruh usaha dihapus 30 hari sesudah minta
+(bisa batal), karyawan = akun login dianonimkan langsung. Satu rumah
+backend/services/account_deletion.py (urutan hapus dihitung dari katalog FK,
+RLS tenant aktif, verifikasi nol sisa; disimpan: tenant tanpa identitas,
+langganan+tagihan, referral+komisi). Migrasi 116. Janitor `account_deletion`
+tiap jam. Web: Akun saya > Hapus akun, publik /hapus-akun (URL untuk Play).
+/reports/margin kini mendukung mode Resep (modal = cost_map_for_brand), dulu
+400 dan tab Laporan app cuma "Coba lagi".
+Commit e71c330 + 3f65628, dipasang Ivan lewat scripts/deploy-hapus-akun-20261009.sh
+(backend docker cp, image tetap; frontend --no-deps). Rollback backend
+/tmp/selaris-hapus-akun-backup-20261009, frontend tag
+selaris-frontend-before-hapus-akun:20261009. QA di DB sintetis (skema prod
+tanpa data), 34 tes lama + 4 baru lolos.
+APK DITAHAN Ivan: tombol Hapus Akun (POS/Dapur/akun tim) dan teks Laporan
+mode Resep baru ada di source. Saat rilis APK: tambahkan petunjuk app di
+app/hapus-akun/page.tsx (ada komentar di sana).
+Belum: tagihan langganan tetap dibuat selama masa tenggang 30 hari.
+
 ## 2026-10-09 - IDENTITAS PT DI HALAMAN LEGAL LIVE, AUDIT LAUNCH
 
 Selaris dikelola PT Sefrekuensi Teknologi Indonesia (keputusan Ivan 9/10),
