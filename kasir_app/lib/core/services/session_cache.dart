@@ -40,6 +40,9 @@ class SessionCache {
   Set<String> permissions = {};
   List<Map<String, dynamic>> allowedOutlets = [];
   String? accessVersion;
+  /// Nama jabatan dari manifest akses, hanya untuk dipajang. Izin tetap dari
+  /// [permissions]. Null = server lama yang belum mengirimnya.
+  String? roleName;
   bool allows(String permission) =>
       accessToken != null &&
       (accessMode != 'managed' || permissions.contains(permission));
@@ -69,6 +72,7 @@ class SessionCache {
         .map((o) => Map<String, dynamic>.from(o as Map))
         .toList();
     accessVersion = manifest['access_version']?.toString();
+    roleName = manifest['role_name']?.toString();
     await const FlutterSecureStorage()
         .write(key: 'access_mode', value: accessMode);
     await const FlutterSecureStorage()
@@ -83,6 +87,7 @@ class SessionCache {
     permissions = {};
     allowedOutlets = [];
     accessVersion = null;
+    roleName = null;
     if (value != null) {
       try {
         final manifest = jsonDecode(value) as Map<String, dynamic>;
@@ -95,6 +100,7 @@ class SessionCache {
               .map((o) => Map<String, dynamic>.from(o as Map))
               .toList();
           accessVersion = manifest['access_version']?.toString();
+          roleName = manifest['role_name']?.toString();
         }
       } catch (_) {
         accessMode = 'managed';
@@ -450,6 +456,7 @@ class SessionCache {
     permissions = {};
     allowedOutlets = [];
     accessVersion = null;
+    roleName = null;
     accessToken = null;
     tenantId = null;
     outletId = null;

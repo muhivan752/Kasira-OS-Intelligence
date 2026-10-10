@@ -109,32 +109,25 @@ class _TeamAccountPageState extends ConsumerState<TeamAccountPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
       appBar: AppBar(title: const Text('Tim dan akun saya')),
-      body: Center(
-          child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+      // Isi mulai dari atas, BUKAN di tengah layar (10/10: di tengah, bagian
+      // atas kosong dan tombol "Buka operasional toko" nempel di atas nama,
+      // kebaca seperti judul yang salah tempat). Urutannya: siapa saya,
+      // kehadiran, lalu jalan ke kerjaan.
+      body: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Align(
+              alignment: Alignment.topCenter,
               child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 480),
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (_error != null)
+                        if (_error != null) ...[
                           Text(_error!,
                               style: TextStyle(
                                   color: Theme.of(context).colorScheme.error)),
-                        if (SessionCache.instance.accessMode == 'managed' &&
-                            [
-                              'pos.sell',
-                              'stock.view',
-                              'sales.detail.view',
-                              'pos.shift.manage',
-                              'pos.cash.manage',
-                              'pos.refund',
-                              'pos.refund.approve',
-                              'pos.kitchen'
-                            ].any(SessionCache.instance.allows))
-                          FilledButton(
-                              onPressed: () => context.go('/dashboard'),
-                              child: const Text('Buka operasional toko')),
+                          const SizedBox(height: 16),
+                        ],
                         if (_setup == null) ...[
                           const Text('Memuat tim…'),
                           TextButton(
@@ -145,11 +138,16 @@ class _TeamAccountPageState extends ConsumerState<TeamAccountPage> {
                                       ?.toString() ??
                                   'Akun tim',
                               style: Theme.of(context).textTheme.headlineSmall),
-                          const SizedBox(height: 16),
+                          if (SessionCache.instance.roleName != null) ...[
+                            const SizedBox(height: 4),
+                            Text('Jabatan: ${SessionCache.instance.roleName}',
+                                style: Theme.of(context).textTheme.bodyMedium),
+                          ],
+                          const SizedBox(height: 24),
                           Text(_setup!['open_attendance'] != null
                               ? 'Kehadiran masuk sudah tercatat. Catat pulang ketika selesai bekerja.'
                               : 'Belum ada catatan masuk yang terbuka.'),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           if (_setup!['self_employee'] != null)
                             FilledButton(
                                 onPressed: _busy
@@ -168,6 +166,25 @@ class _TeamAccountPageState extends ConsumerState<TeamAccountPage> {
                                         : _setup!['open_attendance'] != null
                                             ? 'Catat pulang'
                                             : 'Catat masuk')),
+                        ],
+                        if (SessionCache.instance.accessMode == 'managed' &&
+                            [
+                              'pos.sell',
+                              'stock.view',
+                              'sales.detail.view',
+                              'pos.shift.manage',
+                              'pos.cash.manage',
+                              'pos.refund',
+                              'pos.refund.approve',
+                              'pos.kitchen'
+                            ].any(SessionCache.instance.allows)) ...[
+                          const SizedBox(height: 12),
+                          OutlinedButton(
+                              onPressed: () => context.go('/dashboard'),
+                              child: const Text('Buka operasional toko')),
+                        ],
+                        const SizedBox(height: 24),
+                        if (_setup != null)
                           TextButton(
                               onPressed: _busy
                                   ? null
@@ -176,7 +193,6 @@ class _TeamAccountPageState extends ConsumerState<TeamAccountPage> {
                                       mode: LaunchMode.externalApplication),
                               child: const Text(
                                   'Buka web untuk jadwal dan pengaturan tim')),
-                        ],
                         TextButton(
                             onPressed: _busy
                                 ? null

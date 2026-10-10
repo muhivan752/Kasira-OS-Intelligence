@@ -134,6 +134,19 @@ class _ManagedWorkspacePageState extends ConsumerState<ManagedWorkspacePage>
                   : _selected == 'orders'
                       ? const OrderListPage()
                       : ListView(padding: const EdgeInsets.all(24), children: [
+                          // Staf dulu cuma lihat deretan tombol tanpa tahu
+                          // kenapa tombol itu yang muncul (10/10, akun Kepala
+                          // toko dikira salah izin). Tombolnya ikut izin
+                          // jabatan; nama jabatannya dari manifest akses.
+                          if (_cache.roleName != null) ...[
+                            Text('Jabatan: ${_cache.roleName}',
+                                style: Theme.of(context).textTheme.titleMedium),
+                            const SizedBox(height: 4),
+                            Text(
+                                'Menu di bawah mengikuti izin jabatan ini. Pemilik toko bisa mengubahnya di web.',
+                                style: Theme.of(context).textTheme.bodyMedium),
+                            const SizedBox(height: 16),
+                          ],
                           Text(
                               'Akun staf perlu koneksi internet untuk bertransaksi. Antrean transaksi lama tetap disimpan jika izin berubah.',
                               style: Theme.of(context).textTheme.bodyLarge),

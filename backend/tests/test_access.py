@@ -173,6 +173,9 @@ class AccessTests(unittest.TestCase):
         self.assertFalse(public["offline_pos_allowed"])
         self.assertNotIn("PRIVATE", str(public))
         self.assertNotIn("access_policy", public)
+        self.assertIsNone(public["role_name"])
+        named = self.context(role_name="Kepala toko").public()
+        self.assertEqual(named["role_name"], "Kepala toko")
 
 
 class DefaultRoleTests(unittest.TestCase):

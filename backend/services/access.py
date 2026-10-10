@@ -36,6 +36,11 @@ class AccessContext:
     mode: str
     version: str
     scope: str = "tenant"
+    # Hanya buat dipajang di app staf ("Jabatan: Kepala toko"), supaya staf
+    # tahu kenapa tombol yang muncul itu-itu saja. Bukan bahan keputusan izin,
+    # dan sengaja tidak masuk hash `version`: ganti nama jabatan tidak boleh
+    # memaksa semua kasir menyinkron ulang.
+    role_name: str | None = None
 
     @property
     def outlet_ids(self):
@@ -62,6 +67,7 @@ class AccessContext:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "offline_pos_allowed": self.mode != "managed",
             "scope": self.scope,
+            "role_name": self.role_name,
         }
 
 
@@ -133,7 +139,8 @@ async def resolve_access(db, user):
     }
     version = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()
     return AccessContext(user.id, user.tenant_id, permissions, outlets, employee, mode, version,
-                         role.scope if policy else "tenant")
+                         role.scope if policy else "tenant",
+                         "Pemilik" if mode == "owner" else (role.name if role else None))
 
 
 def validate_tenant_header(request, tenant_id):
