@@ -188,7 +188,7 @@ async def authorize(request, db, context):
         if not isinstance(changes, dict):
             raise HTTPException(422, "Perubahan sinkronisasi tidak valid")
         if any(changes.values()):
-            denied("OFFLINE_SYNC_REVIEW_REQUIRED", "Antrean transaksi tetap tersimpan. Minta pemilik menyelesaikan sinkronisasi sebelum memakai akun staf dengan izin baru")
+            await validate_staff_push(db, changes, context, outlet_id)
     if name in {"list_ingredients", "get_ingredient", "low_stock_ingredients", "read_products", "read_categories", "read_low_stock_products"} and outlet_id is None:
         raise HTTPException(422, "Pilih outlet untuk membaca katalog atau stok")
     if name == "restock_product" and body.get("unit_buy_price") is not None:
@@ -250,6 +250,56 @@ def redact(value, context, module):
         else:
             result[key] = redact(item, context, module)
     return result
+
+
+# Jualan offline akun staf (keputusan Ivan 14/10/2026). Sebelumnya staf wajib
+# online dan SEMUA kiriman sync staf ditolak, jadi mesin CRDT cuma dinikmati
+# pemilik. Sekarang staf ber-pos.sell boleh mengirim antrean jualannya sendiri.
+# Batas 12 jam sejak terakhir online dijaga di app (manifest generated_at +
+# OFFLINE_GRACE_HOURS); server menjaga isinya: hanya pesanan/item/pembayaran
+# milik staf ini di outlet ini. Selain itu (produk, shift, kas, stok) tetap
+# ditolak utuh supaya antrean tidak ditandai terkirim dan tunggu pemilik.
+STAFF_PUSH_TABLES = frozenset({"orders", "order_items", "payments"})
+
+
+async def validate_staff_push(db, changes, context, outlet_id):
+    from backend.models import Order
+    review = ("OFFLINE_SYNC_REVIEW_REQUIRED", "Antrean transaksi tetap tersimpan. Minta pemilik menyelesaikan sinkronisasi sebelum memakai akun staf dengan izin baru")
+    if not context.allows("pos.sell") or any(v for k, v in changes.items() if k not in STAFF_PUSH_TABLES):
+        denied(*review)
+    rows = {k: changes.get(k) or [] for k in STAFF_PUSH_TABLES}
+    if not all(isinstance(v, list) and all(isinstance(r, dict) for r in v) for v in rows.values()):
+        raise HTTPException(422, "Perubahan sinkronisasi tidak valid")
+    me = str(context.user_id)
+    batch_orders = {}
+    for order in rows["orders"]:
+        if str(order.get("user_id") or me) != me or str(order.get("outlet_id") or outlet_id) != str(outlet_id):
+            denied(*review)
+        try:
+            subtotal = Decimal(str(order.get("subtotal") or 0))
+            discount = Decimal(str(order.get("discount_amount") or 0))
+        except Exception:
+            raise HTTPException(422, "Jumlah pesanan tidak valid")
+        # Sama dengan validate_order jalur online: diskon >20% butuh izin.
+        if discount > subtotal * Decimal("0.20") and not context.allows("pos.discount.override"):
+            denied("PERMISSION_DENIED", "Diskon pesanan offline melebihi batas jabatan")
+        batch_orders[str(as_id(order.get("id")))] = order
+    parent_ids = {str(as_id(r.get("order_id"))) for k in ("order_items", "payments") for r in rows[k]}
+    known = {}
+    lookup = {as_id(i) for i in set(batch_orders) | parent_ids}
+    if lookup:
+        for oid, uid, oout in (await db.execute(select(Order.id, Order.user_id, Order.outlet_id).where(Order.id.in_(lookup)))).all():
+            known[str(oid)] = (str(uid) if uid else None, str(oout))
+    # Pesanan yang sudah ada di server hanya boleh disentuh pemiliknya sendiri.
+    for oid in batch_orders:
+        if oid in known and known[oid] != (me, str(outlet_id)):
+            denied(*review)
+    for oid in parent_ids:
+        if oid not in batch_orders and known.get(oid) != (me, str(outlet_id)):
+            denied(*review)
+    for payment in rows["payments"]:
+        if str(payment.get("processed_by") or me) != me or str(payment.get("outlet_id") or outlet_id) != str(outlet_id):
+            denied(*review)
 
 
 async def validate_order(db, body, context):

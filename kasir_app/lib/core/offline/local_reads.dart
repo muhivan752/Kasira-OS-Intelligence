@@ -95,7 +95,7 @@ class LocalReads {
   }
 
   /// Riwayat dari lokal. `onlyUnsynced` buat digabung ke daftar server.
-  Future<List<OrderModel>> recentOrders(String outletId, {int limit = 50, String? status, bool onlyUnsynced = false}) async {
+  Future<List<OrderModel>> recentOrders(String outletId, {int limit = 50, String? status, bool onlyUnsynced = false, String? onlyUserId}) async {
     final q = db.select(db.orders)
       ..where((o) => o.outletId.equals(outletId))
       ..where((o) => o.isDeleted.equals(false))
@@ -103,6 +103,7 @@ class LocalReads {
       ..limit(limit);
     if (status != null) q.where((o) => o.status.equals(status));
     if (onlyUnsynced) q.where((o) => o.isSynced.equals(false));
+    if (onlyUserId != null) q.where((o) => o.userId.equals(onlyUserId));
     final rows = await q.get();
     if (rows.isEmpty) return const [];
     final items = await (db.select(db.orderItems)..where((i) => i.orderId.isIn(rows.map((o) => o.id).toList()))).get();

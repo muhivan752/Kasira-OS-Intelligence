@@ -562,7 +562,18 @@ class CartNotifier extends StateNotifier<CartState> {
   // ── Offline: simpan ke Drift SQLite, deduct stok lokal ──────────────────
   Future<String?> _submitOffline() async {
     if (!_cache.offlinePosAllowed) {
-      state = state.copyWith(isSubmitting: false, error: 'Akun staf perlu koneksi internet untuk bertransaksi. Antrean lama tetap tersimpan.');
+      state = state.copyWith(isSubmitting: false, error: sefStafOfflineHabis);
+      return null;
+    }
+    // Batas yang sama dengan server (pos_access.validate_order dan
+    // validate_staff_push): diskon >20% butuh izin. Online, server yang
+    // menolak; offline, tolak di sini supaya antrean tidak macet di sync.
+    if (_cache.accessMode == 'managed' &&
+        !_cache.allows('pos.discount.override') &&
+        state.discountAmount > state.subtotal * 0.20) {
+      state = state.copyWith(
+          isSubmitting: false,
+          error: 'Diskon di atas 20% perlu izin pemilik. Kurangi diskon atau sambungkan ke internet.');
       return null;
     }
     try {
@@ -690,7 +701,7 @@ class CartNotifier extends StateNotifier<CartState> {
     required double amountPaid,
   }) async {
     if (!_cache.offlinePosAllowed) {
-      state = state.copyWith(error: 'Pembayaran akun staf perlu koneksi internet.');
+      state = state.copyWith(error: sefStafOfflineHabis);
       return false;
     }
     try {

@@ -23,7 +23,10 @@ import '../../providers/dashboard_provider.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../../pos/providers/pos_mode_provider.dart';
 import '../../../online_orders/providers/online_orders_provider.dart';
-import 'managed_workspace_page.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/api/api_client.dart';
+import '../../../products/providers/products_provider.dart';
+import 'staff_home_page.dart';
 
 final _currencyFmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -41,16 +44,26 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
   int _selectedIndex = 0;
   bool _isPro = false;
 
+  /// Akun staf (jabatan berizin kustom). Sejak 14/10/2026 staf memakai
+  /// kerangka yang sama dengan pemilik; yang beda cuma tab yang tampil
+  /// (lihat [_visibleTabs]) dan tab Beranda-nya ([StaffHomePage]).
+  bool get _staff => SessionCache.instance.accessMode == 'managed';
+  bool get _sells => SessionCache.instance.allows('pos.sell');
+
   @override
   void initState() {
     super.initState();
-    if (SessionCache.instance.accessMode == 'managed') return;
     _loadTier();
     // Pesanan online: SSE + bel hidup selama dashboard hidup (= selama login).
     // Observer pertama di app ini: putus stream saat app ke belakang,
     // sambung + tarik ulang saat kembali.
     WidgetsBinding.instance.addObserver(this);
+    if (_staff) {
+      _refreshStaffAccess();
+      if (_sells) _selectedIndex = 1;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_sells) return;
       ref.read(onlineOrdersProvider.notifier).start();
       // Notifikasi push: daftarkan HP ini (aman diulang tiap app dibuka),
       // lalu buka layar tujuan kalau app tadi dibangunkan dari notifikasi
@@ -75,9 +88,38 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
     super.dispose();
   }
 
+  /// Manifest akses staf diperbarui tiap dashboard dibuka dan app kembali ke
+  /// depan. Sukses = jendela offline 12 jam mulai lagi dari sekarang. Gagal
+  /// karena tidak ada internet = diam, kasir jalan dengan izin terakhir.
+  Future<void> _refreshStaffAccess() async {
+    final cache = SessionCache.instance;
+    final token = cache.accessToken;
+    try {
+      final response = await ref.read(apiClientProvider).get('/auth/access');
+      if (!mounted || token != cache.accessToken) return;
+      await cache.applyAccess(Map<String, dynamic>.from(response.data['data'] as Map));
+      if (!cache.allowedOutlets.any((o) => o['id'] == cache.outletId)) {
+        await cache.setOutletId(cache.allowedOutlets.firstOrNull?['id']?.toString() ?? '');
+        await cache.setShiftSessionId(null);
+        ref.invalidate(productsProvider);
+        ref.invalidate(ordersProvider);
+      }
+    } on DioException catch (_) {
+      // Server menolak (izin dicabut) ditangani interceptor/sync; tanpa
+      // internet = pakai izin terakhir sampai jendela offline habis.
+    }
+    if (!mounted) return;
+    setState(() {
+      if (!_visibleTabs.any((t) => t.page == _selectedIndex)) {
+        _selectedIndex = _visibleTabs.first.page;
+      }
+    });
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (SessionCache.instance.accessMode == 'managed') return;
+    if (_staff && state == AppLifecycleState.resumed) _refreshStaffAccess();
+    if (!_sells) return;
     final n = ref.read(onlineOrdersProvider.notifier);
     if (state == AppLifecycleState.resumed) {
       n.onForeground();
@@ -92,16 +134,20 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
 
   // Page index STABIL (jangan diubah — posMode listener & pendingNavigateToPos
   // depend index 1 = Kasir/POS).
-  List<Widget> get _pages => [
-    const _DashboardContent(),         // 0 Beranda
-    const PosPage(),                   // 1 Kasir
-    // IndexedStack membangun semua anak: tanpa izin, jangan sampai layar ini
-    // tetap memanggil /reports/margin di belakang.
-    SessionCache.instance.canViewMargin ? const MarginReportPage() : const SizedBox.shrink(), // 2 Laporan
-    const OrderListPage(),             // 3 Riwayat
-    const TableGridPage(),             // 4 Meja (Pro)
-    const ProductManagementPage(),     // 5 Stok
-  ];
+  // IndexedStack membangun SEMUA anak: halaman tanpa izin diganti kosong,
+  // jangan sampai tetap memanggil API-nya di belakang.
+  List<Widget> get _pages {
+    const none = SizedBox.shrink();
+    final c = SessionCache.instance;
+    return [
+      _staff ? StaffHomePage(onRefreshAccess: _refreshStaffAccess) : const _DashboardContent(), // 0 Beranda
+      _sells ? const PosPage() : none,                                  // 1 Kasir
+      c.canViewMargin ? const MarginReportPage() : none,                // 2 Laporan
+      _sells || c.allows('sales.detail.view') ? const OrderListPage() : none, // 3 Riwayat
+      _sells ? const TableGridPage() : none,                            // 4 Meja (Pro)
+      _staff ? none : const ProductManagementPage(),                    // 5 Stok
+    ];
+  }
 
   /// Bottom-nav PERSIS desain Aurora (urutan + ikon dari HTML `nav` array):
   /// Pro:  Beranda·Meja·Kasir·Stok·Laporan·Riwayat
@@ -111,10 +157,18 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
   List<({IconData icon, String label, int page})> get _visibleTabs {
     // Laporan berisi modal + margin: hanya untuk yang diizinkan (hpp.view),
     // gerbang yang sama dengan backend (business_access).
-    final canMargin = SessionCache.instance.canViewMargin;
+    final c = SessionCache.instance;
+    bool shown(int page) => switch (page) {
+          1 || 4 => _sells,
+          2 => c.canViewMargin,
+          3 => _sells || c.allows('sales.detail.view'),
+          // Kelola produk/stok staf tetap di web (izin stock.* di sana).
+          5 => !_staff,
+          _ => true,
+        };
     return [
       for (final tab in _allTabs)
-        if (tab.page != 2 || canMargin) tab,
+        if (shown(tab.page)) tab,
     ];
   }
 
@@ -433,7 +487,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
 
   @override
   Widget build(BuildContext context) {
-    if (SessionCache.instance.accessMode == 'managed') return const ManagedWorkspacePage();
     // One-shot redirect ke POS tab kalau pendingNavigateToPos=true (di-set oleh
     // tab_detail_page.dart saat user tap "Tambah Pesanan"). Setelah consume,
     // clear provider — gak persistent jadi user tetap bisa navigate balik ke
@@ -498,7 +551,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
                 const SizedBox(height: 48),
                 ..._visibleTabs.map((t) => _buildSideNavItem(t.icon, t.label, t.page)),
                 const Spacer(),
-                if (_isPro)
+                if (_isPro && !_staff)
                   _buildSideNavAction(LucideIcons.sparkles, 'AI', _openAiAssistant),
                 _buildSideNavAction(LucideIcons.settings, 'Setting', _openSettings),
                 const SizedBox(height: 24),
@@ -517,7 +570,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> with WidgetsBindi
     if (pos < 0) pos = 0;
     // AI FAB (Pro) — hanya di screen tanpa FAB sendiri (Beranda/Laporan/Riwayat),
     // biar gak nabrak cart-bar POS / kontrol lain.
-    final showAiFab = _isPro && (_selectedIndex == 0 || _selectedIndex == 2 || _selectedIndex == 3);
+    final showAiFab = _isPro && !_staff && (_selectedIndex == 0 || _selectedIndex == 2 || _selectedIndex == 3);
     return Scaffold(
       backgroundColor: KasiraDS.bgBase,
       // IndexedStack: semua tab tetap hidup (state kejaga) → pindah tab INSTAN,

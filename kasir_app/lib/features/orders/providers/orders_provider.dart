@@ -169,6 +169,12 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
   final AppDatabase _db;
   LocalReads get _local => LocalReads(_db);
 
+  /// Staf tanpa sales.detail.view hanya melihat transaksinya sendiri, sama
+  /// dengan yang ditarik server (sync.py own_only). Antrean kasir lain di HP
+  /// yang sama jangan ikut tampil.
+  String? _ownOnly(SessionCache c) =>
+      c.accessMode == 'managed' && !c.allows('sales.detail.view') ? c.userId : null;
+
   Future<bool> _online() async {
     final r = await Connectivity().checkConnectivity();
     return r.isNotEmpty && !r.contains(ConnectivityResult.none);
@@ -176,11 +182,12 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
 
   /// Offline-first: daftar dari Drift, yang belum sync ditandai.
   Future<void> _loadLocal(String outletId, {String? status}) async {
-    if (SessionCache.instance.accessMode == 'managed') {
-      state = state.copyWith(orders: [], isLoading: false, error: 'Akun staf perlu koneksi internet untuk melihat riwayat.');
+    final c = SessionCache.instance;
+    if (!c.offlinePosAllowed) {
+      state = state.copyWith(orders: [], isLoading: false, error: sefStafOfflineHabis);
       return;
     }
-    final list = await _local.recentOrders(outletId, status: status);
+    final list = await _local.recentOrders(outletId, status: status, onlyUserId: _ownOnly(c));
     state = state.copyWith(orders: list, isLoading: false, isOffline: true, clearError: true);
   }
 
@@ -230,7 +237,7 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
           .toList();
       // Yang masih ngantre di HP belum ada di server: taruh di atas dengan
       // tanda, supaya kasir nggak ngira transaksinya hilang.
-      final pending = c.accessMode == 'managed' ? <OrderModel>[] : await _local.recentOrders(outletId, status: status, onlyUnsynced: true);
+      final pending = await _local.recentOrders(outletId, status: status, onlyUnsynced: true, onlyUserId: _ownOnly(c));
       final serverIds = list.map((o) => o.id).toSet();
       final merged = [...pending.where((o) => !serverIds.contains(o.id)), ...list];
       state = state.copyWith(orders: merged, isLoading: false, isOffline: false);
@@ -298,7 +305,7 @@ final orderDetailProvider = FutureProvider.family<OrderModel, String>((ref, orde
 
   // Order yang belum sync cuma ada di HP; server bakal 404. Lokal duluan.
   final fromLocal = await local.orderById(orderId);
-  if (c.accessMode != 'managed' && fromLocal != null && !fromLocal.isSynced) return fromLocal;
+  if (c.offlinePosAllowed && fromLocal != null && !fromLocal.isSynced) return fromLocal;
 
   final dio = Dio(BaseOptions(
     baseUrl: AppConfig.apiV1,
@@ -316,7 +323,7 @@ final orderDetailProvider = FutureProvider.family<OrderModel, String>((ref, orde
     );
     return OrderModel.fromJson(resp.data['data'] as Map<String, dynamic>);
   } on DioException catch (e) {
-    if (c.accessMode != 'managed' && e.response == null && fromLocal != null) return fromLocal;
+    if (c.offlinePosAllowed && e.response == null && fromLocal != null) return fromLocal;
     rethrow;
   }
 });

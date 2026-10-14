@@ -11,6 +11,12 @@ import '../../features/pos/providers/tax_config_provider.dart';
 /// Sensitive keys (access_token, user_pin) stay in SecureStorage.
 /// Non-sensitive keys (tenant_id, outlet_id, stock_mode, subscription_tier)
 /// are also mirrored to SharedPreferences for 10-50x faster cold reads.
+/// Satu kalimat untuk akun staf yang jendela jualan offline-nya habis
+/// (lewat 12 jam sejak terakhir online, izin jualan dicabut, atau jam HP
+/// mundur). Antrean di HP tidak pernah dibuang.
+const sefStafOfflineHabis =
+    'Sambungkan ke internet sebentar untuk memperbarui izin akun staf. Transaksi yang sudah tercatat tetap aman di HP ini.';
+
 class SessionCache {
   SessionCache._();
   static final instance = SessionCache._();
@@ -46,7 +52,38 @@ class SessionCache {
   bool allows(String permission) =>
       accessToken != null &&
       (accessMode != 'managed' || permissions.contains(permission));
-  bool get offlinePosAllowed => accessToken != null && accessMode != 'managed';
+  /// Kapan manifest akses terakhir DITERIMA dari server (jam HP), dan berapa
+  /// jam staf boleh jualan offline sesudahnya (`offline_grace_hours` dari
+  /// server, cadangan 12). Keputusan Ivan 14/10/2026: CRDT offline itu fitur
+  /// utama Selaris, jadi staf ber-pos.sell ikut offline, tapi izin yang
+  /// dicabut pemilik harus berlaku paling lambat 12 jam kemudian.
+  DateTime? accessReceivedAt;
+  int offlineGraceHours = 12;
+  bool get offlinePosAllowed {
+    if (accessToken == null) return false;
+    if (accessMode != 'managed') return true;
+    final received = accessReceivedAt;
+    if (!permissions.contains('pos.sell') || received == null) return false;
+    final age = DateTime.now().difference(received);
+    // Jam HP mundur sesudah akses diterima = jendela 12 jam bisa diulur,
+    // jadi dianggap habis sampai HP online lagi.
+    return !age.isNegative && age <= Duration(hours: offlineGraceHours);
+  }
+
+  static int _graceHours(Object? value) {
+    final hours = int.tryParse(value?.toString() ?? '');
+    return hours == null || hours < 0 ? 12 : hours;
+  }
+
+  /// Sisa waktu jualan offline akun staf; null = tidak dibatasi (pemilik).
+  Duration? get offlineGraceLeft {
+    if (accessMode != 'managed') return null;
+    final received = accessReceivedAt;
+    if (received == null) return Duration.zero;
+    final age = DateTime.now().difference(received);
+    final left = Duration(hours: offlineGraceHours) - age;
+    return age.isNegative || left.isNegative ? Duration.zero : left;
+  }
   /// Tab Laporan (modal + margin per produk). Gerbang sama dengan backend
   /// business_access: hpp.view / hpp.manage. Beda dengan `allows`, akun
   /// legacy TIDAK otomatis lolos: izinnya dari flag jabatan (can_view_hpp)
@@ -73,10 +110,18 @@ class SessionCache {
         .toList();
     accessVersion = manifest['access_version']?.toString();
     roleName = manifest['role_name']?.toString();
+    // Semua pemanggil applyAccess memegang manifest yang BARU dari server
+    // (login, sync, muat ulang akses), jadi jam terima = sekarang.
+    accessReceivedAt = DateTime.now();
+    offlineGraceHours = _graceHours(manifest['offline_grace_hours']);
     await const FlutterSecureStorage()
         .write(key: 'access_mode', value: accessMode);
-    await const FlutterSecureStorage()
-        .write(key: 'access_manifest', value: jsonEncode(manifest));
+    await const FlutterSecureStorage().write(
+        key: 'access_manifest',
+        value: jsonEncode({
+          ...manifest,
+          '_received_at': accessReceivedAt!.toUtc().toIso8601String()
+        }));
   }
 
   Future<void> _loadAccess() async {
@@ -88,6 +133,8 @@ class SessionCache {
     allowedOutlets = [];
     accessVersion = null;
     roleName = null;
+    accessReceivedAt = null;
+    offlineGraceHours = 12;
     if (value != null) {
       try {
         final manifest = jsonDecode(value) as Map<String, dynamic>;
@@ -101,6 +148,10 @@ class SessionCache {
               .toList();
           accessVersion = manifest['access_version']?.toString();
           roleName = manifest['role_name']?.toString();
+          accessReceivedAt =
+              DateTime.tryParse(manifest['_received_at']?.toString() ?? '')
+                  ?.toLocal();
+          offlineGraceHours = _graceHours(manifest['offline_grace_hours']);
         }
       } catch (_) {
         accessMode = 'managed';
@@ -457,6 +508,8 @@ class SessionCache {
     allowedOutlets = [];
     accessVersion = null;
     roleName = null;
+    accessReceivedAt = null;
+    offlineGraceHours = 12;
     accessToken = null;
     tenantId = null;
     outletId = null;

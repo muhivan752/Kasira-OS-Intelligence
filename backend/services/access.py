@@ -19,6 +19,10 @@ LEGACY_FLAGS = {
     "can_refund": "pos.refund", "can_approve_refund": "pos.refund.approve",
     "can_discount_override": "pos.discount.override",
 }
+# Berapa lama akun staf boleh jualan offline sejak manifest akses terakhir
+# diterima (Ivan 14/10/2026). Satu angka ini dibaca app lewat manifest; app
+# hanya memakai 12 sebagai cadangan kalau server lama tidak mengirimnya.
+OFFLINE_GRACE_HOURS = 12
 ENFORCED_MODULES = ("hris", "pos", "stock", "sync", "finance", "purchasing", "customers", "hpp", "ai")
 
 
@@ -65,7 +69,8 @@ class AccessContext:
             "outlets": [{"id": str(o.id), "name": o.name, "timezone": o.timezone} for o in self.outlets],
             "employee_id": str(self.employee.id) if self.employee else None,
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "offline_pos_allowed": self.mode != "managed",
+            "offline_pos_allowed": self.mode != "managed" or self.allows("pos.sell"),
+            "offline_grace_hours": OFFLINE_GRACE_HOURS,
             "scope": self.scope,
             "role_name": self.role_name,
         }

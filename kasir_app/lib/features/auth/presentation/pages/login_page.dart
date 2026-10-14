@@ -423,8 +423,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
             if (!SessionCache.instance.offlinePosAllowed) {
               state = state.copyWith(
                   isLoading: false,
-                  error:
-                      'Akun staf perlu koneksi internet untuk memeriksa izin. Antrean transaksi tetap tersimpan.');
+                  error: sefStafOfflineHabis);
               return;
             }
           }

@@ -220,12 +220,39 @@ class SyncService {
         db.getUnsyncedShifts(currentOutletId),
         db.getUnsyncedCashActivities(currentOutletId),
       ]);
-      final unsyncedProducts = futures[0] as List<ProductLocal>;
-      final unsyncedOrders = futures[1] as List<OrderLocal>;
-      final unsyncedOrderItems = futures[2] as List<OrderItemLocal>;
-      final unsyncedPayments = futures[3] as List<PaymentLocal>;
-      final unsyncedShifts = futures[4] as List<ShiftLocal>;
-      final unsyncedCashActivities = futures[5] as List<CashActivityLocal>;
+      var unsyncedProducts = futures[0] as List<ProductLocal>;
+      var unsyncedOrders = futures[1] as List<OrderLocal>;
+      var unsyncedOrderItems = futures[2] as List<OrderItemLocal>;
+      var unsyncedPayments = futures[3] as List<PaymentLocal>;
+      var unsyncedShifts = futures[4] as List<ShiftLocal>;
+      var unsyncedCashActivities = futures[5] as List<CashActivityLocal>;
+      if (managed) {
+        // Akun staf mengirim jualan offline MILIKNYA saja (14/10/2026). Server
+        // (pos_access.validate_staff_push) menolak utuh kalau ada baris orang
+        // lain, jadi yang lain dibiarkan di antrean untuk pemiliknya: produk,
+        // shift, kas, dan pesanan kasir lain di HP yang sama.
+        final me = session.userId;
+        if (me == null || !session.allows('pos.sell')) {
+          unsyncedOrders = [];
+        } else {
+          unsyncedOrders =
+              unsyncedOrders.where((o) => o.userId == me).toList();
+        }
+        final mine = unsyncedOrders.map((o) => o.id).toSet();
+        final ownedSynced = await db.ownSyncedOrderIds(
+            unsyncedOrderItems.map((i) => i.orderId).followedBy(
+                unsyncedPayments.map((p) => p.orderId)),
+            me ?? '');
+        bool own(String orderId) =>
+            mine.contains(orderId) || ownedSynced.contains(orderId);
+        unsyncedOrderItems =
+            unsyncedOrderItems.where((i) => own(i.orderId)).toList();
+        unsyncedPayments =
+            unsyncedPayments.where((p) => own(p.orderId)).toList();
+        unsyncedProducts = [];
+        unsyncedShifts = [];
+        unsyncedCashActivities = [];
+      }
 
       final changes = {
         'categories': [], // We don't create categories from POS
@@ -276,19 +303,24 @@ class SyncService {
       // supaya backend bisa dedup. Kalau kosong, generate v4 baru + save ke
       // prefs. Key di-remove dari prefs cuma setelah server balas 200 OK
       // (end of success block) — guarantee retry-safe walau mid-flight drop.
-      String? pendingKey = prefs.getString(_pendingIdempotencyKey);
-      if (!managed && (pendingKey == null || pendingKey.isEmpty)) {
+      // Kunci staf dipisah per akun: kunci yang tertinggal dari kiriman staf
+      // yang putus tidak boleh membuat kiriman pemilik di HP sama dianggap
+      // duplikat (server lewati push, app tandai terkirim = hilang).
+      final idemKey =
+          managed ? '$_pendingIdempotencyKey:$identity' : _pendingIdempotencyKey;
+      String? pendingKey = prefs.getString(idemKey);
+      if (pendingKey == null || pendingKey.isEmpty) {
         pendingKey = _uuid.v4();
-        await prefs.setString(_pendingIdempotencyKey, pendingKey);
+        await prefs.setString(idemKey, pendingKey);
       }
 
       final payload = {
         'node_id': nodeId,
         'outlet_id': currentOutletId,
         'last_sync_hlc': lastSyncHlc,
-        if (!managed) 'idempotency_key': pendingKey,
+        'idempotency_key': pendingKey,
         if (managed) 'access_version': session.accessVersion,
-        'changes': managed ? <String, dynamic>{} : changes,
+        'changes': changes,
       };
 
       // 2. Send to server — pass cancel token biar logout bisa batalin
@@ -359,8 +391,7 @@ class SyncService {
 
         // 4. Mark local changes as synced
         ensureCurrent();
-        if (!managed)
-          await _markAsSynced(
+        await _markAsSynced(
             products: unsyncedProducts,
             orders: unsyncedOrders,
             orderItems: unsyncedOrderItems,
@@ -397,7 +428,7 @@ class SyncService {
         // sync() generate fresh. Timing: SETELAH HLC update + markAsSynced
         // biar kalau ada failure mid-way, key stays persist → retry reuses →
         // backend dedup. Placed paling akhir sebelum _status=success.
-        if (!managed) await prefs.remove(_pendingIdempotencyKey);
+        await prefs.remove(idemKey);
 
         _status = SyncStatus.success;
         // debugPrint('Sync completed successfully. New HLC: $serverHlc');

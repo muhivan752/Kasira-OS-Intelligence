@@ -658,7 +658,14 @@ class _PosPageState extends ConsumerState<PosPage> {
                             hintText: 'Cari menu...',
                             hintStyle: KasiraDS.sans(
                                 size: 15, color: KasiraDS.textMuted),
+                            // Bingkai milik Container di atas. Tema global
+                            // mengisi enabled/focusedBorder + fill, jadi
+                            // `border: none` saja masih menggambar kotak kedua
+                            // di dalam kotak (14/10, HP Ivan).
                             border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            filled: false,
                             isCollapsed: true,
                             contentPadding:
                                 const EdgeInsets.symmetric(vertical: 13),

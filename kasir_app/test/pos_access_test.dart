@@ -11,10 +11,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kasira_kasir/core/api/api_client.dart';
 import 'package:kasira_kasir/core/database/app_database.dart';
 import 'package:kasira_kasir/core/services/session_cache.dart';
+import 'package:kasira_kasir/core/sync/sync_provider.dart';
 import 'package:kasira_kasir/core/sync/sync_service.dart';
 import 'package:kasira_kasir/core/theme/app_theme.dart';
 import 'package:kasira_kasir/features/pos/providers/cart_provider.dart';
-import 'package:kasira_kasir/features/dashboard/presentation/pages/managed_workspace_page.dart';
+import 'package:kasira_kasir/features/dashboard/presentation/pages/staff_home_page.dart';
 import 'package:kasira_kasir/features/dashboard/presentation/pages/managed_actions_page.dart';
 
 class Adapter implements HttpClientAdapter {
@@ -143,8 +144,11 @@ void main() {
     await service.sync();
     expect(service.status, SyncStatus.success);
     final post = adapter.calls.last.data as Map;
-    expect(post['changes'], isEmpty);
-    expect(post.containsKey('idempotency_key'), isFalse);
+    // Tanpa pos.sell staf tidak mengirim apa pun; antrean pemilik utuh.
+    expect((post['changes'] as Map).values.every((v) => (v as List).isEmpty),
+        isTrue);
+    // Kunci idempoten staf terpisah: kunci pemilik yang tertunda tidak dipakai.
+    expect(post['idempotency_key'], isNot('owner-pending'));
     expect(prefs.getString('pending_sync_idempotency_key'), 'owner-pending');
     expect(prefs.getString('last_sync_hlc'), '1000:0:server:outlet');
     expect((await db.select(db.products).get()).single.name, 'Pending product');
@@ -234,32 +238,47 @@ void main() {
   });
 
   testWidgets(
-      'read-only workspace fits 320px at 160% and omits transaction controls',
+      'staff home fits 320px at 160% and omits transaction controls',
       (tester) async {
     tester.view.physicalSize = const Size(320, 760);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final adapter = Adapter((_) => jsonBody({'data': manifest()})), dio = Dio();
+    final adapter = Adapter((request) => request.path == '/sync/'
+            ? jsonBody({'last_sync_hlc': '2000:0:server:outlet', 'changes': {}})
+            : jsonBody({'data': manifest()})),
+        dio = Dio();
     dio.httpClientAdapter = adapter;
     addTearDown(dio.close);
+    final db = AppDatabase.withExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(ProviderScope(
-        overrides: [apiClientProvider.overrideWithValue(dio)],
+        overrides: [
+          apiClientProvider.overrideWithValue(dio),
+          databaseProvider.overrideWithValue(db),
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
         child: MaterialApp(
             theme: AppTheme.auroraTheme,
             builder: (context, child) => MediaQuery(
                 data: MediaQuery.of(context)
                     .copyWith(textScaler: const TextScaler.linear(1.6)),
                 child: child!),
-            home: const ManagedWorkspacePage())));
+            home: StaffHomePage(onRefreshAccess: () async {
+              await dio.get('/auth/access');
+            }))));
     await tester.pumpAndSettle();
-    expect(find.text('Buka kasir'), findsNothing);
+    expect(find.text('Pesanan online'), findsNothing);
     expect(find.text('Sesi kas'), findsNothing);
     expect(find.text('Keuangan'), findsNothing);
     expect(find.text('Lihat stok di web'), findsOneWidget);
-    await tester.tap(find.byTooltip('Muat ulang akses'));
+    expect(find.text('Akun ini tidak untuk berjualan.'), findsOneWidget);
+    await tester.tap(find.text('Perbarui izin dan data'));
     await tester.pumpAndSettle();
-    expect(adapter.calls, hasLength(2));
+    // Tombol perbarui = muat ulang izin + satu putaran sync.
+    expect(adapter.calls.map((r) => r.path), containsAll(['/auth/access', '/sync/']));
+    expect(find.text('Izin dan data kasir sudah diperbarui.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -295,14 +314,69 @@ void main() {
     expect(adapter.calls.any((r) => r.path.contains('uncounted')), isFalse);
     expect(tester.takeException(), isNull);
   });
-  test('managed cashier cannot record an offline payment or submit without selling permission', () async {
+  test('managed cashier sells offline only within the 12-hour window', () async {
     final db = await seeded(), cart = CartNotifier(db);
     addTearDown(cart.dispose);
     expect(await cart.submitOrder(), isNull);
     expect(cart.state.error, contains('Izin'));
+    // Izin jualan baru diterima: offline boleh (keputusan Ivan 14/10/2026).
     await cache.applyAccess(manifest(['pos.sell']));
+    expect(cache.offlinePosAllowed, isTrue);
+    expect(await cart.savePaymentOffline(orderId: 'order', paymentMethod: 'cash', amountDue: 15000, amountPaid: 15000), isTrue);
+    expect((await db.getUnsyncedPayments('outlet')), hasLength(2));
+    // Lewat 12 jam tanpa online: berhenti, antrean tetap.
+    cache.accessReceivedAt = DateTime.now().subtract(const Duration(hours: 12, minutes: 1));
+    expect(cache.offlinePosAllowed, isFalse);
     expect(await cart.savePaymentOffline(orderId: 'order', paymentMethod: 'cash', amountDue: 15000, amountPaid: 15000), isFalse);
-    expect((await db.getUnsyncedPayments('outlet')), hasLength(1));
+    expect(cart.state.error, sefStafOfflineHabis);
+    // Jam HP dimundurkan sesudah akses diterima = jendela dianggap habis.
+    cache.accessReceivedAt = DateTime.now().add(const Duration(hours: 1));
+    expect(cache.offlinePosAllowed, isFalse);
+    expect((await db.getUnsyncedPayments('outlet')), hasLength(2));
+  });
+
+  test('12-hour window survives a cold start and follows the server value', () async {
+    await cache.applyAccess({...manifest(['pos.sell']), 'offline_grace_hours': 2});
+    final received = cache.accessReceivedAt!;
+    cache.accessReceivedAt = null;
+    cache.offlineGraceHours = 12;
+    await cache.initFromPrefsCache();
+    expect(cache.accessReceivedAt!.difference(received).inSeconds.abs(), lessThan(1));
+    expect(cache.offlineGraceHours, 2);
+    cache.accessReceivedAt = DateTime.now().subtract(const Duration(hours: 3));
+    expect(cache.offlinePosAllowed, isFalse);
+  });
+
+  test('staff sync pushes only its own sales and leaves the rest queued', () async {
+    final db = await seeded(), prefs = await SharedPreferences.getInstance();
+    await db.customStatement(
+        "INSERT INTO orders (id, outlet_id, order_number, display_number, user_id, is_synced) VALUES ('mine', 'outlet', 'OFFLINE-1', 9, 'staff', 0), ('mine-old', 'outlet', 'Synced own', 10, 'staff', 1)");
+    await db.customStatement(
+        "INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, total_price, is_synced) VALUES ('mine-item', 'mine', 'product', 1, 15000, 15000, 0)");
+    await db.customStatement(
+        "INSERT INTO payments (id, order_id, outlet_id, amount_due, amount_paid, payment_method, is_synced) VALUES ('mine-pay', 'mine', 'outlet', 15000, 15000, 'cash', 0), ('old-pay', 'mine-old', 'outlet', 5000, 5000, 'cash', 0)");
+    final adapter = Adapter((request) => request.path == '/auth/access'
+        ? jsonBody({'data': manifest(['pos.sell'])})
+        : jsonBody({'last_sync_hlc': '2000:0:server:outlet', 'changes': {}}));
+    final dio = Dio()..httpClientAdapter = adapter;
+    addTearDown(dio.close);
+    final service = SyncService(db, dio, prefs);
+    await service.sync();
+    expect(service.status, SyncStatus.success);
+    final changes = (adapter.calls.last.data as Map)['changes'] as Map;
+    List ids(String table) => (changes[table] as List).map((r) => r['id']).toList();
+    expect(ids('orders'), ['mine']);
+    expect(ids('order_items'), ['mine-item']);
+    expect(ids('payments'), unorderedEquals(['mine-pay', 'old-pay']));
+    for (final table in ['products', 'shifts', 'cash_activities']) {
+      expect(changes[table], isEmpty);
+    }
+    expect(adapter.calls.last.data['idempotency_key'], isNotNull);
+    // Terkirim = tandai; milik pemilik tetap mengantre.
+    expect((await db.getUnsyncedOrders('outlet')).map((o) => o.id), ['order']);
+    expect((await db.getUnsyncedPayments('outlet')).map((p) => p.id), ['payment']);
+    expect(await db.getUnsyncedShifts('outlet'), hasLength(1));
+    expect(prefs.getString('pending_sync_idempotency_key'), 'owner-pending');
   });
 
   for (final approve in [false, true]) {

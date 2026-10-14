@@ -179,6 +179,20 @@ class AppDatabase extends _$AppDatabase {
             ..where((t) => t.outletId.equals(outletId)))
           .get();
 
+  /// Dari daftar order_id, mana yang sudah ada di HP sebagai pesanan milik
+  /// [userId]. Dipakai sync akun staf: item/pembayaran baru boleh dikirim
+  /// kalau induknya pesanan dia sendiri.
+  Future<Set<String>> ownSyncedOrderIds(
+      Iterable<String> orderIds, String userId) async {
+    final ids = orderIds.toSet().toList();
+    if (ids.isEmpty || userId.isEmpty) return {};
+    final rows = await (select(orders)
+          ..where((t) => t.id.isIn(ids))
+          ..where((t) => t.userId.equals(userId)))
+        .get();
+    return rows.map((o) => o.id).toSet();
+  }
+
   Future<List<ShiftLocal>> getUnsyncedShifts(String outletId) => (select(shifts)
         ..where((t) => t.isSynced.equals(false))
         ..where((t) => t.outletId.equals(outletId)))
